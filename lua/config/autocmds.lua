@@ -169,12 +169,13 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
 })
 
 -- LSP
+local completion = "blink" -- or 'native'
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(args)
     local client = vim.lsp.get_client_by_id(args.data.client_id)
     if client then
       -- Built-in completion
-      if client:supports_method "textDocument/completion" then
+      if completion == "native" and client:supports_method "textDocument/completion" then
         vim.lsp.completion.enable(true, client.id, args.buf, { autotrigger = true })
       end
 
