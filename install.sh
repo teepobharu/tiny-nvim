@@ -17,7 +17,7 @@ command_exists() {
 }
 
 # Parse command line arguments
-APPNAME="tiny_nvim"
+APPNAME="tiny-nvim"
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --appname) APPNAME="$2"; shift ;;
@@ -36,7 +36,7 @@ fi
 
 # Clone the repository directly to config directory
 print_message "Cloning configuration repository..." "$YELLOW"
-git clone https://github.com/jellydn/tiny_nvim.git "$HOME/.config/$APPNAME"
+git clone https://github.com/jellydn/tiny-nvim.git "$HOME/.config/$APPNAME"
 
 # Run the installation scripts
 print_message "Installing tools..." "$YELLOW"

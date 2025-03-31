@@ -35,11 +35,11 @@ The result is a faster, more maintainable configuration that still provides all 
 ### One-liner Installation (Recommended)
 
 ```bash
-# Install with default app name (tiny_nvim)
-curl -s https://raw.githubusercontent.com/jellydn/tiny_nvim/main/install.sh | bash
+# Install with default app name (tiny-nvim)
+curl -s https://raw.githubusercontent.com/jellydn/tiny-nvim/main/install.sh | bash
 
 # Or install with custom app name
-curl -s https://raw.githubusercontent.com/jellydn/tiny_nvim/main/install.sh | bash -s -- --appname my_nvim
+curl -s https://raw.githubusercontent.com/jellydn/tiny-nvim/main/install.sh | bash -s -- --appname my_nvim
 ```
 
 This will:
@@ -54,7 +54,7 @@ After installation, you can start Neovim with:
 
 ```bash
 # If using default app name
-NVIM_APPNAME=tiny_nvim nvim
+NVIM_APPNAME=tiny-nvim nvim
 
 # If using custom app name
 NVIM_APPNAME=my_nvim nvim
@@ -65,7 +65,7 @@ NVIM_APPNAME=my_nvim nvim
 To completely remove this configuration, run:
 
 ```bash
-# Replace APPNAME with your chosen name (tiny_nvim or custom name)
+# Replace APPNAME with your chosen name (tiny-nvim or custom name)
 rm -rf ~/.config/APPNAME
 rm -rf ~/.local/share/APPNAME
 rm -rf ~/.cache/APPNAME
@@ -79,20 +79,20 @@ If you prefer to install manually:
 1. Clone this repository:
 
 ```bash
-git clone https://github.com/jellydn/tiny_nvim.git ~/.config/tiny_nvim
+git clone https://github.com/jellydn/tiny-nvim.git ~/.config/tiny-nvim
 ```
 
 2. Run the installation script to set up all required tools:
 
 ```bash
-cd ~/.config/tiny_nvim
+cd ~/.config/tiny-nvim
 ./scripts/install-tools.sh
 ```
 
 3. Launch Neovim with this configuration:
 
 ```bash
-NVIM_APPNAME=tiny_nvim nvim
+NVIM_APPNAME=tiny-nvim nvim
 ```
 
 ## Health Checks & Debugging
@@ -198,9 +198,11 @@ To use this configuration in VSCode:
 
 1. Install the vscode-neovim extension
 2. Set your Neovim configuration path to point to this config:
+
    ```json
-    "vscode-neovim.NVIM_APPNAME": "nvim-ide",
+    "vscode-neovim.NVIM_APPNAME": "tiny-nvim",
    ```
+
 3. Restart VSCode
 
 You'll get the same Neovim experience in VSCode, including all the plugins and keybindings.

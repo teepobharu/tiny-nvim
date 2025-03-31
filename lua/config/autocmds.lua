@@ -1,5 +1,5 @@
 local function augroup(name)
-  return vim.api.nvim_create_augroup("my_tiny_nvim_" .. name, { clear = true })
+  return vim.api.nvim_create_augroup("my_nvim_" .. name, { clear = true })
 end
 
 -- Check if we need to reload the file when it changed
@@ -169,7 +169,7 @@ vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
 })
 
 -- LSP
-local completion = "blink" -- or 'native'
+local completion = vim.g.completion_mode or "blink" -- or 'native'
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(args)
     local client = vim.lsp.get_client_by_id(args.data.client_id)
