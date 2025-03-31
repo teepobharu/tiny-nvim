@@ -11,4 +11,6 @@ vim.lsp.enable {
   "biome", -- Biome = Eslint + Prettier but not fully yet, v2 beta
   "eslint", -- Linter
   "json", -- JSON
+  "pyright", -- Python
+  "gopls", -- Go
 }
