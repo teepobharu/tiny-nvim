@@ -92,20 +92,15 @@ For more detailed debugging information, refer to [conform.nvim debugging guide]
   - [hurl.nvim](https://github.com/ntbbloodbath/hurl.nvim): Hurl file support.
   - [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim): Beautiful and elegant theme inspired by the Kanagawa wave.
   - [lazy.nvim](https://github.com/folke/lazy.nvim): Plugin manager for Neovim.
-  - [lazydev.nvim](https://github.com/folke/lazydev.nvim): Development tools for lazy.nvim.
   - [mini.icons](https://github.com/echasnovski/mini.icons): Improved icon support for better performance.
   - [mini.statusline](https://github.com/echasnovski/mini.statusline): Lightweight statusline.
   - [neogen](https://github.com/danymat/neogen): Documentation generator.
   - [neotest](https://github.com/nvim-neotest/neotest): Testing framework.
-  - [neotest-plenary](https://github.com/nvim-neotest/neotest-plenary): Plenary test adapter.
+  - [vim-test](https://github.com/vim-test/vim-test): Testing framework.
   - [noice.nvim](https://github.com/folke/noice.nvim): Improved notifications and command-line UI.
-  - [nui.nvim](https://github.com/MunifTanjim/nui.nvim): UI component library.
   - [nvim-lint](https://github.com/mfussenegger/nvim-lint): Linting support for multiple file types.
-  - [nvim-nio](https://github.com/nvim-neotest/nvim-nio): Async IO library.
-  - [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter): Syntax highlighting and incremental selection.
   - [overseer.nvim](https://github.com/stevearc/overseer.nvim): Task runner and job management.
   - [persistence.nvim](https://github.com/folke/persistence.nvim): Session management.
-  - [plenary.nvim](https://github.com/nvim-lua/plenary.nvim): Lua utilities.
   - [quick-code-runner.nvim](https://github.com/CRAG666/code_runner.nvim): Quick code execution.
   - [refactoring.nvim](https://github.com/ThePrimeagen/refactoring.nvim): Code refactoring tools.
   - [render-markdown.nvim](https://github.com/MeanderingProgrammer/render-markdown.nvim): Markdown rendering and preview.
@@ -113,7 +108,6 @@ For more detailed debugging information, refer to [conform.nvim debugging guide]
   - [trouble.nvim](https://github.com/folke/trouble.nvim): Diagnostics and quickfix management.
   - [ts-comments.nvim](https://github.com/folke/ts-comments.nvim): TypeScript comment utilities.
   - [ts-error-translator.nvim](https://github.com/dmmulroy/ts-error-translator.nvim): TypeScript error translation.
-  - [vim-test](https://github.com/vim-test/vim-test): Testing framework.
   - [which-key.nvim](https://github.com/folke/which-key.nvim): Keybinding hints and management.
 
 ### How to Use Extra Plugins
@@ -148,19 +142,6 @@ You'll get the same Neovim experience in VSCode, including all the plugins and k
 ### Theme
 
 This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim) as the default theme. The theme is inspired by the Kanagawa wave and provides a beautiful, elegant color scheme that's easy on the eyes while maintaining good contrast and readability.
-
-## Resources
-
-- [What's New in Neovim 0.11](https://gpanders.com/blog/whats-new-in-neovim-0-11/): A detailed overview of the latest features and improvements in Neovim 0.11.
-- [Neovim 0.11 Built-in Completion Setup](https://gist.github.com/miroshQa/7c61292bc37070bb7606a29e07fe00e2): A comprehensive guide for setting up built-in completion in Neovim 0.11+.
-
-## Author
-
-👤 **Dung Huynh Duc**
-
-- Website: https://productsway.com/
-- Twitter: [@jellydn](https://twitter.com/jellydn)
-- Github: [@jellydn](https://github.com/jellydn)
 
 ## Neovide
 
@@ -221,6 +202,9 @@ Also increasing Key Repeat and Delay Until Repeat settings in System Preferences
 
 ## Resources
 
+- [What's New in Neovim 0.11](https://gpanders.com/blog/whats-new-in-neovim-0-11/): A detailed overview of the latest features and improvements in Neovim 0.11.
+- [Neovim 0.11 Built-in Completion Setup](https://gist.github.com/miroshQa/7c61292bc37070bb7606a29e07fe00e2): A comprehensive guide for setting up built-in completion in Neovim 0.11+.
+
 [![IT Man - LazyVim Power User Guide](https://i.ytimg.com/vi/jveM3hZs_oI/hqdefault.jpg)](https://www.youtube.com/watch?v=jveM3hZs_oI)
 
 [![IT Man - Talk #33 NeoVim as IDE [Vietnamese]](https://i.ytimg.com/vi/dFi8CzvqkNE/hqdefault.jpg)](https://www.youtube.com/watch?v=dFi8CzvqkNE)
@@ -240,6 +224,14 @@ Also increasing Key Repeat and Delay Until Repeat settings in System Preferences
 [![IT Man - Enhance Your Neovim Experience with LSP Plugins](https://i.ytimg.com/vi/JwWNIQgL4Fk/hqdefault.jpg)](https://www.youtube.com/watch?v=JwWNIQgL4Fk)
 
 [![IT Man - Bringing Zed AI Experience to Neovim with codecompanion.nvim](https://i.ytimg.com/vi/KbWI4ilHKv4/hqdefault.jpg)](https://www.youtube.com/watch?v=KbWI4ilHKv4)
+
+## Author
+
+👤 **Dung Huynh Duc**
+
+- Website: https://productsway.com/
+- Twitter: [@jellydn](https://twitter.com/jellydn)
+- Github: [@jellydn](https://github.com/jellydn)
 
 ## Show your support
 
