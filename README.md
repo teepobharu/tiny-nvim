@@ -170,6 +170,7 @@ This configuration provides a minimal yet powerful development environment with 
 - [flash.nvim](https://github.com/folke/flash.nvim): Navigation and search enhancements
 - [which-key.nvim](https://github.com/folke/which-key.nvim): Keybinding hints and management
 - [better-escape.nvim](https://github.com/max397574/better-escape.nvim): Better escape functionality
+- [grug-far.nvim](https://github.com/MagicDuck/grug-far.nvim): Advanced search and replace functionality
 
 ### Task Management & Productivity
 
