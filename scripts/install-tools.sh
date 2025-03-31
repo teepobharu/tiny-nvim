@@ -43,6 +43,7 @@ echo "Installing npm packages..."
 npm install -g \
   @antfu/ni \
   @fsouza/prettierd \
+  @tailwindcss/language-server \
   @vtsls/language-server \
   cspell \
   oxlint \
@@ -51,7 +52,7 @@ npm install -g \
   rustywind \
   typescript-language-server \
   typescript \
-  vscode-langservers-extracted
+  vscode-langservers-extracted 
 
 # Install tools with uv
 echo "Installing tools with uv..."

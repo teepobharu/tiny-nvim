@@ -13,4 +13,5 @@ vim.lsp.enable {
   "json", -- JSON
   "pyright", -- Python
   "gopls", -- Go
+  "tailwindcss", -- Tailwind CSS
 }
