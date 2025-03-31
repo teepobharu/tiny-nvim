@@ -3,7 +3,14 @@ require "config.autocmds"
 require "config.lazy"
 require "config.keymaps"
 
-require("kanagawa").load "wave"
+-- Only load the theme if not in VSCode
+if not vim.g.vscode then
+  require("kanagawa").load "wave"
+else
+  -- Trigger vscode keymap
+  local pattern = "NvimIdeKeymaps"
+  vim.api.nvim_exec_autocmds("User", { pattern = pattern, modeline = false })
+end
 
 vim.lsp.enable {
   "luals", -- Lua
