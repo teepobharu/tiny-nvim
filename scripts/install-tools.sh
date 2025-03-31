@@ -33,6 +33,11 @@ mise install \
   uv@latest \
   yarn@1.22.22
 
+# Install Go tools
+echo "Installing Go tools..."
+go install github.com/mgechev/revive@latest
+go install mvdan.cc/sh/v3/cmd/shfmt@latest
+
 # Install npm packages
 echo "Installing npm packages..."
 npm install -g \
