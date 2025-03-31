@@ -1,3 +1,5 @@
+local completion = vim.g.completion_mode or "blink" -- or 'native'
+
 return {
   -- Setup Copilot
   {
@@ -42,6 +44,7 @@ return {
   {
     "saghen/blink.cmp",
     event = "InsertEnter",
+    enable = completion == "blink",
     -- use a release tag to download pre-built binaries
     version = "1.*",
     -- AND/OR build from source, requires nightly: https://rust-lang.github.io/rustup/concepts/channels.html#working-with-nightly-rust
@@ -87,7 +90,7 @@ return {
       -- C-k: Toggle signature help (if signature.enabled = true)
       --
       -- See :h blink-cmp-config-keymap for defining your own keymap
-      keymap = { preset = "enter" },
+      keymap = { preset = "enter", ["<C-y>"] = { "select_and_accept" } },
       completion = {
         -- Controls whether the documentation window will automatically show when selecting a completion item
         documentation = {
