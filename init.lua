@@ -12,6 +12,7 @@ else
   vim.api.nvim_exec_autocmds("User", { pattern = pattern, modeline = false })
 end
 
+-- Enable LSP servers for Neovim 0.11+
 vim.lsp.enable {
   "luals", -- Lua
   "tsls", -- or "vtsls" for TypeScript
