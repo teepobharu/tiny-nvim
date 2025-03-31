@@ -84,8 +84,86 @@ require("lazy").setup({
 - Twitter: [@jellydn](https://twitter.com/jellydn)
 - Github: [@jellydn](https://github.com/jellydn)
 
+## Neovide
+
+```toml
+# .config/neovide/config.toml
+fork = true # Detach from the terminal instead of waiting for the Neovide process to terminate.
+frame = "buttonless" # Transparent decorations including a transparent bar.
+maximized = true # Maximize the window on startup, while still having decorations and the status bar of your OS visible.
+title-hidden = true
+```
+
+# Fonts
+
+I recommend using the following repo to get a "Nerd Font" (Font that supports icons)
+
+[getnf](https://github.com/ronniedroid/getnf)
+
+## Uninstall
+
+```sh
+  rm -rf ~/.config/nvim
+  rm -rf ~/.local/share/nvim
+  rm -rf ~/.cache/nvim
+  rm -rf ~/.local/state/nvim
+```
+
+# Tips
+
+- Improve key repeat on Mac OSX, need to restart
+
+```sh
+defaults write NSGlobalDomain KeyRepeat -int 1
+defaults write NSGlobalDomain InitialKeyRepeat -int 14
+```
+
+- VSCode on Mac
+
+To enable key-repeating, execute the following in your Terminal, log out and back in, and then restart VS Code:
+
+```sh
+# For VS Code
+defaults write com.microsoft.VSCode ApplePressAndHoldEnabled -bool false
+# For VS Code Insider
+defaults write com.microsoft.VSCodeInsiders ApplePressAndHoldEnabled -bool false
+# If necessary, reset global default
+defaults delete -g ApplePressAndHoldEnabled
+# For Cursor
+defaults write com.todesktop.230313mzl4w4u92 ApplePressAndHoldEnabled -bool false
+```
+
+Also increasing Key Repeat and Delay Until Repeat settings in System Preferences -> Keyboard.
+
+[![Key repeat rate](https://i.gyazo.com/e58be996275fe50bee31412ea5930017.png)](https://gyazo.com/e58be996275fe50bee31412ea5930017)
+
+- Disable `full stop with double-space` if you see the delay with `<space>-<space>`
+
+[![Which-key](https://i.gyazo.com/6403f6c57d2e54aca230589b2173eeb0.png)](https://gyazo.com/6403f6c57d2e54aca230589b2173eeb0)
+
+## Resources
+
+[![IT Man - LazyVim Power User Guide](https://i.ytimg.com/vi/jveM3hZs_oI/hqdefault.jpg)](https://www.youtube.com/watch?v=jveM3hZs_oI)
+
+[![IT Man - Talk #33 NeoVim as IDE [Vietnamese]](https://i.ytimg.com/vi/dFi8CzvqkNE/hqdefault.jpg)](https://www.youtube.com/watch?v=dFi8CzvqkNE)
+
+[![IT Man - Talk #35 #Neovim IDE for Web Developer](https://i.ytimg.com/vi/3EbgMJ-RcWY/hqdefault.jpg)](https://www.youtube.com/watch?v=3EbgMJ-RcWY)
+
+[![IT Man - Step-by-Step Guide: Integrating Copilot Chat with Neovim [Vietnamese]](https://i.ytimg.com/vi/By_CCai62JE/hqdefault.jpg)](https://www.youtube.com/watch?v=By_CCai62JE)
+
+[![IT Man - Power up your Neovim with Gen.nvim](https://i.ytimg.com/vi/2nt_qcchW_8/hqdefault.jpg)](https://www.youtube.com/watch?v=2nt_qcchW_8)
+
+[![IT Man - Boost Your Neovim Productivity with GitHub Copilot Chat](https://i.ytimg.com/vi/6oOPGaKCd_Q/hqdefault.jpg)](https://www.youtube.com/watch?v=6oOPGaKCd_Q)
+
+[![IT Man - Get to know GitHub Copilot Chat in #Neovim and be productive IMMEDIATELY](https://i.ytimg.com/vi/sSih4khcstc/hqdefault.jpg)](https://www.youtube.com/watch?v=sSih4khcstc)
+
+[![IT Man - Master Neovim with CopilotChat.nvim v3: Features, Demos, and Innovations](https://i.ytimg.com/vi/PfYnLcSVPh0/hqdefault.jpg)](https://www.youtube.com/watch?v=PfYnLcSVPh0)
+
+[![IT Man - Enhance Your Neovim Experience with LSP Plugins](https://i.ytimg.com/vi/JwWNIQgL4Fk/hqdefault.jpg)](https://www.youtube.com/watch?v=JwWNIQgL4Fk)
+
+[![IT Man - Bringing Zed AI Experience to Neovim with codecompanion.nvim](https://i.ytimg.com/vi/KbWI4ilHKv4/hqdefault.jpg)](https://www.youtube.com/watch?v=KbWI4ilHKv4)
+
 ## Show your support
 
 Give a ⭐️ if this project helped you!
 
-[![support us](https://img.shields.io/badge/become-a patreon%20us-orange.svg?cacheSeconds=2592000)](https://www.patreon.com/jellydn)
