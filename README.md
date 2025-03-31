@@ -48,6 +48,30 @@ cd ~/.config/tiny_nvim
 NVIM_APPNAME=tiny_nvim nvim
 ```
 
+## Health Checks & Debugging
+
+After installation, run the following commands to ensure everything is set up correctly:
+
+1. Check overall Neovim health:
+
+```vim
+:checkhealth
+```
+
+2. Verify LSP configuration:
+
+```vim
+:check vim.lsp
+```
+
+3. For formatting issues, check conform.nvim status:
+
+```vim
+:ConformInfo
+```
+
+For more detailed debugging information, refer to [conform.nvim debugging guide](https://github.com/stevearc/conform.nvim/blob/master/doc/debugging.md#tools).
+
 ## Features
 
 - **Minimal Plugins**: Carefully selected plugins for essential functionality.
