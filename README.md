@@ -5,6 +5,8 @@
 
 > Slim Neovim config for 0.11+ with minimal plugins.
 
+[![Slim Neovim config for 0.11](https://i.gyazo.com/6e351d72c2f119f70dbc55d61e9452fd.png)](https://gyazo.com/6e351d72c2f119f70dbc55d61e9452fd)
+
 ### 🏠 [Homepage](itman.fyi)
 
 ## Quick Start
