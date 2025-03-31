@@ -79,29 +79,42 @@ For more detailed debugging information, refer to [conform.nvim debugging guide]
 
 - **Minimal Plugins**: Carefully selected plugins for essential functionality.
 
-  - [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter): Syntax highlighting and incremental selection.
-  - [nvim-lint](https://github.com/mfussenegger/nvim-lint): Linting support for multiple file types.
-  - [bufferline.nvim](https://github.com/akinsho/bufferline.nvim): Enhanced buffer management.
-  - [mini.statusline](https://github.com/echasnovski/mini.statusline): Lightweight statusline.
-  - [mini.icons](https://github.com/echasnovski/mini.icons): Improved icon support for better performance.
   - [CopilotChat.nvim](https://github.com/CopilotC-Nvim/CopilotChat.nvim): AI-powered coding assistant.
-  - [flash.nvim](https://github.com/folke/flash.nvim): Navigation and search enhancements.
-  - [conform.nvim](https://github.com/stevearc/conform.nvim): Formatting support.
-  - [which-key.nvim](https://github.com/folke/which-key.nvim): Keybinding hints and management.
-  - [snacks.nvim](https://github.com/folke/snacks.nvim): Enhanced UI and utilities.
-  - [noice.nvim](https://github.com/folke/noice.nvim): Improved notifications and command-line UI.
-  - [render-markdown.nvim](https://github.com/MeanderingProgrammer/render-markdown.nvim): Markdown rendering and preview.
-  - [trouble.nvim](https://github.com/folke/trouble.nvim): Diagnostics and quickfix management.
-  - [lazy.nvim](https://github.com/folke/lazy.nvim): Plugin manager for Neovim.
-  - [lazydev.nvim](https://github.com/folke/lazydev.nvim): Development tools for lazy.nvim.
-  - [persistence.nvim](https://github.com/folke/persistence.nvim): Session management.
-  - [ts-error-translator.nvim](https://github.com/dmmulroy/ts-error-translator.nvim): TypeScript error translation.
-  - [better-escape.nvim](https://github.com/max397574/better-escape.nvim): Better escape functionality.
   - [LuaSnip](https://github.com/L3MON4D3/LuaSnip): Snippet engine.
-  - [friendly-snippets](https://github.com/rafamadriz/friendly-snippets): Snippet collection.
+  - [better-escape.nvim](https://github.com/max397574/better-escape.nvim): Better escape functionality.
   - [blink-copilot](https://github.com/folke/blink-copilot): Copilot integration.
   - [blink.cmp](https://github.com/folke/blink.cmp): Completion menu integration.
+  - [bufferline.nvim](https://github.com/akinsho/bufferline.nvim): Enhanced buffer management.
+  - [conform.nvim](https://github.com/stevearc/conform.nvim): Formatting support.
+  - [copilot.vim](https://github.com/zbirenbaum/copilot.vim): GitHub Copilot integration.
+  - [flash.nvim](https://github.com/folke/flash.nvim): Navigation and search enhancements.
+  - [friendly-snippets](https://github.com/rafamadriz/friendly-snippets): Snippet collection.
+  - [hurl.nvim](https://github.com/ntbbloodbath/hurl.nvim): Hurl file support.
   - [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim): Beautiful and elegant theme inspired by the Kanagawa wave.
+  - [lazy.nvim](https://github.com/folke/lazy.nvim): Plugin manager for Neovim.
+  - [lazydev.nvim](https://github.com/folke/lazydev.nvim): Development tools for lazy.nvim.
+  - [mini.icons](https://github.com/echasnovski/mini.icons): Improved icon support for better performance.
+  - [mini.statusline](https://github.com/echasnovski/mini.statusline): Lightweight statusline.
+  - [neogen](https://github.com/danymat/neogen): Documentation generator.
+  - [neotest](https://github.com/nvim-neotest/neotest): Testing framework.
+  - [neotest-plenary](https://github.com/nvim-neotest/neotest-plenary): Plenary test adapter.
+  - [noice.nvim](https://github.com/folke/noice.nvim): Improved notifications and command-line UI.
+  - [nui.nvim](https://github.com/MunifTanjim/nui.nvim): UI component library.
+  - [nvim-lint](https://github.com/mfussenegger/nvim-lint): Linting support for multiple file types.
+  - [nvim-nio](https://github.com/nvim-neotest/nvim-nio): Async IO library.
+  - [nvim-treesitter](https://github.com/nvim-treesitter/nvim-treesitter): Syntax highlighting and incremental selection.
+  - [overseer.nvim](https://github.com/stevearc/overseer.nvim): Task runner and job management.
+  - [persistence.nvim](https://github.com/folke/persistence.nvim): Session management.
+  - [plenary.nvim](https://github.com/nvim-lua/plenary.nvim): Lua utilities.
+  - [quick-code-runner.nvim](https://github.com/CRAG666/code_runner.nvim): Quick code execution.
+  - [refactoring.nvim](https://github.com/ThePrimeagen/refactoring.nvim): Code refactoring tools.
+  - [render-markdown.nvim](https://github.com/MeanderingProgrammer/render-markdown.nvim): Markdown rendering and preview.
+  - [snacks.nvim](https://github.com/folke/snacks.nvim): Enhanced UI and utilities.
+  - [trouble.nvim](https://github.com/folke/trouble.nvim): Diagnostics and quickfix management.
+  - [ts-comments.nvim](https://github.com/folke/ts-comments.nvim): TypeScript comment utilities.
+  - [ts-error-translator.nvim](https://github.com/dmmulroy/ts-error-translator.nvim): TypeScript error translation.
+  - [vim-test](https://github.com/vim-test/vim-test): Testing framework.
+  - [which-key.nvim](https://github.com/folke/which-key.nvim): Keybinding hints and management.
 
 ### How to Use Extra Plugins
 
