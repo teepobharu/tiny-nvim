@@ -43,11 +43,13 @@ return {
     "saghen/blink.cmp",
     event = "InsertEnter",
     -- use a release tag to download pre-built binaries
-    version = "v0.*",
-    -- Or build from source
-    -- build = "cargo build --release",
-    -- optional: provides snippets for the snippet source
+    version = "1.*",
+    -- AND/OR build from source, requires nightly: https://rust-lang.github.io/rustup/concepts/channels.html#working-with-nightly-rust
+    -- build = 'cargo build --release',
+    -- If you use nix, you can build from source using latest nightly rust with:
+    -- build = 'nix run .#build-plugin',
     dependencies = {
+      -- optional: provides snippets for the snippet source
       "L3MON4D3/LuaSnip",
       version = "v2.*",
       build = (function()
@@ -123,11 +125,22 @@ return {
     -- without having to redefine it
     opts_extend = {
       "sources.completion.enabled_providers",
+      "sources.compat", -- Support nvim-cmp source
       "sources.default",
     },
   },
   -- Lazydev
-  { "folke/lazydev.nvim", opts = {}, optional = true },
+  {
+    "folke/lazydev.nvim",
+    opts = {
+      library = {
+        { path = "${3rd}/luv/library", words = { "vim%.uv" } },
+        { path = "snacks.nvim", words = { "Snacks" } },
+        { path = "lazy.nvim", words = { "LazyVim" } },
+      },
+    },
+    optional = true,
+  },
   {
     "saghen/blink.cmp",
     opts = {
@@ -334,9 +347,43 @@ return {
     opts = {},
     event = "VeryLazy",
   },
+  -- Learn those tips from LazyVim
+  -- Auto pairs
   {
-    -- A better annotation generator. Supports multiple languages and annotation conventions.
-    -- <C-n> to jump to next annotation, <C-p> to jump to previous annotation
+    "echasnovski/mini.pairs",
+    event = "VeryLazy",
+    opts = {},
+  },
+  -- Extend and create a/i textobjects
+  {
+    "echasnovski/mini.ai",
+    event = "VeryLazy",
+    opts = function()
+      local ai = require "mini.ai"
+      return {
+        n_lines = 500,
+        custom_textobjects = {
+          o = ai.gen_spec.treesitter { -- code block
+            a = { "@block.outer", "@conditional.outer", "@loop.outer" },
+            i = { "@block.inner", "@conditional.inner", "@loop.inner" },
+          },
+          f = ai.gen_spec.treesitter { a = "@function.outer", i = "@function.inner" }, -- function
+          c = ai.gen_spec.treesitter { a = "@class.outer", i = "@class.inner" }, -- class
+          t = { "<([%p%w]-)%f[^<%w][^<>]->.-</%1>", "^<.->().*()</[^/]->$" }, -- tags
+          d = { "%f[%d]%d+" }, -- digits
+          e = { -- Word with case
+            { "%u[%l%d]+%f[^%l%d]", "%f[%S][%l%d]+%f[^%l%d]", "%f[%P][%l%d]+%f[^%l%d]", "^[%l%d]+%f[^%l%d]" },
+            "^().*()$",
+          },
+          u = ai.gen_spec.function_call(), -- u for "Usage"
+          U = ai.gen_spec.function_call { name_pattern = "[%w_]" }, -- without dot in function name
+        },
+      }
+    end,
+  },
+  -- A better annotation generator. Supports multiple languages and annotation conventions.
+  -- <C-n> to jump to next annotation, <C-p> to jump to previous annotation
+  {
     "danymat/neogen",
     dependencies = "nvim-treesitter/nvim-treesitter",
     opts = { enabled = true },

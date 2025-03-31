@@ -128,7 +128,7 @@ This configuration provides a minimal yet powerful development environment with 
 - **LSP & Completion**
 
   - Built-in LSP support (Neovim 0.11+)
-  - [blink.cmp](https://github.com/folke/blink.cmp): Enhanced completion menu
+  - [blink.cmp](https://github.com/saghen/blink.cmp) (v1.\*): Enhanced completion menu
   - [conform.nvim](https://github.com/stevearc/conform.nvim): Code formatting
   - [nvim-lint](https://github.com/mfussenegger/nvim-lint): Linting support
 
@@ -140,10 +140,12 @@ This configuration provides a minimal yet powerful development environment with 
 
 - **Code Generation & Documentation**
 
-  - [LuaSnip](https://github.com/L3MON4D3/LuaSnip): Snippet engine
+  - [LuaSnip](https://github.com/L3MON4D3/LuaSnip) (v2.\*): Snippet engine
   - [friendly-snippets](https://github.com/rafamadriz/friendly-snippets): Snippet collection
   - [neogen](https://github.com/danymat/neogen): Documentation generator
   - [ts-comments.nvim](https://github.com/folke/ts-comments.nvim): Comment utilities
+  - [mini.pairs](https://github.com/echasnovski/mini.pairs): Auto pairs
+  - [mini.ai](https://github.com/echasnovski/mini.ai): Extend and create a/i textobjects
 
 - **Git Integration**
   - [gitsigns.nvim](https://github.com/lewis6991/gitsigns.nvim): Git signs in the sign column
