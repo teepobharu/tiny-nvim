@@ -135,8 +135,8 @@ This configuration provides a minimal yet powerful development environment with 
 - **AI & Code Assistance**
 
   - [CopilotChat.nvim](https://github.com/CopilotC-Nvim/CopilotChat.nvim): AI-powered coding assistant
-  - [blink-copilot](https://github.com/folke/blink-copilot): Copilot integration
-  - [copilot.vim](https://github.com/zbirenbaum/copilot.vim): GitHub Copilot integration
+  - [blink-copilot](https://github.com/fang2hou/blink-copilot): Copilot integration
+  - [copilot.vim](https://github.com/github/copilot.vim): GitHub Copilot integration
 
 - **Code Generation & Documentation**
 
@@ -174,10 +174,10 @@ This configuration provides a minimal yet powerful development environment with 
 
 ### Task Management & Productivity
 
-- [hurl.nvim](https://github.com/ntbbloodbath/hurl.nvim): Run HTTP requests directly from `.hurl` files
+- [hurl.nvim](https://github.com/jellydn/hurl.nvim): Run HTTP requests directly from `.hurl` files
 - [overseer.nvim](https://github.com/stevearc/overseer.nvim): Task runner and job management
 - [persistence.nvim](https://github.com/folke/persistence.nvim): Session management
-- [quick-code-runner.nvim](https://github.com/CRAG666/code_runner.nvim): Quick code execution
+- [quick-code-runner.nvim](https://github.com/jellydn/quick-code-runner.nvim): Quick code execution
 - [refactoring.nvim](https://github.com/ThePrimeagen/refactoring.nvim): Code refactoring tools
 
 ### File Type Support
