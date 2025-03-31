@@ -7,6 +7,24 @@
 
 [![Slim Neovim config for 0.11](https://i.gyazo.com/6e351d72c2f119f70dbc55d61e9452fd.png)](https://gyazo.com/6e351d72c2f119f70dbc55d61e9452fd)
 
+## Motivation
+
+This configuration is a migration from [my-nvim-ide](https://github.com/jellydn/my-nvim-ide) with two main goals:
+
+1. **Leverage Neovim 0.11+ Built-in Features**:
+
+   - Remove dependency on [`lspconfig`](https://github.com/neovim/nvim-lspconfig/pull/3659) by utilizing Neovim's built-in LSP support
+
+   - Experience faster startup times and reduced complexity
+   - Take advantage of the latest Neovim improvements
+
+2. **Optimize Plugin Selection**:
+   - Trim down the plugin list to only essential ones
+   - Use `blink.cmp` for completion instead of built-in completion for better UX
+   - Maintain a minimal yet powerful development environment
+
+The result is a faster, more maintainable configuration that still provides all the necessary features for modern development.
+
 ### 🏠 [Homepage](itman.fyi)
 
 ## Quick Start
@@ -77,6 +95,7 @@ require("lazy").setup({
 ## Resources
 
 - [What's New in Neovim 0.11](https://gpanders.com/blog/whats-new-in-neovim-0-11/): A detailed overview of the latest features and improvements in Neovim 0.11.
+- [Neovim 0.11 Built-in Completion Setup](https://gist.github.com/miroshQa/7c61292bc37070bb7606a29e07fe00e2): A comprehensive guide for setting up built-in completion in Neovim 0.11+.
 
 ## Author
 
@@ -168,4 +187,3 @@ Also increasing Key Repeat and Delay Until Repeat settings in System Preferences
 ## Show your support
 
 Give a ⭐️ if this project helped you!
-
