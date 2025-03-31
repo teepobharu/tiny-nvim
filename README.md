@@ -89,7 +89,6 @@ For more detailed debugging information, refer to [conform.nvim debugging guide]
   - [noice.nvim](https://github.com/folke/noice.nvim): Improved notifications and command-line UI.
   - [render-markdown.nvim](https://github.com/MeanderingProgrammer/render-markdown.nvim): Markdown rendering and preview.
   - [trouble.nvim](https://github.com/folke/trouble.nvim): Diagnostics and quickfix management.
-  - [catppuccin](https://github.com/catppuccin/nvim): A beautiful colorscheme for Neovim.
   - [lazy.nvim](https://github.com/folke/lazy.nvim): Plugin manager for Neovim.
   - [lazydev.nvim](https://github.com/folke/lazydev.nvim): Development tools for lazy.nvim.
   - [persistence.nvim](https://github.com/folke/persistence.nvim): Session management.
@@ -99,6 +98,7 @@ For more detailed debugging information, refer to [conform.nvim debugging guide]
   - [friendly-snippets](https://github.com/rafamadriz/friendly-snippets): Snippet collection.
   - [blink-copilot](https://github.com/folke/blink-copilot): Copilot integration.
   - [blink.cmp](https://github.com/folke/blink.cmp): Completion menu integration.
+  - [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim): Beautiful and elegant theme inspired by the Kanagawa wave.
 
 ### How to Use Extra Plugins
 
@@ -115,6 +115,23 @@ require("lazy").setup({
   checker = { enabled = true },
 })
 ```
+
+### VSCode Integration
+
+This configuration works seamlessly with VSCode through the [vscode-neovim](https://github.com/vscode-neovim/vscode-neovim) extension. To use this configuration in VSCode:
+
+1. Install the vscode-neovim extension
+2. Set your Neovim configuration path to point to this config:
+   ```json
+    "vscode-neovim.NVIM_APPNAME": "nvim-ide",
+   ```
+3. Restart VSCode
+
+You'll get the same Neovim experience in VSCode, including all the plugins and keybindings.
+
+### Theme
+
+This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim) as the default theme. The theme is inspired by the Kanagawa wave and provides a beautiful, elegant color scheme that's easy on the eyes while maintaining good contrast and readability.
 
 ## Resources
 
