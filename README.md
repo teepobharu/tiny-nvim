@@ -131,7 +131,6 @@ This configuration provides a minimal yet powerful development environment with 
   - [blink.cmp](https://github.com/folke/blink.cmp): Enhanced completion menu
   - [conform.nvim](https://github.com/stevearc/conform.nvim): Code formatting
   - [nvim-lint](https://github.com/mfussenegger/nvim-lint): Linting support
-  - [ts-error-translator.nvim](https://github.com/dmmulroy/ts-error-translator.nvim): TypeScript error translation
 
 - **AI & Code Assistance**
 
@@ -172,6 +171,7 @@ This configuration provides a minimal yet powerful development environment with 
 
 ### Task Management & Productivity
 
+- [hurl.nvim](https://github.com/ntbbloodbath/hurl.nvim): Run HTTP requests directly from `.hurl` files
 - [overseer.nvim](https://github.com/stevearc/overseer.nvim): Task runner and job management
 - [persistence.nvim](https://github.com/folke/persistence.nvim): Session management
 - [quick-code-runner.nvim](https://github.com/CRAG666/code_runner.nvim): Quick code execution
@@ -179,8 +179,8 @@ This configuration provides a minimal yet powerful development environment with 
 
 ### File Type Support
 
-- [hurl.nvim](https://github.com/ntbbloodbath/hurl.nvim): Hurl file support
 - [render-markdown.nvim](https://github.com/MeanderingProgrammer/render-markdown.nvim): Markdown rendering and preview
+- [ts-error-translator.nvim](https://github.com/dmmulroy/ts-error-translator.nvim): TypeScript error translation
 
 ### VSCode Integration
 
