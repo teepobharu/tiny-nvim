@@ -35,6 +35,7 @@ mise install \
 
 # Install Go tools
 echo "Installing Go tools..."
+go install golang.org/x/tools/gopls@latest
 go install github.com/mgechev/revive@latest
 go install mvdan.cc/sh/v3/cmd/shfmt@latest
 
