@@ -32,6 +32,50 @@ The result is a faster, more maintainable configuration that still provides all 
 
 ## Quick Start
 
+### One-liner Installation (Recommended)
+
+```bash
+# Install with default app name (tiny_nvim)
+curl -s https://raw.githubusercontent.com/jellydn/tiny_nvim/main/install.sh | bash
+
+# Or install with custom app name
+curl -s https://raw.githubusercontent.com/jellydn/tiny_nvim/main/install.sh | bash -s -- --appname my_nvim
+```
+
+This will:
+
+1. Backup your existing Neovim configuration (if any)
+2. Clone the repository
+3. Install all required tools
+4. Install all plugins in headless mode
+5. Set up your complete Neovim environment
+
+After installation, you can start Neovim with:
+
+```bash
+# If using default app name
+NVIM_APPNAME=tiny_nvim nvim
+
+# If using custom app name
+NVIM_APPNAME=my_nvim nvim
+```
+
+### Cleanup
+
+To completely remove this configuration, run:
+
+```bash
+# Replace APPNAME with your chosen name (tiny_nvim or custom name)
+rm -rf ~/.config/APPNAME
+rm -rf ~/.local/share/APPNAME
+rm -rf ~/.cache/APPNAME
+rm -rf ~/.local/state/APPNAME
+```
+
+### Manual Installation
+
+If you prefer to install manually:
+
 1. Clone this repository:
 
 ```bash
