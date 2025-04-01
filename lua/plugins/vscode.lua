@@ -165,6 +165,12 @@ vim.api.nvim_create_autocmd("User", {
     end)
 
     -- +Buffer
+    -- Switch buffer
+    vim.keymap.set("n", "<leader>`", function()
+      vscode.action "workbench.action.quickOpenPreviousRecentlyUsedEditor"
+      vscode.action "list.select"
+    end)
+
     -- Close buffer
     vim.keymap.set("n", "<leader>bd", function()
       vscode.action "workbench.action.closeActiveEditor"
