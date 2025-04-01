@@ -25,6 +25,28 @@ return {
     optional = true,
     opts = { ensure_installed = { "css", "latex", "norg", "scss", "typst", "vue", "svelte" } },
   },
+  -- Todo comments
+  {
+    "folke/todo-comments.nvim",
+    optional = true,
+    keys = {
+      {
+        "<leader>st",
+        function()
+          Snacks.picker.todo_comments()
+        end,
+        desc = "Todo",
+      },
+      {
+        "<leader>sT",
+        function()
+          Snacks.picker.todo_comments { keywords = { "TODO", "FIX", "FIXME" } }
+        end,
+        desc = "Todo/Fix/Fixme",
+      },
+    },
+  },
+  -- Diagnostics UI
   {
     "folke/trouble.nvim",
     optional = true,
@@ -49,6 +71,7 @@ return {
       end,
     },
   },
+  -- Session
   {
     "folke/persistence.nvim",
     event = "BufReadPre", -- this will only start session saving when an actual file was opened
@@ -319,6 +342,13 @@ return {
         desc = "Find Git Files",
       },
       {
+        "<leader>fp",
+        function()
+          Snacks.picker.projects()
+        end,
+        desc = "Projects",
+      },
+      {
         "<leader>fr",
         function()
           Snacks.picker.recent()
@@ -326,11 +356,26 @@ return {
         desc = "Recent",
       },
       {
+        "<leader>fR",
+        function()
+          Snacks.picker.resume()
+        end,
+        desc = "Resume",
+      },
+      {
         "<leader>ft",
         function()
           Snacks.terminal()
         end,
         desc = "Toggle Terminal",
+      },
+      {
+        "<leader>fw",
+        function()
+          Snacks.picker.grep_word()
+        end,
+        desc = "Visual selection or word",
+        mode = { "n", "x" },
       },
       {
         "<c-/>",
@@ -389,14 +434,6 @@ return {
           Snacks.picker.grep()
         end,
         desc = "Grep",
-      },
-      {
-        "<leader>sw",
-        function()
-          Snacks.picker.grep_word()
-        end,
-        desc = "Visual selection or word",
-        mode = { "n", "x" },
       },
       -- search
       {
@@ -477,13 +514,6 @@ return {
         desc = "Location List",
       },
       {
-        "<leader>sM",
-        function()
-          Snacks.picker.man()
-        end,
-        desc = "Man Pages",
-      },
-      {
         "<leader>sm",
         function()
           Snacks.picker.marks()
@@ -491,19 +521,13 @@ return {
         desc = "Marks",
       },
       {
-        "<leader>sR",
+        "<leader>sM",
         function()
-          Snacks.picker.resume()
+          Snacks.picker.man()
         end,
-        desc = "Resume",
+        desc = "Man Pages",
       },
-      {
-        "<leader>sP",
-        function()
-          Snacks.picker.projects()
-        end,
-        desc = "Projects",
-      },
+
       {
         "<leader>sq",
         function()
