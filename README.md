@@ -179,6 +179,7 @@ This configuration provides a minimal yet powerful development environment with 
 - [persistence.nvim](https://github.com/folke/persistence.nvim): Session management
 - [quick-code-runner.nvim](https://github.com/jellydn/quick-code-runner.nvim): Quick code execution
 - [refactoring.nvim](https://github.com/ThePrimeagen/refactoring.nvim): Code refactoring tools
+- [todo-comments.nvim](https://github.com/folke/todo-comments.nvim): Highlight and search for todo comments
 
 ### File Type Support
 
@@ -223,6 +224,72 @@ Each language configuration is modular and can be customized according to your n
 ### Theme
 
 This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim) as the default theme. The theme is inspired by the Kanagawa wave and provides a beautiful, elegant color scheme that's easy on the eyes while maintaining good contrast and readability.
+
+## Keymaps
+
+### Buffer Management
+
+| Key             | Description                 |
+| --------------- | --------------------------- |
+| `<leader>bp`    | Toggle Pin                  |
+| `<leader>bP`    | Delete Non-Pinned Buffers   |
+| `<leader>bo`    | Delete Other Buffers        |
+| `<leader>br`    | Delete Buffers to the Right |
+| `<leader>bl`    | Delete Buffers to the Left  |
+| `<S-h>` or `[b` | Previous Buffer             |
+| `<S-l>` or `]b` | Next Buffer                 |
+| `[B`            | Move Buffer Left            |
+| `]B`            | Move Buffer Right           |
+
+### Diagnostics & Quickfix
+
+| Key          | Description                       |
+| ------------ | --------------------------------- |
+| `<leader>xx` | Toggle Diagnostics                |
+| `<leader>xX` | Toggle Buffer Diagnostics         |
+| `<leader>cs` | Toggle Symbols                    |
+| `<leader>cl` | Toggle LSP Definitions/References |
+| `<leader>xL` | Toggle Location List              |
+| `<leader>xQ` | Toggle Quickfix List              |
+
+### Git Operations
+
+| Key           | Description         |
+| ------------- | ------------------- |
+| `]h`          | Next Hunk           |
+| `[h`          | Previous Hunk       |
+| `]H`          | Last Hunk           |
+| `[H`          | First Hunk          |
+| `<leader>ghs` | Stage Hunk          |
+| `<leader>ghr` | Reset Hunk          |
+| `<leader>ghS` | Stage Buffer        |
+| `<leader>ghu` | Undo Stage Hunk     |
+| `<leader>ghR` | Reset Buffer        |
+| `<leader>ghp` | Preview Hunk Inline |
+| `<leader>ghb` | Blame Line          |
+| `<leader>ghB` | Blame Buffer        |
+| `<leader>ghd` | Diff This           |
+| `<leader>ghD` | Diff This ~         |
+| `<leader>tb`  | Toggle Blame Line   |
+
+### Search & Replace
+
+| Key          | Description                                   |
+| ------------ | --------------------------------------------- |
+| `<leader>sr` | Search and Replace (with file type filtering) |
+
+### Treesitter
+
+| Key         | Description                          |
+| ----------- | ------------------------------------ |
+| `<C-space>` | Increment Selection                  |
+| `<bs>`      | Decrement Selection (in visual mode) |
+
+### Which-key
+
+| Key         | Description         |
+| ----------- | ------------------- |
+| `<leader>?` | Show Buffer Keymaps |
 
 ## Neovide
 
