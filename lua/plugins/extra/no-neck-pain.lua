@@ -5,10 +5,15 @@ local function calculate_with()
 end
 
 return {
-  -- Disable zen-mode by default and use no-neck-pain instead
+  -- Disable zen-mode and use no-neck-pain instead
   {
-    "folke/zen-mode.nvim",
-    enabled = false,
+    "folke/snacks.nvim",
+    optional = true,
+    opts = {
+      zen = {
+        enabled = false,
+      },
+    },
   },
   {
     "shortcuts/no-neck-pain.nvim",
