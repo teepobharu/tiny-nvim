@@ -121,6 +121,9 @@ For more detailed debugging information, refer to [conform.nvim debugging guide]
 
 ## Features
 
+<details>
+<summary>Click to expand features</summary>
+
 This configuration provides a minimal yet powerful development environment with carefully selected plugins organized by category:
 
 ### Core Development
@@ -225,7 +228,12 @@ Each language configuration is modular and can be customized according to your n
 
 This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim) as the default theme. The theme is inspired by the Kanagawa wave and provides a beautiful, elegant color scheme that's easy on the eyes while maintaining good contrast and readability.
 
+</details>
+
 ## Keymaps
+
+<details>
+<summary>Click to expand keymaps</summary>
 
 ### Buffer Management
 
@@ -501,6 +509,8 @@ This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim
 | `<leader>tH` | Toggle Hurl Split/Popup           |
 | `<leader>hd` | Debug Info                        |
 
+</details>
+
 ## Neovide
 
 ```toml
@@ -513,9 +523,75 @@ title-hidden = true
 
 # Fonts
 
+<details>
+<summary>Click to expand font recommendations</summary>
+
 I recommend using the following repo to get a "Nerd Font" (Font that supports icons)
 
 [getnf](https://github.com/ronniedroid/getnf)
+
+</details>
+
+## Project-Specific Configuration
+
+<details>
+<summary>Click to expand project configuration details</summary>
+
+This configuration supports project-specific settings through `.nvim-config.lua` files. When Neovim starts, it will automatically look for a `.nvim-config.lua` file in the current working directory and load it if available.
+
+### Loading Extra Plugins
+
+You can enable additional plugins that aren't loaded by default:
+
+```lua
+-- Enable extra plugins
+vim.g.enable_extra_plugins = {
+  "no-neck-pain",  -- Additional UI plugin
+  "nvim-eslint"    -- ESLint integration
+}
+```
+
+These plugins should be defined in `lua/plugins/extra/` directory.
+
+### Enabling LSP On Demand
+
+You can enable specific LSP servers that aren't enabled by default:
+
+```lua
+-- Enable additional LSP servers
+vim.g.lsp_on_demands = {
+  "eslint",        -- ESLint language server
+  "rust_analyzer"  -- Rust language server
+}
+```
+
+### Complete Example
+
+A complete `.nvim-config.lua` file might look like:
+
+```lua
+-- Project-specific Neovim configuration
+
+-- Enable extra plugins
+vim.g.enable_extra_plugins = {
+  "no-neck-pain",
+  "nvim-eslint"
+}
+
+-- Enable additional LSP servers
+vim.g.lsp_on_demands = {
+  "eslint",
+  "rust_analyzer"
+}
+
+-- Set any other project-specific settings
+vim.opt.tabstop = 2
+vim.opt.shiftwidth = 2
+```
+
+This file is not tracked by git, making it perfect for project-specific customizations.
+
+</details>
 
 ## Uninstall
 
@@ -527,6 +603,9 @@ I recommend using the following repo to get a "Nerd Font" (Font that supports ic
 ```
 
 # Tips
+
+<details>
+<summary>Click to expand helpful tips</summary>
 
 - Improve key repeat on Mac OSX, need to restart
 
@@ -558,7 +637,12 @@ Also increasing Key Repeat and Delay Until Repeat settings in System Preferences
 
 [![Which-key](https://i.gyazo.com/6403f6c57d2e54aca230589b2173eeb0.png)](https://gyazo.com/6403f6c57d2e54aca230589b2173eeb0)
 
+</details>
+
 ## Resources
+
+<details>
+<summary>Click to expand learning resources</summary>
 
 - [What's New in Neovim 0.11](https://gpanders.com/blog/whats-new-in-neovim-0-11/): A detailed overview of the latest features and improvements in Neovim 0.11.
 - [Neovim 0.11 Built-in Completion Setup](https://gist.github.com/miroshQa/7c61292bc37070bb7606a29e07fe00e2): A comprehensive guide for setting up built-in completion in Neovim 0.11+.
@@ -582,6 +666,8 @@ Also increasing Key Repeat and Delay Until Repeat settings in System Preferences
 [![IT Man - Enhance Your Neovim Experience with LSP Plugins](https://i.ytimg.com/vi/JwWNIQgL4Fk/hqdefault.jpg)](https://www.youtube.com/watch?v=JwWNIQgL4Fk)
 
 [![IT Man - Bringing Zed AI Experience to Neovim with codecompanion.nvim](https://i.ytimg.com/vi/KbWI4ilHKv4/hqdefault.jpg)](https://www.youtube.com/watch?v=KbWI4ilHKv4)
+
+</details>
 
 ## Author
 
