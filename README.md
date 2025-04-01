@@ -245,22 +245,22 @@ This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim
 
 ### Window Management
 
-| Key          | Description            |
-| ------------ | ---------------------- |
-| `<C-h>`      | Go to Left Window      |
-| `<C-j>`      | Go to Lower Window     |
-| `<C-k>`      | Go to Upper Window     |
-| `<C-l>`      | Go to Right Window     |
-| `<C-Up>`     | Increase Window Height |
-| `<C-Down>`   | Decrease Window Height |
-| `<C-Left>`   | Decrease Window Width  |
-| `<C-Right>`  | Increase Window Width  |
-| `<leader>ww` | Other Window           |
-| `<leader>wd` | Delete Window          |
-| `<leader>w-` | Split Window Below     |
-| `<leader>w`  | Split Window Right     |
-| `<leader>-`  | Split Window Below     |
-| `<leader>`   | Split Window Right     |
+| Key           | Description            |
+| ------------- | ---------------------- |
+| `<C-h>`       | Go to Left Window      |
+| `<C-j>`       | Go to Lower Window     |
+| `<C-k>`       | Go to Upper Window     |
+| `<C-l>`       | Go to Right Window     |
+| `<C-Up>`      | Increase Window Height |
+| `<C-Down>`    | Decrease Window Height |
+| `<C-Left>`    | Decrease Window Width  |
+| `<C-Right>`   | Increase Window Width  |
+| `<leader>ww`  | Other Window           |
+| `<leader>wd`  | Delete Window          |
+| `<leader>w-`  | Split Window Below     |
+| `<leader>w\|` | Split Window Right     |
+| `<leader>-`   | Split Window Below     |
+| `<leader>\|`  | Split Window Right     |
 
 ### Tab Management
 
