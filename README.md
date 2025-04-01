@@ -240,17 +240,53 @@ This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim
 | `<S-l>` or `]b` | Next Buffer                 |
 | `[B`            | Move Buffer Left            |
 | `]B`            | Move Buffer Right           |
+| `<leader>bb`    | Switch to Other Buffer      |
+| `<leader>`      | Switch to Other Buffer      |
 
-### Diagnostics & Quickfix
+### Window Management
 
-| Key          | Description                       |
-| ------------ | --------------------------------- |
-| `<leader>xx` | Toggle Diagnostics                |
-| `<leader>xX` | Toggle Buffer Diagnostics         |
-| `<leader>cs` | Toggle Symbols                    |
-| `<leader>cl` | Toggle LSP Definitions/References |
-| `<leader>xL` | Toggle Location List              |
-| `<leader>xQ` | Toggle Quickfix List              |
+| Key          | Description            |
+| ------------ | ---------------------- |
+| `<C-h>`      | Go to Left Window      |
+| `<C-j>`      | Go to Lower Window     |
+| `<C-k>`      | Go to Upper Window     |
+| `<C-l>`      | Go to Right Window     |
+| `<C-Up>`     | Increase Window Height |
+| `<C-Down>`   | Decrease Window Height |
+| `<C-Left>`   | Decrease Window Width  |
+| `<C-Right>`  | Increase Window Width  |
+| `<leader>ww` | Other Window           |
+| `<leader>wd` | Delete Window          |
+| `<leader>w-` | Split Window Below     |
+| `<leader>w`  | Split Window Right     |
+| `<leader>-`  | Split Window Below     |
+| `<leader>`   | Split Window Right     |
+
+### Tab Management
+
+| Key              | Description      |
+| ---------------- | ---------------- |
+| `<leader><tab>l` | Last Tab         |
+| `<leader><tab>o` | Close Other Tabs |
+| `<leader><tab>f` | First Tab        |
+| `<leader><tab>`  | New Tab          |
+| `<leader><tab>]` | Next Tab         |
+| `<leader><tab>d` | Close Tab        |
+| `<leader><tab>[` | Previous Tab     |
+
+### Movement & Editing
+
+| Key     | Description                      |
+| ------- | -------------------------------- |
+| `j`     | Down (with gj for wrapped lines) |
+| `k`     | Up (with gk for wrapped lines)   |
+| `<A-j>` | Move Line Down                   |
+| `<A-k>` | Move Line Up                     |
+| `gl`    | Go to end of line                |
+| `gh`    | Go to start of line              |
+| `<A-h>` | Go to start of line              |
+| `<A-l>` | Go to end of line                |
+| `<A-a>` | Select all text                  |
 
 ### Git Operations
 
@@ -271,12 +307,120 @@ This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim
 | `<leader>ghd` | Diff This           |
 | `<leader>ghD` | Diff This ~         |
 | `<leader>tb`  | Toggle Blame Line   |
+| `<leader>gs`  | Git Status          |
+
+### LSP & Code Actions
+
+| Key          | Description           |
+| ------------ | --------------------- |
+| `<leader>ca` | Code Action           |
+| `<leader>cA` | Source Action         |
+| `<leader>cr` | Rename                |
+| `<leader>cf` | Format Document       |
+| `<leader>cR` | Refactor              |
+| `<leader>.`  | Quick Fix             |
+| `gr`         | Find References       |
+| `gd`         | Go to Definition      |
+| `gi`         | Go to Implementation  |
+| `go`         | Go to Type Definition |
+| `K`          | Show Documentation    |
+
+### Copilot
+
+| Key     | Description         |
+| ------- | ------------------- |
+| `<C-y>` | Accept Suggestion   |
+| `<C-i>` | Accept Line         |
+| `<C-j>` | Next Suggestion     |
+| `<C-k>` | Previous Suggestion |
+| `<C-d>` | Dismiss Suggestion  |
 
 ### Search & Replace
 
 | Key          | Description                                   |
 | ------------ | --------------------------------------------- |
 | `<leader>sr` | Search and Replace (with file type filtering) |
+| `n`          | Next Search Result                            |
+| `N`          | Previous Search Result                        |
+| `<leader>ur` | Redraw / Clear hlsearch / Diff Update         |
+
+### Diagnostics & Quickfix
+
+| Key          | Description                       |
+| ------------ | --------------------------------- |
+| `<leader>xx` | Toggle Diagnostics                |
+| `<leader>xX` | Toggle Buffer Diagnostics         |
+| `<leader>cs` | Toggle Symbols                    |
+| `<leader>cl` | Toggle LSP Definitions/References |
+| `<leader>xl` | Toggle Location List              |
+| `<leader>xq` | Toggle Quickfix List              |
+| `[q`         | Previous Quickfix                 |
+| `]q`         | Next Quickfix                     |
+| `<leader>cd` | Line Diagnostics                  |
+| `]d`         | Next Diagnostic                   |
+| `[d`         | Previous Diagnostic               |
+| `]e`         | Next Error                        |
+| `[e`         | Previous Error                    |
+| `]w`         | Next Warning                      |
+| `[w`         | Previous Warning                  |
+
+### File Operations
+
+| Key          | Description             |
+| ------------ | ----------------------- |
+| `<C-s>`      | Save File               |
+| `<leader>fn` | New File                |
+| `<leader>qq` | Quit All                |
+| `<C-c>`      | Copy whole file content |
+
+### UI & Formatting
+
+| Key          | Description              |
+| ------------ | ------------------------ |
+| `<leader>ui` | Inspect Position         |
+| `<leader>uI` | Inspect Tree             |
+| `<leader>uf` | Toggle Autoformat        |
+| `<leader>zz` | Open Lazy Plugin Manager |
+| `<leader>?`  | Show Buffer Keymaps      |
+
+### Todo Comments
+
+| Key          | Description                  |
+| ------------ | ---------------------------- |
+| `<leader>st` | Show all todo comments       |
+| `<leader>sT` | Show todo/fix/fixme comments |
+
+### Dashboard
+
+| Key | Description     |
+| --- | --------------- |
+| `f` | Find File       |
+| `g` | Find Text       |
+| `r` | Recent Files    |
+| `c` | Config          |
+| `s` | Restore Session |
+| `q` | Quit            |
+| `l` | Lazy            |
+| `u` | Update          |
+
+### Zen Mode
+
+| Key          | Description      |
+| ------------ | ---------------- |
+| `<leader>zz` | Toggle Zen Mode  |
+| `<leader>tz` | Toggle Zoom Mode |
+
+### Terminal
+
+| Key          | Description        |
+| ------------ | ------------------ |
+| `<esc><esc>` | Enter Normal Mode  |
+| `<C-h>`      | Go to Left Window  |
+| `<C-j>`      | Go to Lower Window |
+| `<C-k>`      | Go to Upper Window |
+| `<C-l>`      | Go to Right Window |
+| `<C-/>`      | Hide Terminal      |
+| `<C-t>`      | Toggle Terminal    |
 
 ### Treesitter
 
@@ -285,11 +429,77 @@ This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim
 | `<C-space>` | Increment Selection                  |
 | `<bs>`      | Decrement Selection (in visual mode) |
 
-### Which-key
+### Folding
 
-| Key         | Description         |
-| ----------- | ------------------- |
-| `<leader>?` | Show Buffer Keymaps |
+| Key  | Description                                  |
+| ---- | -------------------------------------------- |
+| `zv` | Close all folds except the current one       |
+| `zj` | Close current fold when open, open next fold |
+| `zk` | Close current fold when open, open prev fold |
+
+### Neovide Specific
+
+| Key     | Description           |
+| ------- | --------------------- |
+| `<D-s>` | Save File             |
+| `<D-c>` | Copy (in visual mode) |
+| `<D-v>` | Paste (in all modes)  |
+
+### AI (Copilot Chat)
+
+| Key          | Description                                 |
+| ------------ | ------------------------------------------- |
+| `<leader>ap` | CopilotChat - Prompt actions                |
+| `<leader>am` | CopilotChat - Generate commit message       |
+| `<leader>af` | CopilotChat - Fix Diagnostic                |
+| `<leader>al` | CopilotChat - Clear buffer and chat history |
+| `<leader>av` | CopilotChat - Toggle                        |
+| `<leader>a?` | CopilotChat - Select Models                 |
+| `<leader>aa` | CopilotChat - Select Agents                 |
+
+### Testing
+
+| Key           | Description         |
+| ------------- | ------------------- |
+| `<leader>cjt` | Run Test Nearest    |
+| `<leader>cjT` | Run Test File       |
+| `<leader>cjS` | Run Test Suite      |
+| `<leader>ctt` | Run File            |
+| `<leader>ctT` | Run All Test Files  |
+| `<leader>ctr` | Run Nearest         |
+| `<leader>ctl` | Run Last            |
+| `<leader>cts` | Toggle Summary      |
+| `<leader>cto` | Show Output         |
+| `<leader>ctO` | Toggle Output Panel |
+| `<leader>ctS` | Stop                |
+| `<leader>ctw` | Toggle Watch        |
+
+### Task Runner & Code Execution
+
+| Key          | Description           |
+| ------------ | --------------------- |
+| `<leader>ot` | Run Task              |
+| `<leader>oq` | Quick Action          |
+| `<leader>or` | Rerun Last Task       |
+| `<leader>oo` | Toggle at bottom      |
+| `<leader>cp` | Quick Code Runner/Pad |
+
+### Hurl (API Testing)
+
+| Key          | Description                       |
+| ------------ | --------------------------------- |
+| `<leader>hA` | Run All requests                  |
+| `<leader>ha` | Run Api request                   |
+| `<leader>he` | Run Api request to entry          |
+| `<leader>hE` | Run Api request from entry to end |
+| `<leader>hv` | Run Api in verbose mode           |
+| `<leader>hV` | Run Api in very verbose mode      |
+| `<leader>hr` | Rerun last command                |
+| `<leader>hh` | Hurl Runner/Show Last Response    |
+| `<leader>hg` | Add global variable               |
+| `<leader>hG` | Manage global variable            |
+| `<leader>tH` | Toggle Hurl Split/Popup           |
+| `<leader>hd` | Debug Info                        |
 
 ## Neovide
 
