@@ -44,6 +44,7 @@ echo "Installing npm packages..."
 npm install -g \
   @antfu/ni \
   @fsouza/prettierd \
+  @mermaid-js/mermaid-cli \
   @tailwindcss/language-server \
   @vtsls/language-server \
   cspell \
