@@ -187,6 +187,7 @@ This configuration provides a minimal yet powerful development environment with 
 ### File Type Support
 
 - [render-markdown.nvim](https://github.com/MeanderingProgrammer/render-markdown.nvim): Markdown rendering and preview
+- [previm](https://github.com/previm/previm): Markdown preview in browser
 - [ts-error-translator.nvim](https://github.com/dmmulroy/ts-error-translator.nvim): TypeScript error translation
 
 ### VSCode Integration
@@ -374,12 +375,14 @@ This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim
 
 ### File Operations
 
-| Key          | Description             |
-| ------------ | ----------------------- |
-| `<C-s>`      | Save File               |
-| `<leader>fn` | New File                |
-| `<leader>qq` | Quit All                |
-| `<C-c>`      | Copy whole file content |
+| Key          | Description                      |
+| ------------ | -------------------------------- |
+| `<C-s>`      | Save File                        |
+| `<leader>fn` | New File                         |
+| `<leader>qq` | Quit All                         |
+| `<C-c>`      | Copy whole file content          |
+| `<leader>m`  | Markdown preview (Previm)        |
+| `<leader>tm` | Toggle Markdown preview (Render) |
 
 ### UI & Formatting
 

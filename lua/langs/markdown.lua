@@ -40,7 +40,7 @@ return {
       {
         "<leader>m",
         "<cmd>PrevimOpen<cr>",
-        desc = "Markdown preview",
+        desc = "Markdown preview on browser",
       },
     },
   },
