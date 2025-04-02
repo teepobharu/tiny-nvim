@@ -17,7 +17,7 @@ This configuration is a migration from [my-nvim-ide](https://github.com/jellydn/
 1. **Leverage Neovim 0.11+ Built-in Features**:
 
    - Remove dependency on [`lspconfig`](https://github.com/neovim/nvim-lspconfig/pull/3659) by utilizing Neovim's built-in LSP support
-
+   - No need for the `mason.nvim` plugin; instead, use a shell [script](./scripts/install-tools.sh) to install necessary tools
    - Experience faster startup times and reduced complexity
    - Take advantage of the latest Neovim improvements
 
