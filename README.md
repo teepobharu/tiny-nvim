@@ -415,7 +415,7 @@ This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim
 
 | Key          | Description      |
 | ------------ | ---------------- |
-| `<leader>zz` | Toggle Zen Mode  |
+| `<leader>cz` | Toggle Zen Mode  |
 | `<leader>tz` | Toggle Zoom Mode |
 
 ### Terminal
