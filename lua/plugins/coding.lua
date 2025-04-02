@@ -90,7 +90,7 @@ return {
       -- C-k: Toggle signature help (if signature.enabled = true)
       --
       -- See :h blink-cmp-config-keymap for defining your own keymap
-      keymap = { preset = "enter", ["<C-y>"] = { "select_and_accept" } },
+      keymap = { preset = "enter" },
       completion = {
         -- Controls whether the documentation window will automatically show when selecting a completion item
         documentation = {
