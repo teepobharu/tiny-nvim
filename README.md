@@ -2,9 +2,9 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](#)
 [![Twitter: jellydn](https://img.shields.io/twitter/follow/jellydn.svg?style=social)](https://twitter.com/jellydn)
-<a href="https://dotfyle.com/jellydn/tinynvim"><img src="https://dotfyle.com/jellydn/tinynvim/badges/plugins?style=flat" /></a>
-<a href="https://dotfyle.com/jellydn/tinynvim"><img src="https://dotfyle.com/jellydn/tinynvim/badges/leaderkey?style=flat" /></a>
-<a href="https://dotfyle.com/jellydn/tinynvim"><img src="https://dotfyle.com/jellydn/tinynvim/badges/plugin-manager?style=flat" /></a>
+<a href="https://dotfyle.com/jellydn/tiny-nvim"><img src="https://dotfyle.com/jellydn/tiny-nvim/badges/plugins?style=flat" /></a>
+<a href="https://dotfyle.com/jellydn/tiny-nvim"><img src="https://dotfyle.com/jellydn/tiny-nvim/badges/leaderkey?style=flat" /></a>
+<a href="https://dotfyle.com/jellydn/tiny-nvim"><img src="https://dotfyle.com/jellydn/tiny-nvim/badges/plugin-manager?style=flat" /></a>
 
 > Slim Neovim config for 0.11+ with minimal plugins.
 
