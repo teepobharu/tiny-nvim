@@ -25,10 +25,13 @@ if vim.g.vscode then
 else
   -- Load the theme
   require("kanagawa").load "wave"
+
+  local ts_server = vim.g.lsp_typescript_server or "ts_ls" -- or "vtsls" for TypeScript
+
   -- Enable LSP servers for Neovim 0.11+
   vim.lsp.enable {
-    "luals", -- Lua
-    "tsls", -- or "vtsls" for TypeScript
+    ts_server,
+    "lua_ls", -- Lua
     "biome", -- Biome = Eslint + Prettier
     "json", -- JSON
     "pyright", -- Python
