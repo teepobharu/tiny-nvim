@@ -26,7 +26,7 @@ else
   -- Load the theme
   require("kanagawa").load "wave"
 
-  local ts_server = vim.g.lsp_typescript_server or "ts_ls" -- or "vtsls" for TypeScript
+  local ts_server = vim.g.lsp_typescript_server or "ts_ls" -- "ts_ls" or "vtsls" for TypeScript
 
   -- Enable LSP servers for Neovim 0.11+
   vim.lsp.enable {
@@ -39,7 +39,7 @@ else
     "tailwindcss", -- Tailwind CSS
   }
 
-  -- Load Lsp on-demand, e.g: eslint is disable by deafult
+  -- Load Lsp on-demand, e.g: eslint is disable by default
   -- e.g: We could enable eslint by set vim.g.lsp_on_demands = {"eslint"}
   if vim.g.lsp_on_demands then
     vim.lsp.enable(vim.g.lsp_on_demands)
