@@ -1,11 +1,11 @@
 local Lsp = require "utils.lsp"
 
-function biome_fix()
+function _G.biome_fix()
   -- NOTE: Migrate to LSP later if it's available
   local file = vim.fn.fnameescape(vim.fn.expand "%:p") -- Escape file path for shell
   vim.cmd("silent !biome lint --write " .. file)
 end
-function biome_fix_unsafe()
+function _G.biome_fix_unsafe()
   -- NOTE: Migrate to LSP later if it's available
   local file = vim.fn.fnameescape(vim.fn.expand "%:p") -- Escape file path for shell
   vim.cmd("silent !biome lint --write --unsafe " .. file)
