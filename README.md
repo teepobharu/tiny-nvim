@@ -189,6 +189,7 @@ This configuration provides a minimal yet powerful development environment with 
 - [render-markdown.nvim](https://github.com/MeanderingProgrammer/render-markdown.nvim): Markdown rendering and preview
 - [previm](https://github.com/previm/previm): Markdown preview in browser
 - [ts-error-translator.nvim](https://github.com/dmmulroy/ts-error-translator.nvim): TypeScript error translation
+- [typecheck.nvim](https://github.com/jellydn/typecheck.nvim): Type checking for TypeScript
 
 ### VSCode Integration
 
@@ -320,19 +321,20 @@ This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim
 
 ### LSP & Code Actions
 
-| Key          | Description           |
-| ------------ | --------------------- |
-| `<leader>ca` | Code Action           |
-| `<leader>cA` | Source Action         |
-| `<leader>cr` | Rename                |
-| `<leader>cf` | Format Document       |
-| `<leader>cR` | Refactor              |
-| `<leader>.`  | Quick Fix             |
-| `gr`         | Find References       |
-| `gd`         | Go to Definition      |
-| `gi`         | Go to Implementation  |
-| `go`         | Go to Type Definition |
-| `K`          | Show Documentation    |
+| Key          | Description                 |
+| ------------ | --------------------------- |
+| `<leader>ca` | Code Action                 |
+| `<leader>cA` | Source Action               |
+| `<leader>cr` | Rename                      |
+| `<leader>cf` | Format Document             |
+| `<leader>ck` | Run Type Check (TypeScript) |
+| `<leader>cR` | Refactor                    |
+| `<leader>.`  | Quick Fix                   |
+| `gr`         | Find References             |
+| `gd`         | Go to Definition            |
+| `gi`         | Go to Implementation        |
+| `go`         | Go to Type Definition       |
+| `K`          | Show Documentation          |
 
 ### Copilot
 
