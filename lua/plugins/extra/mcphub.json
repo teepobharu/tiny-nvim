@@ -13,7 +13,5 @@
       "command": "uvx"
     }
   },
-  "nativeMCPServers": [
-    
-  ]
+  "nativeMCPServers": {}
 }
