@@ -598,6 +598,66 @@ This file is not tracked by git, making it perfect for project-specific customiz
 
 </details>
 
+## Extra Plugins
+
+<details>
+<summary>Click to expand extra plugins</summary>
+
+This configuration includes several extra plugins that can be enabled on demand through your project-specific configuration. These plugins provide additional functionality without bloating the core configuration.
+
+### Available Extra Plugins
+
+1. **[no-neck-pain.nvim](https://github.com/shortcuts/no-neck-pain.nvim)**
+
+   - Distraction-free writing mode with customizable width
+   - Alternative to zen-mode with a focus on reducing neck strain
+   - Keymaps:
+     - `<leader>cz`: Toggle No Neck Pain mode
+     - `<leader>zu`: Increase width
+     - `<leader>zd`: Decrease width
+
+2. **[codecompanion.nvim](https://github.com/olimorris/codecompanion.nvim)**
+
+   - AI code companion with GitHub Copilot integration
+   - Rich set of features including code explanation, refactoring, and inline documentation
+   - Supports slash commands for context-aware actions
+   - Keymaps prefix: `<leader>A`
+   - Visual mode selections:
+     - `<leader>Ae`: Explain selected code
+     - `<leader>Af`: Fix selected code
+     - `<leader>At`: Generate unit tests for selected code
+     - `<leader>Ar`: Refactor selected code
+     - `<leader>Ad`: Add inline documentation
+     - `<leader>An`: Suggest better naming
+
+3. **[avante.nvim](https://github.com/yetone/avante.nvim)**
+
+   - Alternative AI code assistant using Copilot
+   - Replaces the standard Copilot implementation
+   - Provides a more streamlined interface
+
+4. **[mcphub.nvim](https://github.com/ravitemer/mcphub.nvim)**
+   - Minecraft Plugin Hub integration
+   - Access Minecraft plugins directly from Neovim
+   - Command: `:MCPHub`
+
+### Enabling Extra Plugins
+
+To enable any of these plugins, add them to your `.nvim-config.lua` file:
+
+```lua
+vim.g.enable_extra_plugins = {
+  "no-neck-pain",
+  "codecompanion",
+  "avante",
+  "mcphub"
+}
+```
+
+Note that some plugins like `avante.nvim` will disable conflicting plugins (such as `copilot.vim`) when enabled.
+
+</details>
+
 ## Uninstall
 
 ```sh
