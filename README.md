@@ -544,49 +544,64 @@ I recommend using the following repo to get a "Nerd Font" (Font that supports ic
 
 This configuration supports project-specific settings through `.nvim-config.lua` files. When Neovim starts, it will automatically look for a `.nvim-config.lua` file in the current working directory and load it if available.
 
-### Loading Extra Plugins
+### Quick Setup with ProjectSettings
 
-You can enable additional plugins that aren't loaded by default:
+You can quickly create a `.nvim-config.lua` file using the `:ProjectSettings` command. This interactive command will:
 
-```lua
--- Enable extra plugins
-vim.g.enable_extra_plugins = {
-  "no-neck-pain",  -- Additional UI plugin
-  "nvim-eslint"    -- ESLint integration
-}
+1. Show available plugins and LSP servers
+2. Let you select which ones to enable
+3. Create a `.nvim-config.lua` file with your selections
+
+Example usage:
+
+```vim
+:ProjectSettings
 ```
 
-These plugins should be defined in `lua/plugins/extra/` directory.
+Available options:
 
-### Enabling LSP On Demand
+1. Plugins:
 
-You can enable specific LSP servers that aren't enabled by default:
+   - `no-neck-pain`: Additional UI plugin
+   - `codecompanion`: AI code companion
+   - `avante`: Alternative AI assistant
+   - `mcphub`: Minecraft Plugin Hub
 
-```lua
--- Enable additional LSP servers
-vim.g.lsp_on_demands = {
-  "eslint",        -- ESLint language server
-  "rust_analyzer"  -- Rust language server
-}
+2. LSP Servers:
+   - `eslint`: ESLint language server
+   - `lua_ls`: Lua language server
+   - `biome`: Biome = Eslint + Prettier
+   - `json`: JSON language server
+   - `pyright`: Python language server
+   - `gopls`: Go language server
+   - `tailwindcss`: Tailwind CSS language server
+
+When prompted, enter your selections as comma-separated values:
+
+```
+Plugins: no-neck-pain,codecompanion
+LSP: eslint,biome
 ```
 
-### Complete Example
+### Manual Configuration
 
-A complete `.nvim-config.lua` file might look like:
+You can also manually create a `.nvim-config.lua` file:
 
 ```lua
 -- Project-specific Neovim configuration
 
--- Enable extra plugins
-vim.g.enable_extra_plugins = {
-  "no-neck-pain",
-  "nvim-eslint"
-}
+-- Set TypeScript LSP server
+vim.g.lsp_typescript_server = "ts_ls"
 
 -- Enable additional LSP servers
 vim.g.lsp_on_demands = {
-  "eslint",
-  "rust_analyzer"
+  "eslint",        -- ESLint language server
+}
+
+-- Enable extra plugins
+vim.g.enable_extra_plugins = {
+  "no-neck-pain",  -- Additional UI plugin
+  "nvim-eslint"    -- ESLint integration
 }
 
 -- Set any other project-specific settings
