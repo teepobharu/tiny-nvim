@@ -28,6 +28,8 @@ This configuration is a migration from [my-nvim-ide](https://github.com/jellydn/
 
 The result is a faster, more maintainable configuration that still provides all the necessary features for modern development.
 
+[![IT Man - My Tiny Nvim (2025 version) for Neovim 0.11+](https://i.ytimg.com/vi/-N9QTQzEt0w/hqdefault.jpg)](https://www.youtube.com/watch?v=-N9QTQzEt0w)
+
 ### 🏠 [Homepage](itman.fyi)
 
 ## Quick Start
