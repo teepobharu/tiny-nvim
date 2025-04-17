@@ -221,7 +221,7 @@ return {
         enabled = true,
       },
       input = { enabled = true },
-      scroll = { enabled = false },
+      scroll = { enabled = true },
       notifier = {
         enabled = true,
         --- Available style: "compact"|"fancy"|"minimal"
