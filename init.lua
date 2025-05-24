@@ -17,6 +17,8 @@ require "config.autocmds"
 require "config.lazy"
 require "config.keymaps"
 require "config.project"
+require "config.mykeymaps"
+require "config.myEditor"
 
 -- Only load the theme if not in VSCode
 if vim.g.vscode then
