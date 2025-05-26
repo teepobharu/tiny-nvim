@@ -15,6 +15,8 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
+require("config.mydefault-nvim-config")
+
 local specs = { { import = "plugins" }, { import = "langs" } }
 -- Load extra plugins base on vim.g.enable_extra_plugins and merge to specs
 local extra_plugins = vim.g.enable_extra_plugins -- e.g: { "no-neck-pain", "nvim-eslint" }
@@ -25,6 +27,10 @@ if extra_plugins then
     })
   end
 end
+
+-- specs = vim.list_extend(specs, {
+--   import = "plugins.extra.myEditor"
+-- })
 
 -- Setup lazy.nvim
 require("lazy").setup {
