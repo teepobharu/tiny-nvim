@@ -1,4 +1,4 @@
-local pathUtil = require("utils.path")
+local pathUtil = require("utils.mypath")
 local gitUtil = require("utils.git")
 local keyutil = require("utils.keyutil")
 local Lsp = require("utils.lsp")
@@ -432,7 +432,6 @@ return {
       { "<leader>qd", function() require("persistence").stop() end, desc = "Stop persistence" },
     },
   },
-
   {
     "folke/snacks.nvim",
     enabled = isSnackEnabled,
@@ -513,11 +512,8 @@ return {
     },
     keys = {
       {
-        "<leader>fR",
-        function()
-          Snacks.picker.resume()
-        end,
-        desc = "Resume",
+        "<c-_>",
+        false
       },
       {
         "<leader>gb",
