@@ -6,6 +6,7 @@ return {
   filetypes = { "python" },
   settings = {
     python = {
+      pythonPath = require("utils.mypath").get_pythonpath(),
       analysis = {
         autoSearchPaths = true,
         useLibraryCodeForTypes = true,

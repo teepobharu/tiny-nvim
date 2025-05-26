@@ -1,30 +1,31 @@
 return {
-  -- Disable copilot
-  {
-    "github/copilot.vim",
-    enabled = false,
-  },
-  {
-    "CopilotC-Nvim/CopilotChat.nvim",
-    enabled = false,
-  },
   {
     "yetone/avante.nvim",
     event = "VeryLazy",
-    version = false,
-    opts = {
-      provider = "copilot",
-      hints = { enabled = false }, -- Disable hints as I could trigger with <leader>a
-    },
     build = "make",
+    opts = {
+      hints = { enabled = false }, -- Disable hints
+      provider = "copilot", -- You can then change this provider here
+      mappings = {
+        ask = "<leader>ra",
+        edit = "<leader>rA",
+        refresh = "<leader>rr",
+      },
+    },
     dependencies = {
-      "nvim-treesitter/nvim-treesitter",
-      "stevearc/dressing.nvim",
       "nvim-lua/plenary.nvim",
       "MunifTanjim/nui.nvim",
-      --- Use copilot lua version instead of the official one
-      "zbirenbaum/copilot.lua",
     },
+    config = function(_, options)
+      require("avante").setup(options)
+
+      local wk = require("which-key")
+      wk.add({
+        { "<leader>ra", desc = "Ask AI" },
+        { "<leader>rA", desc = "Edit selected", mode = { "v" } },
+        { "<leader>rr", desc = "Refresh AI" },
+      })
+    end,
   },
   {
     "MeanderingProgrammer/render-markdown.nvim",
@@ -35,3 +36,4 @@ return {
     ft = { "markdown", "Avante" },
   },
 }
+
