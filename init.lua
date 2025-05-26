@@ -1,4 +1,5 @@
 require "config.options"
+require "config.myopts"
 
 -- Load project setting if available, e.g: .nvim-config.lua
 -- This file is not tracked by git
@@ -18,7 +19,6 @@ require "config.lazy"
 require "config.keymaps"
 require "config.project"
 require "config.mykeymaps"
-require "config.myEditor"
 
 -- Only load the theme if not in VSCode
 if vim.g.vscode then
@@ -56,6 +56,8 @@ else
     less = { "tailwindcss" },
     postcss = { "tailwindcss" },
   }
+
+  require("config.mydefault-nvim-config")
 
   local enabled_lsp = {}
   local on_demands = vim.g.lsp_on_demands or {}
