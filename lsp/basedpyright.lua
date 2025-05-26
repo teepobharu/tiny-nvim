@@ -13,6 +13,7 @@ return {
   },
   settings = {
     python = {
+      pythonPath = require("utils.mypath").get_pythonpath(),
       analysis = {
         autoSearchPaths = true,
         useLibraryCodeForTypes = true,

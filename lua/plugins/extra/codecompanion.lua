@@ -1,4 +1,5 @@
-local mapping_key_prefix = vim.g.ai_prefix_key or "<leader>A"
+local mapping_key_prefix = vim.g.ai_prefix_key or "<leader>a"
+local IS_DEV = false
 
 -- This is custom system prompt for Copilot adapter
 -- Base on https://github.com/olimorris/codecompanion.nvim/blob/e7d931ae027f9fdca2bd7c53aa0a8d3f8d620256/lua/codecompanion/config.lua#L639 and https://github.com/CopilotC-Nvim/CopilotChat.nvim/blob/d43fab67c328946fbf8e24fdcadfdb5410517e1f/lua/CopilotChat/prompts.lua#L5
@@ -41,8 +42,8 @@ When given a task:
 ]],
   vim.loop.os_uname().sysname
 )
-local COPILOT_EXPLAIN =
-  string.format [[You are a world-class coding tutor. Your code explanations perfectly balance high-level concepts and granular details. Your approach ensures that students not only understand how to write code, but also grasp the underlying principles that guide effective programming.
+local COPILOT_EXPLAIN = string.format(
+  [[You are a world-class coding tutor. Your code explanations perfectly balance high-level concepts and granular details. Your approach ensures that students not only understand how to write code, but also grasp the underlying principles that guide effective programming.
 When asked for your name, you must respond with "GitHub Copilot".
 Follow the user's requirements carefully & to the letter.
 Your expertise is strictly limited to software development topics.
@@ -69,8 +70,9 @@ Use developer-friendly terms and analogies in your explanations.
 Identify 'gotchas' or less obvious parts of the code that might trip up someone new.
 Provide clear and relevant examples aligned with any provided context.
 ]]
-local COPILOT_REVIEW =
-  string.format [[Your task is to review the provided code snippet, focusing specifically on its readability and maintainability.
+)
+local COPILOT_REVIEW = string.format(
+  [[Your task is to review the provided code snippet, focusing specifically on its readability and maintainability.
 Identify any issues related to:
 - Naming conventions that are unclear, misleading or doesn't follow conventions for the language being used.
 - The presence of unnecessary comments, or the lack of necessary ones.
@@ -90,8 +92,9 @@ Format your feedback as follows:
  
 If the code snippet has no readability issues, simply confirm that the code is clear and well-written as is.
 ]]
-local COPILOT_REFACTOR =
-  string.format [[Your task is to refactor the provided code snippet, focusing specifically on its readability and maintainability.
+)
+local COPILOT_REFACTOR = string.format(
+  [[Your task is to refactor the provided code snippet, focusing specifically on its readability and maintainability.
 Identify any issues related to:
 - Naming conventions that are unclear, misleading or doesn't follow conventions for the language being used.
 - The presence of unnecessary comments, or the lack of necessary ones.
@@ -101,6 +104,7 @@ Identify any issues related to:
 - Any inconsistencies in naming, formatting, or overall coding style.
 - Repetitive code patterns that could be more efficiently handled through abstraction or optimization.
 ]]
+)
 
 return {
   {
@@ -113,34 +117,20 @@ return {
     },
   },
   {
-    "saghen/blink.cmp",
-    optional = true,
-    opts = {
-      sources = {
-        per_filetype = {
-          codecompanion = { "codecompanion" },
-        },
-      },
-    },
-  },
-  {
-    "MeanderingProgrammer/render-markdown.nvim",
-    optional = true,
-    opts = {
-      file_types = { "markdown", "codecompanion" },
-    },
-    ft = { "markdown", "codecompanion" },
-  },
-  {
     "nvim-treesitter/nvim-treesitter",
-    optional = true,
     opts = { ensure_installed = { "yaml", "markdown" } },
   },
   {
+    "CopilotC-Nvim/CopilotChat.nvim",
+    enabled = true,
+  },
+  {
+    dir = IS_DEV and "~/Projects/research/codecompanion.nvim" or nil,
     "olimorris/codecompanion.nvim",
     dependencies = {
       "nvim-lua/plenary.nvim",
       "nvim-treesitter/nvim-treesitter",
+      "ibhagwan/fzf-lua", -- For fzf provider, file or buffer picker
       "jellydn/spinner.nvim", -- Show loading spinner when request is started
     },
     opts = {
@@ -154,6 +144,7 @@ return {
               description = "Insert open buffers",
               opts = {
                 contains_code = true,
+                provider = "fzf_lua", -- default|telescope|mini_pick|fzf_lua
               },
             },
             ["file"] = {
@@ -162,6 +153,7 @@ return {
               opts = {
                 contains_code = true,
                 max_lines = 1000,
+                provider = "fzf_lua", -- telescope|mini_pick|fzf_lua
               },
             },
           },
@@ -214,6 +206,22 @@ return {
       },
       prompt_library = {
         -- Custom the default prompt
+        ["Generate a Commit Message"] = {
+          prompts = {
+            {
+              role = "user",
+              content = function()
+                return "Write commit message with commitizen convention. Write clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'."
+                  .. "\n\n```\n"
+                  .. vim.fn.system("git diff")
+                  .. "\n```"
+              end,
+              opts = {
+                contains_code = true,
+              },
+            },
+          },
+        },
         ["Explain"] = {
           strategy = "chat",
           description = "Explain how code in a buffer works",
@@ -287,7 +295,7 @@ return {
               content = function()
                 return "Write commit message for the change with commitizen convention. Write clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'."
                   .. "\n\n```\n"
-                  .. vim.fn.system "git diff --staged"
+                  .. vim.fn.system("git diff --staged")
                   .. "\n```"
               end,
               opts = {
@@ -515,7 +523,7 @@ return {
       require("codecompanion").setup(options)
 
       -- Show loading spinner when request is started
-      local spinner = require "spinner"
+      local spinner = require("spinner")
       local group = vim.api.nvim_create_augroup("CodeCompanionHooks", {})
       vim.api.nvim_create_autocmd({ "User" }, {
         pattern = "CodeCompanionRequest*",
@@ -570,6 +578,12 @@ return {
       },
       {
         mapping_key_prefix .. "m",
+        "<cmd>CodeCompanion /commit<cr>",
+        desc = "Code Companion - Git commit message",
+      },
+      -- Custom prompts
+      {
+        mapping_key_prefix .. "M",
         "<cmd>CodeCompanion /staged-commit<cr>",
         desc = "Code Companion - Git commit message (staged)",
       },
@@ -598,6 +612,18 @@ return {
         desc = "Code Companion - Better naming",
         mode = "v",
       },
+      -- Quick chat
+      {
+        mapping_key_prefix .. "q",
+        function()
+          local input = vim.fn.input("Quick Chat: ")
+          if input ~= "" then
+            vim.cmd("CodeCompanion " .. input)
+          end
+        end,
+        desc = "Code Companion - Quick chat",
+      },
     },
   },
 }
+
