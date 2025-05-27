@@ -410,8 +410,7 @@ end, { nargs = 0 })
 
 keymap("n", "<leader>Lr", ":RestartLspClients<CR>", { desc = "LSPRestart", noremap = true, silent = true })
 keymap("n", "<leader>Lx", ":StopLspClients<CR>", { desc = "LSP Stop", noremap = true, silent = true })
-keymap("n", "<leader>Ls", ":LspStart", { desc = "LSP Start", noremap = true })
-keymap("n", "<leader>Li", ":LspInfo<CR>", { desc = "LSP Info", noremap = true, silent = true })
+keymap("n", "<leader>Li", ":check lsp<CR>", { desc = "LSP Info", noremap = true, silent = true })
 
 --   # which key migrate .nvim $HOME/.config/nvim/keys/which-key.vim
 keymap("n", "<c-q>", ":q<CR>", { desc = "Close", noremap = true, silent = true })
