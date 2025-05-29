@@ -1,7 +1,6 @@
 local pathUtil = require("utils.mypath")
 local gitUtil = require("utils.git")
 local keyutil = require("utils.keyutil")
-local Lsp = require("utils.lsp")
 local isSnackEnabled = keyutil.isSnackEnabled
 local key_f = keyutil.key_f
 local key_s = keyutil.key_s
@@ -339,7 +338,7 @@ Your instructions here
         -- cd ~/.cache && pipenv --python 3
         -- pipenv install pandas
         python = {
-          pathUtil.get_pythonpath(false, true) .. " -u",
+          pathUtil.get_pythonpath(false) .. " -u",
           -- first check if therre is virt env in the git rroot dir or .venv or not if not python3 -u else pipenv run python -u
           -- purre cli handle not work with handling https://github.com/jellydn/quick-code-runner.nvim/blob/main/lua/quick-code-runner/utils.lua#L248
           -- "[[ -d .venv ]] && echo 'pipenv run python -u' || echo 'python3 -u'", -- not work
