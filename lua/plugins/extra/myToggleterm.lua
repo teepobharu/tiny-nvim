@@ -81,7 +81,7 @@ return {
     --   desc = "Toggle term",
     -- },
     {
-      "<leader><c-_>",
+      "<leader><c-space>",
       "<cmd>:ToggleTerm<cr>",
       desc = "Toggle term",
     },

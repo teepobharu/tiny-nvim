@@ -106,4 +106,18 @@ function M.get_global_file_by_type(ext)
   return string.format("%s/code-pad.%s", path, ext)
 end
 
+---@return string|nil
+function M.get_root_directory_current_buffer()
+  -- Change directory to the current buffer's directory
+  local buffer_path = vim.fn.expand("%:p:h")
+  -- lcd buffer_path
+  vim.cmd("lcd " .. buffer_path)
+  -- Get git root from current buffer
+  if path.is_git_repo() then
+    return path.get_git_root()
+  else
+    return buffer_path
+  end
+end
+
 return M
