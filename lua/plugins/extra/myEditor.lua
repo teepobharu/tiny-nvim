@@ -12,8 +12,8 @@ local mapping_key_prefix = vim.g.ai_prefix_key or "<leader>A" -- orginal from co
 
 return {
   -- Disabled list
-  { "nvimdev/dashboard-nvim", lazy = true, enabled = false },
-  { "Wansmer/treesj", enabled = false },
+  { "nvimdev/dashboard-nvim", lazy = true,    enabled = false },
+  { "Wansmer/treesj",         enabled = false },
   -- folke/edgy.nvim:  https://github.com/LazyVim/LazyVim/blob/1f8469a53c9c878d52932818533ce51c27ded5b6/lua/lazyvim/plugins/extras/ui/edgy.lua#L97
   {
     "jellydn/hurl.nvim",
@@ -221,6 +221,66 @@ return {
         })
       end,
     },
+    opts = {
+      keymaps = {
+        completion = {
+          modes = {
+            -- i = "<C-/>",
+            -- i = "<C-Space>",
+          },
+        },
+      },
+      prompt_library = {
+        ["Setup Test Example"] = {
+          strategy = "workflow",
+          description = "My workflow",
+          opts = {
+            --   adapter = "openai", -- Always use the OpenAI adapter for this workflow
+            adapter = "copilot",
+
+          },
+          prompts = {
+            {
+              name = "Setup Test", -- example edit <-> test in available
+              role = "user",
+              opts = { auto_submit = false },
+              content = function()
+                -- Leverage auto_tool_mode which disables the requirement of approvals and automatically saves any edited buffer
+                vim.g.codecompanion_auto_tool_mode = true
+
+                -- Some clear instructions for the LLM to follow
+                return [[### Instructions
+Your instructions here
+
+### Steps to Follow
+
+      You are required to write code following the instructions provided above and test the correctness by running the designated test suite. Follow these steps exactly:
+
+      1. Update the code in #buffer{watch} using the @editor tool
+      2. Then use the @cmd_runner tool to run the test suite with `<test_cmd>` (do this after you have updated the code)
+      3. Make sure you trigger both tools in the same response
+
+      We'll repeat this cycle until the tests pass. Ensure no deviations from these steps.]]
+              end,
+            },
+            {
+              name = "Repeat On Failure",
+              role = "user",
+              opts = { auto_submit = true },
+              -- Scope this prompt to only run when the cmd_runner tool is active
+              condition = function()
+                return _G.codecompanion_current_tool == "cmd_runner"
+              end,
+              -- Repeat until the tests pass, as indicated by the testing flag
+              repeat_until = function(chat)
+                return chat.tools.flags.testing == true
+              end,
+              content = "The tests have failed. Can you edit the buffer and run the test suite again?",
+            },
+          },
+        },
+      },
+    },
   },
   {
     "CopilotC-Nvim/CopilotChat.nvim",
@@ -426,16 +486,19 @@ return {
       dir = vim.fn.stdpath("state") .. "/my-sessions/", -- directory where session files are saved
     },
     keys = {
-      { "<leader>qs", function() require("persistence").save() end, desc = "Save session" },
+      { "<leader>qs", function() require("persistence").save() end,                desc = "Save session" },
       { "<leader>ql", function() require("persistence").load({ last = true }) end, desc = "Restore last session" },
-      { "<leader>qS", function() require("persistence").select() end, desc = "Select session to restore" },
-      { "<leader>qd", function() require("persistence").stop() end, desc = "Stop persistence" },
+      { "<leader>qS", function() require("persistence").select() end,              desc = "Select session to restore" },
+      { "<leader>qd", function() require("persistence").stop() end,                desc = "Stop persistence" },
     },
   },
   {
     "folke/snacks.nvim",
     enabled = isSnackEnabled,
     opts = {
+      explorer = {
+        replace_netrw = false
+      },
       picker = {
         formatters = {
           file = {
@@ -487,10 +550,10 @@ return {
               vim.notify("No reference compare with default", vim.log.levels.WARN)
             end
 
-            picker:close() -- require this else not work
+            picker:close()                                            -- require this else not work
             vim.cmd("tabnew")
-            vim.cmd("b#") -- switch to the previous buffer
-            vim.cmd("bd#") -- delete the previous buffer (empty buffer)
+            vim.cmd("b#")                                             -- switch to the previous buffer
+            vim.cmd("bd#")                                            -- delete the previous buffer (empty buffer)
             print([==[run my_diff_compare ref:]==], vim.inspect(ref)) -- __AUTO_GENERATED_PRINT_VAR_END__
             require("gitsigns").diffthis(ref, {
               vertical = true,
@@ -511,16 +574,44 @@ return {
       },
     },
     keys = {
-      {
-        "<c-_>",
-        false
-      },
+      -- default keys for toggle term
+      -- {
+      --   "<c-_>",
+      --   false
+      -- },
       {
         "<leader>gb",
         function()
           Snacks.picker.git_branches()
         end,
         desc = "Git Branches",
+      },
+      {
+        "<leader>fz", -- https://github.com/folke/snacks.nvim/discussions/617
+        function()
+          Snacks.picker.zoxide(
+            {
+              finder = "files_zoxide",
+              format = "file",
+              -- confirm = "load_session" -- Disable loading session by default.
+              confirm = function(picker, item)
+                picker:close()
+                if item then
+                  Snacks.picker.files({ cwd = item.text })
+                end
+                local dir = item.file
+                vim.fn.chdir(dir)      -- Change current working directory
+                vim.cmd("tcd " .. dir) -- Change tab-local current working directory
+              end,
+              win = {
+                preview = {
+                  minimal = true,
+                },
+              },
+            }
+          )
+        end,
+        desc = "Zoxide"
       },
     },
   },
@@ -539,61 +630,109 @@ return {
           "<localleader>g",
           group = "Git",
           mode = { "n" },
-          icon = { icon = "" },
-          color = "black",
+          icon = { icon = "", color = "black" }
         },
         {
           "<localleader>c",
           group = "file/dir",
           mode = { "n" },
-          icon = { icon = "📂" },
-          color = "black",
+          icon = { icon = "📂", color = "black" },
         },
         {
           "<localleader>f",
           group = "file/find",
           mode = { "n" },
-          icon = { icon = "📂" },
-          color = "black",
+          icon = { icon = "📂", color = "black" },
         },
         {
           "<localleader>r",
           group = "code/lsp/lua",
           mode = { "n" },
-          icon = { icon = "💻" },
-          color = "black",
+          icon = { icon = "💻", color = "black" },
         },
       }, isSnackEnabled and {
         {
           "<leader>L",
           group = "linter/lsp",
           mode = { "n" },
-          color = "black",
+          icon = { color = "black" },
         },
         {
           "<leader>" .. key_f,
           group = "Find(Fzf)",
           mode = { "n" },
-          icon = { icon = "" },
-          color = "black",
+          icon = { icon = "", color = "black" },
         },
         {
           "<leader>" .. key_g,
           group = "Git(Fzf)",
           mode = { "n", "v" },
-          icon = { icon = "" },
-          color = "black",
+          icon = { icon = "", color = "black" },
         },
         {
           "<leader>" .. key_s,
           group = "Search(Fzf)",
           mode = { "n", "v" },
-          icon = { icon = "" },
-          color = "black",
+          icon = { icon = "", color = "black" },
         },
       } or {}),
     },
-  }, -- { import = "plugins.extras.copilot-chat-v2" },
+  },
+  -- required to add avante cmp sources
+  {
+    'saghen/blink.compat',
+    -- use v2.* for blink.cmp v1.*
+    version = '2.*',
+    -- lazy.nvim will automatically load the plugin when it's required by blink.cmp
+    lazy = true,
+    -- make sure to set opts so that lazy.nvim calls blink.compat's setup
+    opts = {},
+  },
+  -- codecompanion https://www.reddit.com/r/neovim/comments/1hhmoxm/comment/m2w1utu/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
+  {
+    "saghen/blink.cmp",
+    opts = {
+      sources = {
+        -- default = {
+        --     "avante_commands", "avante_mentions", "avante_files"
+        --     -- ,"codecompanion"
+        --   },
+        providers = {
+          -- codecompanion = {
+          --   name = "codecompanion",
+          --   module = "blink.compat.source",
+          --   score_offset = 1000, -- show at a higher priority than lsp
+          -- },
+          avante_commands = {
+            name = "avante_commands",
+            module = "blink.compat.source",
+            score_offset = 90, -- show at a higher priority than lsp
+            opts = {},
+          },
+          avante_files = {
+            name = "avante_commands",
+            module = "blink.compat.source",
+            score_offset = 100, -- show at a higher priority than lsp
+            opts = {},
+          },
+          avante_mentions = {
+            name = "avante_mentions",
+            module = "blink.compat.source",
+            score_offset = 1000, -- show at a higher priority than lsp
+            opts = {},
+          },
+        },
+        per_filetype = {
+          -- check ft with set filetype
+          -- AvantePromptInput = { inherit_defaults = true },
+          -- AvanteInput = { inherit_defaults = true, "avante_commands", "avante_mentions", "avante_files" },
+          AvanteInput = { "avante_commands", "avante_mentions", "avante_files" },
+          -- lua = { inherit_defaults = true, 'lazydev' } } -- defaults https://github.com/Saghen/blink.cmp/blob/e7cdf1ac0be3acfce2a718bc921768ac747db5d9/doc/configuration/sources.md?plain=1#L23
+        }
+      },
+    },
+  },
+  -- { import = "plugins.extra.copilot-chat-v2" },
   -- {
   --   "neovim/nvim-lspconfig",
   --   opts = {
@@ -622,11 +761,5 @@ return {
   --     },
   --   },
   -- },
-  -- { import = "plugins.extras.telescope-lazy" },
-  { import = "plugins.extras.myNoice" },
-  { import = "plugins.extras.telescope" },
-  -- { import = "plugins.extras.neotree" },
-  -- { import = "plugins.extras.fzf" },
-  -- { import = "plugins.extras.telescope-map-essntials" },
+  { import = "plugins.extra.myNoice" },
 }
-
