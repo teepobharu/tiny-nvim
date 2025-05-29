@@ -7,7 +7,7 @@ local M = {}
 function M.get_pythonpath(pipenvFallback, isLog)
   -- check for current dir if pyyrgithconfig.json exists and get python path
   local function readpyrightconfig(filepath, pyrightConfigname)
-    print([==[M.get_pythonpath#readpyrightconfig filepath:]==], vim.inspect(filepath)) -- __AUTO_GENERATED_PRINT_VAR_END__
+    -- print([==[M.get_pythonpath#readpyrightconfig filepath:]==], vim.inspect(filepath)) -- __AUTO_GENERATED_PRINT_VAR_END__
     local filepathconfig = filepath .. "/" .. (pyrightConfigname or "pyrightconfig.json")
     local content = ""
     if vim.fn.filereadable(filepathconfig) == 1 then
@@ -21,11 +21,17 @@ function M.get_pythonpath(pipenvFallback, isLog)
   config = config or readpyrightconfig(root_dir)
 
   if not config then
-    vim.notify("pyrightconfig exists but not able to read", vim.log.levels.WARN)
+    if isLog then
+      vim.notify("pyrightconfig exists but not able to read", vim.log.levels.WARN)
+    end
   else
     local venvPath = config.venvPath
     if venvPath == nil or vim.fn.empty(venvPath) == 1 then
-      vim.notify("pyrightconfig exists but venvPath not found", vim.log.levels.ERROR)
+      if isLog then
+        -- __AUTO_GENERATED_PRINT_VAR_START__
+        print([==[M.get_pythonpath#if#if#if isLog:]==], vim.inspect(isLog)) -- __AUTO_GENERATED_PRINT_VAR_END__
+        vim.notify("pyrightconfig exists but venvPath not found", vim.log.levels.WARN)
+      end
     else
       local pythonExeDir = "/bin/python"
       local isVenvAbsPath = string.sub(venvPath, 1, 1) == "/"
