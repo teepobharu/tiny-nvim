@@ -4,11 +4,12 @@
 -- open spectre search and live grep telescope : https://www.reddit.com/r/neovim/comments/17o6g2n/comment/k7wf2wp/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
 local Util = require("lazy.core.util")
 local Path = require("utils.path")
+local Mypath = require("utils.mypath")
 local KeyUtils = require("utils.keyutil")
 local key_f = KeyUtils.key_f
 local key_g = KeyUtils.key_g
 
-local isSnackEnabled = vim.g.enable_plugins and vim.g.enable_plugins.snacks == "yes"
+local isSnackEnabled = KeyUtils.isSnackEnabled
 
 function openGitRemote(state)
   local node = state.tree:get_node()
@@ -41,6 +42,7 @@ function openGitRemote(state)
   local fullUrl = "https://" .. gitDomain .. "/" .. current_file .. "/blob/" .. branch
   require("lazy.util").open(fullUrl)
 end
+
 --- Get options for file and grep operations based on the current state and type.
 
 ---@param state
@@ -56,7 +58,7 @@ function get_opts_for_files_and_grep(state, type)
   if type == "file" then
     table.insert(extra_opts_list, "-t=f")
   end
-  local extra_opts = table.concat(extra_opts_list, " ") -- works on fzf not in telescope
+  local extra_opts = table.concat(extra_opts_list, " ")                           -- works on fzf not in telescope
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[get_opts_for_files_and_grep extra_opts:]==], vim.inspect(extra_opts)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
@@ -64,7 +66,7 @@ function get_opts_for_files_and_grep(state, type)
   return {
     current_file_dir = current_file_dir,
     cwdPath = cwdPath,
-    extra_opts = extra_opts, -- fzf files
+    extra_opts = extra_opts,           -- fzf files
     extra_opts_list = extra_opts_list, -- telescope grep
     filepath = filepath,
   }
@@ -106,7 +108,7 @@ return {
     },
     keys = {
       {
-        isSnackEnabled and "<leader>E" or "<leader>e",
+        "<leader>e",
         function()
           require("neo-tree.command").execute({ toggle = true, dir = Path.get_root_directory() })
         end,
@@ -115,7 +117,7 @@ return {
       {
         "<localleader>e",
         function()
-          require("neo-tree.command").execute({ toggle = true, dir = Path.get_root_directory_current_buffer() })
+          require("neo-tree.command").execute({ toggle = true, dir = Mypath.get_root_directory_current_buffer() })
         end,
         desc = "Explorer NeoTree (Root)",
       },
@@ -137,7 +139,7 @@ return {
       {
         "<leader>fe",
         function()
-          local curr_dir = Path.get_root_directory_current_buffer()
+          local curr_dir = Mypath.get_root_directory_current_buffer()
           if isSnackEnabled then
             local ok, err = pcall(Snacks.picker.explorer, {
               cwd = curr_dir,
@@ -161,10 +163,10 @@ return {
 
             if not ok then
               vim.notify("Snacks Explorer: " .. err, vim.log.levels.ERROR)
-              require("neo-tree.command").execute({ toggle = true, dir = Path.get_root_directory_current_buffer() })
+              require("neo-tree.command").execute({ toggle = true, dir = Mypath.get_root_directory_current_buffer() })
             end
           else
-            require("neo-tree.command").execute({ toggle = true, dir = Path.get_root_directory_current_buffer() })
+            require("neo-tree.command").execute({ toggle = true, dir = Mypath.get_root_directory_current_buffer() })
           end
         end,
         desc = (isSnackEnabled and "Snack Explorer" or "NeoTree Explorer") .. "(Root)",
@@ -203,7 +205,7 @@ return {
     opts = function(_, opts)
       -- lazyvim.nvim
       opts.open_files_do_not_replace_types = opts.open_files_do_not_replace_types
-        or { "terminal", "Trouble", "qf", "Outline", "trouble" }
+          or { "terminal", "Trouble", "qf", "Outline", "trouble" }
       table.insert(opts.open_files_do_not_replace_types, "edgy")
       -- use function to merge config (behiovr = force/override  )
       Util.merge(
