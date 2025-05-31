@@ -586,6 +586,26 @@ Your instructions here
         desc = "Git Branches",
       },
       {
+        "<leader>E",
+        function()
+          Snacks.picker.explorer({
+            cwd = vim.fn.expand("%:p:h"),
+            auto_close = true,
+            layout = {
+              preset = "vertical",
+            },
+            win = {
+              list = {
+                keys = {
+                  ["-"] = "explorer_up",
+                  ["g."] = "toggle_hidden",
+                },
+              },
+            },
+          })
+        end
+      },
+      {
         "<leader>fz", -- https://github.com/folke/snacks.nvim/discussions/617
         function()
           Snacks.picker.zoxide(
@@ -691,6 +711,21 @@ Your instructions here
   {
     "saghen/blink.cmp",
     opts = {
+      keymap = {
+        -- https://cmp.saghen.dev/configuration/keymap.html
+        -- 'c-e' by default remove autocomplete
+        -- disable from main coding.ai then trigger only when change from normal mode
+        ['<C-c>'] = {
+          function(cmp)
+            if cmp.is_visible() then
+              return cmp.show({ providers = { 'copilot' } })
+            else
+              return
+            end
+          end,
+          'fallback',
+        },
+      },
       sources = {
         -- default = {
         --     "avante_commands", "avante_mentions", "avante_files"
@@ -705,19 +740,19 @@ Your instructions here
           avante_commands = {
             name = "avante_commands",
             module = "blink.compat.source",
-            score_offset = 90, -- show at a higher priority than lsp
+            -- score_offset = 90, -- show at a higher priority than lsp
             opts = {},
           },
           avante_files = {
             name = "avante_commands",
             module = "blink.compat.source",
-            score_offset = 100, -- show at a higher priority than lsp
+            -- score_offset = 100, -- show at a higher priority than lsp
             opts = {},
           },
           avante_mentions = {
             name = "avante_mentions",
             module = "blink.compat.source",
-            score_offset = 1000, -- show at a higher priority than lsp
+            -- score_offset = 1000, -- show at a higher priority than lsp
             opts = {},
           },
         },
@@ -725,7 +760,7 @@ Your instructions here
           -- check ft with set filetype
           -- AvantePromptInput = { inherit_defaults = true },
           -- AvanteInput = { inherit_defaults = true, "avante_commands", "avante_mentions", "avante_files" },
-          AvanteInput = { "avante_commands", "avante_mentions", "avante_files" },
+          AvanteInput = { inherit_defaults = true, "avante_commands", "avante_mentions", "avante_files" },
           -- lua = { inherit_defaults = true, 'lazydev' } } -- defaults https://github.com/Saghen/blink.cmp/blob/e7cdf1ac0be3acfce2a718bc921768ac747db5d9/doc/configuration/sources.md?plain=1#L23
         }
       },
