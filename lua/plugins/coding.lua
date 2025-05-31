@@ -120,8 +120,8 @@ return {
       -- Disable per file type
       enabled = function()
         return not vim.tbl_contains({ "copilot-chat" }, vim.bo.filetype)
-          and vim.bo.buftype ~= "prompt"
-          and vim.b.completion ~= false
+            and vim.bo.buftype ~= "prompt"
+            and vim.b.completion ~= false
       end,
     },
     -- without having to redefine it
@@ -137,8 +137,8 @@ return {
     opts = {
       library = {
         { path = "${3rd}/luv/library", words = { "vim%.uv" } },
-        { path = "snacks.nvim", words = { "Snacks" } },
-        { path = "lazy.nvim", words = { "LazyVim" } },
+        { path = "snacks.nvim",        words = { "Snacks" } },
+        { path = "lazy.nvim",          words = { "LazyVim" } },
       },
     },
     optional = true,
@@ -187,7 +187,7 @@ return {
     dependencies = { "fang2hou/blink-copilot" },
     opts = {
       sources = {
-        default = { "copilot" },
+        -- default = { "copilot" },
         providers = {
           copilot = {
             name = "copilot",
@@ -215,7 +215,7 @@ return {
     "ThePrimeagen/refactoring.nvim",
     vscode = true,
     dependencies = {
-      { "nvim-lua/plenary.nvim", vscode = true },
+      { "nvim-lua/plenary.nvim",          vscode = true },
       { "nvim-treesitter/nvim-treesitter" },
     },
     keys = {
@@ -370,14 +370,14 @@ return {
             i = { "@block.inner", "@conditional.inner", "@loop.inner" },
           },
           f = ai.gen_spec.treesitter { a = "@function.outer", i = "@function.inner" }, -- function
-          c = ai.gen_spec.treesitter { a = "@class.outer", i = "@class.inner" }, -- class
-          t = { "<([%p%w]-)%f[^<%w][^<>]->.-</%1>", "^<.->().*()</[^/]->$" }, -- tags
-          d = { "%f[%d]%d+" }, -- digits
-          e = { -- Word with case
+          c = ai.gen_spec.treesitter { a = "@class.outer", i = "@class.inner" },       -- class
+          t = { "<([%p%w]-)%f[^<%w][^<>]->.-</%1>", "^<.->().*()</[^/]->$" },          -- tags
+          d = { "%f[%d]%d+" },                                                         -- digits
+          e = {                                                                        -- Word with case
             { "%u[%l%d]+%f[^%l%d]", "%f[%S][%l%d]+%f[^%l%d]", "%f[%P][%l%d]+%f[^%l%d]", "^[%l%d]+%f[^%l%d]" },
             "^().*()$",
           },
-          u = ai.gen_spec.function_call(), -- u for "Usage"
+          u = ai.gen_spec.function_call(),                          -- u for "Usage"
           U = ai.gen_spec.function_call { name_pattern = "[%w_]" }, -- without dot in function name
         },
       }
