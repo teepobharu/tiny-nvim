@@ -700,8 +700,8 @@ Your instructions here
   {
     "stevearc/conform.nvim",
     opts = {
-        formatters_by_ft = {
-          sh = { "shfmt" },
+      formatters_by_ft = {
+        sh = { "shfmt" },
       }
     }
   },
@@ -773,6 +773,38 @@ Your instructions here
         }
       },
     },
+  },
+  -- handle conflict with surround
+  {
+    "folke/flash.nvim",
+    -- enabled = false,
+    keys = {
+      -- prevent conflict with surround
+      {
+        "s",
+        mode = { "x", "o" },
+        false
+        -- function()
+        --   require("flash").jump()
+        -- end,
+      },
+    }
+  },
+  {
+    "kylechui/nvim-surround",
+    version = "^3.0.0", -- Use for stability; omit to use `main` branch for the latest features
+    event = "VeryLazy",
+    config = function()
+      require("nvim-surround").setup({
+        -- https://github.com/kylechui/nvim-surround/blob/main/lua/nvim-surround/config.lua
+        keymaps = {
+          visual = "s",
+          -- visual_line = "gS",
+          -- visual_line = "gs",
+        }
+        -- Configuration here, or leave empty to use defaults
+      })
+    end
   },
   -- { import = "plugins.extra.copilot-chat-v2" },
   -- {
