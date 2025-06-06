@@ -313,7 +313,7 @@ Your instructions here
           -- apply_cursor = "a",
           -- retry_user_request = "r",
           -- edit_user_request = "e",
-          switch_windows = "<C-w>",
+          -- switch_windows = "<C-w>", -- conflict with c-wf focus command confimration popup
           -- reverse_switch_windows = "<S-Tab>",
         },
       },
@@ -696,6 +696,14 @@ Your instructions here
         },
       } or {}),
     },
+  },
+  {
+    "stevearc/conform.nvim",
+    opts = {
+        formatters_by_ft = {
+          sh = { "shfmt" },
+      }
+    }
   },
   -- required to add avante cmp sources
   {

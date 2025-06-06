@@ -63,4 +63,9 @@ uv tool install isort
 uv tool install pyright
 uv tool install ruff
 
+go install go install mvdan.cc/sh/v3/cmd/shfmt@latest
+npm install -g \
+  bash-language-server
+# bash-language-server --version
+
 echo "All tools have been installed successfully!"
