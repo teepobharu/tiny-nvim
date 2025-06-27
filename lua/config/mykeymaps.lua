@@ -297,6 +297,7 @@ function _G.set_toggleterm_keymaps()
   -- vim.keymap.set("t", "<C-l>", [[<Cmd>wincmd l<CR>]], opts)
   -- vim.keymap.set("t", "<C-w>", [[<C-\><C-n><C-w>]], opts)
 end
+
 keymap("n", ";", ":", { desc = "CMD enter command mode" })
 
 vim.api.nvim_create_user_command("OpenTerminalInSplitWithCwd", function()
@@ -326,6 +327,7 @@ function gitsigns_jump_next_hunk()
   end)
   return "<Ignore>"
 end
+
 function gitsigns_jump_prev_hunk()
   if vim.wo.diff then
     return "[c"
@@ -335,6 +337,7 @@ function gitsigns_jump_prev_hunk()
   end)
   return "<Ignore>"
 end
+
 keymap("n", "<C-S-j>", gitsigns_jump_next_hunk, { desc = "Jump to next hunk", expr = true })
 keymap("n", "<C-M-j>", gitsigns_jump_next_hunk, { desc = "Jump to next hunk", expr = true })
 keymap("n", "<C-S-k>", gitsigns_jump_prev_hunk, { desc = "Jump to prev hunk", expr = true })
@@ -628,12 +631,70 @@ end
 -- local function set_mappings()
 -- Map J and K in quickfix window
 local quickfixAndTroubleGroup = augroup("QuickfixAndTroubleMappings")
+
+local function get_qf_files()
+  local files = {}
+  for _, item in ipairs(vim.fn.getqflist()) do
+    local fname = vim.fn.bufname(item.bufnr)
+    if fname ~= "" and not files[fname] then
+      files[fname] = true
+    end
+  end
+  return vim.tbl_keys(files)
+end
+
+local function print_copy_output()
+  local files = {}
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  files = get_qf_files()
+
+  -- print file join by space in one line and create command to add new line on these files if exists
+  --print the shell command
+  -- print total files :
+  print([==[ Total files:]==], #files)
+  local command_sh_add_line_check_exist =
+      "echo '" ..
+      table.concat(files, " ") ..
+      "' | xargs -I {} sh -c 'if [ -f {} ]; then echo \"\" >> \"{}\"; else echo \"File does not exist: {}\"; fi'"
+
+  print([==[ Add line ]==])              -- __AUTO_GENERATED_PRINT_VAR_END__
+  print(command_sh_add_line_check_exist) -- __AUTO_GENERATED_PRINT_VAR_END__
+  -- print remove_newline (revert )
+  local command_sh_remove_newline =
+      "echo '" ..
+      table.concat(files, " ") ..
+      "' | xargs -n 1 -I {} sh -c 'if [ -f {} ]; then sed -i \"\" \"\\$d\" \"{}\"; else echo \"File does not exist: {}\"; fi'"
+  print([==[ Remove line ]==])
+  print(command_sh_remove_newline)
+  -- print([==[ files:]==], vim.inspect(files)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  -- copy files into clipboard split by new line / if want same line can paste in spotlight
+  vim.fn.setreg("+", table.concat(files, "\n"))
+  vim.notify(" ~ Copied " .. #files .. " files to clipboard", vim.log.levels.INFO)
+end
+
+local function open_qflist_in_vscode()
+  local files = get_qf_files()
+  if #files == 0 then
+    print("No files in quickfix list.")
+    return
+  end
+  local cmd = "code " .. table.concat(files, " ")
+  print("~ Opening files in VSCode with cmd:")
+  print(cmd)
+  vim.fn.jobstart(cmd, { detach = true })
+end
+
 vim.api.nvim_create_autocmd("FileType", {
   group = quickfixAndTroubleGroup,
   pattern = "qf",
   callback = function()
     vim.api.nvim_buf_set_keymap(0, "n", "H", ":colder<CR>", { noremap = true, silent = true })
     vim.api.nvim_buf_set_keymap(0, "n", "L", ":cnewer<CR>", { noremap = true, silent = true })
+    -- open in vscode
+    -- vim.api.nvim_buf_set_keymap(0, "n", "<C-o>", ":lua print_copy_output()<CR>", { noremap = true, silent = true })
+    -- vim.api.nvim_buf_set_keymap(0, "n", "<C-o>", ":lua open_qflist_in_vscode()<CR>", { noremap = true, silent = true })
+    vim.keymap.set("n", "<C-o>", open_qflist_in_vscode, { buffer = true, noremap = true, silent = true })
+    vim.keymap.set("n", "<C-y>", print_copy_output, { buffer = true, noremap = true, silent = true })
   end,
 })
 
