@@ -654,7 +654,9 @@ end
 function test_outputcmd_copy_fn_from_quicklist()
   local files = {}
   -- __AUTO_GENERATED_PRINT_VAR_START__
+  -- get item in QF list
   for _, item in ipairs(vim.fn.getqflist()) do
+    --
     local fname = vim.fn.bufname(item.bufnr)
     if fname ~= "" and not files[fname] then
       files[fname] = true
@@ -673,11 +675,10 @@ function test_outputcmd_copy_fn_from_quicklist()
   command_sh_remove_newline =
       "echo '" ..
       table.concat(vim.tbl_keys(files), " ") ..
-      "' | xargs -I {} sh -c 'if [ -f {} ]; then sed -i \"\\$d\" \"{}\"; else echo \"File does not exist: {}\"; fi'"
+      "' | xargs -n 1 -I {} sh -c 'if [ -f {} ]; then sed -i \"\" \"\\$d\" \"{}\"; else echo \"File does not exist: {}\"; fi'"
   print([==[ command_sh_remove_newline:]==], command_sh_remove_newline)
-
   -- print([==[ files:]==], vim.inspect(files)) -- __AUTO_GENERATED_PRINT_VAR_END__
-  -- copy files into clipboard split by new line
+  -- copy files into clipboard split by new line / if want same line can paste in spotlight
   vim.fn.setreg("+", table.concat(vim.tbl_keys(files), "\n"))
 
 
@@ -691,7 +692,7 @@ function test_outputcmd_copy_fn_from_quicklist()
     local command_sh_remove_newline =
         "echo '" ..
         chunk ..
-        "' | xargs -n 4 -I {} sh -c 'if [ -f {} ]; then sed -i \"\\$d\" \"{}\"; else echo \"File does not exist: {}\"; fi'"
+        "' | xargs -n 4 -I {} sh -c 'if [ -f {} ]; then sed -i \"{}\" \"\\$d\"; else echo \"File does not exist: {}\"; fi'"
   end
 end
 
