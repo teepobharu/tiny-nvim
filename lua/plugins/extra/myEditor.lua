@@ -1,6 +1,6 @@
-local pathUtil = require("utils.mypath")
-local gitUtil = require("utils.git")
-local keyutil = require("utils.keyutil")
+local pathUtil = require "utils.mypath"
+local gitUtil = require "utils.git"
+local keyutil = require "utils.keyutil"
 local isSnackEnabled = keyutil.isSnackEnabled
 local key_f = keyutil.key_f
 local key_s = keyutil.key_s
@@ -47,10 +47,10 @@ return {
       {
         "<leader>ow",
         function()
-          local overseer = require("overseer")
+          local overseer = require "overseer"
           overseer.run_template({ name = "run script" }, function(task)
             if task then
-              task:add_component({ "restart_on_save", paths = { vim.fn.expand("%:p") } })
+              task:add_component { "restart_on_save", paths = { vim.fn.expand "%:p" } }
               local main_win = vim.api.nvim_get_current_win()
               overseer.run_action(task, "open vsplit")
               vim.api.nvim_set_current_win(main_win)
@@ -236,7 +236,6 @@ return {
           opts = {
             --   adapter = "openai", -- Always use the OpenAI adapter for this workflow
             adapter = "copilot",
-
           },
           prompts = {
             {
@@ -359,7 +358,7 @@ Your instructions here
         },
         typescript = {
           -- "bun run",
-          "deno run",
+          "deno run --allow-import",
         },
         --  end common -------------------
         sh = {
@@ -367,13 +366,13 @@ Your instructions here
         },
       },
       global_files = {
-        javascript = pathUtil.get_global_file_by_type("js"),
-        typescript = pathUtil.get_global_file_by_type("ts"),
-        python = pathUtil.get_global_file_by_type("py"),
-        go = pathUtil.get_global_file_by_type("go"),
-        lua = pathUtil.get_global_file_by_type("lua"),
+        javascript = pathUtil.get_global_file_by_type "js",
+        typescript = pathUtil.get_global_file_by_type "ts",
+        python = pathUtil.get_global_file_by_type "py",
+        go = pathUtil.get_global_file_by_type "go",
+        lua = pathUtil.get_global_file_by_type "lua",
         --  end common -------------------
-        sh = pathUtil.get_global_file_by_type("sh"),
+        sh = pathUtil.get_global_file_by_type "sh",
       },
     },
   },
@@ -390,7 +389,7 @@ Your instructions here
 
               local ref = selected[1]
               ref = ref:gsub("^[^/]+/", "")
-              local sanitized_ref = ref:match("([^%s]+)$") -- remove all space nonrelated ref prefixes
+              local sanitized_ref = ref:match "([^%s]+)$" -- remove all space nonrelated ref prefixes
               open_remote(sanitized_ref, "file")
               open_remote(sanitized_ref, "branch")
             end,
@@ -400,7 +399,7 @@ Your instructions here
           actions = {
             ["ctrl-o"] = function(selected)
               -- Custom action to open remote file
-              local commit_hash = selected[1]:match("%w+")
+              local commit_hash = selected[1]:match "%w+"
               open_remote(commit_hash, "file")
               open_remote(commit_hash, "commit")
             end,
@@ -410,7 +409,7 @@ Your instructions here
           actions = {
             ["ctrl-o"] = function(selected)
               -- Custom action to open remote file
-              local commit_hash = selected[1]:match("%w+")
+              local commit_hash = selected[1]:match "%w+"
               open_remote(commit_hash, "file")
               open_remote(commit_hash, "commit")
             end,
@@ -423,7 +422,7 @@ Your instructions here
             -- end,
             ["ctrl-o"] = function(selected)
               -- Custom action to open remote file
-              local commit_hash = selected[1]:match("%w+")
+              local commit_hash = selected[1]:match "%w+"
               open_remote(commit_hash, "file")
               open_remote(commit_hash, "commit")
               -- local file_path = vim.fn.expand("%:p")
@@ -482,7 +481,7 @@ Your instructions here
   {
     "folke/persistence.nvim",
     opts = {
-      dir = vim.fn.stdpath("state") .. "/my-sessions/", -- directory where session files are saved
+      dir = vim.fn.stdpath "state" .. "/my-sessions/", -- directory where session files are saved
     },
     keys = {
       { "<leader>qs", function() require("persistence").save() end,                desc = "Save session" },
@@ -496,7 +495,7 @@ Your instructions here
     enabled = isSnackEnabled,
     opts = {
       explorer = {
-        replace_netrw = false
+        replace_netrw = false,
       },
       picker = {
         formatters = {
@@ -550,9 +549,9 @@ Your instructions here
             end
 
             picker:close()                                            -- require this else not work
-            vim.cmd("tabnew")
-            vim.cmd("b#")                                             -- switch to the previous buffer
-            vim.cmd("bd#")                                            -- delete the previous buffer (empty buffer)
+            vim.cmd "tabnew"
+            vim.cmd "b#"                                              -- switch to the previous buffer
+            vim.cmd "bd#"                                             -- delete the previous buffer (empty buffer)
             print([==[run my_diff_compare ref:]==], vim.inspect(ref)) -- __AUTO_GENERATED_PRINT_VAR_END__
             require("gitsigns").diffthis(ref, {
               vertical = true,
@@ -588,8 +587,8 @@ Your instructions here
       {
         "<leader>E",
         function()
-          Snacks.picker.explorer({
-            cwd = vim.fn.expand("%:p:h"),
+          Snacks.picker.explorer {
+            cwd = vim.fn.expand "%:p:h",
             auto_close = true,
             layout = {
               preset = "vertical",
@@ -602,35 +601,33 @@ Your instructions here
                 },
               },
             },
-          })
-        end
+          }
+        end,
       },
       {
         "<leader>fz", -- https://github.com/folke/snacks.nvim/discussions/617
         function()
-          Snacks.picker.zoxide(
-            {
-              finder = "files_zoxide",
-              format = "file",
-              -- confirm = "load_session" -- Disable loading session by default.
-              confirm = function(picker, item)
-                picker:close()
-                if item then
-                  Snacks.picker.files({ cwd = item.text })
-                end
-                local dir = item.file
-                vim.fn.chdir(dir)      -- Change current working directory
-                vim.cmd("tcd " .. dir) -- Change tab-local current working directory
-              end,
-              win = {
-                preview = {
-                  minimal = true,
-                },
+          Snacks.picker.zoxide {
+            finder = "files_zoxide",
+            format = "file",
+            -- confirm = "load_session" -- Disable loading session by default.
+            confirm = function(picker, item)
+              picker:close()
+              if item then
+                Snacks.picker.files { cwd = item.text }
+              end
+              local dir = item.file
+              vim.fn.chdir(dir)      -- Change current working directory
+              vim.cmd("tcd " .. dir) -- Change tab-local current working directory
+            end,
+            win = {
+              preview = {
+                minimal = true,
               },
-            }
-          )
+            },
+          }
         end,
-        desc = "Zoxide"
+        desc = "Zoxide",
       },
     },
   },
@@ -649,7 +646,7 @@ Your instructions here
           "<localleader>g",
           group = "Git",
           mode = { "n" },
-          icon = { icon = "", color = "black" }
+          icon = { icon = "", color = "black" },
         },
         {
           "<localleader>c",
@@ -702,14 +699,14 @@ Your instructions here
     opts = {
       formatters_by_ft = {
         sh = { "shfmt" },
-      }
-    }
+      },
+    },
   },
   -- required to add avante cmp sources
   {
-    'saghen/blink.compat',
+    "saghen/blink.compat",
     -- use v2.* for blink.cmp v1.*
-    version = '2.*',
+    version = "2.*",
     -- lazy.nvim will automatically load the plugin when it's required by blink.cmp
     lazy = true,
     -- make sure to set opts so that lazy.nvim calls blink.compat's setup
@@ -723,15 +720,15 @@ Your instructions here
         -- https://cmp.saghen.dev/configuration/keymap.html
         -- 'c-e' by default remove autocomplete
         -- disable from main coding.ai then trigger only when change from normal mode
-        ['<C-c>'] = {
+        ["<C-c>"] = {
           function(cmp)
             if cmp.is_visible() then
-              return cmp.show({ providers = { 'copilot' } })
+              return cmp.show { providers = { "copilot" } }
             else
               return
             end
           end,
-          'fallback',
+          "fallback",
         },
       },
       sources = {
@@ -770,7 +767,7 @@ Your instructions here
           -- AvanteInput = { inherit_defaults = true, "avante_commands", "avante_mentions", "avante_files" },
           AvanteInput = { inherit_defaults = true, "avante_commands", "avante_mentions", "avante_files" },
           -- lua = { inherit_defaults = true, 'lazydev' } } -- defaults https://github.com/Saghen/blink.cmp/blob/e7cdf1ac0be3acfce2a718bc921768ac747db5d9/doc/configuration/sources.md?plain=1#L23
-        }
+        },
       },
     },
   },
@@ -783,28 +780,28 @@ Your instructions here
       {
         "s",
         mode = { "x", "o" },
-        false
+        false,
         -- function()
         --   require("flash").jump()
         -- end,
       },
-    }
+    },
   },
   {
     "kylechui/nvim-surround",
     version = "^3.0.0", -- Use for stability; omit to use `main` branch for the latest features
     event = "VeryLazy",
     config = function()
-      require("nvim-surround").setup({
+      require("nvim-surround").setup {
         -- https://github.com/kylechui/nvim-surround/blob/main/lua/nvim-surround/config.lua
         keymaps = {
           visual = "s",
           -- visual_line = "gS",
           -- visual_line = "gs",
-        }
+        },
         -- Configuration here, or leave empty to use defaults
-      })
-    end
+      }
+    end,
   },
   -- { import = "plugins.extra.copilot-chat-v2" },
   -- {
