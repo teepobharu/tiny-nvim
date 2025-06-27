@@ -40,23 +40,49 @@ uv tool list
 - [ ] terminal toggle check c-\_ vs c-t
 - [x] LSP keymaps
 
+Fixes attempt
+
+- [ ] uf auto format not working
+
 Migration added
 
 - [ ] Zozxide snacks
 
 LSP
+Guides: https://lsp-zero.netlify.app/blog/lsp-config-without-plugins.html
 
-- check with :check lsp or <l>li
+- browse default conf: https://github.com/neovim/nvim-lspconfig/blob/12d163c5c2b05e85431f2deef5d9d59a8fd8dfc2/lua/lspconfig/configs/lua_ls.lua
+
+- check with :check lsp
+- [ ] SH not working only ref work ?
+- [ ] Lua declaration Lib not working only ref work ?
 - [ ] CMP codecompanion fix - remove enabled list
   - [ ] CMP overrides copilot
   - [x] CMP enter
         disabled
         dcompanion
+- [ ] Default mapping not used / not used in init get_default_keymap lsp : used in on_capability setup to set with nvim key
+  - grn, conflict with gr snacks, use lsp saga
+  - try search key with lsp default action work
 - [ ] lua lsp
+  - [x] format
+  - [x] Ref gr - lib
+  - [ ] Ref VIM not work
+- [ ] Bash
+  - [x] format
+  - [x] Ref gr - lib
+  - [x] GD from other file
+  - [x] rename lsp saga lr
 - [ ] remove lsp saga , unused mapping
 - [ ] bash
-- [ ] ts
+- [x] ts
+  - [ ] readme
 - [ ] Check python works
+
+NV2 :
+
+- work on vim definition
+- toggle format work even code setup the same
 
 ### Improvements
 
@@ -66,6 +92,10 @@ LSP
 
 - [ ] FZF
   - [ ] remove refs in neotree
+        Do not like
+- Copilot accept just some parts : copilot in auto complete - work around bind with c-c to change source around
+  KEYS
+- shift tab to tab in insert mode , tab to complete / new line
 
 ## Perf check
 
