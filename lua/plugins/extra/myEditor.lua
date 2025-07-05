@@ -11,6 +11,13 @@ local mapping_key_prefix = vim.g.ai_prefix_key or "<leader>A" -- orginal from co
 
 return {
   -- Disabled list
+  {
+    "nvim-treesitter/nvim-treesitter",
+    -- version = false, -- last release is way too old and doesn't work on Windows
+    dependencies = {
+      "nvim-treesitter/nvim-treesitter-textobjects", -- nv2 has this : add selecting around (vaf : function) or sentence [], {} block
+    },
+  },
   { "nvimdev/dashboard-nvim", lazy = true,    enabled = false },
   { "Wansmer/treesj",         enabled = false },
   -- folke/edgy.nvim:  https://github.com/LazyVim/LazyVim/blob/1f8469a53c9c878d52932818533ce51c27ded5b6/lua/lazyvim/plugins/extras/ui/edgy.lua#L97
@@ -358,6 +365,12 @@ Your instructions here
         },
         typescript = {
           -- "bun run",
+          -- check out myTest.ts -- after downloaded next run no downloadede require
+          -- uses esm.sh else upkg load long and stuck / use deno install (will save in cache - use deno info to check path)
+          -- import { format } from "https://esm.sh/date-fns@3.6.0/format";
+          -- const formattedDate = format(new Date(), "yyyy-MM-dd");
+          -- console.log(formattedDate);
+
           "deno run --allow-import",
         },
         --  end common -------------------
@@ -789,6 +802,7 @@ Your instructions here
   },
   {
     "kylechui/nvim-surround",
+    vscode = true,
     version = "^3.0.0", -- Use for stability; omit to use `main` branch for the latest features
     event = "VeryLazy",
     config = function()
