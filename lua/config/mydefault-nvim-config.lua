@@ -10,21 +10,9 @@ vim.g.enable_extra_plugins = {
   "lspsaga",
   "neotree",
   "fzf",
-  "fold-preview",
+  -- "fold-preview",
   "myToggleterm",
   "myEditor",
-}
--- __AUTO_GENERATED_PRINT_VAR_START__
-vim.g.enable_langs = {
-  "lua_ls",      -- Lua
-  "biome",       -- Biome = Eslint + Prettier
-  "json",        -- JSON
-  "pyright",     -- Python
-  "gopls",       -- Go
-  "tailwindcss", -- Tailwind CSS
-  -- "rust",
-  "typescript",
-  "tailwindcss",
 }
 
 -- extend vim.lsp.enable

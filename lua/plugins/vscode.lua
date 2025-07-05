@@ -22,7 +22,6 @@ end
 
 local enabled = {
   "lazy.nvim",
-  "nvim-treesitter",
   "ts-comments.nvim",
   "nvim-treesitter",
   "nvim-treesitter-textobjects",
@@ -32,13 +31,16 @@ local enabled = {
 -- use to fix vim.fn.start not found
 
 -- print(vim.expand("$PATH"))
-vim.env.PATH = vim.env.PATH .. ":/opt/homebrew/bin"
+-- vim.env.PATH = vim.env.PATH .. ":/opt/homebrew/bin"
 -- print(vim.expand("$PATH"))
 
 local Config = require("lazy.core.config")
 Config.options.checker.enabled = false
 Config.options.change_detection.enabled = false
 Config.options.defaults.cond = function(plugin)
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  -- print([==[Config.options.defaults.cond plugin:]==], vim.inspect(plugin))
+  print([==[Config.options.defaults.cond plugin:]==], vim.inspect(plugin.name), plugin.vscode) -- __AUTO_GENERATED_PRINT_VAR_END__
   return vim.tbl_contains(enabled, plugin.name) or plugin.vscode
 end
 
@@ -276,6 +278,12 @@ vim.api.nvim_create_autocmd("User", {
     end)
 
     -- Run task
+    vim.keymap.set("n", "<leader>oo", function()
+      vscode.action "workbench.action.tasks.runTask"
+    end)
+    vim.keymap.set("n", "<leader>ol", function()
+      vscode.action "npm.focus"
+    end)
     vim.keymap.set("n", "<leader>rt", function()
       vscode.action "workbench.action.tasks.runTask"
     end)
@@ -296,6 +304,7 @@ vim.api.nvim_create_autocmd("User", {
     vim.keymap.set({ "n", "x", "i" }, "<C-m>", function()
       require("vscode-multi-cursor").addSelectionToNextFindMatch()
     end)
+
     my_vscode_keymaps(vscode)
   end,
 })

@@ -565,7 +565,11 @@ keymap({ "n", "v" }, "gGs", function()
   local text = inputUtil.get_selected_or_cursor_word()
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[(anon) text:]==], vim.inspect(text)) -- __AUTO_GENERATED_PRINT_VAR_END__
-  local escaped_text = text:gsub(" ", "%%20")
+  local escaped_text = text and text:gsub(" ", "%%20")
+  if not escaped_text or escaped_text == "" then
+    print("No text to search")
+    return
+  end
   -- __AUTO_GENERATED_PRINT_VAR_
   print([==[(anon) escaped_text:]==], vim.inspect(escaped_text)) -- __AUTO_GENERATED_PRINT_VAR_END__
   local search_url = "https://www.google.com/search?q=" .. escaped_text
