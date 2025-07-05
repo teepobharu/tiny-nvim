@@ -52,6 +52,7 @@ LSP
 Guides: https://lsp-zero.netlify.app/blog/lsp-config-without-plugins.html
 
 - browse default conf: https://github.com/neovim/nvim-lspconfig/blob/12d163c5c2b05e85431f2deef5d9d59a8fd8dfc2/lua/lspconfig/configs/lua_ls.lua
+- https://github.com/neovim/nvim-lspconfig/blob/master/doc/configs.md#pyright
 
 - check with :check lsp
 - [ ] SH not working only ref work ?
