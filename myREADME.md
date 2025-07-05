@@ -57,6 +57,7 @@ Guides: https://lsp-zero.netlify.app/blog/lsp-config-without-plugins.html
 - check with :check lsp
 - [ ] SH not working only ref work ?
 - [ ] Lua declaration Lib not working only ref work ?
+  - [ ] disable folke/lazydev.nvim to get install but blink require this
 - [ ] CMP codecompanion fix - remove enabled list
   - [ ] CMP overrides copilot
   - [x] CMP enter
@@ -74,6 +75,7 @@ Guides: https://lsp-zero.netlify.app/blog/lsp-config-without-plugins.html
   - [x] Ref gr - lib
   - [x] GD from other file
   - [x] rename lsp saga lr
+  - [x] Fold not work even nv2
 - [ ] remove lsp saga , unused mapping
 - [ ] bash
 - [x] ts

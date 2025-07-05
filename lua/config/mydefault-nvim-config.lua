@@ -15,6 +15,8 @@ vim.g.enable_extra_plugins = {
   "myEditor",
 }
 
+-- vim.g.lazydev_enabled = false -- uncomment this to load all lua dependencies (get access to vim object)
+
 -- extend vim.lsp.enable
 
 -- require to pit in lsp dir with same name as below
