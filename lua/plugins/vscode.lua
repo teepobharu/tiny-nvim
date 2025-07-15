@@ -639,7 +639,7 @@ function my_vscode_keymaps(vscode)
     if isCursor then
       vscode.action("aichat.newchataction") -- cursor
     else
-      vscode.action("github.copilot.chat.attachFile")
+      vscode.action("workbench.action.chat.attachFile")
     end
     -- vscode.action("aipopup.action.modal.generate") -- cursor
   end)
