@@ -636,6 +636,8 @@ end
 -- Map J and K in quickfix window
 local quickfixAndTroubleGroup = augroup("QuickfixAndTroubleMappings")
 
+-- Define a base opts table with shared variables and descriptions
+
 local function get_qf_files()
   local files = {}
   for _, item in ipairs(vim.fn.getqflist()) do
@@ -687,18 +689,24 @@ local function open_qflist_in_vscode()
   print(cmd)
   vim.fn.jobstart(cmd, { detach = true })
 end
-
 vim.api.nvim_create_autocmd("FileType", {
   group = quickfixAndTroubleGroup,
   pattern = "qf",
   callback = function()
-    vim.api.nvim_buf_set_keymap(0, "n", "H", ":colder<CR>", { noremap = true, silent = true })
-    vim.api.nvim_buf_set_keymap(0, "n", "L", ":cnewer<CR>", { noremap = true, silent = true })
+    local quickfix_opts = { noremap = true, silent = true, desc = "Quickfix operation" }
+    quickfix_opts.desc = "Go to older list"
+    vim.api.nvim_buf_set_keymap(0, "n", "H", ":colder<CR>", quickfix_opts)
+    quickfix_opts.desc = "Go to newer list"
+    vim.api.nvim_buf_set_keymap(0, "n", "L", ":cnewer<CR>", quickfix_opts)
     -- open in vscode
     -- vim.api.nvim_buf_set_keymap(0, "n", "<C-o>", ":lua print_copy_output()<CR>", { noremap = true, silent = true })
     -- vim.api.nvim_buf_set_keymap(0, "n", "<C-o>", ":lua open_qflist_in_vscode()<CR>", { noremap = true, silent = true })
-    vim.keymap.set("n", "<C-o>", open_qflist_in_vscode, { buffer = true, noremap = true, silent = true })
-    vim.keymap.set("n", "<C-y>", print_copy_output, { buffer = true, noremap = true, silent = true })
+
+    quickfix_opts = vim.tbl_extend("force", quickfix_opts, { buffer = true })
+    quickfix_opts.desc = "Open in VSCode"
+    vim.keymap.set("n", "<C-o>", open_qflist_in_vscode, quickfix_opts)
+    quickfix_opts.desc = "Print and Copy Output"
+    vim.keymap.set("n", "<C-y>", print_copy_output, quickfix_opts)
   end,
 })
 
