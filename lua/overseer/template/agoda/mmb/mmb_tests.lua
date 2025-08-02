@@ -1,27 +1,18 @@
----@return overseer.TemplateDefinition
+@return overseer.TemplateDefinition
 return {
-  name = "Run Mmb pick",
-  description = "run android test on current file",
+  name = "Test jest curr no Cov watch snap",
+  description = "Run Jest tests on the current file with specified options",
   builder = function(params)
-    local sel_command = params.command
-    local base_command = "sh /Users/tharutaipree/Personal/mynotes/work/AgodaCoding/agodaSnip.sh mmb "
-    local finalcmd = base_command .. sel_command
-    -- __AUTO_GENERATED_PRINT_VAR_START__
-    print([==[builder finalcmd:]==], vim.inspect(finalcmd)) -- __AUTO_GENERATED_PRINT_VAR_END__
+    local file_name = vim.fn.expand("%")
+    local base_command = "yarn test " .. file_name .. " --watch -u --silence=false --coverage=false"
     ---@type overseer.TaskDefinition
     return {
-      cmd = finalcmd,
+      cmd = base_command,
     }
   end,
   --- @type overseer.Params|fun():overseer.Params
   params = function()
     local choices = {
-      ["Client install only"] = "--client-installonly",
-      ["Dev BLP"] = "--dev-blp --client-noinstall",
-      ["Dev BLP +install"] = "--dev-blp",
-      ["Dev BLP + run Server"] = "--dev-blp -s",
-      --- if client build then no run sv if -s not specified
-      ["Server and parallel def build"] = "-s",
       ["Server + Build and parallel def build"] = "-s",
       ["Server run only"] = "-s --nobuild",
     }
@@ -33,7 +24,7 @@ return {
         desc = "The package name for the test",
         order = 1,
         choices = choices,
-        default = choices["Server run only"],
+        default = choices["Sever"],
         optional = false,
       },
     }
@@ -54,10 +45,10 @@ return {
   },
   priority = 5,
   condition = {
-    filetypes = { "kt" },
+    filetypes = { "kt", "test" }, -- Include test filetypes
     callback = function(task)
-      local isInProj = vim.fn.expand("%:p:h"):match("mmb")
-      if isInProj then
+      local isTestFile = vim.fn.expand("%:t"):match("_test.kt$") -- Match test files
+      if isTestFile then
         return true
       else
         return false
