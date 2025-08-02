@@ -104,6 +104,7 @@ return {
       templates = {
         "builtin",
         "user.run_script",
+        "vscode_global.vscode_global",
         "common_shell.grep_async",
         "agoda.android_client.and_build",
         "agoda.mmb.mmb_pick",
