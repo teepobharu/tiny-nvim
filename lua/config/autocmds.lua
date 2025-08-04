@@ -185,6 +185,10 @@ vim.api.nvim_create_autocmd("LspAttach", {
       if client:supports_method "textDocument/inlayHints" then
         vim.lsp.inlay_hint.enable(true, { bufnr = args.buf })
       end
+      -- add my keys
+      vim.keymap.set("n", "<leader>cr", vim.lsp.buf.rename, { desc = "Rename", buffer = args.buf })
+      vim.keymap.set("n", "<leader>ca", vim.lsp.buf.code_action, { desc = "Code action", buffer = args.buf })
+      -- end add my keys
     end
   end,
 })
