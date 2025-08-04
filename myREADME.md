@@ -13,6 +13,7 @@
   LSP
   Tools : mise, uv, go, npm
 - mise is versioning tools
+- !! after install with mise requires to run mise use in order to make lua language server to work in the workdir
 - uv (python based ?)
 - tsc -v
 
@@ -65,6 +66,7 @@ Guides: https://lsp-zero.netlify.app/blog/lsp-config-without-plugins.html
         dcompanion
 - [ ] Default mapping not used / not used in init get_default_keymap lsp : used in on_capability setup to set with nvim key
   - grn, conflict with gr snacks, use lsp saga
+    - [x] add rename, code action in autocommand on LspAttach
   - try search key with lsp default action work
 - [ ] lua lsp
   - [x] format
