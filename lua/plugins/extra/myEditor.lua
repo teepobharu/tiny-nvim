@@ -9,6 +9,36 @@ local open_remote = gitUtil.open_remote
 
 local mapping_key_prefix = vim.g.ai_prefix_key or "<leader>A" -- orginal from codecompanion.lua
 
+local function fzfcompareref(selected)
+  local ok, gitsigns = pcall(require, "gitsigns")
+  if not ok then
+    vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
+    return
+  end
+  local commit_hash = selected[1]:match("%w+")
+  print([==["ctrl-s" commit_hash:]==], vim.inspect(commit_hash)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  local file_path = vim.fn.expand("%:p")
+  vim.cmd("tabnew " .. file_path)
+  gitsigns.diffthis(commit_hash, { vertical = true })
+end
+
+local function toggle_diffpreview_alt()
+  -- Toggle delta.side-by-side in ~/.gitconfig.local
+  local gitconfig_file = os.getenv("HOME") .. "/.gitconfig.local"
+  local handle = io.popen('git config -f "' .. gitconfig_file .. '" delta.side-by-side')
+  local is_side_side_enabled = handle:read("*a")
+  handle:close()
+  is_side_side_enabled = is_side_side_enabled:gsub("%s+", "")
+
+  if is_side_side_enabled == "true" then
+    print("side-by-side disabled")
+    os.execute('git config -f "' .. gitconfig_file .. '" delta.side-by-side false')
+  else
+    print("side-by-side enabled")
+    os.execute('git config -f "' .. gitconfig_file .. '" delta.side-by-side true')
+  end
+end
+
 return {
   -- Disabled list
   {
@@ -417,6 +447,8 @@ Your instructions here
               open_remote(commit_hash, "file")
               open_remote(commit_hash, "commit")
             end,
+            ["ctrl-s"] = fzfcompareref,
+            ["f6"] = toggle_diffpreview_alt,
           },
         },
         blame = {
@@ -427,6 +459,8 @@ Your instructions here
               open_remote(commit_hash, "file")
               open_remote(commit_hash, "commit")
             end,
+            ["ctrl-s"] = fzfcompareref,
+            ["f6"] = toggle_diffpreview_alt,
           },
         },
         commits = {
@@ -451,6 +485,8 @@ Your instructions here
               --
               -- vim.cmd("e " .. file_path)
             end,
+            ["ctrl-s"] = fzfcompareref,
+            ["f6"] = toggle_diffpreview_alt,
           },
         },
       },
@@ -525,7 +561,8 @@ Your instructions here
               input = {
                 keys = {
                   ["<C-s>"] = { "my_diff_compare", mode = { "n", "i" }, desc = "Open Diff" },
-                  -- ["<C-t>"] = { "test_picker", mode = { "n", "i" }, desc = "Test picker" },
+                  ["<C-t>"] = { "test_picker", mode = { "n", "i" }, desc = "Test picker" },
+                  ["f6"] = { "toggle_diffpreview_alt", mode = { "n", "i" }, desc = "Toggle Delta Mode" },
                 },
               },
             },
@@ -535,6 +572,8 @@ Your instructions here
               input = {
                 keys = {
                   ["<C-s>"] = { "my_diff_compare", mode = { "n", "i" }, desc = "Open Diff" },
+                  ["f6"] = { "toggle_diffpreview_alt", mode = { "n", "i" }, desc = "Toggle Delta Mode" },
+                  ["<C-t>"] = { "test_picker", mode = { "n", "i" }, desc = "Test picker" },
                 },
               },
             },
@@ -545,6 +584,7 @@ Your instructions here
             print([==[ item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
             picker:close()
           end,
+          toggle_diffpreview_alt = toggle_diffpreview_alt,
           my_diff_compare = function(picker, item, action)
             -- print([==[ item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
             -- Check if Gitsigns is available
