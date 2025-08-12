@@ -257,7 +257,7 @@ function testGit2(path)
   end)
   local fullUrl = "https://" .. urlPath .. "/" .. current_file .. "/blob/" .. branch
   -- __AUTO_GENERATED_PRINT_VAR_START__
-  print([==[testGit2 fullUrl:]==], vim.inspect(fullUrl)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  print([==[testGit2 fullUrl:]==], vim.inspect(fullUrl))
   vim.fn.system("open " .. fullUrl)
   require("lazy.util").open(fullUrl)
 end
@@ -664,7 +664,6 @@ function test_outputcmd_copy_fn_from_quicklist()
       files[fname] = true
     end
   end
-
   -- print file join by space in one line and create command to add new line on these files if exists
   --print the shell command
   command_sh_add_line_check_exist =
@@ -698,9 +697,142 @@ function test_outputcmd_copy_fn_from_quicklist()
   end
 end
 
+function test_fold_method_debug()
+  --related files = options and ui.utils
+
+  -- :set foldmethod?
+  -- :set foldmethod?
+  --      :set foldexpr?
+  -- Want
+  -- - `foldmethod=expr`
+  -- - `foldexpr=v:lua.require'utils.ui'.foldexpr()`
+  -- - Or, if using Treesitter directly: `foldexpr=nvim_treesitter#foldexpr()`
+
+
+
+  -- :echo getbufvar(5, '&foldmethod')
+  -- TRY TO FIX FOLD FOR MD
+  -- ### Summary
+  -- - **Install Treesitter for markdown**: `:TSInstall markdown markdown_inline`
+  -- - **Set up foldexpr** for markdown as above.
+  -- - **Or use a header-based foldexpr** if you prefer.
+  -- md when toggle TS seems to highlight working
+
+  -- Treesitter
+  -- TS check with :TSModuleInfo
+  -- :TSBufEnable highlight
+  -- when use this can fold corecctly
+  -- :setlocal foldexpr=nvim_treesitter#foldexpr()
+
+  -- Sample fold plugin setup : https://github.com/kevinhwang91/nvim-ufo
+end
+
+function test_overseerbuilder()
+  local choices = { "1. Build", "2. Test", "3. Deploy", "4. All", "5. " }
+  -- validate if selection is in choices
+
+  local function inputList()
+    -- local choice = vim.fn.inputlist({ "Select color:", "1. red", "2. green", "3. blue", "" })
+    -- print("You selected: " .. choice)
+
+
+    local choice = vim.fn.inputlist({
+      "Choose an action:",
+      "1. Build",
+      "2. Test",
+      "3. Deploy",
+      "4. All",
+      "5. ",
+      "",
+    })
+    choice = number
+    if choice < 1 or choice > #choices then
+      print("Invalid choice")
+      return
+    else
+      local selected_action = choices[choice]
+      print("You selected: " .. selected_action)
+    end
+    -- use `vim.ui.select` instead of `inputlist`
+  end
+
+  inputList()
+  -- below does not do await (use callback) mychoice print is nil always
+  local mychoice = ""
+  vim.ui.select(choices, {
+    prompt = "Choose an action:",
+    format_item = function(item)
+      return item:gsub("^%d+%. ", "") -- Remove the leading number and dot
+    end,
+  }, function(choice2)
+    print("Inside select callback")
+    print(choice2)
+    if choice2 then
+      mychoice = choice2
+      print("my You selected: " .. choice2)
+    else
+      print("my No selection made")
+    end
+  end)
+  print("end")
+
+  if mychoice then
+    print("mychoice is not nil", vim.inspect(mychoice))
+  else
+    print("mychoice is nil or empty")
+  end
+end
+
+function snacks_preview()
+  -- snacks preview
+  -- require("snacks.picker").preview({ source = "asd.zxc" })
+  ---@type snacks.picker
+  -- @type snacks.picker.core.picker -- https://github.com/folke/snacks.nvim/blob/main/docs/picker.md#-snackspickercorepicker
+  function test1()
+    local B = Snacks.picker.buffers()
+    print(vim.inspect(B.init_opts.source))
+    print(vim.inspect(B.init_opts.source.asd and B.init_opts.source.asd.zxc)) -- stop
+    print(123)
+    print(vim.inspect(B.init_opts.source.asd.zxc))                            -- stop
+    print(321)
+  end
+
+  ---@class snacks.picker.input
+  local p1 = Snacks.picker.files {
+    -- search = "test"
+    pattern = "test" -- intial query
+  }
+  vim.defer_fn(function()
+    vim.notify("waiting", vim.log.levels.INFO)
+    print("waiting . . .")
+  end, 2000)
+  local p2 = Snacks.picker.buffers {
+    -- search = "test"
+    pattern = "testp2" -- intial query
+  }
+  -- wait 3s
+  print([==[snacks_preview#(anon) p1:active1]==], vim.inspect(p1:is_active()))
+  vim.defer_fn(function()
+    p1:toggle()
+    print([==[snacks_toggle#(anon) p1:active2]==], vim.inspect(p1:is_active()))
+  end, 3000)
+  vim.defer_fn(function()
+    p2:toggle()
+    print([==[snacks_preview#(anon) p1:]==], vim.inspect(p1:is_focused()))
+    print([==[snacks_preview#(anon) p2:]==], vim.inspect(p2:is_active()))
+  end, 3000)
+  -- lua Snacks.picker.get()
+  -- test1()
+end
+
 local function main()
+  snacks_preview()
+  -- print(Snacks.picker.picker) --nil
+  -- vim.inspect(Snacks.picker.picker.get())
+  -- vim.inspect(Snacks.picker.picker.get())
   -- add key binding ,rp = run
-  runGetVisual()
+  -- test_overseerbuilder()
+  -- runGetVisual()
   -- test_outputcmd_copy_fn_from_quicklist()
 
   -- __AUTO_GENERATED_PRINT_VAR_START__

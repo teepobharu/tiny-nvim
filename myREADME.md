@@ -1,5 +1,7 @@
 # Changes
 
+[[../nvim2_jelly_lzmigrate/myREADME_leg.md]]
+
 - No more lspconfig dependecy, now directly configure `lsp` from neovim
 - LSP has to be downloaded with script (no more mason support)[./install.sh]
 - LazyDev helper to optimzied Lua space to show completion on only loaded module ?

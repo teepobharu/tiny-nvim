@@ -3,11 +3,11 @@ return {
   name = "Run Android pick",
   description = "run android test on current file",
   builder = function(params)
-    local sel_command = params.command
-    local base_command = "sh /Users/tharutaipree/Personal/mynotes/work/AgodaCoding/agodaSnip.sh and "
-    local finalcmd = base_command .. sel_command
+    local andcmd = params.andcmd
     -- __AUTO_GENERATED_PRINT_VAR_START__
-    print([==[builder finalcmd:]==], vim.inspect(finalcmd)) -- __AUTO_GENERATED_PRINT_VAR_END__
+    local base_command = "sh " .. os.getenv("HOME") .. "/Personal/mynotes/work/AgodaCoding/agodaSnip.sh and "
+    local finalcmd = base_command .. andcmd
+    print([==[builderx finalcmd:]==], vim.inspect(finalcmd)) -- __AUTO_GENERATED_PRINT_VAR_END__
     ---@type overseer.TaskDefinition
     return {
       cmd = finalcmd,
@@ -15,20 +15,48 @@ return {
   end,
   --- @type overseer.Params|fun():overseer.Params
   params = function()
-    local choices = {
-      ["Build App Presentation"] = "and_build_app_presentation # build only",
-      ["Find Build Dir and Install APK"] = "and_find_build_dir_and_ls_apk # install apk",
-      ["Detekt Check"] = "and_detekt_check # check detekt",
+    local display_choices = {
+      "Build App Presentation",
+      "Find Build Dir and Install APK",
+      "Detekt Check",
+      "Test mmb,legacy,home",
+      "Clean and fix zip error",
     }
+
+    local commands = {
+      "and_build_app_presentation # build only",
+      "and_find_build_dir_and_ls_apk # install apk",
+      "and_detekt_check # check detekt",
+      "and_test_mmb_screen_legacynav_home",
+      "and_zip_error",
+    }
+
+    local choice_input_list = { "Please select a command (default = Test mmb,legacy,home): " }
+
+    for i, display_choice in ipairs(display_choices) do
+      table.insert(choice_input_list, string.format("%d. %s", i, display_choice))
+    end
+    table.insert(choice_input_list, "") -- Exit input list construction
+
+    local selected_index = vim.fn.inputlist(choice_input_list)
+    local sel_command = commands[1] -- Default command
+
+    if selected_index > 0 and selected_index <= #commands then
+      sel_command = commands[selected_index]
+      print([==[params#if selected_command:]==], vim.inspect(sel_command)) -- Debugging user choice
+    end
+
     --- @type overseer.Params
     return {
-      command = {
-        type = "namedEnum",
-        name = "command",
+      andcmd = {
+        type = "string",
+        name = "finalcommand",
         desc = "The package name for the test",
         order = 1,
-        choices = choices,
-        default = choices["Build App Presentation"],
+        default = sel_command,
+        validate = function(value)
+          return true
+        end,
         optional = false,
       },
     }
