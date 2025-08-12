@@ -80,6 +80,8 @@ return {
     "stevearc/overseer.nvim",
     -- tutorials : https://github.com/stevearc/overseer.nvim/blob/master/doc/tutorials.md#run-a-file-on-save
     -- support on vscode tasks ?
+    -- template syntax: https://github.com/stevearc/overseer.nvim/blob/master/doc/reference.md
+    --  form: https://github.com/stevearc/overseer.nvim/blob/fe7b2f9ba263e150ab36474dfc810217b8cf7400/lua/overseer/form/utils.lua#L49
     keys = {
       {
         "<leader>ow",
@@ -556,6 +558,25 @@ Your instructions here
         ui_select = true, -- boolean set `vim.ui.select` to a snacks picker, might conflict with fzf
         sources = {
           -- sample pickers: https://github.com/WizardStark/dotfiles/blob/main/home/.config/nvim/lua/workspaces/ui.lua#L417
+          -- buffers and file to use tooggle key map when press c-space
+          files = {
+            win = {
+              input = {
+                keys = {
+                  ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
+                },
+              },
+            },
+          },
+          buffers = {
+            win = {
+              input = {
+                keys = {
+                  ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
+                },
+              },
+            },
+          },
           git_branches = {
             win = {
               input = {
@@ -611,6 +632,36 @@ Your instructions here
               vertical = true,
             })
           end,
+          toggle_files_buffers = function(picker, item)
+            local preview_source = picker.init_opts and picker.init_opts.source
+            if not preview_source then
+              vim.notify("Error: picker.init_opts is nil", vim.log.levels.ERROR)
+            end
+            -- require("snacks"). -- to see types
+            local pickern
+            local current_search = picker.input.filter and picker.input.filter.pattern
+            ---@type snacks.picker.previewers.Config
+            local picker_params = {}
+            if current_search and current_search ~= "" then
+              picker_params.pattern = current_search
+            end
+            if preview_source == "files" then
+              -- TODO: check if get words and put in search is good idea, no need to close ?
+              -- picker:close()
+              Snacks.picker.buffers(picker_params)
+              vim.defer_fn(function()
+                -- Ensure the picker is focused after closing and reopening only happens in buffer mode
+                if vim.api.nvim_get_mode().mode == "n" then
+                  vim.cmd("startinsert")
+                end
+              end, 50)
+            else
+              -- picker:close()
+              Snacks.picker.files(picker_params)
+            end
+            -- Snacks.picker.actions.insert(picker) -- nothing
+            -- Snacks.picker.actions.toggle_focus(picker) -- not help sometimes still show
+          end,
         },
       },
       -- https://github.com/folke/snacks.nvim/blob/main/docs/gitbrowse.md
@@ -624,6 +675,23 @@ Your instructions here
           },
         },
       },
+      -- win : overrides here does not really work - not sure why
+      win = {
+        list = {
+          keys = {
+            ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
+            ["0"] = { "focus_preview", desc = "Focus Preview" },
+          }
+        },
+        input = {
+          keys = {
+            -- ["="] = "toggle_focus",
+            -- ["<C-i>"] = "toggle_focus",
+            ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
+            ["0"] = { "focus_preview", mode = { "n" }, desc = "Focus Preview" },
+          }
+        }
+      }
     },
     keys = {
       {
@@ -661,6 +729,46 @@ Your instructions here
             },
           }
         end,
+      },
+      {
+        "<C-e>",
+        function()
+          Snacks.picker.smart({
+            win = {
+              input = {
+                keys = {
+                  ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
+                },
+              }
+            }
+          })
+        end,
+      },
+      {
+        "<leader><space>",
+        -- find files and use ctrl_space toggle to find buffer with
+        function()
+          Snacks.picker.buffers {
+            win = {
+              input = {
+                keys = {
+                },
+              },
+            },
+          }
+        end,
+      },
+      {
+        "<leader>ff",
+        function()
+          Snacks.picker.files {
+            pattern = function(picker)
+              return picker:word()
+            end,
+          }
+        end,
+        desc = "Find Files (word)",
+        mode = { "n", "v" },
       },
       {
         "<leader>fz", -- https://github.com/folke/snacks.nvim/discussions/617
