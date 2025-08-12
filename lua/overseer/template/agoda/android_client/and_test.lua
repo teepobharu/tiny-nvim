@@ -98,12 +98,21 @@ local function generate_gradle_test_command(filepath)
 
   -- Construct the command
   local gradle_command =
-    string.format("./gradlew %s:testBaidumapDebugUnitTest --tests %s.%s", module, package_name, class_name)
+      string.format("./gradlew %s:testBaidumapDebugUnitTest --tests %s.%s", module, package_name, class_name)
 
   -- Return the command
   return gradle_command
 end
 -- ./gradlew :presentation:legacy-navigation:testBaidumapDebugUnitTest, --tests, com.agoda.mobile.consumer.screens.home.BottomNavPageMapperImplTest
+
+local function generate_test_command(module, test_module, package_name, class_name)
+  class_name = class_name == "ALL" and "" or class_name
+  if class_name and class_name ~= "" then
+    return string.format("./gradlew %s:%s --tests \"%s.%s\"", module, test_module, package_name, class_name)
+  else
+    return string.format("./gradlew %s:%s", module, test_module)
+  end
+end
 -- path of test is in presentation/legacy-navigation/src/test/kotlin/com/agoda/mobile/consumer/screens/home/BottomNavPageMapperImplTest.kt
 -- The command to run the test is ./gradlew :presentation:legacy-navigation:testBaidumapDebugUnitTest --tests com.agoda.mobile.consumer.screens.home.BottomNavPageMapperImplTest
 --
@@ -140,12 +149,23 @@ return {
     local filepath = vim.fn.expand("%:p")
     local content = get_file_content(filepath)
     local package_name = params.package_name or get_package_name(filepath, content)
-    local class_name = params.class_name or get_class_name(filepath, content)
+    -- local class_name = params.class_name == "ALL" and "" or params.class_name
     local module = params.module or get_module(filepath)
 
     -- Construct the command
-    local gradle_command =
-      string.format("./gradlew %s:%s --tests %s.%s", module, params.test_module, package_name, class_name)
+    if module:find("legacy%-navigation") and params.test_module ~= "testBaidumapDebugUnitTest" then
+      vim.notify(
+        string.format("Replacing params.test_module with '%s' for legacy-navigation module", params.test_module),
+        vim.log.levels.WARN
+      )
+      params.test_module = "testBaidumapDebugUnitTest"
+    end
+    vim.notify(
+      string.format("Using params.test_module: '%s'", params.test_module),
+      vim.log.levels.INFO
+    )
+    local gradle_command = generate_test_command(module, params.test_module, package_name, params.class_name)
+
     print([==[builder gradle_command:]==], vim.inspect(gradle_command)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
     -- ./gradlew :presentation:legacy-navigation:testBaidumapDebugUnitTest, --tests, com.agoda.mobile.consumer.screens.home.BottomNavPageMapperImplTest
@@ -164,8 +184,30 @@ return {
     local module = get_module(filepath)
     local package_name = get_package_name(filepath, content)
     local class_name = get_class_name(filepath, content)
-    local test_module = "testBaidumapDebugUnitTest"
-    local def_final_cmd = string.format("./gradlew %s:%s --tests %s.%s", module, test_module, package_name, class_name)
+    local test_module = "testDebugUnitTest"
+    if module:find("legacy%-navigation") and test_module ~= "testBaidumapDebugUnitTest" then
+      test_module = "testBaidumapDebugUnitTest"
+    end
+
+    local classname_choices = {
+      class_name,
+      "*",
+      "ALL",
+    }
+    local classname_choices_with_num_prefix = {}
+    -- start from 1
+    for i, name in ipairs(classname_choices) do
+      table.insert(classname_choices_with_num_prefix, string.format("%d. %s", i, name))
+    end
+    vim.list_extend({ "Select class name to run test:" }, classname_choices_with_num_prefix)
+    table.insert(classname_choices_with_num_prefix, "")
+    local classname_selection = vim.fn.inputlist(classname_choices_with_num_prefix)
+    if classname_selection > 0 and classname_selection <= #classname_choices then
+      class_name = classname_choices[classname_selection]
+    end
+    print([==[choice, class_name:]==], choice, vim.inspect(class_name)) -- __AUTO_GENERATED_PRINT_VAR_END__
+
+    local def_final_cmd = generate_test_command(module, test_module, package_name, class_name)
     return {
       package_name = {
         type = "string",
@@ -175,13 +217,17 @@ return {
         default = package_name,
         optional = true,
       },
-      class_name = {
-        type = "string",
+      name = {
+        type = "enum",
         name = "Class Name.TestName",
         desc = "The class name for the test",
         order = 2,
+        choices = classname_choices,
+        validate = function(value)
+          return true
+        end,
         default = class_name,
-        optional = false,
+        optional = true,
       },
       module = {
         type = "string",
@@ -192,25 +238,29 @@ return {
         optional = true,
       },
       test_module = {
-        type = "string",
+        type = "enum",
         name = "test module command",
-        desc = "The search input to use",
+        desc = "Select test module command",
         order = 5,
+        choices = {
+          "testBaidumapDebugUnitTest",
+          "testDebugUnitTest",
+        },
         validate = function(value)
           return true
         end,
         default = test_module,
+        -- optional = false, -- make non optional to see modal before run
         optional = true,
       },
       def_final_cmd = {
         type = "string",
         name = "final command",
-        desc = "For showing default final command",
+        desc = "Preview of command",
         order = 6,
         validate = function(value)
           return true
         end,
-        optional = true,
         default = def_final_cmd,
       },
     }
