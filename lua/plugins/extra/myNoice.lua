@@ -1,6 +1,12 @@
+local completion = vim.g.completion_mode or "blink" -- or 'native'
+local is_blinkcmp = completion == "blink"
+
 return {
   "folke/noice.nvim",
   opts = {
+    lsp = {
+      -- signature = { enabled = not is_blinkcmp },
+    },
     commands = {
       history = {
         -- require('noice')

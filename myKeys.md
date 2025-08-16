@@ -28,6 +28,12 @@ Main lazy setup for plugins :
   <leader>-TAB + create / move tabs
   <leader>-d => debug
 
+keymaps
+
+- which-key
+- toggle (i = C-R + backspace)
+- <leader>? : mapping on current buffer
+
 Understand each plugin more: https://www.youtube.com/watch?v=6pAG3BHurdM&ab_channel=JoseanMartinez
 
 ## AI

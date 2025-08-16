@@ -905,7 +905,13 @@ function snacks_qfgrep()
   }
 end
 
+function lsp_signature()
+  -- :lua vim.lsp.buf.signature_help()
+  -- ISSUE = noice auto enable signature !!
+end
+
 local function main()
+  -- lsp_signature()
   -- snacks_qfgrep()
   -- snacks_preview()
   -- print(Snacks.picker.picker) --nil
@@ -924,7 +930,8 @@ local function main()
   -- get_pythonpath()
   -- getGitList()
   -- errorHandling()
-  executables()
+  -- executables()
+  --
   -- filesys()
   -- getArrListConfig()
   -- testGetlineExe()
