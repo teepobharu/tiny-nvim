@@ -262,6 +262,7 @@ return {
           return true
         end,
         default = def_final_cmd,
+        optional = true,
       },
     }
   end,

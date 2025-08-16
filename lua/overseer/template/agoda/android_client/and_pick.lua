@@ -16,19 +16,19 @@ return {
   --- @type overseer.Params|fun():overseer.Params
   params = function()
     local display_choices = {
-      "Build App Presentation",
-      "Find Build Dir and Install APK",
-      "Detekt Check",
       "Test mmb,legacy,home",
+      "Detekt, Precheck Check",
       "Clean and fix zip error",
+      "Build App Presentation",
+      -- "Find Build Dir and Install APK",
     }
 
     local commands = {
-      "and_build_app_presentation # build only",
-      "and_find_build_dir_and_ls_apk # install apk",
-      "and_detekt_check # check detekt",
       "and_test_mmb_screen_legacynav_home",
+      "and_ci_ag_precheck_detekt",
       "and_zip_error",
+      "and_build_app_presentation # build only",
+      -- "and_find_build_dir_and_ls_apk # install apk",
     }
 
     local choice_input_list = { "Please select a command (default = Test mmb,legacy,home): " }
@@ -49,7 +49,8 @@ return {
     --- @type overseer.Params
     return {
       andcmd = {
-        type = "string",
+        type = "enum",
+        choices = commands,
         name = "finalcommand",
         desc = "The package name for the test",
         order = 1,
