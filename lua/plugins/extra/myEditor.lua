@@ -890,10 +890,21 @@ Your instructions here
   {
     "saghen/blink.cmp",
     opts = {
+      signature = {
+        -- key works but now get duplicate overlay another ui conflict
+        -- when disalbe noice no issue
+        enabled = false,
+        window = {
+          show_documentation = false -- https://cmp.saghen.dev/configuration/signature
+        }
+      },
       keymap = {
         -- https://cmp.saghen.dev/configuration/keymap.html
         -- 'c-e' by default remove autocomplete
         -- disable from main coding.ai then trigger only when change from normal mode
+        -- does not allow to have K + K to jump to preview like noice but has preview scroll c-f,b
+        -- but why get map by inital vim.lsp.buf ??
+        -- ["K"] = { "show_documentation"}
         ["<C-c>"] = {
           function(cmp)
             if cmp.is_visible() then
