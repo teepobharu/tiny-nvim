@@ -357,6 +357,48 @@ opts.desc = nil
 -- ===============================================
 -- LOCALLEADER ==========================
 -- ===============================================
+
+-- Diff Operations
+keymap("n", "<leader>Gdd", ":if &diff | diffoff | else | diffthis | endif<CR>", { desc = "Toggle Diff Mode" })
+keymap("n", "<leader>Gdx", ":diffoff<CR>", { desc = "Diff Off" })
+-- diff off
+keymap("n", "<leader>dD", ":if &diff | diffoff | else | diffthis | endif<CR>", { desc = "Diff Toggle" })
+
+-- Auto-bind keys in diff mode
+vim.api.nvim_create_autocmd("OptionSet", {
+  pattern = "diff",
+  callback = function()
+    -- print("Diff mode changed: wodiff = ", vim.wo.diff)
+    -- check if diff mode is enabled can check in cmd with :echo &diff ?
+    if vim.wo.diff then
+      -- vim.keymap.set("n", "]c", "]c", { desc = "Next Change", buffer = true })
+      -- vim.keymap.set("n", "[c", "[c", { desc = "Previous Change", buffer = true })
+      keymap("n", "<leader>dd", ":diffoff<CR>", { desc = "Diff Off" })
+      keymap("n", "<leader>dx", ":diffoff<CR>", { desc = "Diff Off" })
+      keymap("n", "<leader>dt", ":diffthis<CR>", { desc = "Diff this", buffer = true })
+      keymap({ "n", "v" }, "<leader>dp", ":diffput<CR>", { desc = "Diff Put", buffer = true })
+      keymap({ "n", "v" }, "<leader>dg", ":diffget<CR>", { desc = "Diff Obtain", buffer = true })
+      -- both n and v mode wwrks
+    else
+      keymap("n", "<leader>dd", ":diffthis<CR>", { desc = "Diff On" })
+      keymap("n", "<leader>dt", ":diffthis<CR>", { desc = "Diff this", buffer = true })
+      -- unbind the rest
+      local bufnr = vim.api.nvim_get_current_buf()
+      -- __AUTO_GENERATED_PRINT_VAR_START__
+      print([==[callback#if bufnr:]==], vim.inspect(bufnr)) -- __AUTO_GENERATED_PRINT_VAR_END__
+      -- does not seem to remove
+      vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dx")
+      vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dx")
+      vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dt")
+      vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dp")
+      vim.api.nvim_buf_del_keymap(bufnr, "v", "<leader>dp")
+      vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dg")
+      vim.api.nvim_buf_del_keymap(bufnr, "v", "<leader>dg")
+      print("Unbind ?")
+    end
+  end,
+})
+
 local function addNvimConfigInRoot()
   local pathUtil = require("utils.path")
   local git_dir = pathUtil.get_git_root() or vim.fn.getcwd()
