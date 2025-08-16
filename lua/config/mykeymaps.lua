@@ -532,23 +532,29 @@ local function run_command(command, callback)
   -- callback.out = callback.out or false
   -- callback.stderr = callback.stderr or false
 
+  local last_error = nil
+  print("running command: ", vim.inspect(command))
   vim.fn.jobstart(command, {
-    on_stdout = callback.out and function(_, data, _)
-      print("[stdout " .. vim.inspect(command) .. "]:", vim.inspect(data))
+    on_stdout = callback.out or function(_, data, _)
+      print("[stdout]", vim.inspect(data))
     end or nil,
-    on_stderr = callback.stderr and function(_, data, _)
-      print("[stderr " .. vim.inspect(command) .. "]:", vim.inspect(data))
+    on_stderr = callback.stderr or function(_, data, _)
+      print("[stderr]", vim.inspect(data))
+      local errfilter = vim.tbl_filter(function(value) return value ~= "" end, data)
+      last_error = (#errfilter > 0) and errfilter or last_error
     end or nil,
-    on_exit = function(_, code, _)
-      print("[exit " .. vim.inspect(command) .. " ] code =", data)
-      if code ~= 0 then
-        callback.success(_, code, _)
+    on_exit = function(_, _, _)
+      print("on_exit last error:", vim.inspect(last_error))
+      if last_error then
+        callback.fail(last_error)
       else
-        callback.fail(_, code, _)
+        callback.success()
       end
     end,
     detach = true,
   })
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[run_command on_exit:]==], vim.inspect(on_exit)) -- __AUTO_GENERATED_PRINT_VAR_END__
 end
 
 keymap({ "n", "v" }, "gx", function()
@@ -576,6 +582,48 @@ keymap({ "n", "v" }, "gGs", function()
   run_command({ open_command, search_url })
 end, { silent = true, desc = "Google Search" })
 
+keymap({ "n" }, "gF", function()
+  -- " Enable gf to recognize file:/// paths and navigate to line numbers
+  -- set isfname+==file:// -- check with set isfname?
+  local function goto_file_line()
+    -- Extract file path and line number
+    local fileline = vim.fn.expand("<cfile>")
+    if fileline:match("^file://") then
+      -- Parse the path and line from the format file:///path/to/file:<line>:<column>
+      -- Match the file path and line number from a "file://" pattern.
+      -- The pattern captures everything after "file://" up to the colon (:) as the file path,
+      -- and captures the digits after the colon as the line number.
+      -- make sure to handle filepath:line:col where :line:col :line or no line can be passed through / optional
+      local path, line, col = fileline:match("file://(.-):(%d*):?(%d*)")
+      if path then
+        vim.cmd("edit " .. path)
+        if line ~= "" then
+          vim.cmd(line)
+          if col ~= "" then
+            vim.cmd("normal! " .. col .. "|")
+          end
+        end
+        return
+      end
+      print("filematched file:// |  path=", path, "line=", line)
+      if path and line then
+        vim.cmd("edit " .. path)
+        vim.cmd(line)
+        return
+      end
+    end
+    -- how to send file via g
+    -- file://https://www.goggle.com/search?q=
+    -- file://tests/myTest.lua
+    -- file:///Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/tests/myTest.lua
+    -- file:///Users/tharutaipree/AgodaGit/fe/mmbweb/src/Clientside/.storybook/preview-head.html
+    -- print("Using gF fallback")
+    vim.cmd("normal! gF")
+  end
+
+  goto_file_line()
+end)
+
 keymap({ "n", "v" }, "gX", function()
   local url_or_word = url_repo()
   -- copy to register + if not empty
@@ -589,32 +637,17 @@ keymap({ "n", "v" }, "gX", function()
   else
     command_run = "code --goto"
     callback = {
-      fail = function(_, code, _)
-        print("code cmd fail try again with cmd: ", open_command)
-        vim.fn.jobstart({ open_command, url_or_word }, { detach = true })
+      fail = function(err)
+        -- usually will not happen if vscode cant open open will not since
+        -- file:///pathnotexists X fail -> open notexist X fail
+        -- file:///pathexists vscode ok
+        print("onfail: retry with cmd: ", open_command)
+        run_command({ open_command, url_or_word })
+        -- vim.fn.jobstart({ open_command, url_or_word }, { detach = true })
       end,
     }
-
-    -- /Users/tharutaipree/.config/nvim2_jelly_lzmigrate/lua/config/mykeymaps.lua
-    -- vim.fn.jobstart("echo 'hello' && some error here", {
-    -- vim.fn.jobstart({ open_command, "-a", "code", url_or_word }, { -- get error command not found
-    -- vim.fn.jobstart(open_command .. " -a " .. "code " .. url_or_word ,{
-    -- local callback = {
-    --     success = function(_, code, _)
-    --         print("success code=", code)
-    --     end,
-    --     fail = function(_, code, _)
-    --         print("fail code=", code)
-    --     end,
-    -- }
-    -- vim.fn.jobstart("env && code " .. url_or_word ,{
-
-    -- get error code is not executable how to make code a known command
-    -- __AUTO_GENERATED_PRINT_VAR_START__
-    -- local code_command = open_command .. "-a code"
-    -- __AUTO_GENERATED_PRINT_VAR_START__
   end
-  run_command(command_run .. url_or_word, callback)
+  run_command(command_run .. " " .. url_or_word, callback)
 end, { silent = true, desc = "Open in vscode" })
 
 set_opfunc = vim.fn[vim.api.nvim_exec(

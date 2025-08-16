@@ -308,7 +308,9 @@ function filesys()
 end
 
 function executables()
-  local ppath = vim.fn.exepath("python3")
+  local ppath3 = vim.fn.exepath("python3")
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[executables ppath3:]==], vim.inspect(ppath3)) -- __AUTO_GENERATED_PRINT_VAR_END__
   local ppath = vim.fn.exepath("python")
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[main ppath:]==], vim.inspect(ppath)) -- __AUTO_GENERATED_PRINT_VAR_END__
@@ -362,7 +364,7 @@ function get_pythonpath()
   local outputpipenvpy = vim.fn.systemlist("pipenv --py")
   print([==[get_pythonpath outputpipenvpy:]==], vim.inspect(outputpipenvpy))
   if vim.v.shell_error == 0 then
-    -- Loading .env environment variables... <- sometimes show this extra line ??
+    -- Loading .env environment variables... <- sometimes sho this extra line ??
     -- /Users/tharutaipree/Personal/streamlitgemini/.venv/bin/python
     for _, line in ipairs(output) do
       if line:match("^/") then
@@ -393,6 +395,17 @@ function errorHandling()
 end
 
 local function buffers()
+  local buf = vim.api.nvim_get_current_buf()
+  print([==[M.buffcurr:]==], vim.inspect(buf))             -- __AUTO_GENERATED_PRINT_VAR_END__
+  local bufname = vim.fn.bufname(buf)
+  print([==[M.buffnr:]==], vim.inspect(bufname))           -- __AUTO_GENERATED_PRINT_VAR_END__
+  local vbuff = vim.b[buf]
+  print([==[buffers vbuff:]==], vim.inspect(vbuff))        -- __AUTO_GENERATED_PRINT_VAR_END__
+  local res = vim.treesitter.get_parser(13)
+  print([==[treesitter buffers res:]==], vim.inspect(res)) -- __AUTO_GENERATED_PRINT_VAR_END__
+
+
+
   local prev_buf = vim.fn.bufnr("#") or 0
   local line_no = vim.api.nvim_buf_get_mark(prev_buf, ".")
   -- __AUTO_GENERATED_PRINT_VAR_START__
@@ -427,20 +440,21 @@ end
 
 vim_process_callback = function()
   print("vim_process_callback")
-  local commandTables = {
-    -- "which code", -- not executable
-    -- "&&", -- this now work
-    -- "env",
-    -- "&&",
-    -- "echo",
-    -- "hello",
-    -- "&&",
-    -- "123",
-  }
+  -- local commandTables = {
+  --   "which code", -- not executable
+  --   "&&",         -- this now work
+  --   "env",
+  --   "&&",
+  --   "echo",
+  --   "hello",
+  --   "&&",
+  --   "123",
+  -- }
   -- chode not found
-  -- commandTables = "env && which code && 123" -- this works code path output
+  commandTables = "env && which code && 123" -- this works code path output
+  commandTables = "which code && 123"        -- this works code path output
   -- join table with space
-  -- vim.fn.jobstart(table.concat(commandTables, " ", {
+  -- -- vim.fn.jobstart(table.concat(commandTables, " ", {
   vim.fn.jobstart(commandTables, {
     -- vim.fn.jobstart("env && which code && echo 'hello' && code . && some error here", {
     on_stdout = function(_, data, _)
@@ -458,31 +472,47 @@ vim_process_callback = function()
     end,
     detach = true,
   })
+  --
   local open_command = "open"
-  local open_command = "code"
+  local open_command = "code --goto"
   print([==[function open_command:]==], vim.inspect(open_command)) -- __AUTO_GENERATED_PRINT_VAR_END__
   -- __AUTO_GENERATED_PRINT_VAR_START__
   -- local open_command = "open -a code"
   local url_or_word = "/Users/tharutaipree/dotfiles/.config/nvim2_jelly_lzmigrate/lua/config/mykeymaps.lua"
+  local url_or_word = "file:////Users/tharutaipree/dotfiles/.config/nvim2_jelly_lzmigrate/lua/config/mykeymaps.lua"
+  local url_or_word = "file:///asdasdzxc/asdasd.invalid"
+  local url_or_word = "/asdasdzxc/asdasd.invalid"
+  local url_or_word = "/asdasdzxc/asdasd.NOTEXISTS"
 
   -- vim.fn.jobstart({ open_command, "-a" , "code"}, { -- not work
   -- vim.fn.jobstart(open_command .. " -a " .. "code"}, { -- not work
-  vim.fn.jobstart({ open_command, url_or_word }, {
+  local last_error = nil
+  vim.fn.jobstart(open_command .. " " .. url_or_word, {
+    -- vim.fn.jobstart({ open_command, url_or_word }, {
     on_stdout = function(_, data, _)
       --   print("stdout", data)
       -- __AUTO_GENERATED_PRINT_VAR_START__
-      print([==[functionout#if#function data:]==], vim.inspect(data)) -- __AUTO_GENERATED_PRINT_VAR_END__
+      print([==[on#out#function data:]==], vim.inspect(data)) -- __AUTO_GENERATED_PRINT_VAR_END__
     end,
     on_stderr = function(_, data, _)
-      --   print("stderr", data)
-      print([==[function#err#function data:]==], vim.inspect(data)) -- __AUTO_GENERATED_PRINT_VAR_END__
+      --   print("stderr", data) -- print many times when error ?
+      print([==[on#err#function data:]==], vim.inspect(data)) -- __AUTO_GENERATED_PRINT_VAR_END__
+      -- data table without empty string
+      -- data_filter = data : {"", "asd"} => { "asd" }
+      errfilter = vim.tbl_filter(function(value) return value ~= "" end, data)
+      last_error = (#errfilter > 0) and errfilter or last_error
+      -- __AUTO_GENERATED_PRINT_VAR_START__
+      print([==[vim_process_callback#on_stderr last_error:]==], vim.inspect(last_error)) -- __AUTO_GENERATED_PRINT_VAR_END__
     end,
-    on_exit = function(_, code, _)
-      print("exit code=", code)
-      if code == 0 then
-        print("open success")
+    on_exit = function(a, b, c)
+      -- print("a=", vim.inspect(a)) -- 32, 43 even pass / fail
+      -- print("b=", vim.inspect(b)) -- always 0
+      -- print("c=", vim.inspect(c)) -- always exit
+      -- will get correct last error
+      if last_error then
+        print("open failed error: ", last_error)
       else
-        print("open failed")
+        print("open success")
       end
     end,
     detach = true,
@@ -707,6 +737,8 @@ function test_fold_method_debug()
   -- - `foldmethod=expr`
   -- - `foldexpr=v:lua.require'utils.ui'.foldexpr()`
   -- - Or, if using Treesitter directly: `foldexpr=nvim_treesitter#foldexpr()`
+  --
+  -- :checkhealth nvim-treesitter
 
 
 
@@ -825,8 +857,57 @@ function snacks_preview()
   -- test1()
 end
 
+function snacks_qfgrep()
+  -- get list of quickfix items files
+  -- do rg on these files
+  local items = vim.fn.getqflist({
+    items = 0,
+  }).items
+
+  if not items or #items == 0 then
+    vim.notify("Quickfix list is empty", vim.log.levels.WARN)
+    return
+  end
+
+  local files = {}
+  for _, item in ipairs(items) do
+    if item.filename then
+      table.insert(files, item.filename)
+    end
+  end
+  ---@type snacks.picker.Config
+  --- require("snacks.picker").files
+  local snacks_picker_files
+  Snacks.picker.files {
+    input = {
+      initial_value = "",
+      keys = {
+        J = {
+          function()
+            vim.cmd "colder"
+          end,
+          mode = { "n", "i" },
+          desc = "Navigate to older list",
+        },
+        K = {
+          function()
+            vim.cmd "cnewer"
+          end,
+          mode = { "n", "i" },
+          desc = "Navigate to newer list",
+        },
+      },
+    },
+    preview = {
+      minimal = true,
+    },
+    values = files,
+  }
+end
+
 local function main()
-  snacks_preview()
+  -- snacks_qfgrep()
+  -- snacks_preview()
   -- print(Snacks.picker.picker) --nil
   -- vim.inspect(Snacks.picker.picker.get())
   -- vim.inspect(Snacks.picker.picker.get())
@@ -838,12 +919,12 @@ local function main()
   -- __AUTO_GENERATED_PRINT_VAR_START__
   -- call :messages
   -- testExpand()
+  -- buffers()
   -- vim_process_callback()
   -- get_pythonpath()
   -- getGitList()
-  -- buffers()
   -- errorHandling()
-  -- executables()
+  executables()
   -- filesys()
   -- getArrListConfig()
   -- testGetlineExe()
