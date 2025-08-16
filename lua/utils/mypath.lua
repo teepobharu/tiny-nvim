@@ -90,8 +90,13 @@ function M.get_pythonpath(pipenvFallback, isLog)
   end
   -- Fallback to default python executable
   local python = vim.fn.exepath("python")
+  python = python or vim.fn.exepath("python3")
   if isLog then
-    vim.notify("get_pythonpath using default python exe: " .. python, vim.log.levels.INFO)
+    if python == "" then
+      vim.notify("No python executable found", vim.log.levels.WARN)
+    else
+      vim.notify("get_pythonpath using default python exe: " .. python, vim.log.levels.INFO)
+    end
   end
   return python
 end
