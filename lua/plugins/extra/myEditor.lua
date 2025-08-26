@@ -352,7 +352,7 @@ Your instructions here
           -- apply_cursor = "a",
           -- retry_user_request = "r",
           -- edit_user_request = "e",
-          switch_windows = "<C-k>", -- conflict with c-wf focus command confimration popup
+          switch_windows = "<C-]>", -- conflict with c-wf focus command confimration popup
           -- reverse_switch_windows = "<S-Tab>",
         },
       },

@@ -388,7 +388,6 @@ vim.api.nvim_create_autocmd("OptionSet", {
       print([==[callback#if bufnr:]==], vim.inspect(bufnr)) -- __AUTO_GENERATED_PRINT_VAR_END__
       -- does not seem to remove
       vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dx")
-      vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dx")
       vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dt")
       vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dp")
       vim.api.nvim_buf_del_keymap(bufnr, "v", "<leader>dp")
