@@ -10,12 +10,12 @@ vim.g.enable_extra_plugins = {
   "lspsaga",
   "neotree",
   "fzf",
-  -- "fold-preview",
+  "fold-preview",
   "myToggleterm",
   "myEditor",
 }
 
--- vim.g.lazydev_enabled = false -- uncomment this to load all lua dependencies (get access to vim object)
+vim.g.lazydev_enabled = false -- uncomment this to load all lua dependencies (get access to vim object)
 
 -- extend vim.lsp.enable
 

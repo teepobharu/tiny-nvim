@@ -22,9 +22,11 @@ return {
       local wk = require("which-key")
       wk.add({
         { "<leader>ra", desc = "Ask AI" },
-        { "<leader>rA", desc = "Edit selected", mode = { "v" } },
+        { "<leader>rA", desc = "Edit selected",   mode = { "v" } },
         { "<leader>rr", desc = "Refresh AI" },
+        { "<leader>rM", desc = "Avante AI Models" },
       })
+      vim.api.nvim_set_keymap("n", "<leader>rM", ":AvanteModel<CR>", { noremap = true, silent = true })
     end,
   },
   {
@@ -36,4 +38,3 @@ return {
     ft = { "markdown", "Avante" },
   },
 }
-
