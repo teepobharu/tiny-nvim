@@ -131,4 +131,30 @@ function M.get_root_directory_current_buffer()
   end
 end
 
+-- sample usage
+-- input ../somefile.txt
+-- output = /full/path/to/somefile.txt
+function M.getFullPathFromRelativePath(relPath)
+  local success, result = pcall(function()
+    if relPath:sub(1, 1) == "/" then
+      return relPath
+    end
+    local relcwd = vim.fn.expand("%:.:h")
+    local combined = relcwd .. "/" .. relPath
+    return vim.fn.fnamemodify(combined, ":p")
+  end)
+
+  if not success then
+    vim.notify("Error in getFullPathFromRelativePath: input=" .. relPath .. " result=" .. result, vim.log.levels.ERROR)
+    return nil
+  end
+
+  if vim.fn.filereadable(result) == 0 and vim.fn.isdirectory(result) == 0 then
+    -- vim.notify("Invalid path: " .. result, vim.log.levels.WARN)
+    return nil
+  end
+
+  return result
+end
+
 return M

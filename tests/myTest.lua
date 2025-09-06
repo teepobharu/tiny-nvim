@@ -910,7 +910,61 @@ function lsp_signature()
   -- ISSUE = noice auto enable signature !!
 end
 
+local function getDirForCurWord()
+  -- local filepath = "myTest.lua"
+  local filepath = "../tests/myTest.lua"
+  -- Get the full absolute path of the current buffer
+  local absolute_filepath = vim.fn.expand("%:p")
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[getDirForCurWord absolute_filepath:]==], vim.inspect(absolute_filepath)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  -- Get the path relative to the current working directory
+  local relative_to_cwd = vim.fn.expand("%:.")
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[getDirForCurWord relative_to_cwd:]==], vim.inspect(relative_to_cwd)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  local relative_to_dir = vim.fn.expand("%:.:h")
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[getDirForCurWord relative_to_dir:]==], vim.inspect(relative_to_dir)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  local relative_to_home = vim.fn.expand("%:~")
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[getDirForCurWord relative_to_home:]==], vim.inspect(relative_to_home)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  local relative_to_dir_and_filepath = relative_to_dir .. "/" .. filepath
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[getDirForCurWord relative_to_dir_and_filepath:]==], vim.inspect(relative_to_dir_and_filepath)) -- __AUTO_GENERATED_PRINT_VAR_END__
+
+  local isradable = vim.fn.filereadable("/Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/tests/myTest.lua")
+  isradable = vim.fn.filereadable(relative_to_dir_and_filepath)
+  print([==[getDirForCurWord isradable:]==], vim.inspect(isradable)) -- __AUTO_GENERATED_PRINT_VAR_END__
+
+  local expandfp = vim.fn.fnamemodify(relative_to_dir_and_filepath, ":p")
+  print([==[getDirForCurWord expandfp:]==], vim.inspect(expandfp))         -- __AUTO_GENERATED_PRINT_VAR_END__
+  local isradableexp = vim.fn.filereadable(expandfp)
+  print([==[getDirForCurWord isradableexp:]==], vim.inspect(isradableexp)) -- __AUTO_GENERATED_PRINT_VAR_END__
+
+  function getFullPathFromRelativePath(relPath)
+    -- cwd not work will get abs and fnamemod will still has ..
+    local relcwd = vim.fn.expand("%:.:h")
+    -- __AUTO_GENERATED_PRINT_VAR_START__
+    local combined = relcwd .. "/" .. relPath
+    local fullPath = vim.fn.fnamemodify(combined, ":p")
+    return fullPath
+  end
+
+  local fullPath = getFullPathFromRelativePath(filepath)
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[getDirForCurWord fullPath:]==], vim.inspect(fullPath)) -- __AUTO_GENERATED_PRINT_VAR_END__
+end
+
+function PL_testPasteImage()
+  local pasted_image = require("img-clip").paste_image()
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[PL_testPasteImage pasted_image:]==], vim.inspect(pasted_image)) -- __AUTO_GENERATED_PRINT_VAR_END__
+end
+
 local function main()
+  PL_testPasteImage()
+  -- getDirForCurWord()
   -- lsp_signature()
   -- snacks_qfgrep()
   -- snacks_preview()

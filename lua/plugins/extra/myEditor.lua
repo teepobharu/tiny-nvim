@@ -191,6 +191,39 @@ return {
       },
     },
   },
+
+  -- [Image](/Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/assets/2025-09-06-23-28-21.png)
+  -- image support for code companion , requires pngpaste , brew install pngpaste https://github.com/jcsalterego/pngpaste
+  {
+    "HakonHarnes/img-clip.nvim",
+    event = "VeryLazy",
+    keys = {
+      -- suggested keymap
+      { "<leader>iv", "<cmd>PasteImage<cr>", desc = "Paste image from system clipboard" },
+    },
+    -- command = { "PasteImage" },
+    opts = {
+      default = {
+        prompt_for_file_name = false,
+        template = "[Image$CURSOR]($FILE_PATH)",
+        use_absolute_path = false,
+      },
+      filetypes = {
+        codecompanion = {
+          prompt_for_file_name = false,
+          use_absolute_path = true,
+        },
+        AvanteInput = {
+          prompt_for_file_name = false,
+          use_absolute_path = true,
+        }
+      },
+    },
+    -- config = function(_, opt)
+    --   -- __AUTO_GENERATED_PRINT_VAR_START__
+    --   print([==[ opt:]==], vim.inspect(opt)) -- __AUTO_GENERATED_PRINT_VAR_END__
+    -- end,
+  },
   {
     "olimorris/codecompanion.nvim",
     keys = {
@@ -343,6 +376,29 @@ Your instructions here
   },
   {
     "yetone/avante.nvim",
+    -- dependencies = {
+    --   "HakonHarnes/img-clip.nvim"
+    -- },
+    -- {
+    --   -- support for image pasting :
+    --   -- when use cmd + shift + v in insert save in .local/..
+    --   -- if used map config will create asset in current dir
+    --   "HakonHarnes/img-clip.nvim",
+    --   event = "VeryLazy",
+    --   opts = {
+    --     -- recommended settings
+    --     default = {
+    --       embed_image_as_base64 = false,
+    --       prompt_for_file_name = false,
+    --       drag_and_drop = {
+    --         insert_mode = true,
+    --       },
+    --       -- required for Windows users
+    --       use_absolute_path = true,
+    --     },
+    --   },
+    -- },
+    -- },
     opts = {
       mappings = {
         -- edit = "<leader>rE", -- does not overwrite why ?
@@ -711,24 +767,48 @@ Your instructions here
         desc = "Git Branches",
       },
       {
-        "<leader>E",
-        function()
-          Snacks.picker.explorer {
-            cwd = vim.fn.expand "%:p:h",
-            auto_close = true,
-            layout = {
-              preset = "vertical",
-            },
-            win = {
-              list = {
-                keys = {
-                  ["-"] = "explorer_up",
-                  ["g."] = "toggle_hidden",
-                },
+        "<leader>E", function()
+        local defaultDir = vim.fn.expand "%:p:h"
+        local curword = vim.fn.expand("<cfile>")
+        local filepath = curword and pathUtil.getFullPathFromRelativePath(curword)
+        local notcurdir = (curword == "" or (vim.fn.filereadable(filepath) == 0 and vim.fn.isdirectory(filepath) == 0))
+        local cwddir = notcurdir and defaultDir or filepath
+        -- lua/plugins/extra/myEditor.lua
+        --     /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua
+        if not notcurdir then
+          local success, err = pcall(function()
+            vim.cmd("Neotree " .. filepath)
+          end)
+          print([==[(anon) err:]==], vim.inspect(err))         -- __AUTO_GENERATED_PRINT_VAR_END__
+          -- __AUTO_GENERATED_PRINT_VAR_START__
+          print([==[(anon) success:]==], vim.inspect(success)) -- __AUTO_GENERATED_PRINT_VAR_END__
+          if not success then
+            vim.notify("Error opening Neotree: " .. err, vim.log.levels.ERROR)
+            -- ../../../assets/2025-08-31-23-35-34.png
+            -- ../../../assets/2025-08-31-23-35-38.png
+            -- ../../../assets/2025-08-31-23-23-23.png
+          else
+            -- print("success")
+            return
+          end
+        end
+
+        Snacks.picker.explorer {
+          cwd = defaultDir,
+          auto_close = true,
+          layout = {
+            preset = "vertical",
+          },
+          win = {
+            list = {
+              keys = {
+                ["-"] = "explorer_up",
+                ["g."] = "toggle_hidden",
               },
             },
-          }
-        end,
+          },
+        }
+      end,
       },
       {
         "<C-e>",
@@ -1018,5 +1098,6 @@ Your instructions here
   --     },
   --   },
   -- },
+  -- { import = "plugins.extra.myImage" }, -- create too many sticky image render without removing
   { import = "plugins.extra.myNoice" },
 }
