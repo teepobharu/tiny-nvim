@@ -292,10 +292,6 @@ vim.api.nvim_create_autocmd("User", {
       vscode.action "workbench.action.tasks.reRunTask"
     end)
 
-    -- Debug typescript type, used with https://marketplace.visualstudio.com/items?itemName=Orta.vscode-twoslash-queries
-    vim.keymap.set("n", "<leader>dd", function()
-      vscode.action "orta.vscode-twoslash-queries.insert-twoslash-query"
-    end)
 
     -- Other keymaps will be used with https://github.com/VSpaceCode/vscode-which-key, so we don't need to define them here
     -- Trigger which-key by pressing <CMD+Space>, refer more default keymaps https://github.com/VSpaceCode/vscode-which-key/blob/15c5aa2da5812a21210c5599d9779c46d7bfbd3c/package.json#L265
@@ -429,6 +425,9 @@ function my_vscode_keymaps(vscode)
   end)
   vim.keymap.set("n", "<leader>qr", function()
     vscode.action("workbench.action.reloadWindow")
+  end)
+  vim.keymap.set("n", "<leader>uw", function()
+    vscode.action("editor.action.toggleWordWrap")
   end)
   -- +Window
   -- vs / sp split
@@ -798,13 +797,57 @@ function my_vscode_keymaps(vscode)
     vscode.action("search.action.focusSearchList")
   end)
 
-  -- TO MIGRATE -------------------- =============
-  -- Navigation
+  -- Debug typescript type, used with https://marketplace.visualstudio.com/items?itemName=Orta.vscode-twoslash-queries
+  vim.keymap.set("n", "<leader>dE", function()
+    vscode.action("editor.debug.action.editBreakpoint")
+  end)
+  vim.keymap.set("n", "<leader>dD", function()
+    vscode.action "orta.vscode-twoslash-queries.insert-twoslash-query"
+  end)
+  -- Debug mappings
+  vim.keymap.set("n", "<leader>ds", function()
+    vscode.action("workbench.action.debug.restart")
+  end)
+  vim.keymap.set("n", "<leader>dd", function()
+    vscode.action("editor.debug.action.toggleBreakpoint")
+  end)
+  vim.keymap.set("n", "<leader>dn", function()
+    vscode.action("editor.debug.action.stepOver")
+  end)
+  vim.keymap.set("n", "<leader>dw", function()
+    vscode.action("editor.debug.action.selectionToWatch")
+  end)
+  vim.keymap.set("n", "<leader>dj", function()
+    vscode.action("workbench.action.debug.stepInto")
+  end)
+  vim.keymap.set("n", "<leader>dk", function()
+    vscode.action("workbench.action.debug.stepOut")
+  end)
+  vim.keymap.set("n", "<leader>dt", function()
+    vscode.action("workbench.debug.viewlet.action.toggleBreakpointsActivatedAction")
+  end)
+  vim.keymap.set("n", "<leader>dm", function()
+    vscode.action("workbench.debug.viewlet.action.disableAllBreakpoints")
+  end)
+  vim.keymap.set("n", "<leader>de", function()
+    vscode.action("workbench.panel.repl.view.focus")
+  end)
+  vim.keymap.set("n", "<leader>dc", function()
+    vscode.action("editor.debug.action.runToCursor")
+  end)
+  vim.keymap.set("n", "<leader>dx", function()
+    vscode.action("workbench.action.debug.disconnect")
+  end)
 
-  -- Jest : TODO: make sure it ru njest test
-  -- toggle wrap tw
-  vim.keymap.set("n", "<leader>tw", function()
-    vscode.action("editor.action.toggleWordWrap")
+  vim.keymap.set("n", "<leader>dM", function()
+    vscode.action("workbench.debug.viewlet.action.enableAllBreakpoints")
+  end)
+  vim.keymap.set("n", "<leader>dr", function()
+    vscode.action("editor.debug.action.goToNextBreakpoint")
+  end)
+
+  vim.keymap.set("n", "<leader>td", function()
+    vscode.action("testing.debugAtCursor")
   end)
   vim.keymap.set("n", "<leader>tT", function()
     vscode.action("extension.runJestFile")
@@ -814,6 +857,10 @@ function my_vscode_keymaps(vscode)
     vscode.action("extension.runJest")
     vscode.action("testing.runAtCursor")
   end)
+  -- TO MIGRATE -------------------- =============
+  -- Navigation
+
+  -- Jest : TODO: make sure it run jest test
   vim.keymap.set("n", "<leader>ts", function()
     vscode.action("workbench.view.testing.focus")
   end)

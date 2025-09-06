@@ -2,6 +2,7 @@ local opts = { noremap = true, silent = true }
 local keymap = vim.keymap.set
 local Cmd = require("utils.cmd")
 local inputUtil = require("utils.input")
+local myPathUtil = require("utils.mypath")
 -- ===========================
 -- LAZY NVIM ====================
 -- =======================
@@ -608,6 +609,8 @@ keymap({ "n", "v" }, "gx", function()
   end
 end, { silent = true, desc = "Copy word / Open url" })
 
+
+-- map key maps to open directory
 keymap({ "n", "v" }, "gGs", function()
   local text = inputUtil.get_selected_or_cursor_word()
   -- __AUTO_GENERATED_PRINT_VAR_START__
@@ -763,6 +766,222 @@ local function open_qflist_in_vscode()
   print(cmd)
   vim.fn.jobstart(cmd, { detach = true })
 end
+
+
+vim.api.nvim_create_autocmd('FileType', {
+  pattern = { 'AvanteInput', 'codecompanion' },
+  callback = function()
+    print("FILETYPE AUCMD: ", vim.bo.filetype)
+    -- cmd shift p
+    -- vim.keymap.set({ 'n', 'v' }, '<D-S-v>', ':PasteImage<CR>', { desc = "PasteImage", buffer = true, silent = true })
+    -- vim.keymap.set('n', '<D-v>', ':PasteImage<CR>', { desc = "PasteImage", buffer = true, silent = true })
+    -- vim.api.nvim_buf_set_keymap(0, 'i', '<D-S-v>', '<Esc>:PasteImage<CR>a',
+    -- unbind all of the above
+    -- vim.api.nvim_buf_del_keymap(0, 'i', '<D-S-v>')
+    -- vim.api.nvim_buf_del_keymap(0, 'i', '<D-v>')
+    -- vim.api.nvim_buf_del_keymap(0, 'n', '<D-S-v>')
+    -- vim.api.nvim_buf_del_keymap(0, 'n', '<D-v>')
+    --   { desc = "PasteImage", noremap = true, silent = true })
+    -- vim.keymap.set('n', '<leader>iv', ':PasteImage<CR>', { desc = "PasteImage", buffer = true, silent = true })
+    -- vim.keymap.set('n', '<leader>V', ':PasteImage<CR>', { desc = "PasteImage", buffer = true, silent = true })
+  end,
+})
+--
+-- TODO checkout keymap by https://www.youtube.com/watch?v=0O3kqGwNzTI
+-- https://github.com/linkarzu/dotfiles-latest/blob/4ac00c8653025da331d43adfb892dc7a67ea4c6a/neovim/nvim-lazyvim/lua/config/keymaps.lua
+-- ############################################################################
+--                             Image section
+-- MAPPING for open dir / delete use case SHOULD be ALREADY actionable by NEOTREE go -> Delete / Open
+-- ############################################################################
+
+-- I use a Ctrl keymap so that I can paste images in insert mode
+-- I tried using <C-v> but duh, that's used for visual block mode
+-- so don't do it
+vim.keymap.set({ "n", "v", "i" }, "<C-a><C-v>", function()
+  local pasted_image = require("img-clip").paste_image()
+  if pasted_image then
+    -- "Update" saves only if the buffer has been modified since the last save
+    vim.cmd("update")
+    print("Image pasted and file saved")
+    -- Only if updated I'll refresh the images by clearing them first
+    -- I'm using [[ ]] to escape the special characters in a command
+    vim.cmd([[lua require("image").clear()]])
+    -- Reloads the file to reflect the changes
+    vim.cmd("edit!")
+    -- Switch back to command mode
+    vim.cmd("stopinsert")
+  else
+    print("No image pasted. File not updated.")
+  end
+end, { desc = "Paste image from system clipboard" })
+
+-- ############################################################################
+
+-- Open image under cursor in the Preview app (macOS)
+-- Get the image path: modified to work with absolute path
+local function extract_image_path(line)
+  -- Pattern to match image path in Markdown
+  -- support md ![alt text](image_path) format
+  local image_pattern = "%[.-%]%((.-)%)"
+  -- Extract relative image path
+  local _, _, image_path = string.find(line, image_pattern)
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[extract_image_path image_pattern:]==], vim.inspect(image_pattern)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  if not image_path or image_path == "" then
+    -- vim.notify("No valid image path found from [] template", vim.log.levels.WARN)
+    image_path = image_path or myPathUtil.getFullPathFromRelativePath(vim.fn.expand("<cfile>"))
+  end
+  return image_path
+end
+
+vim.keymap.set("n", "<leader>io", function()
+  local function get_image_path()
+    return extract_image_path(vim.api.nvim_get_current_line())
+  end
+
+  -- Get the image path
+  local image_path = get_image_path()
+
+  if image_path then
+    -- Check if the image path starts with "http" or "https"
+    if string.sub(image_path, 1, 4) == "http" then
+      print("URL image, use 'gx' to open it in the default browser.")
+    else
+      -- Construct absolute image path
+      -- local current_file_path = vim.fn.expand("%:p:h")
+      -- local absolute_image_path = current_file_path .. "/" .. image_path
+      local absolute_image_path = image_path
+
+      -- Construct command to open image in Preview
+      local command = "open -a Preview " .. vim.fn.shellescape(absolute_image_path)
+      -- Execute the command
+      local success = os.execute(command)
+
+      if success then
+        print("Opened image in Preview: " .. absolute_image_path)
+      else
+        print("Failed to open image in Preview: " .. absolute_image_path)
+      end
+    end
+  else
+    print("No image found under the cursor")
+  end
+end, { desc = "(macOS) Open image under cursor in Preview" })
+
+-- ############################################################################
+
+-- Open image under cursor in Finder (macOS)
+--
+-- THIS ONLY WORKS IF YOU'RE NNNNNOOOOOOTTTTT USING ABSOLUTE PATHS,
+-- BUT INSTEAD YOURE USING RELATIVE PATHS
+--
+-- If using absolute paths, use the default `gx` to open the image instead
+vim.keymap.set("n", "<leader>if", function()
+  local function get_image_path()
+    return extract_image_path(vim.api.nvim_get_current_line())
+  end
+
+  local image_path = get_image_path()
+
+  if image_path then
+    -- Check if the image path starts with "http" or "https"
+    if string.sub(image_path, 1, 4) == "http" then
+      print("URL image, use 'gx' to open it in the default browser.")
+    else
+      -- Construct absolute image path
+      -- local absolute_image_path = myPathUtil.getFullPathFromRelativePath(vim.fn.expand("<cfile>"))
+      -- local current_file_path = vim.fn.expand("%:p:h")
+      -- local absolute_image_path = current_file_path .. "/" .. image_path
+      local absolute_image_path = image_path
+
+      -- Open the containing folder in Finder and select the image file
+      local command = "open -R " .. vim.fn.shellescape(absolute_image_path)
+      local success = vim.fn.system(command)
+
+      if success == 0 then
+        print("Opened image in Finder: " .. absolute_image_path)
+      else
+        print("Failed to open image in Finder: " .. absolute_image_path)
+      end
+    end
+  else
+    print("No image found under the cursor")
+  end
+end, { desc = "(macOS) Open image under cursor in Finder" })
+
+-- ############################################################################
+
+-- Delete image file under cursor using trash app (macOS)
+vim.keymap.set("n", "<leader>id", function()
+  local function get_image_path()
+    return extract_image_path(vim.api.nvim_get_current_line())
+  end
+
+  -- Get the image path
+  local image_path = get_image_path()
+
+  if image_path then
+    -- Check if the image path starts with "http" or "https"
+    if string.sub(image_path, 1, 4) == "http" then
+      vim.api.nvim_echo({
+        { "URL image cannot be deleted from disk.", "WarningMsg" },
+      }, false, {})
+    else
+      -- Construct absolute image path
+      -- local current_file_path = vim.fn.expand("%:p:h")
+      -- local absolute_image_path = current_file_path .. "/" .. image_path
+      local absolute_image_path = image_path
+
+      -- Check if trash utility is installed
+      if vim.fn.executable("trash") == 0 then
+        vim.api.nvim_echo({
+          { "- Trash utility not installed. Make sure to install it first\n", "ErrorMsg" },
+          { "- In macOS run `brew install trash`\n",                          nil },
+        }, false, {})
+        return
+      end
+
+      -- Prompt for confirmation before deleting the image
+      vim.ui.input({
+        prompt = "Delete image file? (y/n) ",
+      }, function(input)
+        if input == "y" or input == "Y" then
+          -- Delete the image file using trash app
+          local success, _ = pcall(function()
+            vim.fn.system({ "trash", vim.fn.fnameescape(absolute_image_path) })
+          end)
+
+          if success then
+            vim.api.nvim_echo({
+              { "Image file deleted from disk:\n", "Normal" },
+              { absolute_image_path,               "Normal" },
+            }, false, {})
+            -- I'll refresh the images, but will clear them first
+            -- I'm using [[ ]] to escape the special characters in a command
+            -- vim.cmd([[lua require("image").clear()]]) -- no need since cause issue
+            -- Reloads the file to reflect the changes
+            vim.cmd("edit!")
+          else
+            vim.api.nvim_echo({
+              { "Failed to delete image file:\n", "ErrorMsg" },
+              { absolute_image_path,              "ErrorMsg" },
+            }, false, {})
+          end
+        else
+          vim.api.nvim_echo({
+            { "Image deletion canceled.", "Normal" },
+          }, false, {})
+        end
+      end)
+    end
+  else
+    vim.api.nvim_echo({
+      { "No image found under the cursor", "WarningMsg" },
+    }, false, {})
+  end
+end, { desc = "(macOS) Delete image file under cursor" })
+
+-- ############################################################################
 vim.api.nvim_create_autocmd("FileType", {
   group = quickfixAndTroubleGroup,
   pattern = "qf",
@@ -783,6 +1002,10 @@ vim.api.nvim_create_autocmd("FileType", {
     vim.keymap.set("n", "<C-y>", print_copy_output, quickfix_opts)
   end,
 })
+
+vim.api.nvim_create_user_command("FzfSession", function()
+  require("config.telescope_pickers").fzf.pickers.session_picker()
+end, {})
 
 -- -- Map J and K in trouble window with refresh
 -- vim.api.nvim_create_autocmd("FileType", {
