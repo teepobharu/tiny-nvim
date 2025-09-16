@@ -784,9 +784,6 @@ Your instructions here
           print([==[(anon) success:]==], vim.inspect(success)) -- __AUTO_GENERATED_PRINT_VAR_END__
           if not success then
             vim.notify("Error opening Neotree: " .. err, vim.log.levels.ERROR)
-            -- ../../../assets/2025-08-31-23-35-34.png
-            -- ../../../assets/2025-08-31-23-35-38.png
-            -- ../../../assets/2025-08-31-23-23-23.png
           else
             -- print("success")
             return

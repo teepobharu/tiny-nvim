@@ -8,6 +8,16 @@ return {
     local finalcmd = base_command .. sel_command
     -- __AUTO_GENERATED_PRINT_VAR_START__
     print([==[builder finalcmd:]==], vim.inspect(finalcmd)) -- __AUTO_GENERATED_PRINT_VAR_END__
+    -- Playwright HTML report prompt
+    -- local html_choices = {}
+    -- local handle = io.popen('find test/playwright -type f -path "*/test-results-*/**/index.html"')
+    -- if handle then
+    --   for file in handle:lines() do
+    --     table.insert(html_choices, file)
+    --   end
+    --   handle:close()
+    -- end
+
     ---@type overseer.TaskDefinition
     return {
       cmd = finalcmd,
@@ -15,6 +25,7 @@ return {
   end,
   --- @type overseer.Params|fun():overseer.Params
   params = function()
+    -- TODO use same approach as and_pick for better completion selection index instead of key since keys  with inputlist fn will reorder from when remap with ipair loops
     local choices = {
       ["Client install only"] = "--client-installonly",
       ["Dev BLP"] = "--dev-blp --client-noinstall",
@@ -25,16 +36,24 @@ return {
       ["Server + Build and parallel def build"] = "-s",
       ["Server run only"] = "-s --nobuild",
     }
-    --- @type overseer.Params
+
     return {
       command = {
-        type = "namedEnum",
+        type = "namedEnum", -- not in doc but usable why ? https://github.com/stevearc/overseer.nvim/blob/master/doc/reference.md
         name = "command",
         desc = "The package name for the test",
         order = 1,
         choices = choices,
         default = choices["Server run only"],
         optional = false,
+      },
+      playwright_report = {
+        type = "choice",
+        name = "Playwright HTML Report",
+        desc = "Open Playwright HTML report",
+        order = 2,
+        choices = html_choices,
+        optional = true,
       },
     }
   end,
