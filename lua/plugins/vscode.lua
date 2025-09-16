@@ -124,6 +124,12 @@ vim.api.nvim_create_autocmd("User", {
     vim.keymap.set("n", "<leader>sS", function()
       vscode.action("workbench.action.showAllSymbols")
     end)
+    vim.keymap.set("n", "<leader>sz", function()
+      vscode.action("workbench.action.gotoSymbol")
+    end)
+    vim.keymap.set("n", "<leader>sZ", function()
+      vscode.action("breadcrumbs.focusAndSelect")
+    end)
     -- Search word under cursor
     vim.keymap.set("n", "<leader>sw", function()
       vscode.action "editor.action.addSelectionToNextFindMatch"
@@ -691,7 +697,7 @@ function my_vscode_keymaps(vscode)
   end)
 
   vim.keymap.set({ "n", "v" }, "<leader>Aq", function()
-      vscode.action("continue.focusEdit") -- cursor
+    vscode.action("continue.focusEdit") -- cursor
   end)
   vim.keymap.set({ "n", "v" }, "<leader>Aa", function()
     vscode.action("continue.focusContinueInputWithoutClear")
