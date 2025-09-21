@@ -225,6 +225,26 @@ return {
     -- end,
   },
   {
+    "greggh/claude-code.nvim",
+    opts = {
+      keymaps = {
+        toggle = {
+          normal = "<localleader>C",
+          terminal = "<localleader>C",
+          variants = {
+            continue = "<leader>Cc",
+            verbose = "<leader>Cv",
+            sudo = "<leader>Cs",
+          },
+        },
+      },
+      command_variants = {
+        -- Output options
+        sudo = "--dangerously-skip-permissions", -- Enable verbose logging with full turn-by-turn output
+      }
+    }
+  },
+  {
     "olimorris/codecompanion.nvim",
     keys = {
       {
@@ -400,15 +420,15 @@ Your instructions here
     -- },
     -- },
     opts = {
+      selection = {
+        enabled = true,
+        hint_display = "none",
+      },
       mappings = {
         -- edit = "<leader>rE", -- does not overwrite why ?
         --- @class AvanteConflictMappings
         sidebar = {
-          -- apply_all = "A",
-          -- apply_cursor = "a",
-          -- retry_user_request = "r",
-          -- edit_user_request = "e",
-          switch_windows = "<C-]>", -- conflict with c-wf focus command confimration popup
+          -- apply_all = "A"onflict with c-wf focus command confimration popup
           -- reverse_switch_windows = "<S-Tab>",
         },
       },
