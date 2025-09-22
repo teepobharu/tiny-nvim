@@ -428,7 +428,8 @@ Your instructions here
         -- edit = "<leader>rE", -- does not overwrite why ?
         --- @class AvanteConflictMappings
         sidebar = {
-          -- apply_all = "A"onflict with c-wf focus command confimration popup
+          switch_windows = "<C-Tab>", -- not work
+          -- apply_all = "A" -- conflict with c-wf focus command confimration popup
           -- reverse_switch_windows = "<S-Tab>",
         },
       },

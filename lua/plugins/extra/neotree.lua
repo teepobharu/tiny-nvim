@@ -304,15 +304,16 @@ return {
             end,
             copy_file_name_current = function(state)
               local node = state.tree:get_node()
-              local filename = node.name
-              vim.fn.setreg('"', filename)
-              vim.notify("Copied: " .. filename)
+              local filepath = node:get_id()
+              local relative_path = vim.fn.fnamemodify(filepath, ":.")
+              vim.fn.setreg('"', relative_path)
+              vim.notify("Copied: " .. relative_path, vim.log.levels.INFO)
             end,
             copy_abs_file = function(state)
               local node = state.tree:get_node()
               local filepath = node:get_id()
               vim.fn.setreg('"', filepath)
-              vim.notify("Copied: " .. filepath)
+              vim.notify("Copied: " .. filepath, vim.log.levels.INFO)
             end,
             telescope_livegrep_cwd = function(state)
               local opts = get_opts_for_files_and_grep(state, "file")
@@ -389,7 +390,7 @@ return {
                     local path = node:get_id()
                     vim.fn.setreg("+", path, "c")
                   end,
-                  desc = "Copy Path to Clipboard",
+                  desc = "copy_abs_file clipboard",
                 },
 
                 ["O"] = {
