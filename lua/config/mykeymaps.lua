@@ -8,6 +8,16 @@ local myPathUtil = require("utils.mypath")
 -- =======================
 
 -- Setup keys
+local function diffoff_all_buffers()
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    vim.api.nvim_buf_call(buf, function()
+      vim.cmd("diffoff")
+    end)
+  end
+end
+
+keymap("n", "<leader>dX", diffoff_all_buffers,
+  { desc = "Turn off diff mode for all buffers", noremap = true, silent = true })
 -- check using :letmapleader or :let maplocalleader
 -- -> need to put inside plugins mapping also to make it work on those mapping
 -- command completion in command line mode
@@ -371,29 +381,39 @@ vim.api.nvim_create_autocmd("OptionSet", {
   callback = function()
     -- print("Diff mode changed: wodiff = ", vim.wo.diff)
     -- check if diff mode is enabled can check in cmd with :echo &diff ?
+    -- vim.keymap.set("n", "]c", "]c", { desc = "Next Change", buffer = true })
+    -- vim.keymap.set("n", "[c", "[c", { desc = "Previous Change", buffer = true })
+    keymap("n", "<leader>dd", ":diffoff<CR>", { desc = "Diff Off" })
+    keymap("n", "<leader>dx", ":diffoff<CR>", { desc = "Diff Off" })
+    keymap("n", "<leader>dt", ":diffthis<CR>", { desc = "Diff this", buffer = true })
+    keymap({ "n", "v" }, "<leader>dp", ":diffput<CR>", { desc = "Diff Put", buffer = true })
+    keymap({ "n", "v" }, "<leader>dg", ":diffget<CR>", { desc = "Diff Obtain", buffer = true })
+    -- both n and v mode wwrks
     if vim.wo.diff then
-      -- vim.keymap.set("n", "]c", "]c", { desc = "Next Change", buffer = true })
-      -- vim.keymap.set("n", "[c", "[c", { desc = "Previous Change", buffer = true })
-      keymap("n", "<leader>dd", ":diffoff<CR>", { desc = "Diff Off" })
-      keymap("n", "<leader>dx", ":diffoff<CR>", { desc = "Diff Off" })
-      keymap("n", "<leader>dt", ":diffthis<CR>", { desc = "Diff this", buffer = true })
-      keymap({ "n", "v" }, "<leader>dp", ":diffput<CR>", { desc = "Diff Put", buffer = true })
-      keymap({ "n", "v" }, "<leader>dg", ":diffget<CR>", { desc = "Diff Obtain", buffer = true })
-      -- both n and v mode wwrks
+      -- always map else delete keymap will throw error even mapcheck passed
     else
       keymap("n", "<leader>dd", ":diffthis<CR>", { desc = "Diff On" })
       keymap("n", "<leader>dt", ":diffthis<CR>", { desc = "Diff this", buffer = true })
       -- unbind the rest
       local bufnr = vim.api.nvim_get_current_buf()
-      -- __AUTO_GENERATED_PRINT_VAR_START__
       print([==[callback#if bufnr:]==], vim.inspect(bufnr)) -- __AUTO_GENERATED_PRINT_VAR_END__
       -- does not seem to remove
-      vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dx")
-      vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dt")
-      vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dp")
-      vim.api.nvim_buf_del_keymap(bufnr, "v", "<leader>dp")
-      vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dg")
-      vim.api.nvim_buf_del_keymap(bufnr, "v", "<leader>dg")
+      -- add space
+      if vim.fn.mapcheck("<leader>dp", "n") ~= "" then
+        vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dp")
+      end
+      if vim.fn.mapcheck("<leader>dp", "v") ~= "" then
+        vim.api.nvim_buf_del_keymap(bufnr, "v", "<leader>dp")
+      end
+      if vim.fn.mapcheck("<leader>dg", "n") ~= "" then
+        vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dg")
+      end
+      if vim.fn.mapcheck("<leader>dt", "n") ~= "" then
+        vim.api.nvim_buf_del_keymap(bufnr, "n", "<leader>dt")
+      end
+      if vim.fn.mapcheck("<leader>dg", "v") ~= "" then
+        vim.api.nvim_buf_del_keymap(bufnr, "v", "<leader>dg")
+      end
       print("Unbind ?")
     end
   end,
