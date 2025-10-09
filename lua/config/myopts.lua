@@ -4,4 +4,4 @@
 vim.g.maplocalleader = ","
 vim.g.lazygit_config = true
 vim.g.ai_prefix_key = "<leader>A" -- see: lua/plugins/extra/codecompanion.lua
-
+vim.opt.foldexpr = "v:lua.require'utils.ui'.foldexpr()"
