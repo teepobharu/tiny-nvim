@@ -7,6 +7,21 @@ local key_s = keyutil.key_s
 local key_g = keyutil.key_g
 local open_remote = gitUtil.open_remote
 
+---Run the first available formatter followed by more formatters
+---@param bufnr integer
+---@param ... string
+---@return string
+local function first(bufnr, ...)
+  local conform = require "conform"
+  for i = 1, select("#", ...) do
+    local formatter = select(i, ...)
+    if conform.get_formatter_info(formatter, bufnr).available then
+      return formatter
+    end
+  end
+  return select(1, ...)
+end
+
 local mapping_key_prefix = vim.g.ai_prefix_key or "<leader>A" -- orginal from codecompanion.lua
 
 local function fzfcompareref(selected)
@@ -960,18 +975,40 @@ Your instructions here
   },
   {
     "stevearc/conform.nvim",
+    -- ../conform.lua | https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#format-command
+    -- npm i -g eslint_d # duplicated when used with eslint and cant seems format or use codfe actions like eslint ?
     opts = {
+      -- log_level = vim.log.levels.DEBUG -- TRACE will see each line but still not see more LSP format info
       formatters_by_ft = {
         sh = { "shfmt" },
+        ["javascript"] = { "biome", "deno_fmt", "prettier", "prettierd", "dprint", stop_after_first = true },
+        ["javascriptreact"] = function(bufnr)
+          return {
+            "rustywind",
+            first(bufnr, "biome", "deno_fmt", "prettier", "prettierd",
+              "dprint")
+          }
+        end,
+        ["typescript"] = { "biome", "deno_fmt", "prettier", "prettierd", "dprint", stop_after_first = true },
+        -- ["typescript"] = { lsp_format = "prefer", "biome", "deno_fmt", "prettier", "prettierd", "dprint", stop_after_first = true },
+        ["typescriptreact"] = function(bufnr)
+          return {
+            "rustywind",
+            first(bufnr, "biome", "deno_fmt", "prettier", "prettierd",
+              "dprint")
+          }
+        end,
+      },
+      default_format_opts = {
+        lsp_format = vim.g.lsp_format_mode or "fallback"
       },
       format_on_save = function(bufnr)
         -- Disable with a global or buffer-local variable
         if vim.g.disable_autoformat or vim.b[bufnr].disable_autoformat then
           return
         end
-        return { timeout_ms = 500, lsp_format = "fallback" }
+        return { timeout_ms = 500, lsp_format = vim.g.lsp_format_mode or "fallback" }
       end,
-
     },
   },
   -- required to add avante cmp sources
