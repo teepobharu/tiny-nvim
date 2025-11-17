@@ -1027,6 +1027,113 @@ vim.api.nvim_create_user_command("FzfSession", function()
   require("config.telescope_pickers").fzf.pickers.session_picker()
 end, {})
 
+
+local function toggle_lsp_format_mode(norequire)
+  if vim.g.lsp_format_mode == "prefer" then
+    vim.g.lsp_format_mode = "fallback"
+  else
+    vim.g.lsp_format_mode = "prefer"
+  end
+
+  -- if norequire then -- will not update
+  vim.notify("set lsp_format to: " .. vim.g.lsp_format_mode, vim.log.levels.INFO)
+  --   return
+  -- end
+
+  -- BELOW seems not required anymore
+  -- local conform = require("conform")
+  -- print([==[BEFORE toggle_lsp_format_mode conform:]==], vim.inspect(conform)) -- __AUTO_GENERATED_PRINT_VAR_END__
+
+  -- function getFirstItem(configName)
+  --   local myconfig = require("plugins.extra.myEditor")
+  --   local conform_spec = nil
+  --   local success, result = pcall(function()
+  --     for _, plugin in ipairs(myconfig or {}) do
+  --       if plugin[1] == configName then
+  --         conform_spec = plugin
+  --         break
+  --       end
+  --     end
+  --     return conform_spec
+  --   end)
+  --   return success and result or nil
+  -- end
+  --
+  -- local item = getFirstItem("stevearc/conform.nvim")
+  -- local myopts = item.opts or {}
+  -- print([==[toggle_lsp_format_mode myopts:]==], vim.inspect(myopts)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  -- conform.setup(vim.tbl_deep_extend("force", conform or {}
+  --   -- need myopts else it will not works
+  --   , myopts,
+  --   {
+  --     -- default_format_opts = { lsp_format = vim.g.lsp_format_mode },
+  --     -- format_on_save = vim.tbl_extend("force", conform.format_on_save or {}, {
+  --     --   lsp_format = vim.g.lsp_format_mode,
+  --     -- }),
+  --   }
+  -- ))
+  -- vim.notify("Conform lsp_format set to: " .. vim.g.lsp_format_mode, vim.log.levels.INFO)
+  -- Update Conform config
+  -- local conform = require("conform")
+  -- print([==[AFTER toggle_lsp_format_mode conform:]==], vim.inspect(conform))                       -- __AUTO_GENERATED_PRINT_VAR_END__
+  -- print([==[AFTER toggle_lsp_format_mode onsave conform:]==], vim.inspect(conform.format_on_save)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  --
+  -- vim.notify("Conform lsp_format set to: " .. vim.g.lsp_format_mode, vim.log.levels.INFO)
+end
+
+local function confformat(timeout_ms, isasync)
+  local conform = require("conform")
+  conform.format({ async = isasync or false, timeout_ms = timeout_ms or 5000 }, function(err)
+    if not err then
+      vim.cmd(":noautocmd w")
+    end
+  end)
+end
+
+local function select_and_format()
+  local conform = require("conform")
+  local bufnr = vim.api.nvim_get_current_buf()
+  local formatters = conform.list_formatters(bufnr)
+  if not formatters or #formatters == 0 then
+    vim.notify("No formatters available", vim.log.levels.WARN)
+    return
+  end
+
+  local items = {}
+  for _, f in ipairs(formatters) do
+    table.insert(items, f.name)
+  end
+
+  vim.ui.select(items, { prompt = "Select formatter:" }, function(choice)
+    if choice then
+      conform.format({ formatters = { choice }, async = false, bufnr = bufnr })
+      -- save after format without triggggggering autocmd
+      vim.cmd(":noautocmd w")
+      vim.notify("Formatted with: " .. choice, vim.log.levels.INFO)
+    end
+  end)
+end
+
+-- 3. Map shortcut
+vim.keymap.set("n", "<leader>uFt", toggle_lsp_format_mode, { desc = "Toggle LSP Format Mode (prefer/fallback)" })
+-- vim.keymap.set("n", "<leader>uFT", function() toggle_lsp_format_mode(true) end, { desc = "Toggle LSP Format Mode" })
+vim.keymap.set("n", "<leader>uFS", select_and_format, { desc = "Select Formatter to Run" })
+vim.keymap.set("n", "<leader>uFf", confformat, { desc = "Format" })
+vim.keymap.set("n", "<leader>uFF", function() confformat(10000, true) end, { desc = "Async Format" })
+vim.keymap.set("n", "<leader>uFs", ":noautocmd w<CR>", { desc = "Save No Format" })
+-- From docs : https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#leave-visual-mode-after-range-format
+vim.keymap.set("", "<localleader>F", function()
+  require("conform").format({ async = true }, function(err)
+    if not err then
+      local mode = vim.api.nvim_get_mode().mode
+      if vim.startswith(string.lower(mode), "v") then
+        vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", true)
+      end
+    end
+  end)
+end, { desc = "Format code" })
+
+
 -- -- Map J and K in trouble window with refresh
 -- vim.api.nvim_create_autocmd("FileType", {
 --   group = quickfixAndTroubleGroup,
