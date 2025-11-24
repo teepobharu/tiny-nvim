@@ -914,7 +914,41 @@ Your instructions here
     "folke/which-key.nvim",
     optional = true,
     opts = {
+      icons = {
+        -- ref: https://github.com/folke/which-key.nvim/blob/3aab2147e74890957785941f0c1ad87d0a44c15a/lua/which-key/icons.lua#L55
+        rules = {
+          { pattern = "avante", icon = " ", color = "green" },
+          { pattern = "sidekick", icon = " ", color = "blue" },
+          -- { pattern = "%f[%a]ai", icon = " ", color = "green" },
+        },
+      },
+      ---@type wk.Spec
       spec = vim.list_extend({
+        -- overides key desc
+        {
+          "<leader>as",
+          desc = "Select sidekick CLI",
+          -- icon = { icon = " ", color = "orange" }
+        },
+        {
+          "<leader>ad",
+          desc = "Detach sidekick",
+        },
+        {
+          "<leader>at",
+          mode = { "x", "n" },
+          desc = "Add ref to sidekick",
+        },
+        {
+          "<leader>af",
+          desc = "Add file sidekick",
+        },
+        {
+          "<leader>av",
+          mode = { "x" },
+          desc = "Add text sidekick",
+        },
+        -- end overides key desc
         {
           "gG",
           group = "web",
