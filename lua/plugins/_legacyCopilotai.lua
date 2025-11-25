@@ -1,5 +1,8 @@
 -- TODO: if conflicted with side kick then consider using localleader prefix instead
 -- Setup AI with CopilotChat
+local keyutil = require "utils.keyutil"
+local isSideKickEnabled = keyutil.isSideKickEnabled
+
 return {
   {
     "folke/which-key.nvim",
@@ -68,7 +71,7 @@ return {
     keys = {
       -- Show prompts actions with telescope
       {
-        "<leader>ap",
+        "<localleader>ap",
         function()
           require("CopilotChat").select_prompt {
             context = {
@@ -79,7 +82,7 @@ return {
         desc = "CopilotChat - Prompt actions",
       },
       {
-        "<leader>ap",
+        "<localleader>ap",
         function()
           require("CopilotChat").select_prompt()
         end,
@@ -88,18 +91,19 @@ return {
       },
       -- Generate commit message based on the git diff
       {
-        "<leader>am",
+        "<localleader>am",
         "<cmd>CopilotChatCommit<cr>",
         desc = "CopilotChat - Generate commit message for all changes",
       },
       -- Fix the issue with diagnostic
-      { "<leader>af", "<cmd>CopilotChatFix<cr>",    desc = "CopilotChat - Fix Diagnostic" },
+      { "<localleader>af", "<cmd>CopilotChatFix<cr>",    desc = "CopilotChat - Fix Diagnostic" },
       -- Clear buffer and chat history
-      { "<leader>al", "<cmd>CopilotChatReset<cr>",  desc = "CopilotChat - Clear buffer and chat history" },
+      { "<localleader>al", "<cmd>CopilotChatReset<cr>",  desc = "CopilotChat - Clear buffer and chat history" },
       -- Toggle Copilot Chat Vsplit
-      { "<leader>av", "<cmd>CopilotChatToggle<cr>", desc = "CopilotChat - Toggle" },
+      { "<leader>av",      "<cmd>CopilotChatToggle<cr>", desc = "CopilotChat - Toggle" },
+      { "<localleader>av", "<cmd>CopilotChatToggle<cr>", desc = "CopilotChat - Toggle" },
       -- Copilot Chat Models
-      { "<leader>a?", "<cmd>CopilotChatModels<cr>", desc = "CopilotChat - Select Models" },
+      { "<localleader>a?", "<cmd>CopilotChatModels<cr>", desc = "CopilotChat - Select Models" },
     },
   },
 }
