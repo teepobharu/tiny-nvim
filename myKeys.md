@@ -38,6 +38,28 @@ Understand each plugin more: https://www.youtube.com/watch?v=6pAG3BHurdM&ab_chan
 
 ## AI
 
+### Sidekick
+
+https://github.com/folke/sidekick.nvim
+
+Steps
+
+- <a-a> to attach intially then toggle after
+- a-d to detach
+
+  Actions
+
+- Open each agent in tmux.
+- Add the current file with `<l>af`.
+
+Some Issues
+
+- Adding from the buffer will send relative paths.
+
+Features
+
+- Use snacks with the `a-a` key to send selected files (full path) to chat.
+
 ### CodeCompanion
 
 Actions

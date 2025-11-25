@@ -2,6 +2,7 @@ local pathUtil = require "utils.mypath"
 local gitUtil = require "utils.git"
 local keyutil = require "utils.keyutil"
 local isSnackEnabled = keyutil.isSnackEnabled
+local sideKickEnabled = keyutil.isSideKickEnabled
 local key_f = keyutil.key_f
 local key_s = keyutil.key_s
 local key_g = keyutil.key_g
@@ -393,7 +394,7 @@ Your instructions here
     enabled = true,
     keys = {
       {
-        "<leader>aE",
+        "<localleader>aE",
         "<cmd>CopilotChatBuffEdit<cr>",
         desc = "~ Copilot Chat Buf Edit ",
       },
@@ -439,7 +440,10 @@ Your instructions here
         enabled = true,
         hint_display = "none",
       },
-      mappings = {
+      behavior = {
+        -- auto_set_keymaps = false,
+      },
+      mappings = { -- https://github.com/yetone/avante.nvim/blob/5df39b480d438a46afa1571db6480210bccea21b/lua/avante/config.lua#L641
         -- edit = "<leader>rE", -- does not overwrite why ?
         --- @class AvanteConflictMappings
         sidebar = {
@@ -447,6 +451,8 @@ Your instructions here
           -- apply_all = "A" -- conflict with c-wf focus command confimration popup
           -- reverse_switch_windows = "<S-Tab>",
         },
+        -- focus = "<leader>af",
+        focus = "<localleader>ax", -- discard to some random key
       },
     },
   },
@@ -949,6 +955,7 @@ Your instructions here
           desc = "Add text sidekick",
         },
         -- end overides key desc
+        { "<localleader>a", group = "ai" },
         {
           "gG",
           group = "web",
