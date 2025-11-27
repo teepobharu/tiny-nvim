@@ -2,7 +2,6 @@ local pathUtil = require "utils.mypath"
 local gitUtil = require "utils.git"
 local keyutil = require "utils.keyutil"
 local isSnackEnabled = keyutil.isSnackEnabled
-local sideKickEnabled = keyutil.isSideKickEnabled
 local key_f = keyutil.key_f
 local key_s = keyutil.key_s
 local key_g = keyutil.key_g
@@ -114,37 +113,83 @@ return {
             end
           end)
         end,
-        desc = "WatchRun",
+        desc = "WatchRun overseer",
       },
+      {
+        "<leader>oR",
+        function()
+          local overseer = require "overseer"
+          local tasks = overseer.list_tasks { recent_first = true }
+          if vim.tbl_isempty(tasks) then
+            vim.notify("No tasks found", vim.log.levels.WARN)
+          else
+            -- Store tasks in a lookup table by index
+            local task_lookup = {}
+            local items = {}
+            for i, task in ipairs(tasks) do
+              task_lookup[i] = task
+              table.insert(items, {
+                text = task.name,
+                task_idx = i,
+              })
+            end
+
+            Snacks.picker.pick {
+              source = "select",
+              title = "Rerun Task",
+              items = items,
+              format = "text",
+              actions = {
+                confirm = function(picker, item)
+                  if item and item.task_idx then
+                    local task = task_lookup[item.task_idx]
+                    picker:close()
+                    overseer.run_action(task, "restart")
+                  end
+                end,
+                ["<c-x>"] = function(picker, item)
+                  if item and item.task_idx then
+                    local task = task_lookup[item.task_idx]
+                    overseer.run_action(task, "dispose")
+                    picker:close()
+                  end
+                end,
+              },
+            }
+          end
+        end,
+        desc = "Select Rerun Task overseer",
+      },
+
       {
         "<leader>oT",
         ":OverseerTaskAction<CR>", -- Add the command you want to run here
-        desc = "Run Overseer Task Action",
+        desc = "Run Task Action overseer",
       },
       {
         "<leader>oQ",
         ":OverseerDeleteBundle<CR>",
-        desc = "Delete Overseer Bundle",
+        desc = "Delete Bundle overseer",
       },
       {
         "<leader>oC",
         ":OverseerClearCache<CR>",
-        desc = "Clear Overseer Cache",
+        desc = "Clear Cache overseer",
       },
       {
         "<leader>os",
         ":OverseerSaveBundle<CR>",
-        desc = "Save Overseer Bundle",
+        desc = "Save Bundle overseer",
       },
       {
         "<leader>ol",
         ":OverseerLoadBundle<CR>",
-        desc = "Load Overseer Bundle",
+        desc = "Load Bundle overseer",
       },
       {
         "<leader>on",
         ":OverseerBuild<CR>",
-        desc = "New Task",
+        desc = "New Task overseer",
       },
     },
     opts = {
@@ -371,6 +416,28 @@ Your instructions here
               end,
             },
             {
+              name = "Snacks Nvim Context", -- example edit <-> test in available
+              role = "user",
+              opts = { auto_submit = false },
+              content = function()
+                -- Leverage auto_tool_mode which disables the requirement of approvals and automatically saves any edited buffer
+                vim.g.codecompanion_auto_tool_mode = true
+                -- Some clear instructions for the LLM to follow
+                return [[### Instructions
+Your instructions here
+
+### Steps to Follow
+
+      You are required to write code with correct usage of nvim lazy libraries and preferably in lua then fallback to vim if necessary
+      1. Update the code in #buffer{watch} using the @editor tool
+      2.
+      3. Make sure you trigger both tools in the same response
+      Specification:
+      - Check the documentatino from https://github.com/folke/snacks.nvim/blob/main/docs/picker.md
+      ]]
+              end,
+            },
+            {
               name = "Repeat On Failure",
               role = "user",
               opts = { auto_submit = true },
@@ -449,11 +516,17 @@ Your instructions here
         sidebar = {
           switch_windows = "<C-Tab>", -- not work
           -- apply_all = "A" -- conflict with c-wf focus command confimration popup
-          -- reverse_switch_windows = "<S-Tab>",
+          -- reverse_switch_windows = "<s-tab>",
         },
-        -- focus = "<leader>af",
+        files = {
+          add_current = "<leader>aC"
+        },
+        toggle = {
+          debug = "<leader>rd", -- discard to some random key
+          selection = "<localleader>ax"
+        },
         focus = "<localleader>ax", -- discard to some random key
-      },
+      }
     },
   },
   {
@@ -647,6 +720,7 @@ Your instructions here
       explorer = {
         replace_netrw = false,
       },
+      -- https://github.com/folke/snacks.nvim/blob/main/docs/picker.md
       picker = {
         formatters = {
           file = {
@@ -658,6 +732,7 @@ Your instructions here
           -- sample pickers: https://github.com/WizardStark/dotfiles/blob/main/home/.config/nvim/lua/workspaces/ui.lua#L417
           -- buffers and file to use tooggle key map when press c-space
           files = {
+            hidden = false,
             win = {
               input = {
                 keys = {
@@ -697,8 +772,72 @@ Your instructions here
               },
             },
           },
+          qflist = {
+            win = {
+              input = {
+                keys = {
+                  ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove QF Item" },
+                },
+              },
+            },
+          },
+          grep = {
+            win = {
+              input = {
+                keys = {
+                  ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove QF Item" },
+                },
+              },
+            },
+          },
         },
         actions = {
+          remove_qf_item = function(picker, item)
+            if not item then return end
+
+            -- Get current quickfix list
+            local qflist = vim.fn.getqflist()
+
+            if #qflist == 0 then
+              vim.notify("Quickfix list is empty. Send items to quickfix with <A-q> first.", vim.log.levels.WARN)
+              return
+            end
+
+            -- For grep results, we need to match by file, line, and text
+            -- For qflist items, we can use the index
+            local idx = item.idx
+
+            if idx and idx > 0 and idx <= #qflist then
+              -- Direct index match (works for qflist picker)
+              table.remove(qflist, idx)
+              vim.fn.setqflist(qflist, 'r')
+              picker:refresh()
+            else
+              -- Try to find by matching file, line, and column (works for grep picker)
+              local removed = false
+              for i = #qflist, 1, -1 do
+                local qf_item = qflist[i]
+                local qf_file = qf_item.filename or (qf_item.bufnr and vim.api.nvim_buf_get_name(qf_item.bufnr))
+                local item_file = item.file or item.filename
+
+                if qf_file == item_file and qf_item.lnum == item.lnum then
+                  -- Additional check for column if available
+                  if not item.col or qf_item.col == item.col then
+                    table.remove(qflist, i)
+                    removed = true
+                    break
+                  end
+                end
+              end
+
+              if removed then
+                vim.fn.setqflist(qflist, 'r')
+                picker:refresh()
+              else
+                vim.notify("Could not find item in quickfix list", vim.log.levels.WARN)
+              end
+            end
+          end,
           test_picker = function(picker, item)
             print([==[ item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
             picker:close()
@@ -761,6 +900,38 @@ Your instructions here
             -- Snacks.picker.actions.toggle_focus(picker) -- not help sometimes still show
           end,
         },
+        -- win : overrides here does not really work - not sure why
+        win = {
+          list = {
+            keys = {
+              ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
+              ["0"] = { "focus_preview", desc = "Focus Preview" },
+              -- make consistent as FZFlua
+              ["<c-a>"] = { "sidekick_send", mode = { "n", "i" } },
+              ["<a-a>"] = { "select_all", mode = { "n", "i" } },
+              ["<a-q>"] = { "qflist", mode = { "n", "i" } },
+              ["<c-q>"] = "cancel",
+            }
+          },
+          input = {
+            keys = {
+              -- ["="] = "toggle_focus",
+              -- ["<C-i>"] = "toggle_focus",
+              ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
+              ["0"] = { "focus_preview", mode = { "n" }, desc = "Focus Preview" },
+              -- make consistent as FZFlua
+              ["<c-a>"] = { "sidekick_send", mode = { "n", "i" } },
+              ["<a-a>"] = { "select_all", mode = { "n", "i" } },
+              ["<a-q>"] = { "qflist", mode = { "n", "i" } },
+              ["<c-q>"] = "cancel",
+            }
+          },
+          preview = {
+            keys = {
+              ["<c-q>"] = "cycle_win",
+            },
+          },
+        },
       },
       -- https://github.com/folke/snacks.nvim/blob/main/docs/gitbrowse.md
       gitbrowse = {
@@ -773,23 +944,6 @@ Your instructions here
           },
         },
       },
-      -- win : overrides here does not really work - not sure why
-      win = {
-        list = {
-          keys = {
-            ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
-            ["0"] = { "focus_preview", desc = "Focus Preview" },
-          }
-        },
-        input = {
-          keys = {
-            -- ["="] = "toggle_focus",
-            -- ["<C-i>"] = "toggle_focus",
-            ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
-            ["0"] = { "focus_preview", mode = { "n" }, desc = "Focus Preview" },
-          }
-        }
-      }
     },
     keys = {
       {
@@ -862,6 +1016,7 @@ Your instructions here
             }
           })
         end,
+        desc = "Find Smart",
       },
       {
         "<leader><space>",
@@ -876,6 +1031,53 @@ Your instructions here
             },
           }
         end,
+      },
+      {
+        "<leader>fq",
+        function()
+          Snacks.picker.qflist()
+        end,
+        desc = "Quickfix List",
+      },
+      {
+        "<leader>sq",
+        function()
+          -- Get the current quickfix list
+          local items = vim.fn.getqflist({ items = 0 }).items
+
+          if not items or #items == 0 then
+            vim.notify("Quickfix list is empty", vim.log.levels.WARN)
+            return
+          end
+
+          local files = {}
+          local seen = {}
+          for _, item in ipairs(items) do
+            -- Check if filename exists and hasn't been added yet
+            if item.filename and item.filename ~= "" and not seen[item.filename] then
+              table.insert(files, item.filename)
+              seen[item.filename] = true
+            elseif item.bufnr and item.bufnr > 0 then
+              local name = vim.api.nvim_buf_get_name(item.bufnr)
+              if name ~= "" and not seen[name] then
+                table.insert(files, name)
+                seen[name] = true
+              end
+            end
+          end
+
+          if #files == 0 then
+            vim.notify("No valid files found in quickfix list", vim.log.levels.WARN)
+            return
+          end
+          -- Use Snacks.picker.grep with the file list as 'dirs'
+          -- This works because rg accepts file paths as arguments to search in
+          Snacks.picker.grep({
+            dirs = files,
+            title = "Grep Quickfix Files",
+          })
+        end,
+        desc = "Grep Quickfix Files"
       },
       {
         "<leader>ff",
@@ -917,14 +1119,81 @@ Your instructions here
     },
   },
   {
+    "ThePrimeagen/harpoon",
+    keys = {
+      {
+        "<leader>fhl",
+        function()
+          local harpoon = require("harpoon")
+          harpoon.ui:toggle_quick_menu(harpoon:list())
+        end,
+        desc = "Harpoon menu",
+      },
+    }
+  },
+  {
+    "folke/sidekick.nvim",
+    -- https://github.com/folke/sidekick.nvim?tab=readme-ov-file
+    opts = {
+      cli = {
+        prompts = {
+          fname = function() return vim.fn.expand("%:t") end,
+          fpath = function(ctx)
+            -- in this format file: <> \n name <> in newline separate
+            -- try sending just the file name not the content
+            return vim.fn.expand("%:p")
+            -- \nname: " .. vim.fn.expand("%:t")
+            -- this sends the current file content
+            -- return "Current file: " .. ctx.buf .. " at line " .. ctx.row
+          end,
+        }
+      }
+    },
+    keys = {
+      {
+        "<leader>aV",
+        function() require("sidekick.cli").send({ msg = "{selection}" }) end,
+        mode = { "x" },
+        desc = "Send Visual Selection",
+      },
+      {
+        "<leader>aNt",
+        function() require("sidekick.nes").toggle() end,
+        mode = { "n" },
+        desc = "Sidekick Toggle CLI",
+      },
+      {
+        "<leader>aNe",
+        function() require("sidekick.nes").enable() end,
+        mode = { "n" },
+        desc = "Sidekick Enable CLI",
+      },
+      {
+        "<leader>aNd",
+        function() require("sidekick.nes").disable() end,
+        mode = { "n" },
+        desc = "Sidekick Disable Nes",
+      },
+      {
+        "<leader>aNu",
+        function() require("sidekick.nes").update() end,
+        mode = { "n" },
+        desc = "Sidekick Nes Update",
+      },
+    }
+  },
+  {
     "folke/which-key.nvim",
     optional = true,
     opts = {
       icons = {
         -- ref: https://github.com/folke/which-key.nvim/blob/3aab2147e74890957785941f0c1ad87d0a44c15a/lua/which-key/icons.lua#L55
+        -- search glxyphs: https://nerdfonts.ytyng.com/
         rules = {
           { pattern = "avante", icon = " ", color = "green" },
           { pattern = "sidekick", icon = " ", color = "blue" },
+          { pattern = "overseer", icon = "󰙵 ", color = "cyan" },
+          { pattern = "lsp", icon = "", color = "blue" },
           -- { pattern = "%f[%a]ai", icon = " ", color = "green" },
         },
       },
@@ -950,7 +1219,7 @@ Your instructions here
           desc = "Add file sidekick",
         },
         {
-          "<leader>av",
+          "<leader>aV",
           mode = { "x" },
           desc = "Add text sidekick",
         },

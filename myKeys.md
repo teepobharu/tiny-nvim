@@ -298,6 +298,10 @@ Action bind
   | <l>gb | branch                                              |
   | <l>go | open current cursor hash / file in browser          |
 
+  Added Features/Pickers
+  - grep in quicklist (default only support file search)
+  - binding smart to trigger files / buffers switches
+
 #### Gitsign
 
 - good features

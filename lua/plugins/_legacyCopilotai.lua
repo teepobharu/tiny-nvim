@@ -96,12 +96,22 @@ return {
         desc = "CopilotChat - Generate commit message for all changes",
       },
       -- Fix the issue with diagnostic
-      { "<localleader>af", "<cmd>CopilotChatFix<cr>",    desc = "CopilotChat - Fix Diagnostic" },
+      { "<localleader>af", "<cmd>CopilotChatFix<cr>",   desc = "CopilotChat - Fix Diagnostic" },
       -- Clear buffer and chat history
-      { "<localleader>al", "<cmd>CopilotChatReset<cr>",  desc = "CopilotChat - Clear buffer and chat history" },
-      -- Toggle Copilot Chat Vsplit
-      { "<leader>av",      "<cmd>CopilotChatToggle<cr>", desc = "CopilotChat - Toggle" },
-      { "<localleader>av", "<cmd>CopilotChatToggle<cr>", desc = "CopilotChat - Toggle" },
+      { "<localleader>al", "<cmd>CopilotChatReset<cr>", desc = "CopilotChat - Clear buffer and chat history" },
+      -- toggle copilot chat vsplit
+      {
+        "<leader>av",
+        mode = { "x", "n" },
+        "<cmd>CopilotChatToggle<cr>",
+        desc = "CopilotChat - Toggle"
+      },
+      {
+        "<localleader>av",
+        mode = { "x", "n" },
+        "<cmd>CopilotChatToggle<cr>",
+        desc = "CopilotChat - Toggle"
+      },
       -- Copilot Chat Models
       { "<localleader>a?", "<cmd>CopilotChatModels<cr>", desc = "CopilotChat - Select Models" },
     },
