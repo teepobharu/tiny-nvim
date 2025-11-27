@@ -646,6 +646,62 @@ keymap({ "n", "v" }, "gGs", function()
   run_command({ open_command, search_url })
 end, { silent = true, desc = "Google Search" })
 
+-- Common function to resolve directory path from cursor/selection
+local function resolve_directory_path()
+  local selected_or_cursor_word = inputUtil.get_selected_or_cursor_word()
+  local curr_buffer_path = vim.fn.expand("%:p:h")
+  local paths_to_try = {
+    selected_or_cursor_word,
+    vim.fn.expand("<cfile>"),
+    curr_buffer_path .. "/" .. vim.fn.expand("<cfile>"),
+    curr_buffer_path .. "/" .. selected_or_cursor_word
+  }
+
+  local dir_path = nil
+  for _, path in ipairs(paths_to_try) do
+    if path and path ~= "" then
+      if vim.fn.isdirectory(path) > 0 then
+        dir_path = path
+        break
+      else
+        local relative_path = curr_buffer_path .. "/" .. path
+        if vim.fn.isdirectory(relative_path) > 0 then
+          dir_path = relative_path
+          break
+        end
+      end
+    end
+  end
+
+  -- Fallback to selected word if it's a valid directory
+  if not dir_path and selected_or_cursor_word and vim.fn.isdirectory(selected_or_cursor_word) == 1 then
+    dir_path = selected_or_cursor_word
+  end
+
+  return dir_path, selected_or_cursor_word
+end
+
+keymap({ "n", "v" }, "gGo", function()
+  local dir_path, selected_word = resolve_directory_path()
+  if dir_path then
+    -- Open the directory in finder
+    vim.fn.jobstart({ "open", dir_path })
+  else
+    vim.notify("Invalid directory: " .. (dir_path or selected_word or "<nil>"), vim.log.levels.WARN)
+  end
+end, { desc = "Open dir - select/cursor/file" })
+
+-- Open NeoTree at resolved directory
+keymap({ "n", "v" }, "gGd", function()
+  local dir_path, selected_word = resolve_directory_path()
+
+  if dir_path then
+    vim.cmd("Neotree " .. dir_path)
+  else
+    vim.notify("Invalid directory: " .. (dir_path or selected_word or "<nil>"), vim.log.levels.WARN)
+  end
+end, { desc = "Open NeoTree dir - select/cursor/file" })
+
 keymap({ "n" }, "gF", function()
   -- " Enable gf to recognize file:/// paths and navigate to line numbers
   -- set isfname+==file:// -- check with set isfname?
@@ -682,11 +738,11 @@ keymap({ "n" }, "gF", function()
     -- file:///Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/tests/myTest.lua
     -- file:///Users/tharutaipree/AgodaGit/fe/mmbweb/src/Clientside/.storybook/preview-head.html
     -- print("Using gF fallback")
-    vim.cmd("normal! gF")
+    vim.cmd("normal! gf")
   end
 
   goto_file_line()
-end)
+end, { desc = "Go to file+line" })
 
 keymap({ "n", "v" }, "gX", function()
   local url_or_word = url_repo()

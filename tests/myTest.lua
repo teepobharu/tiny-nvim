@@ -579,6 +579,43 @@ local function git_replace_pathedgecase()
   local module = path_before_test:match(module_pattern)
   print([==[git_replace_pathedgecase module:]==], vim.inspect(module)) -- __AUTO_GENERATED_PRINT_VAR_END__
 end
+function snacks_qfgrep()
+  -- Get the current quickfix list
+  local items = vim.fn.getqflist({ items = 0 }).items
+
+  if not items or #items == 0 then
+    vim.notify("Quickfix list is empty", vim.log.levels.WARN)
+    return
+  end
+
+  local files = {}
+  local seen = {}
+  for _, item in ipairs(items) do
+    -- Check if filename exists and hasn't been added yet
+    if item.filename and item.filename ~= "" and not seen[item.filename] then
+      table.insert(files, item.filename)
+      seen[item.filename] = true
+    elseif item.bufnr and item.bufnr > 0 then
+      local name = vim.api.nvim_buf_get_name(item.bufnr)
+      if name ~= "" and not seen[name] then
+        table.insert(files, name)
+        seen[name] = true
+      end
+    end
+  end
+
+  if #files == 0 then
+    vim.notify("No valid files found in quickfix list", vim.log.levels.WARN)
+    return
+  end
+
+  -- Use Snacks.picker.grep with the file list as 'dirs'
+  -- This works because rg accepts file paths as arguments to search in
+  Snacks.picker.grep({
+    dirs = files,
+    title = "Grep Quickfix Files",
+  })
+end
 
 local function overseertestTask()
   -- Insert args at the '$*' in the grepprg
@@ -857,7 +894,7 @@ function snacks_preview()
   -- test1()
 end
 
-function snacks_qfgrep()
+function snacks_qffiles()
   -- get list of quickfix items files
   -- do rg on these files
   local items = vim.fn.getqflist({
@@ -963,10 +1000,11 @@ function PL_testPasteImage()
 end
 
 local function main()
-  PL_testPasteImage()
+  snacks_qfgrep()
+  -- snacks_qffiles()
+  -- PL_testPasteImage()
   -- getDirForCurWord()
   -- lsp_signature()
-  -- snacks_qfgrep()
   -- snacks_preview()
   -- print(Snacks.picker.picker) --nil
   -- vim.inspect(Snacks.picker.picker.get())
