@@ -168,6 +168,7 @@ local function toggleTermCheck()
   end, opts)
   opts.desc = ""
 end
+
 local function testGit()
   local gitOriginSSH = "git@github.com:teepobharu/my-nvim-ide.git"
   local gitOriginHTTPS = "https://github.com/teepobharu/my-nvim-ide.git"
@@ -213,6 +214,7 @@ local function testGit()
   print(navigablePartSSH)   -- Output: github.com/teepobharu/my-nvim-ide
   print(navigablePartHTTPS) -- Output: github.com/teepobharu/my-nvim-ide
 end
+
 function testGit2(path)
   local current_file = path or vim.fn.expand("%:p")
   -- __AUTO_GENERATED_PRINT_VAR_START__
@@ -260,6 +262,23 @@ function testGit2(path)
   print([==[testGit2 fullUrl:]==], vim.inspect(fullUrl))
   vim.fn.system("open " .. fullUrl)
   require("lazy.util").open(fullUrl)
+end
+
+function testGitrefFzfLua()
+  local texts = {
+    " * TRIPWEB-entry-rm1      * 2c78b28c11 fix(lint): fix credentials",
+    "   origin/TRIPWEB-entry-rm1  2c78b28c11 fix(lint): fix credentials",
+    "origin/nospace j2c78b28c11 fix(lint): fix credentials",
+  }
+
+  for _, text in ipairs(texts) do
+    local ref = text:match("[^%w_]+(.*)$") -- Extract only the 'ref' part after special characters and space prefixes
+    -- local ref = text:match("[^%w_]+(.-)%S") -- Extract only the 'ref' part after special characters and space prefixes
+    ref = ref:match("^(%S+)")              -- Get the first word which is the ref
+
+    print("Original:", text)
+    print("Modified:", ref)
+  end
 end
 
 function getGitList()
@@ -1000,7 +1019,8 @@ function PL_testPasteImage()
 end
 
 local function main()
-  snacks_qfgrep()
+  testGitrefFzfLua()
+  -- snacks_qfgrep()
   -- snacks_qffiles()
   -- PL_testPasteImage()
   -- getDirForCurWord()

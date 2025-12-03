@@ -196,7 +196,7 @@ return {
         mode = "v",
       },
       {
-        "<leader>" .. key_f .. "g",
+        "<leader>" .. key_f .. "G",
         "<cmd> :FzfLua grep_project --cmd 'git grep --line-number --column --color=always'<CR>",
         desc = "Find Git Grep",
       },
@@ -271,12 +271,24 @@ return {
         desc = "Grep Files at current directory",
       },
       {
-        "<leader>" .. key_f .. "f",
+        "<leader>" .. key_f .. "g",
         function()
           local root_dir = require("utils.root").git()
           require("fzf-lua").git_files({ cwd = root_dir })
         end,
         desc = "Find Git Files",
+      },
+      {
+        "<leader>" .. key_f .. "f",
+        function()
+          local root_dir = require("utils.root").get()
+
+          require("fzf-lua").files({
+            cwd = root_dir,
+            cwd_prompt = false,
+          })
+        end,
+        desc = "Find Files",
       },
       {
         "<leader>" .. key_f .. "c",
@@ -286,7 +298,7 @@ return {
         desc = "Find Neovim Configs",
       },
       { "<leader>" .. key_s .. "b", "<cmd> :FzfLua grep_curbuf<CR>", desc = "Search Current Buffer" },
-      { "<leader>" .. key_s .. "B", "<cmd> :FzfLua lines<CR>", desc = "Search Lines in Open Buffers" },
+      { "<leader>" .. key_s .. "B", "<cmd> :FzfLua lines<CR>",       desc = "Search Lines in Open Buffers" },
       {
         "<leader>" .. key_s .. "w",
         function()

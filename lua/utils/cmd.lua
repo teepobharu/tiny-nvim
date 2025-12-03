@@ -7,6 +7,46 @@ local function create_cmd(cmd, func, opt)
   vim.api.nvim_create_user_command(cmd, func, opt)
 end
 
+---@class CommandCallback
+---@field success? fun(): nil Callback when command succeeds
+---@field fail? fun(error: string[]): nil Callback when command fails
+---@field out? fun(job_id: integer, data: string[], event: string): nil Callback for stdout
+---@field stderr? fun(job_id: integer, data: string[], event: string): nil Callback for stderr
+
+---Execute a shell command asynchronously with callbacks
+---@param command string[] The command to execute, as a list of arguments (e.g., {"ls", "-la"})
+---@param callback? CommandCallback A table containing optional callback functions
+local function run_command(command, callback)
+  callback = callback or {}
+  callback.success = callback.success or function() end
+  callback.fail = callback.fail or function() end
+  -- callback.out = callback.out or false
+  -- callback.stderr = callback.stderr or false
+
+  local last_error = nil
+  print("running command: ", vim.inspect(command))
+  vim.fn.jobstart(command, {
+    on_stdout = callback.out or function(_, data, _)
+      print("[stdout]", vim.inspect(data))
+    end or nil,
+    on_stderr = callback.stderr or function(_, data, _)
+      print("[stderr]", vim.inspect(data))
+      local errfilter = vim.tbl_filter(function(value) return value ~= "" end, data)
+      last_error = (#errfilter > 0) and errfilter or last_error
+    end or nil,
+    on_exit = function(_, _, _)
+      print("on_exit last error:", vim.inspect(last_error))
+      if last_error then
+        callback.fail(last_error)
+      else
+        callback.success()
+      end
+    end,
+    detach = true,
+  })
+end
+
 return {
   create_cmd = create_cmd,
+  run_command = run_command,
 }

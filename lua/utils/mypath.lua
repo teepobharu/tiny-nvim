@@ -157,4 +157,45 @@ function M.getFullPathFromRelativePath(relPath)
   return result
 end
 
+--- Get the closest sub-project directory in a monorepo
+--- Searches for common monorepo markers (package.json, pyproject.toml, etc.)
+--- in parent directories up to the git root
+---@return string|nil
+function M.get_sub_project_dir()
+  local path = require("utils.path")
+  local current_file = vim.fn.expand("%:p")
+  local current_dir = vim.fn.expand("%:p:h")
+  local root_dir = path.get_root_directory()
+
+  if not root_dir then
+    return current_dir
+  end
+
+  -- Common project markers for monorepos
+  local markers = {
+    "package.json",
+    "pyproject.toml",
+    "Cargo.toml",
+    "go.mod",
+    "pom.xml",
+    "build.gradle",
+    ".gitlab-ci.yml",
+    ".git",
+  }
+
+  -- Walk up from current directory to root
+  local dir = current_dir
+  while dir ~= root_dir and dir ~= "/" do
+    for _, marker in ipairs(markers) do
+      if vim.fn.filereadable(dir .. "/" .. marker) == 1 then
+        return dir
+      end
+    end
+    dir = vim.fn.fnamemodify(dir, ":h")
+  end
+
+  -- Fallback to root directory
+  return root_dir
+end
+
 return M

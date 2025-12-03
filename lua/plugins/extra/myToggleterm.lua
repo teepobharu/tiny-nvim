@@ -66,6 +66,7 @@ local isToggleCurrentLazyTerm = function(name, termOpts)
   end
 end
 
+-- check key overrides in lua/config/mykeymaps.lua:350
 return {
   "akinsho/toggleterm.nvim",
   enabled = true,
@@ -82,20 +83,24 @@ return {
     -- },
     {
       "<leader><c-space>",
-      "<cmd>:ToggleTerm<cr>",
+      function()
+        vim.cmd(":ToggleTerm " .. vim.v.count1)
+      end,
+      desc = "Toggle ToggleTerm",
+    },
+    -- { "<c-/>", function() Snacks.terminal() end, desc = "Snacks Terminal" },
+
+    {
+      isSnacksEnable and "<c-_>" or "<c-:>",
+      function()
+        if isSnacksEnable then
+          Snacks.terminal()
+        else
+          require("toggleterm").toggle()
+        end
+      end,
       desc = "Toggle term",
     },
-    -- {
-    --   isSnacksEnable and "<c-_>" or "<c-:>",
-    --   function()
-    --     if isSnacksEnable then
-    --       Snacks.terminal()
-    --     else
-    --       require("toggleterm").toggle()
-    --     end
-    --   end,
-    --   desc = "Toggle term",
-    -- },
     {
       "<localleader><c-_>",
       "<cmd>:ToggleTermSendCurrentLine<cr>",
@@ -116,7 +121,7 @@ return {
       "<localleader>t",
       sentSelectedToTerminal,
       desc = "Send visual selection to terminal",
-      mode = "v",
+      mode = { "n", "v" },
     },
     {
       "<localleader>T",
@@ -188,6 +193,10 @@ return {
           cmd = "lazygit",
           dir = lazycwd,
           direction = "float",
+          float_opts = {
+            width = math.floor(vim.o.columns * 0.99),
+            height = math.floor(vim.o.lines * 0.99),
+          },
         })
       end,
       desc = "Lazygit Toggle (CWD)",
@@ -200,6 +209,11 @@ return {
           cmd = "lazygit",
           dir = "git_dir",
           direction = "float",
+          float_opts = {
+            width = math.floor(vim.o.columns * 0.95),
+            height = math.floor(vim.o.lines * 0.95),
+          },
+
         })
       end,
       desc = "Lazygit Toggle",

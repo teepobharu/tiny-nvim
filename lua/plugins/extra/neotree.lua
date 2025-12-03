@@ -19,6 +19,7 @@ function openGitRemote(state)
   local is_dir = node.type == "directory"
   -- // run git remote url command to get the remote and construct in table_is_empty(table_to_check)he browser ( make sure to support ssh )
   local current_file = path or vim.fn.expand("%:p")
+  local relative_file_path = vim.fn.fnamemodify(current_file, ":.")
 
   local urlPath = require("utils.git").get_remote_path()
   local mainBranch = require("utils.git").git_main_branch()
@@ -39,7 +40,7 @@ function openGitRemote(state)
     else
     end
   end)
-  local fullUrl = "https://" .. gitDomain .. "/" .. current_file .. "/blob/" .. branch
+  local fullUrl = "https://" .. urlPath .. "/blob/" .. branch .. "/" .. current_file
   require("lazy.util").open(fullUrl)
 end
 
@@ -215,8 +216,8 @@ return {
           sources = { "filesystem", "buffers", "git_status" },
           open_files_do_not_replace_types = { "terminal", "Trouble", "trouble", "qf", "Outline" },
           filesystem = {
-            -- bind_to_cwd = false,
-            bind_to_cwd = true, -- true creates a 2-way binding between vim's cwd and neo-tree's root
+            bind_to_cwd = false,
+            -- bind_to_cwd = true, -- true creates a 2-way binding between vim's cwd and neo-tree's root
             follow_current_file = { enabled = true },
             use_libuv_file_watcher = true,
           },
