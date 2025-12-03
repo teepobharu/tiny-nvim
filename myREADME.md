@@ -1,7 +1,8 @@
 # Changes
 
+MORE INFO and later TODO: [[./myKeys.md]]
+
 [[../nvim2_jelly_lzmigrate/myREADME_leg.md]]
-[[./myKeys.md]]
 
 - No more lspconfig dependecy, now directly configure `lsp` from neovim
 - LSP has to be downloaded with script (no more mason support)[./install.sh]

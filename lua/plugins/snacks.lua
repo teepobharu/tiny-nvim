@@ -377,20 +377,23 @@ return {
         desc = "Visual selection or word",
         mode = { "n", "x" },
       },
-      {
-        "<c-/>",
-        function()
-          Snacks.terminal()
-        end,
-        desc = "Toggle Terminal",
-      },
-      {
-        "<c-_>",
-        function()
-          Snacks.terminal()
-        end,
-        desc = "which_key_ignore",
-      },
+      -- Commented out to prevent duplicate with myEditor.lua
+      -- {
+      --   "<c-/>",
+      --   function()
+      --     print("Hello from Snacks!")
+      --     Snacks.terminal()
+      --   end,
+      --   desc = "Toggle Terminal",
+      -- },
+      -- Commented out to prevent conflict - using <c-t> for ToggleTerm instead
+      -- {
+      --   "<c-_>",
+      --   function()
+      --     Snacks.terminal()
+      --   end,
+      --   desc = "which_key_ignore",
+      -- },
       -- git
       {
         "<leader>gc",

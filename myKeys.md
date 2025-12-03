@@ -5,7 +5,30 @@
 
 ## TODOs
 
-- [ ]
+- bind check qflist WIP
+  - snacks not support multi delete binding c-x
+  - trouble does not persist when dd but file visilbity gone
+  - script with acmd seem not work ?
+- focused file search and stop change dir in mono repo switch
+  - observation: json files lsp root to .git
+  - other .js .ts files work and trigger search within monorepo
+  - WIP (https://github.com/nvim-neo-tree/neo-tree.nvim/blob/main/lua/neo-tree/defaults.lua)
+    - try disable neotree cwd and move json lsp `root_markers` from .git to
+
+- [ ] fix toggle term keymap term cycle and other mappings - 20251201 wip
+  - cycle C-E for all term type works
+  - C-Tab not mappable work
+  - C-space layout:
+    - [x] toggleterm work no
+    - [ ] snacks term no
+  - [ ] c\_/ consistency to use snacks
+- [ ] Feat: luasnip add in /scripts needs package.json
+  - add p.json still not work print get correct dir [file](lua/plugins/coding.lua:72)
+  - https://github.com/rafamadriz/friendly-snippets/blob/main/package.json
+  - https://github.com/rafamadriz/friendly-snippets/blob/main/package.json
+- [x] branches 20251204
+  - fzf c-s
+  - bind open glab mr on branch
 
 ## Configurations
 

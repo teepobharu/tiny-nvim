@@ -1,6 +1,7 @@
 local pathUtil = require "utils.mypath"
 local gitUtil = require "utils.git"
 local keyutil = require "utils.keyutil"
+
 local isSnackEnabled = keyutil.isSnackEnabled
 local key_f = keyutil.key_f
 local key_s = keyutil.key_s
@@ -36,6 +37,7 @@ local function fzfcompareref(selected)
   vim.cmd("tabnew " .. file_path)
   gitsigns.diffthis(commit_hash, { vertical = true })
 end
+
 
 local function toggle_diffpreview_alt()
   -- Toggle delta.side-by-side in ~/.gitconfig.local
@@ -375,6 +377,31 @@ return {
       end,
     },
     opts = {
+      -- https://codecompanion.olimorris.dev/configuration/chat-buffer
+      strategies = {
+        chat = {
+          slash_commands = {
+            ["buffer"] = {
+              -- docs: initial snacks config wrong https://github.com/olimorris/codecompanion.nvim/blob/8ad65eef735b31bb47d76f59d878ee1bac4bdc85/lua/codecompanion/strategies/chat/slash_commands/init.lua#L100
+              callback = "strategies.chat.slash_commands.catalog.buffer",
+              -- description = "Insert open buffers",
+              opts = {
+                -- contains_code = true,
+                provider = "snacks", -- default|telescope|mini_pick|fzf_lua
+              },
+            },
+            ["file"] = {
+              callback = "strategies.chat.slash_commands.catalog.file",
+              description = "Insert a file",
+              opts = {
+                -- contains_code = true,
+                -- max_lines = 1000,
+                provider = "snacks", -- telescope|mini_pick|fzf_lua
+              },
+            },
+          },
+        },
+      },
       keymaps = {
         completion = {
           modes = {
@@ -384,6 +411,48 @@ return {
         },
       },
       prompt_library = {
+        ["Snacks Nvim Context"] = {
+          strategy = "chat",
+          description = "Write documentation for me",
+          opts = {
+            index = 11,
+            is_slash_cmd = false,
+            auto_submit = false,
+            short_name = "snacks nvim context",
+          },
+          context = {
+            {
+              type = "file",
+              path = {
+                "/Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua"
+              },
+            },
+          },
+          prompts = {
+            {
+              name = "Snacks Nvim Context", -- example edit <-> test in available
+              role = "user",
+              opts = { auto_submit = false },
+              content = function()
+                -- Leverage auto_tool_mode which disables the requirement of approvals and automatically saves any edited buffer
+                vim.g.codecompanion_auto_tool_mode = true
+                -- Some clear instructions for the LLM to follow
+                return [[### Instructions
+Your instructions here
+
+### Steps to Follow
+
+      You are required to write code with correct usage of nvim lazy libraries and preferably in lua then fallback to vim if necessary
+      1. Update the code in #buffer{watch} using the @editor tool
+      2.
+      3. Make sure you trigger both tools in the same response
+      Specification:
+      - Check the documentation from https://github.com/folke/snacks.nvim/blob/main/docs/picker.md
+      ]]
+              end,
+            },
+          },
+        },
         ["Setup Test Example"] = {
           strategy = "workflow",
           description = "My workflow",
@@ -413,28 +482,6 @@ Your instructions here
       3. Make sure you trigger both tools in the same response
 
       We'll repeat this cycle until the tests pass. Ensure no deviations from these steps.]]
-              end,
-            },
-            {
-              name = "Snacks Nvim Context", -- example edit <-> test in available
-              role = "user",
-              opts = { auto_submit = false },
-              content = function()
-                -- Leverage auto_tool_mode which disables the requirement of approvals and automatically saves any edited buffer
-                vim.g.codecompanion_auto_tool_mode = true
-                -- Some clear instructions for the LLM to follow
-                return [[### Instructions
-Your instructions here
-
-### Steps to Follow
-
-      You are required to write code with correct usage of nvim lazy libraries and preferably in lua then fallback to vim if necessary
-      1. Update the code in #buffer{watch} using the @editor tool
-      2.
-      3. Make sure you trigger both tools in the same response
-      Specification:
-      - Check the documentatino from https://github.com/folke/snacks.nvim/blob/main/docs/picker.md
-      ]]
               end,
             },
             {
@@ -602,13 +649,18 @@ Your instructions here
           -- add actions that open remote the the file at current line remotely
           actions = {
             ["ctrl-o"] = function(selected)
-              -- Custom action to open remote file
-
-              local ref = selected[1]
-              ref = ref:gsub("^[^/]+/", "")
-              local sanitized_ref = ref:match "([^%s]+)$" -- remove all space nonrelated ref prefixes
-              open_remote(sanitized_ref, "file")
-              open_remote(sanitized_ref, "branch")
+              local ref = selected[1]:match("[^%w_]+(.*)$") -- Extract only the 'ref' part after special characters and space prefixes
+              ref = ref:match("^(%S+)")                     -- Get the first word which is the ref
+              open_remote(ref, "file")
+              open_remote(ref, "branch")
+            end,
+            ["ctrl-s"] = fzfcompareref,
+            ["ctrl-g"] = function(selected)
+              -- Open merge request for selected branch
+              local ref = selected[1]:match("[^%w_]+(.*)$") -- Extract only the 'ref' part after special characters and space prefixes
+              ref = ref:match("^(%S+)")                     -- Get the first word which is the ref
+              -- __AUTO_GENERATED_PRINT_VAR_START__
+              gitUtil.open_mr(ref)
             end,
           },
         },
@@ -714,6 +766,16 @@ Your instructions here
     },
   },
   {
+    "folke/trouble.nvim",
+    keys = {
+        {
+        "<leader>xf",
+        "<cmd>Trouble snacks_files<cr>",
+        desc = "Trouble Snacks",
+      }
+  }
+  },
+  {
     "folke/snacks.nvim",
     enabled = isSnackEnabled,
     opts = {
@@ -757,6 +819,7 @@ Your instructions here
                   ["<C-s>"] = { "my_diff_compare", mode = { "n", "i" }, desc = "Open Diff" },
                   ["<C-t>"] = { "test_picker", mode = { "n", "i" }, desc = "Test picker" },
                   ["f6"] = { "toggle_diffpreview_alt", mode = { "n", "i" }, desc = "Toggle Delta Mode" },
+                  ["<C-g>"] = { "open_mr", mode = { "n", "i" }, desc = "Open Merge Request" },
                 },
               },
             },
@@ -792,6 +855,18 @@ Your instructions here
           },
         },
         actions = {
+          open_mr = function(picker, item)
+            print([==[ item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            local branch = item.branch
+            -- __AUTO_GENERATED_PRINT_VAR_START__
+            print([==[open_mr branch:]==], vim.inspect(branch)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            if not branch then
+              vim.notify("No branch found for this item", vim.log.levels.WARN)
+              return
+            end
+            gitUtil.open_mr(branch)
+          end,
+
           remove_qf_item = function(picker, item)
             if not item then return end
 
@@ -950,6 +1025,53 @@ Your instructions here
         "<leader>e",
         false,
       },
+      -- {
+      --   "<c-_>",
+      --   false,
+      -- },
+      -- {
+      --   "<c-]>",
+      --   function()
+      --     print("🔄 SNACKS TERMINAL CALLED FROM myEditor.lua")
+      --     Snacks.terminal()
+      --   end,
+      --   desc = "Snacks Terminal"
+      -- },
+      {
+        "<c-/>",
+        function()
+          print("🔄 SNACKS TERMINAL CALLED FROM myEditor.lua")
+          Snacks.terminal()
+        end,
+        desc = "Snacks Terminal"
+      },
+      -- Send current line to Snacks terminal
+      {
+        -- This universal fn tested and work
+        -- TOFIX: will always send to the last terminal while Toggle term can choose from count
+        "<localleader>S",
+        function()
+          local text = require("utils.input").getSelectedLines()
+          require("utils.snacks_terminal").send_to_snacks_terminal(text)
+        end,
+        desc = "Send to Snacks terminal",
+        mode = { "n", "v" }
+      },
+      {
+        "<localleader>sa",
+        function()
+          require("utils.snacks_terminal").send_all_lines()
+        end,
+        desc = "Send all to Snacks terminal"
+      },
+      {
+        "<localleader>ss",
+        function()
+          require("utils.snacks_terminal").send_previous_selection()
+        end,
+        desc = "Send previous selected to Snacks terminal"
+      },
+      -- { "<c-_>", function() vim.cmd(":ToggleTerm") end, desc = "ToggleTerm" },
       -- default keys for toggle term
       -- {
       --   "<c-_>",
@@ -1083,12 +1205,27 @@ Your instructions here
         "<leader>ff",
         function()
           Snacks.picker.files {
-            pattern = function(picker)
-              return picker:word()
-            end,
+            -- pattern = function(picker)
+            --   return picker:word()
+            -- end,
           }
         end,
-        desc = "Find Files (word)",
+        desc = "Find Files",
+        -- desc = "Find Files (word)",
+        mode = { "n", "v" },
+      },
+      {
+        "<leader>fF",
+        function()
+          Snacks.picker.files {
+            cwd = pathUtil.get_sub_project_dir(),
+            -- use fn from mypath.get_sub_project_dirs
+            -- only search in current scope of mono repo on buffer files propogating to the closest file in this order
+            --   return picker:word()
+            -- end,
+          }
+        end,
+        desc = "Find Files monorepo",
         mode = { "n", "v" },
       },
       {

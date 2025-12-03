@@ -1,6 +1,7 @@
 local opts = { noremap = true, silent = true }
 local keymap = vim.keymap.set
 local Cmd = require("utils.cmd")
+local run_command = Cmd.run_command
 local inputUtil = require("utils.input")
 local myPathUtil = require("utils.mypath")
 -- ===========================
@@ -174,30 +175,36 @@ keymap("n", "<Esc>", toggle_fold_or_clear_highlight, { expr = true, silent = tru
 -- ============================
 opts.desc = "Toggle Normal"
 keymap("t", "<C-q>", "<c-\\><c-n>", { desc = "Enter Normal Mode" })
+keymap("t", "<C-q>", "<c-\\><c-n>:q<CR>", { desc = "Close Terminal", silent = true })
+
 opts.desc = nil
 
-local getTermBuffer = function()
+local getTermBuffer = function(filter_ft)
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[getTermBuffer filter_ft:]==], vim.inspect(filter_ft)) -- __AUTO_GENERATED_PRINT_VAR_END__
   local term_buffers = {}
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    local ft = vim.bo[buf].filetype -- toggleterm
-    -- local buf_name = vim.api.nvim_buf_get_name(buf) -- bufname can change when rename buff
-    -- __AUTO_GENERATED_PRINT_VAR_START__
-    -- print([==[for ft:]==], "bufno=" .. buf .. "ft" .. vim.inspect(ft)) -- __AUTO_GENERATED_PRINT_VAR_END__
-    local is_toggleterm = ft == "toggleterm"
-    if is_toggleterm then
+    local current_ft = vim.bo[buf].filetype -- toggleterm
+    local is_term = (filter_ft and current_ft == filter_ft) or
+        (
+          filter_ft == nil and (
+            current_ft == "toggleterm" or current_ft == "snacks_terminal")
+        )
+
+    print([==[getTermBuffer#for#if is_term:]==], vim.inspect(is_term)) -- __AUTO_GENERATED_PRINT_VAR_END__
+    if is_term == true then
       -- __AUTO_GENERATED_PRINT_VAR_START__
       table.insert(term_buffers, buf)
-      -- print([==[_G.cycle_term_buffers#for#if is_toggleterm:]==], buf_name)
     end
-    -- if buf_name:match("term://.*toggleterm#.*") then
-    --   table.insert(term_buffers, buf)
-    -- end
   end
   return term_buffers
 end
 
-function _G.cycle_term_buffers()
-  local term_buffers = getTermBuffer()
+function _G.cycle_term_buffers(filter_ft)
+  print("G cycle " .. (filter_ft or "x"))
+  local term_buffers = getTermBuffer(filter_ft)
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[_G.cycle_term_buffers term_buffers:]==], vim.inspect(term_buffers)) -- __AUTO_GENERATED_PRINT_VAR_END__
   if #term_buffers == 0 then
     print("No terminal buffers found")
     return
@@ -216,6 +223,9 @@ function _G.cycle_term_buffers()
   if not next_buf then
     next_buf = term_buffers[1]
   end
+
+  print([==[_G.cycle_term_buffers#if next_buf:]==], vim.inspect(next_buf)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  -- vim.api.nvim_set_current_win(next_buf)
 
   vim.api.nvim_set_current_buf(next_buf)
 end
@@ -242,56 +252,164 @@ function _G.create_new_term()
   local term_buffers = getTermBuffer()
   -- #term#<id>
   local next_id = 1
+  local next_buf = nil
   local sorted_term_num = {}
   for i, buf in ipairs(term_buffers) do
     local bufname = vim.api.nvim_buf_get_name(buf)
+    -- sample snacks terminal :
+    -- term://~/dotfiles//17674:/bin/bash"
+    -- sample toggleterm terminal
+    -- term://~/dotfiles//30640:/bin/bash;#toggleterm#1
+
     local id = bufname:match("term://.*#(%d+)$")
+    local ft = vim.bo[buf].filetype
+    if ft == "toggleterm" then
+      id = bufname:match("term://.*#(%d+)$")
+    elseif ft == "snacks_terminal" then
+      id = bufname:match("term://.*//(%d+):")
+    else
+      id = bufname:match("term://.*//(%d+):")
+    end
+
+    print([==[_G.create_new_term#for#if id:]==], vim.inspect(id)) -- __AUTO_GENERATED_PRINT_VAR_END__
     if tonumber(id) > 0 then
-      table.insert(sorted_term_num, tonumber(id))
+      table.insert(sorted_term_num, { id = tonumber(id), buf = buf })
     end
   end
-  table.sort(sorted_term_num)
-  for i, id in ipairs(sorted_term_num) do
-    if next_id < id then
+  table.sort(sorted_term_num, function(a, b) return a.id < b.id end)
+
+  -- For toggle term to find next avail id
+  for i, entry in ipairs(sorted_term_num) do
+    if next_id < entry.id then
       break
     else
       next_id = next_id + 1
+      next_buf = entry.buf
     end
   end
-  local command = next_id .. "ToggleTerm"
-  vim.cmd(command)
+
+  local current_ft = vim.bo.filetype
+  local command = nil
+  if current_ft:match("toggleterm") then
+    command = next_id .. "ToggleTerm"
+    vim.cmd(command)
+  elseif current_ft:match("snacks_terminal") then
+    print("Snacks terminal open id " .. next_id)
+    command = "SnacksTerm " .. next_id
+    require("snacks").open_terminal(next_id)
+  else
+    -- open that buffer number
+    command = "buffer " .. next_id
+    vim.cmd("buffer " .. next_id)
+  end
 end
 
 function _G.set_toggleterm_keymaps()
   -- run on all terminal buffers
   -- https://github.com/akinsho/toggleterm.nvim?tab=readme-ov-file#terminal-window-mappings
   local opts = opts
-  opts.buffer = 0
-  local ft = vim.bo.filetype -- toggleterm
+  local bufnum = vim.api.nvim_get_current_buf()
+  opts.buffer = 0 -- only current buffer
+  local ft = vim.bo.filetype
   local is_toggleterm = ft == "toggleterm"
+  local is_snacks = ft == "snacks_terminal"
   local buffername = vim.fn.expand("%:t")
   if string.find(buffername, "lazygit") then
     print("Lazygit buffer")
   else
     opts.desc = "Enter normal mode"
     vim.keymap.set("t", "jk", [[<C-\><C-n>]], opts)
-    opts.desc = "Toggle Term <num> (press with <n> to open other term)"
-    vim.keymap.set("n", "<C-t>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], opts)
-    vim.keymap.set("n", "<localleader>tt", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], opts)
 
-    opts.desc = "Toggle Layout"
-    vim.keymap.set("n", "<C-SPACE>", ":lua cycle_term_layout()<CR>", opts)
-    opts.desc = "Create new Term"
-    vim.keymap.set("n", "<C-n>", ":lua create_new_term()<CR>", opts)
+    if is_snacks then
+      print("Snacks terminal buffer")
+      opts.desc = "Toggle Snacks Term in normal mode"
+      local function toggleSnacks()
+        Snacks.terminal()
+      end
+      opts.desc = "Toggle Snacks Terminal"
+      vim.keymap.set("n", "<C-t>", toggleSnacks, opts)
+
+      -- TODO check if can use opts.win.position "float" or "bottom"
+      opts.desc = "Toggle Snacks term layout"
+      vim.keymap.set({ "t" }, "<C-Tab>", function()
+        local buf = vim.api.nvim_get_current_buf()
+        local info = vim.b[buf].snacks_terminal
+        local new_pos = info.position == "float" and "bottom" or "float"
+        info.position = new_pos
+        ---        ---@class snacks.terminal.Opts: snacks.terminal.Config
+        ------@field cwd? string
+        ------@field count? integer
+        ------@field env? table<string, string>
+        ------@field start_insert? boolean start insert mode when starting the terminal
+        ------@field auto_insert? boolean start insert mode when entering the terminal buffer
+        ------@field auto_close? boolean close the terminal buffer when the process exits
+        ------@field interactive? boolean shortcut for `start_insert`, `auto_close` and `auto_insert` (default: true)
+        ---📦 Module
+        if info then
+          require("snacks.terminal").toggle(info.cmd, info)
+        end
+      end, opts)
+
+      opts.desc = "Toggle Snacks with cmd"
+
+      vim.keymap.set("n", "<C-i>", function()
+        local buf = vim.api.nvim_get_current_buf()
+        local info = vim.b[buf].snacks_terminal
+        -- debug mode
+        -- variables = {
+        --   changedtick = 8,
+        --   snacks_terminal = {
+        --     id = 1
+        --   },
+        --   term_title = "term://~/dotfiles//60264:/bin/bash",
+        --   terminal_job_id = 4,
+        --   terminal_job_pid = 60264,
+        --   ts_folds = false
+        -- },
+        --
+        print([==[_G.set_toggleterm_keymaps#if#if#(anon) info:]==] .. buf .. " >", vim.inspect(info)) -- __AUTO_GENERATED_PRINT_VAR_END__
+        print("Send current word to Snacks terminal")
+        -- TODO: make it toggle correctly
+        -- __AUTO_GENERATED_PRINT_VAR_START__
+        local newcmd = "echo " .. vim.fn.expand("<cword>")
+        newcmd = ""
+        info.position = "bottom"
+        if info then
+          require("snacks.terminal").toggle(newcmd, info)
+        end
+      end, opts)
+    elseif is_toggleterm then
+      -- print("Toggleterm buffer")
+      opts.desc = "Toggle Term in normal mode"
+      -- vim.keymap.set("n", "jk", [[<Cmd>ToggleTerm<CR>]], opts)
+      opts.desc = "Toggle Term <num> (press with <n> to open other term)"
+      vim.keymap.set("n", "<C-t>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], opts)
+      vim.keymap.set("n", "<localleader>tt", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], opts)
+      opts.desc = "Toggle Layout"
+      vim.keymap.set({ "n", "t" }, "<C-SPACE>", "<Cmd>lua cycle_term_layout()<CR>", opts)
+      opts.desc = "Create new Term"
+      vim.keymap.set("n", "<C-n>", ":lua create_new_term()<CR>", opts)
+      -- Make sure C-_ always use ToggleTerm
+      opts.desc = "Toggle Term"
+      vim.keymap.set("t", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
+        opts)
+      vim.keymap.set("n", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
+        { desc = opts.desc, noremap = true, silent = true })
+    else
+      -- print("Other terminal buffer" .. ft)
+    end
     -- durection=float|horizontal|vertical
     opts.desc = "Quit Current Term"
     vim.keymap.set("n", "Q", ":bd!<CR>", opts)
-    vim.keymap.set(
-      "n",
-      "<c-e>",
-      ":lua cycle_term_buffers()<CR>",
-      { buffer = 0, desc = "Cycle term buffer", noremap = true, silent = true }
-    )
+    opts.desc = "Cycle term  buffer"
+    vim.keymap.set({ "t" }, "<C-Tab>", function()
+      local current_ft = vim.bo.filetype
+      cycle_term_buffers(current_ft)
+    end, opts)
+
+    opts.desc = "Cycle all terms"
+    vim.keymap.set("n", "<S-Tab>", ":lua cycle_term_buffers()<CR>", opts)
+    vim.keymap.set("t", "<C-Tab>", ":lua cycle_term_buffers()<CR>", opts)
     -- cycle through all terminal buffers
     -- J and K to move between all buffers next and rpev
     opts.desc = "Toggle Term next toggle"
@@ -485,7 +603,7 @@ end, { nargs = 0 })
 
 keymap("n", "<leader>Lr", ":RestartLspClients<CR>", { desc = "LSPRestart", noremap = true, silent = true })
 keymap("n", "<leader>Lx", ":StopLspClients<CR>", { desc = "LSP Stop", noremap = true, silent = true })
-keymap("n", "<leader>LX", ":StopAllLspClients<CR>", { desc = "LSP Stop", noremap = true, silent = true })
+keymap("n", "<leader>LX", ":StopAllLspClients<CR>", { desc = "LSP Stop All", noremap = true, silent = true })
 keymap("n", "<leader>Li", ":check lsp<CR>", { desc = "LSP Info", noremap = true, silent = true })
 
 --   # which key migrate .nvim $HOME/.config/nvim/keys/which-key.vim
@@ -587,37 +705,6 @@ local function url_repo(tryParseGit)
   return cursorword or ""
 end
 
-local function run_command(command, callback)
-  callback = callback or {}
-  callback.success = callback.success or function() end
-  callback.fail = callback.fail or function() end
-  -- callback.out = callback.out or false
-  -- callback.stderr = callback.stderr or false
-
-  local last_error = nil
-  print("running command: ", vim.inspect(command))
-  vim.fn.jobstart(command, {
-    on_stdout = callback.out or function(_, data, _)
-      print("[stdout]", vim.inspect(data))
-    end or nil,
-    on_stderr = callback.stderr or function(_, data, _)
-      print("[stderr]", vim.inspect(data))
-      local errfilter = vim.tbl_filter(function(value) return value ~= "" end, data)
-      last_error = (#errfilter > 0) and errfilter or last_error
-    end or nil,
-    on_exit = function(_, _, _)
-      print("on_exit last error:", vim.inspect(last_error))
-      if last_error then
-        callback.fail(last_error)
-      else
-        callback.success()
-      end
-    end,
-    detach = true,
-  })
-  -- __AUTO_GENERATED_PRINT_VAR_START__
-  print([==[run_command on_exit:]==], vim.inspect(on_exit)) -- __AUTO_GENERATED_PRINT_VAR_END__
-end
 
 keymap({ "n", "v" }, "gx", function()
   local url_or_word = url_repo(true)
@@ -752,6 +839,7 @@ keymap({ "n", "v" }, "gX", function()
   -- use one regex matcher
 
   local callback = nil
+  local command_run = nil
   if normal_ext_open then
     command_run = open_command
   else
@@ -1189,6 +1277,15 @@ vim.keymap.set("", "<localleader>F", function()
   end)
 end, { desc = "Format code" })
 
+-- Special remaps keys
+-- Ghostty remapped in ~/dotfiles/.config/ghostty/config:80
+-- tested in ghostty non tmux + refresh  (required ghostty remap all works except C-S-A-Tab)
+-- vim.keymap.set("n", "<C-Tab>", ":echo C-Tab", { desc = "Test map C-Tab" })             -- seems to work
+-- vim.keymap.set("n", "<S-Tab>", ":echo S-Tab", { desc = "Test map S-Tab" })             -- seems to work
+-- vim.keymap.set("n", "<C-S-Tab>", ":echo C-S-Tab", { desc = "Test map C-S-Tab" })       -- seems to work
+-- vim.keymap.set("n", "<S-A-Tab>", ":echo S-A-Tab", { desc = "Test map S-A-Tab" })       -- seems to work
+-- -- no work yet
+-- vim.keymap.set("n", "<C-S-A-Tab>", ":echo C-S-A-Tab", { desc = "Test map C-S-A-Tab" }) -- need remap ?
 
 -- -- Map J and K in trouble window with refresh
 -- vim.api.nvim_create_autocmd("FileType", {
