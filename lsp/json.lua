@@ -5,5 +5,5 @@ return {
   init_options = {
     provideFormatter = true,
   },
-  root_markers = { ".git" },
+  single_file_support = true, -- this will not default back to git root in file search in mono repo projects
 }

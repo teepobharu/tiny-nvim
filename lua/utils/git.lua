@@ -91,4 +91,93 @@ function M.open_remote(ref, mode)
   vim.fn.jobstart({ "open", url }, { detach = true })
 end
 
+---Open merge request for a branch
+---@param branch string The branch name (can include remote prefix like "origin/feature-branch")
+function M.open_mr(branch)
+  if not branch or branch == "" then
+    vim.notify("No branch provided", vim.log.levels.WARN)
+    return
+  end
+
+  -- incorrect logic: also remove other branch prefix out Remove remote prefix if present (e.g., "origin/feature-branch" -> "feature-branch")
+  -- local branch_name = branch:gsub("^[^/]+/", "")
+  local branch_name = branch
+
+  -- Detect git hosting provider
+  local remote_path = M.get_remote_path("origin")
+
+  local cmd_util = require("utils.cmd")
+
+  if remote_path:match("gitlab") then
+    -- GitLab MR - try to view first, fallback to create if not exists
+    cmd_util.run_command({ "glab", "mr", "view", "-w", branch_name }, {
+      success = function()
+        vim.notify("Opening GitLab MR for: " .. branch_name, vim.log.levels.INFO)
+      end,
+      fail = function(error)
+        local error_msg = table.concat(error, "\n")
+        -- Check if error indicates MR doesn't exist
+        if error_msg:match("not found") or error_msg:match("no merge request") or error_msg:match("could not find") then
+          vim.notify("MR not found, creating new MR for: " .. branch_name, vim.log.levels.INFO)
+          -- Fallback to creating MR
+          cmd_util.run_command({ "glab", "mr", "create", "-w" }, {
+            success = function()
+              vim.notify("Created and opened GitLab MR for: " .. branch_name, vim.log.levels.INFO)
+            end,
+            fail = function(create_error)
+              vim.notify("Failed to create MR: " .. table.concat(create_error, "\n"), vim.log.levels.ERROR)
+            end
+          })
+        elseif error_msg:match("looking for beginning of value") then
+          vim.notify("glab error: Check connection to gitlab or auth", vim.log.levels
+            .ERROR)
+          -- check auth result
+          vim.fn.jobstart({ "glab", "auth", "status" }, {
+            on_stdout = function(_, data, _)
+              if data then
+                vim.notify("glab auth status:\n" .. table.concat(data, "\n"), vim.log.levels.INFO)
+              end
+            end,
+            on_stderr = function(_, data, _)
+              if data then
+                vim.notify("glab auth status error:\n" .. table.concat(data, "\n"), vim.log.levels.ERROR)
+              end
+            end,
+            detach = true,
+          })
+        else
+          vim.notify("glab error: " .. error_msg, vim.log.levels.ERROR)
+        end
+      end
+    })
+  elseif remote_path:match("github") then
+    -- GitHub PR - try to view first, fallback to create if not exists
+    cmd_util.run_command({ "gh", "pr", "view", "-w", branch_name }, {
+      success = function()
+        vim.notify("Opening GitHub PR for: " .. branch_name, vim.log.levels.INFO)
+      end,
+      fail = function(error)
+        local error_msg = table.concat(error, "\n")
+        -- Check if error indicates PR doesn't exist
+        if error_msg:match("no pull requests found") or error_msg:match("not found") or error_msg:match("could not find") then
+          vim.notify("PR not found, creating new PR for: " .. branch_name, vim.log.levels.INFO)
+          -- Fallback to creating PR
+          cmd_util.run_command({ "gh", "pr", "create", "-w" }, {
+            success = function()
+              vim.notify("Created and opened GitHub PR for: " .. branch_name, vim.log.levels.INFO)
+            end,
+            fail = function(create_error)
+              vim.notify("Failed to create PR: " .. table.concat(create_error, "\n"), vim.log.levels.ERROR)
+            end
+          })
+        else
+          vim.notify("gh error: " .. error_msg, vim.log.levels.ERROR)
+        end
+      end
+    })
+  else
+    vim.notify("Unsupported git hosting provider: " .. remote_path, vim.log.levels.WARN)
+  end
+end
+
 return M
