@@ -19,6 +19,7 @@ require "config.lazy"
 require "config.keymaps"
 require "config.project"
 require "config.mykeymaps"
+require "config.myautocmds"
 
 -- Only load the theme if not in VSCode
 if vim.g.vscode then
@@ -49,6 +50,7 @@ else
     javascriptreact = { ts_server, "biome" },
     typescript = { ts_server, "biome" },
     typescriptreact = { ts_server, "biome" },
+    markdown = { "marksman" },
     html = { "tailwindcss" },
     css = { "tailwindcss" },
     scss = { "tailwindcss" },

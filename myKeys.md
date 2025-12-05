@@ -22,8 +22,9 @@
     - [x] toggleterm work no
     - [ ] snacks term no
   - [ ] c\_/ consistency to use snacks
-- [ ] Feat: luasnip add in /scripts needs package.json
+- [x] Feat: luasnip add in /scripts needs package.json
   - add p.json still not work print get correct dir [file](lua/plugins/coding.lua:72)
+  - works now make sure the package.json settings and path link to corret json dir (copilot change from lazyload -> load but when revert still works)
   - https://github.com/rafamadriz/friendly-snippets/blob/main/package.json
   - https://github.com/rafamadriz/friendly-snippets/blob/main/package.json
 - [x] branches 20251204
@@ -220,7 +221,7 @@ Config file settings / debug
 #### Language
 
 <l>ss - symbols
-<l>gO - loclist native symbols ?
+<l>gO - loclist native symbols works on markdown if no lsp installed - render-markdown only provide auto complete capability ?
 
 md - `[[` go to next section
 

@@ -31,27 +31,26 @@ local function fzfcompareref(selected)
     vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
     return
   end
-  local commit_hash = selected[1]:match("%w+")
+  local commit_hash = selected[1]:match "%w+"
   print([==["ctrl-s" commit_hash:]==], vim.inspect(commit_hash)) -- __AUTO_GENERATED_PRINT_VAR_END__
-  local file_path = vim.fn.expand("%:p")
+  local file_path = vim.fn.expand "%:p"
   vim.cmd("tabnew " .. file_path)
   gitsigns.diffthis(commit_hash, { vertical = true })
 end
 
-
 local function toggle_diffpreview_alt()
   -- Toggle delta.side-by-side in ~/.gitconfig.local
-  local gitconfig_file = os.getenv("HOME") .. "/.gitconfig.local"
+  local gitconfig_file = os.getenv "HOME" .. "/.gitconfig.local"
   local handle = io.popen('git config -f "' .. gitconfig_file .. '" delta.side-by-side')
-  local is_side_side_enabled = handle:read("*a")
+  local is_side_side_enabled = handle:read "*a"
   handle:close()
   is_side_side_enabled = is_side_side_enabled:gsub("%s+", "")
 
   if is_side_side_enabled == "true" then
-    print("side-by-side disabled")
+    print "side-by-side disabled"
     os.execute('git config -f "' .. gitconfig_file .. '" delta.side-by-side false')
   else
-    print("side-by-side enabled")
+    print "side-by-side enabled"
     os.execute('git config -f "' .. gitconfig_file .. '" delta.side-by-side true')
   end
 end
@@ -65,8 +64,8 @@ return {
       "nvim-treesitter/nvim-treesitter-textobjects", -- nv2 has this : add selecting around (vaf : function) or sentence [], {} block
     },
   },
-  { "nvimdev/dashboard-nvim", lazy = true,    enabled = false },
-  { "Wansmer/treesj",         enabled = false },
+  { "nvimdev/dashboard-nvim", lazy = true, enabled = false },
+  { "Wansmer/treesj", enabled = false },
   -- folke/edgy.nvim:  https://github.com/LazyVim/LazyVim/blob/1f8469a53c9c878d52932818533ce51c27ded5b6/lua/lazyvim/plugins/extras/ui/edgy.lua#L97
   {
     "jellydn/hurl.nvim",
@@ -279,7 +278,7 @@ return {
         AvanteInput = {
           prompt_for_file_name = false,
           use_absolute_path = true,
-        }
+        },
       },
     },
     -- config = function(_, opt)
@@ -304,8 +303,8 @@ return {
       command_variants = {
         -- Output options
         sudo = "--dangerously-skip-permissions", -- Enable verbose logging with full turn-by-turn output
-      }
-    }
+      },
+    },
   },
   {
     "olimorris/codecompanion.nvim",
@@ -334,7 +333,7 @@ return {
       {
         mapping_key_prefix .. "Q",
         function()
-          vim.cmd("CodeCompanion")
+          vim.cmd "CodeCompanion"
         end,
         desc = "Code Companion - Quick chat",
         mode = "v",
@@ -424,7 +423,7 @@ return {
             {
               type = "file",
               path = {
-                "/Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua"
+                "/Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua",
               },
             },
           },
@@ -566,14 +565,14 @@ Your instructions here
           -- reverse_switch_windows = "<s-tab>",
         },
         files = {
-          add_current = "<leader>aC"
+          add_current = "<leader>aC",
         },
         toggle = {
           debug = "<leader>rd", -- discard to some random key
-          selection = "<localleader>ax"
+          selection = "<localleader>ax",
         },
         focus = "<localleader>ax", -- discard to some random key
-      }
+      },
     },
   },
   {
@@ -649,16 +648,16 @@ Your instructions here
           -- add actions that open remote the the file at current line remotely
           actions = {
             ["ctrl-o"] = function(selected)
-              local ref = selected[1]:match("[^%w_]+(.*)$") -- Extract only the 'ref' part after special characters and space prefixes
-              ref = ref:match("^(%S+)")                     -- Get the first word which is the ref
+              local ref = selected[1]:match "[^%w_]+(.*)$" -- Extract only the 'ref' part after special characters and space prefixes
+              ref = ref:match "^(%S+)" -- Get the first word which is the ref
               open_remote(ref, "file")
               open_remote(ref, "branch")
             end,
             ["ctrl-s"] = fzfcompareref,
             ["ctrl-g"] = function(selected)
               -- Open merge request for selected branch
-              local ref = selected[1]:match("[^%w_]+(.*)$") -- Extract only the 'ref' part after special characters and space prefixes
-              ref = ref:match("^(%S+)")                     -- Get the first word which is the ref
+              local ref = selected[1]:match "[^%w_]+(.*)$" -- Extract only the 'ref' part after special characters and space prefixes
+              ref = ref:match "^(%S+)" -- Get the first word which is the ref
               -- __AUTO_GENERATED_PRINT_VAR_START__
               gitUtil.open_mr(ref)
             end,
@@ -759,26 +758,53 @@ Your instructions here
       dir = vim.fn.stdpath "state" .. "/my-sessions/", -- directory where session files are saved
     },
     keys = {
-      { "<leader>qs", function() require("persistence").save() end,                desc = "Save session" },
-      { "<leader>ql", function() require("persistence").load({ last = true }) end, desc = "Restore last session" },
-      { "<leader>qS", function() require("persistence").select() end,              desc = "Select session to restore" },
-      { "<leader>qd", function() require("persistence").stop() end,                desc = "Stop persistence" },
+      {
+        "<leader>qs",
+        function()
+          require("persistence").save()
+        end,
+        desc = "Save session",
+      },
+      {
+        "<leader>ql",
+        function()
+          require("persistence").load { last = true }
+        end,
+        desc = "Restore last session",
+      },
+      {
+        "<leader>qS",
+        function()
+          require("persistence").select()
+        end,
+        desc = "Select session to restore",
+      },
+      {
+        "<leader>qd",
+        function()
+          require("persistence").stop()
+        end,
+        desc = "Stop persistence",
+      },
     },
   },
   {
     "folke/trouble.nvim",
     keys = {
-        {
+      {
         "<leader>xf",
         "<cmd>Trouble snacks_files<cr>",
         desc = "Trouble Snacks",
-      }
-  }
+      },
+    },
   },
   {
     "folke/snacks.nvim",
     enabled = isSnackEnabled,
     opts = {
+      dashboard = {
+        enabled = false,
+      },
       explorer = {
         replace_netrw = false,
       },
@@ -868,7 +894,9 @@ Your instructions here
           end,
 
           remove_qf_item = function(picker, item)
-            if not item then return end
+            if not item then
+              return
+            end
 
             -- Get current quickfix list
             local qflist = vim.fn.getqflist()
@@ -885,13 +913,15 @@ Your instructions here
             if idx and idx > 0 and idx <= #qflist then
               -- Direct index match (works for qflist picker)
               table.remove(qflist, idx)
-              vim.fn.setqflist(qflist, 'r')
+              vim.fn.setqflist(qflist, "r")
               picker:refresh()
             else
               -- Try to find by matching file, line, and column (works for grep picker)
               local removed = false
               for i = #qflist, 1, -1 do
                 local qf_item = qflist[i]
+                print([==[remove_qf_item#if#for item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
+                print([==[remove_qf_item#if#for qf_item:]==], vim.inspect(qf_item)) -- __AUTO_GENERATED_PRINT_VAR_END__
                 local qf_file = qf_item.filename or (qf_item.bufnr and vim.api.nvim_buf_get_name(qf_item.bufnr))
                 local item_file = item.file or item.filename
 
@@ -906,7 +936,7 @@ Your instructions here
               end
 
               if removed then
-                vim.fn.setqflist(qflist, 'r')
+                vim.fn.setqflist(qflist, "r")
                 picker:refresh()
               else
                 vim.notify("Could not find item in quickfix list", vim.log.levels.WARN)
@@ -935,10 +965,10 @@ Your instructions here
               vim.notify("No reference compare with default", vim.log.levels.WARN)
             end
 
-            picker:close()                                            -- require this else not work
+            picker:close() -- require this else not work
             vim.cmd "tabnew"
-            vim.cmd "b#"                                              -- switch to the previous buffer
-            vim.cmd "bd#"                                             -- delete the previous buffer (empty buffer)
+            vim.cmd "b#" -- switch to the previous buffer
+            vim.cmd "bd#" -- delete the previous buffer (empty buffer)
             print([==[run my_diff_compare ref:]==], vim.inspect(ref)) -- __AUTO_GENERATED_PRINT_VAR_END__
             require("gitsigns").diffthis(ref, {
               vertical = true,
@@ -964,7 +994,7 @@ Your instructions here
               vim.defer_fn(function()
                 -- Ensure the picker is focused after closing and reopening only happens in buffer mode
                 if vim.api.nvim_get_mode().mode == "n" then
-                  vim.cmd("startinsert")
+                  vim.cmd "startinsert"
                 end
               end, 50)
             else
@@ -986,7 +1016,7 @@ Your instructions here
               ["<a-a>"] = { "select_all", mode = { "n", "i" } },
               ["<a-q>"] = { "qflist", mode = { "n", "i" } },
               ["<c-q>"] = "cancel",
-            }
+            },
           },
           input = {
             keys = {
@@ -999,7 +1029,7 @@ Your instructions here
               ["<a-a>"] = { "select_all", mode = { "n", "i" } },
               ["<a-q>"] = { "qflist", mode = { "n", "i" } },
               ["<c-q>"] = "cancel",
-            }
+            },
           },
           preview = {
             keys = {
@@ -1040,10 +1070,10 @@ Your instructions here
       {
         "<c-/>",
         function()
-          print("🔄 SNACKS TERMINAL CALLED FROM myEditor.lua")
+          print "🔄 SNACKS TERMINAL CALLED FROM myEditor.lua"
           Snacks.terminal()
         end,
-        desc = "Snacks Terminal"
+        desc = "Snacks Terminal",
       },
       -- Send current line to Snacks terminal
       {
@@ -1055,21 +1085,21 @@ Your instructions here
           require("utils.snacks_terminal").send_to_snacks_terminal(text)
         end,
         desc = "Send to Snacks terminal",
-        mode = { "n", "v" }
+        mode = { "n", "v" },
       },
       {
         "<localleader>sa",
         function()
           require("utils.snacks_terminal").send_all_lines()
         end,
-        desc = "Send all to Snacks terminal"
+        desc = "Send all to Snacks terminal",
       },
       {
         "<localleader>ss",
         function()
           require("utils.snacks_terminal").send_previous_selection()
         end,
-        desc = "Send previous selected to Snacks terminal"
+        desc = "Send previous selected to Snacks terminal",
       },
       -- { "<c-_>", function() vim.cmd(":ToggleTerm") end, desc = "ToggleTerm" },
       -- default keys for toggle term
@@ -1085,58 +1115,61 @@ Your instructions here
         desc = "Git Branches",
       },
       {
-        "<leader>E", function()
-        local defaultDir = vim.fn.expand "%:p:h"
-        local curword = vim.fn.expand("<cfile>")
-        local filepath = curword and pathUtil.getFullPathFromRelativePath(curword)
-        local notcurdir = (curword == "" or (vim.fn.filereadable(filepath) == 0 and vim.fn.isdirectory(filepath) == 0))
-        local cwddir = notcurdir and defaultDir or filepath
-        -- lua/plugins/extra/myEditor.lua
-        --     /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua
-        if not notcurdir then
-          local success, err = pcall(function()
-            vim.cmd("Neotree " .. filepath)
-          end)
-          print([==[(anon) err:]==], vim.inspect(err))         -- __AUTO_GENERATED_PRINT_VAR_END__
-          -- __AUTO_GENERATED_PRINT_VAR_START__
-          print([==[(anon) success:]==], vim.inspect(success)) -- __AUTO_GENERATED_PRINT_VAR_END__
-          if not success then
-            vim.notify("Error opening Neotree: " .. err, vim.log.levels.ERROR)
-          else
-            -- print("success")
-            return
+        "<leader>E",
+        function()
+          local defaultDir = vim.fn.expand "%:p:h"
+          local curword = vim.fn.expand "<cfile>"
+          local filepath = curword and pathUtil.getFullPathFromRelativePath(curword)
+          local notcurdir = (
+            curword == "" or (vim.fn.filereadable(filepath) == 0 and vim.fn.isdirectory(filepath) == 0)
+          )
+          local cwddir = notcurdir and defaultDir or filepath
+          -- lua/plugins/extra/myEditor.lua
+          --     /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua
+          if not notcurdir then
+            local success, err = pcall(function()
+              vim.cmd("Neotree " .. filepath)
+            end)
+            print([==[(anon) err:]==], vim.inspect(err)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            -- __AUTO_GENERATED_PRINT_VAR_START__
+            print([==[(anon) success:]==], vim.inspect(success)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            if not success then
+              vim.notify("Error opening Neotree: " .. err, vim.log.levels.ERROR)
+            else
+              -- print("success")
+              return
+            end
           end
-        end
 
-        Snacks.picker.explorer {
-          cwd = defaultDir,
-          auto_close = true,
-          layout = {
-            preset = "vertical",
-          },
-          win = {
-            list = {
-              keys = {
-                ["-"] = "explorer_up",
-                ["g."] = "toggle_hidden",
+          Snacks.picker.explorer {
+            cwd = defaultDir,
+            auto_close = true,
+            layout = {
+              preset = "vertical",
+            },
+            win = {
+              list = {
+                keys = {
+                  ["-"] = "explorer_up",
+                  ["g."] = "toggle_hidden",
+                },
               },
             },
-          },
-        }
-      end,
+          }
+        end,
       },
       {
         "<C-e>",
         function()
-          Snacks.picker.smart({
+          Snacks.picker.smart {
             win = {
               input = {
                 keys = {
                   ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
                 },
-              }
-            }
-          })
+              },
+            },
+          }
         end,
         desc = "Find Smart",
       },
@@ -1147,8 +1180,7 @@ Your instructions here
           Snacks.picker.buffers {
             win = {
               input = {
-                keys = {
-                },
+                keys = {},
               },
             },
           }
@@ -1194,12 +1226,32 @@ Your instructions here
           end
           -- Use Snacks.picker.grep with the file list as 'dirs'
           -- This works because rg accepts file paths as arguments to search in
-          Snacks.picker.grep({
+          Snacks.picker.grep {
             dirs = files,
             title = "Grep Quickfix Files",
-          })
+          }
         end,
-        desc = "Grep Quickfix Files"
+        desc = "Grep Quickfix Files",
+      },
+      {
+        "<leader>sG",
+        function()
+          Snacks.picker.grep {
+            cwd = pathUtil.get_sub_project_dir(),
+            title = "Grep Monorepo Files",
+          }
+        end,
+        desc = "Grep Dir Monorepo",
+      },
+      {
+        "<leader>fWg",
+        function()
+          Snacks.picker.grep {
+            cwd = pathUtil.get_sub_project_dir(),
+            title = "Grep Monorepo Files",
+          }
+        end,
+        desc = "Grep Dir Monorepo",
       },
       {
         "<leader>ff",
@@ -1241,7 +1293,7 @@ Your instructions here
                 Snacks.picker.files { cwd = item.text }
               end
               local dir = item.file
-              vim.fn.chdir(dir)      -- Change current working directory
+              vim.fn.chdir(dir) -- Change current working directory
               vim.cmd("tcd " .. dir) -- Change tab-local current working directory
             end,
             win = {
@@ -1261,63 +1313,76 @@ Your instructions here
       {
         "<leader>fhl",
         function()
-          local harpoon = require("harpoon")
+          local harpoon = require "harpoon"
           harpoon.ui:toggle_quick_menu(harpoon:list())
         end,
         desc = "Harpoon menu",
       },
-    }
+    },
   },
   {
     "folke/sidekick.nvim",
     -- https://github.com/folke/sidekick.nvim?tab=readme-ov-file
     opts = {
+      -- enabled = false, -- or default is fn and use vim.g.sidekick_nes
       cli = {
         prompts = {
-          fname = function() return vim.fn.expand("%:t") end,
+          fname = function()
+            return vim.fn.expand "%:t"
+          end,
           fpath = function(ctx)
             -- in this format file: <> \n name <> in newline separate
             -- try sending just the file name not the content
-            return vim.fn.expand("%:p")
+            return vim.fn.expand "%:p"
             -- \nname: " .. vim.fn.expand("%:t")
             -- this sends the current file content
             -- return "Current file: " .. ctx.buf .. " at line " .. ctx.row
           end,
-        }
-      }
+        },
+      },
     },
     keys = {
       {
         "<leader>aV",
-        function() require("sidekick.cli").send({ msg = "{selection}" }) end,
+        function()
+          require("sidekick.cli").send { msg = "{selection}" }
+        end,
         mode = { "x" },
         desc = "Send Visual Selection",
       },
       {
         "<leader>aNt",
-        function() require("sidekick.nes").toggle() end,
+        function()
+          require("sidekick.nes").toggle()
+        end,
         mode = { "n" },
         desc = "Sidekick Toggle CLI",
       },
       {
         "<leader>aNe",
-        function() require("sidekick.nes").enable() end,
+        function()
+          require("sidekick.nes").enable()
+        end,
         mode = { "n" },
         desc = "Sidekick Enable CLI",
       },
       {
         "<leader>aNd",
-        function() require("sidekick.nes").disable() end,
+        function()
+          require("sidekick.nes").disable()
+        end,
         mode = { "n" },
         desc = "Sidekick Disable Nes",
       },
       {
         "<leader>aNu",
-        function() require("sidekick.nes").update() end,
+        function()
+          require("sidekick.nes").update()
+        end,
         mode = { "n" },
         desc = "Sidekick Nes Update",
       },
-    }
+    },
   },
   {
     "folke/which-key.nvim",
@@ -1420,6 +1485,14 @@ Your instructions here
       } or {}),
     },
   },
+  -- {
+  --   "glepnir/lspsaga.nvim",
+  --   keys = {
+  --     -- Scroll hover definition while insert - use C-f,b use normal mode the <leader> lh + lh instead
+  --     -- below mapping also works but open new preview window for saga and can't continue with the auto cmp
+  --     -- { "<C-p>", "<cmd>Lspsaga hover_doc<CR>", desc = "Hover Doc", mode = "i" },
+  --   },
+  -- },
   {
     "stevearc/conform.nvim",
     -- ../conform.lua | https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#format-command
@@ -1477,8 +1550,8 @@ Your instructions here
         -- when disalbe noice no issue
         enabled = false,
         window = {
-          show_documentation = false -- https://cmp.saghen.dev/configuration/signature
-        }
+          show_documentation = false, -- https://cmp.saghen.dev/configuration/signature
+        },
       },
       keymap = {
         -- https://cmp.saghen.dev/configuration/keymap.html

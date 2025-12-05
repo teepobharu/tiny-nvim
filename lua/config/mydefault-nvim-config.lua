@@ -22,5 +22,6 @@ vim.g.lazydev_enabled = false -- uncomment this to load all lua dependencies (ge
 -- require to pit in lsp dir with same name as below
 vim.lsp.enable {
   'bashls',
+  'markdown',
   -- 'eslint'
 }
