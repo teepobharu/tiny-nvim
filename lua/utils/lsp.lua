@@ -224,6 +224,12 @@ function M.on_attach(on_attach, name)
       local buffer = args.buf ---@type number
       local client = vim.lsp.get_client_by_id(args.data.client_id)
       if client and (not name or client.name == name) then
+        -- added by me : https://neovim.io/doc/user/lsp.html#Client%3Aon_attach()
+        local keymaps = M.get_default_keymaps()
+        for _, map in ipairs(keymaps) do
+          vim.keymap.set("n", map.keys, map.func, { buffer = args.buf, desc = map.desc })
+        end
+        -- end added by me
         return on_attach(client, buffer)
       end
     end,

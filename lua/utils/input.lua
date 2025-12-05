@@ -170,4 +170,25 @@ end
 
 -- ================ TOGGLE TERM UTIL COPIED END ===============
 
+function M.restore_visual_selection(start_pos, end_pos, mode)
+  start_pos = start_pos or vim.fn.getpos("`<")
+  end_pos = end_pos or vim.fn.getpos("`>")
+  mode = mode or vim.fn.visualmode()
+
+  -- Move to start
+  vim.api.nvim_win_set_cursor(0, {start_pos[2], start_pos[3] - 1})
+
+  -- Enter visual mode
+  if mode == 'v' then
+    vim.cmd('normal! v')
+  elseif mode == 'V' then
+    vim.cmd('normal! V')
+  elseif mode == '\22' then -- CTRL-V (visual block)
+    vim.cmd('normal! <C-v>')
+  end
+
+  -- Move to end
+  vim.api.nvim_win_set_cursor(0, {end_pos[2], end_pos[3] - 1})
+end
+
 return M

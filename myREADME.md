@@ -6,6 +6,7 @@ MORE INFO and later TODO: [[./myKeys.md]]
 
 - No more lspconfig dependecy, now directly configure `lsp` from neovim
 - LSP has to be downloaded with script (no more mason support)[./install.sh]
+- See more updated settings here https://github.com/search?q=repo%3Aneovim%2Fnvim-lspconfig+path%3A%2F%5Elsp%5C%2F%2F+markdown&type=code
 - LazyDev helper to optimzied Lua space to show completion on only loaded module ?
 
 ## Migration Notes

@@ -78,4 +78,8 @@ npm install -g \
   bash-language-server
 # bash-language-server --version
 
+echo "MY installation part"
+brew install marksman
+echo "End MY installation part"
+
 echo "All tools have been installed successfully!"

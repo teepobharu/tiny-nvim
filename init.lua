@@ -19,6 +19,7 @@ require "config.lazy"
 require "config.keymaps"
 require "config.project"
 require "config.mykeymaps"
+require "config.myautocmds"
 
 -- Only load the theme if not in VSCode
 if vim.g.vscode then
@@ -39,7 +40,7 @@ else
         "json",        -- JSON
         "pyright",     -- Python
         "gopls",       -- Go
-        "tailwindcss", -- Tailwind CSS
+        -- "tailwindcss", -- Tailwind CSS
     }
 
     require("config.mydefault-nvim-config")
