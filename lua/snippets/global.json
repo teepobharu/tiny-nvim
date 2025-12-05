@@ -1,0 +1,9 @@
+{
+  "dateYMD": {
+    "prefix": "YMD",
+    "body": [
+      "${CURRENT_YEAR}${CURRENT_MONTH}${CURRENT_DATE}"
+    ],
+    "description": "Put the date in (m/D/Y) format"
+  }
+}

@@ -320,12 +320,21 @@ function _G.set_toggleterm_keymaps()
     opts.desc = "Enter normal mode"
     vim.keymap.set("t", "jk", [[<C-\><C-n>]], opts)
 
+    local function toggleSnacks()
+      print("togglesnacks from map inner")
+      Snacks.terminal()
+    end
+    -- TODO: stioll conflicting ?
+    vim.keymap.set("n", "<C-/>", toggleSnacks, { silent = true, desc = "Toggle snacks BF" })
+    vim.keymap.set("n", "<C-S-Tab>", toggleSnacks, { silent = true, desc = "Toggle snacks BF" })
+    vim.keymap.set("n", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
+      { desc = "Toggle term BF", noremap = true, silent = true })
+    vim.keymap.set("n", "<C-S-A-Tab>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
+      { desc = "Toggle term BF", noremap = true, silent = true })
+
     if is_snacks then
       print("Snacks terminal buffer")
       opts.desc = "Toggle Snacks Term in normal mode"
-      local function toggleSnacks()
-        Snacks.terminal()
-      end
       opts.desc = "Toggle Snacks Terminal"
       vim.keymap.set("n", "<C-t>", toggleSnacks, opts)
 
@@ -393,17 +402,17 @@ function _G.set_toggleterm_keymaps()
       opts.desc = "Toggle Term"
       vim.keymap.set("t", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
         opts)
-      vim.keymap.set("n", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
-        { desc = opts.desc, noremap = true, silent = true })
     else
       -- print("Other terminal buffer" .. ft)
     end
-    -- durection=float|horizontal|vertical
+    -- direction=float|horizontal|vertical
     opts.desc = "Quit Current Term"
     vim.keymap.set("n", "Q", ":bd!<CR>", opts)
-    opts.desc = "Cycle term  buffer"
+    opts.desc = "Cycle term buffer"
+    vim.keymap.set("n", "<C-Tab>", ":lua cycle_term_buffers()<CR>", opts)
     vim.keymap.set({ "t" }, "<C-Tab>", function()
       local current_ft = vim.bo.filetype
+      print("Cycle map current_ft" .. vim.bo.filetype)
       cycle_term_buffers(current_ft)
     end, opts)
 
@@ -633,6 +642,19 @@ keymap("n", "<localleader>rsn", addNvimConfigInRoot, { desc = "Setup nvim proj l
 keymap("n", "<localleader>rp", "", { desc = "Profile" })
 keymap("n", "<localleader>rl", ":luafile %<CR>", { desc = "Reload Lua file" })
 keymap("v", "<localleader>rl", ":luafile %<CR>", { desc = "Reload Lua file" })
+
+keymap({'n', 'v'}, '<localleader>rL', function()
+  local code
+  if vim.api.nvim_get_mode().mode == 'v' or vim.api.nvim_get_mode().mode == 'V' then
+    code = inputUtil.getSelectedLines()
+  else
+    code = vim.api.nvim_get_current_line()
+  end
+  local f = load(code)
+  if f then f() end
+end, { desc = "Execute selected Lua code" })
+
+
 keymap("n", "<localleader>rps", function()
   vim.cmd([[
 		:profile start /tmp/nvim-profile.log
@@ -1179,57 +1201,40 @@ local function toggle_lsp_format_mode(norequire)
     vim.g.lsp_format_mode = "prefer"
   end
 
-  -- if norequire then -- will not update
   vim.notify("set lsp_format to: " .. vim.g.lsp_format_mode, vim.log.levels.INFO)
-  --   return
-  -- end
-
-  -- BELOW seems not required anymore
-  -- local conform = require("conform")
-  -- print([==[BEFORE toggle_lsp_format_mode conform:]==], vim.inspect(conform)) -- __AUTO_GENERATED_PRINT_VAR_END__
-
-  -- function getFirstItem(configName)
-  --   local myconfig = require("plugins.extra.myEditor")
-  --   local conform_spec = nil
-  --   local success, result = pcall(function()
-  --     for _, plugin in ipairs(myconfig or {}) do
-  --       if plugin[1] == configName then
-  --         conform_spec = plugin
-  --         break
-  --       end
-  --     end
-  --     return conform_spec
-  --   end)
-  --   return success and result or nil
-  -- end
-  --
-  -- local item = getFirstItem("stevearc/conform.nvim")
-  -- local myopts = item.opts or {}
-  -- print([==[toggle_lsp_format_mode myopts:]==], vim.inspect(myopts)) -- __AUTO_GENERATED_PRINT_VAR_END__
-  -- conform.setup(vim.tbl_deep_extend("force", conform or {}
-  --   -- need myopts else it will not works
-  --   , myopts,
-  --   {
-  --     -- default_format_opts = { lsp_format = vim.g.lsp_format_mode },
-  --     -- format_on_save = vim.tbl_extend("force", conform.format_on_save or {}, {
-  --     --   lsp_format = vim.g.lsp_format_mode,
-  --     -- }),
-  --   }
-  -- ))
-  -- vim.notify("Conform lsp_format set to: " .. vim.g.lsp_format_mode, vim.log.levels.INFO)
-  -- Update Conform config
-  -- local conform = require("conform")
-  -- print([==[AFTER toggle_lsp_format_mode conform:]==], vim.inspect(conform))                       -- __AUTO_GENERATED_PRINT_VAR_END__
-  -- print([==[AFTER toggle_lsp_format_mode onsave conform:]==], vim.inspect(conform.format_on_save)) -- __AUTO_GENERATED_PRINT_VAR_END__
-  --
-  -- vim.notify("Conform lsp_format set to: " .. vim.g.lsp_format_mode, vim.log.levels.INFO)
 end
 
-local function confformat(timeout_ms, isasync)
+--@params
+---@param timeout_ms integer|nil timeout in milliseconds
+---@param isasync boolean|nil specify if formatting is async
+---@param formatter table|nil specify formatter(s) to use
+---@param auto_expand_visual boolean|nil whether to expand visual selection
+local function confformat(timeout_ms, isasync, formatter, auto_expand_visual)
   local conform = require("conform")
-  conform.format({ async = isasync or false, timeout_ms = timeout_ms or 5000 }, function(err)
+  local is_selected = false
+  if auto_expand_visual ~= nil then
+    is_selected = auto_expand_visual
+  else
+    local is_visual = vim.fn.mode()
+    is_selected = is_visual == "v" or is_visual == "V" or is_visual == "\22"
+  end
+  -- select down one more line else the last line will not be formatted ??
+  local start_pos = vim.fn.getpos("'<")
+  local end_pos = vim.fn.getpos("'>")
+
+  if is_selected then
+    -- vim.cmd("normal! gvg")
+    vim.cmd("normal! gv")
+    vim.cmd("normal! j")
+  end
+  conform.format({ async = isasync or false, timeout_ms = timeout_ms or 5000, formatter = formatter }, function(err)
     if not err then
       vim.cmd(":noautocmd w")
+    end
+    if vim.startswith(string.lower(vim.fn.mode()), "v") then
+      print("stop v mode")
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", true)
+      inputUtil.restore_visual_selection(start_pos, end_pos)
     end
   end)
 end
@@ -1243,30 +1248,47 @@ local function select_and_format()
     return
   end
 
+
   local items = {}
   for _, f in ipairs(formatters) do
     table.insert(items, f.name)
   end
 
+  local is_visual = vim.fn.mode()
+  local is_selected = is_visual == "v" or is_visual == "V" or is_visual == "\22"
+
   vim.ui.select(items, { prompt = "Select formatter:" }, function(choice)
     if choice then
-      conform.format({ formatters = { choice }, async = false, bufnr = bufnr })
-      -- save after format without triggggggering autocmd
-      vim.cmd(":noautocmd w")
+      confformat(nil, false, {choice}, is_selected)
+      -- conform.format({ formatters = { choice }, async = false, bufnr = bufnr })
+      -- conform.format({ formatters = { choice }, async = false })
+      -- save after format without triggering autocmd
+      -- vim.cmd(":noautocmd w")
       vim.notify("Formatted with: " .. choice, vim.log.levels.INFO)
     end
   end)
 end
 
 -- 3. Map shortcut
+--
+vim.keymap.set("n", "<localleader>Fe", vim.cmd("FormatEnable"), { desc = "Enable Auto Format"  })
+vim.keymap.set("n", "<localleader>Fd", vim.cmd("FormatDisable"), { desc = "Disable Auto Format"  })
 vim.keymap.set("n", "<leader>uFt", toggle_lsp_format_mode, { desc = "Toggle LSP Format Mode (prefer/fallback)" })
+vim.keymap.set("n", "<localleader>FT", toggle_lsp_format_mode, { desc = "Toggle LSP Format Mode (prefer/fallback)" })
+vim.keymap.set("n", "<localleader>FT", toggle_lsp_format_mode, { desc = "Toggle LSP Format Mode (prefer/fallback)" })
 -- vim.keymap.set("n", "<leader>uFT", function() toggle_lsp_format_mode(true) end, { desc = "Toggle LSP Format Mode" })
 vim.keymap.set("n", "<leader>uFS", select_and_format, { desc = "Select Formatter to Run" })
+vim.keymap.set("", "<localleader>FS", select_and_format, { desc = "Select Formatter to Run" })
 vim.keymap.set("n", "<leader>uFf", confformat, { desc = "Format" })
+vim.keymap.set("", "<localleader>Ff", confformat, { desc = "Format" })
 vim.keymap.set("n", "<leader>uFF", function() confformat(10000, true) end, { desc = "Async Format" })
-vim.keymap.set("n", "<leader>uFs", ":noautocmd w<CR>", { desc = "Save No Format" })
+vim.keymap.set("", "<localleader>FF", function() confformat(10000, true) end, { desc = "Async Format" })
+vim.keymap.set("n", "<leader>uFs", ":noautocmd w<CR>", { desc = "Save No Format / C-S-s" })
+vim.keymap.set("", "<localleader>Fs", ":noautocmd w<CR>", { desc = "Save No Format" })
+vim.keymap.set("", "<C-S-s>", ":noautocmd w<CR>", { desc = "Save No Format" })
+
 -- From docs : https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#leave-visual-mode-after-range-format
-vim.keymap.set("", "<localleader>F", function()
+vim.keymap.set("", "<localleader>ff", function()
   require("conform").format({ async = true }, function(err)
     if not err then
       local mode = vim.api.nvim_get_mode().mode
