@@ -13,6 +13,7 @@ vim.g.enable_extra_plugins = {
   "fold-preview",
   "myToggleterm",
   "myEditor",
+  "snacks",
 }
 
 vim.g.lazydev_enabled = false -- uncomment this to load all lua dependencies (get access to vim object)
