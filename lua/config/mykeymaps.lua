@@ -304,6 +304,17 @@ function _G.create_new_term()
   end
 end
 
+local function toggleSnacks()
+  print("togglesnacks from map inner")
+  Snacks.terminal()
+end
+
+-- TODO: still conflicting ?
+-- vim.keymap.set("n", "<C-/>", toggleSnacks, { silent = true, desc = "Toggle snacks BF" })
+vim.keymap.set("n", "<C-S-Tab>", toggleSnacks, { silent = true, desc = "Toggle snacks BF" })
+vim.keymap.set("n", "<S-A-Tab>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], { desc = "ToggleTerm", silent = true, noremap = true })
+
+
 function _G.set_toggleterm_keymaps()
   -- run on all terminal buffers
   -- https://github.com/akinsho/toggleterm.nvim?tab=readme-ov-file#terminal-window-mappings
@@ -319,18 +330,8 @@ function _G.set_toggleterm_keymaps()
   else
     opts.desc = "Enter normal mode"
     vim.keymap.set("t", "jk", [[<C-\><C-n>]], opts)
-
-    local function toggleSnacks()
-      print("togglesnacks from map inner")
-      Snacks.terminal()
-    end
-    -- TODO: stioll conflicting ?
-    vim.keymap.set("n", "<C-/>", toggleSnacks, { silent = true, desc = "Toggle snacks BF" })
-    vim.keymap.set("n", "<C-S-Tab>", toggleSnacks, { silent = true, desc = "Toggle snacks BF" })
-    vim.keymap.set("n", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
-      { desc = "Toggle term BF", noremap = true, silent = true })
-    vim.keymap.set("n", "<C-S-A-Tab>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
-      { desc = "Toggle term BF", noremap = true, silent = true })
+    -- vim.keymap.set("n", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
+      -- { desc = "Toggle term BF", noremap = true, silent = true })
 
     if is_snacks then
       print("Snacks terminal buffer")
@@ -395,7 +396,8 @@ function _G.set_toggleterm_keymaps()
       vim.keymap.set("n", "<C-t>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], opts)
       vim.keymap.set("n", "<localleader>tt", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], opts)
       opts.desc = "Toggle Layout"
-      vim.keymap.set({ "n", "t" }, "<C-SPACE>", "<Cmd>lua cycle_term_layout()<CR>", opts)
+      vim.keymap.set({ "t" }, "<C-SPACE>", cycle_term_layout, opts)
+      vim.keymap.set({ "n" }, "<C-SPACE>", "<Cmd>lua cycle_term_layout()<CR>", opts)
       opts.desc = "Create new Term"
       vim.keymap.set("n", "<C-n>", ":lua create_new_term()<CR>", opts)
       -- Make sure C-_ always use ToggleTerm
@@ -418,7 +420,7 @@ function _G.set_toggleterm_keymaps()
 
     opts.desc = "Cycle all terms"
     vim.keymap.set("n", "<S-Tab>", ":lua cycle_term_buffers()<CR>", opts)
-    vim.keymap.set("t", "<C-Tab>", ":lua cycle_term_buffers()<CR>", opts)
+    vim.keymap.set("t", "<S-Tab>", cycle_term_buffers, opts)
     -- cycle through all terminal buffers
     -- J and K to move between all buffers next and rpev
     opts.desc = "Toggle Term next toggle"
@@ -1285,7 +1287,7 @@ vim.keymap.set("n", "<leader>uFF", function() confformat(10000, true) end, { des
 vim.keymap.set("", "<localleader>FF", function() confformat(10000, true) end, { desc = "Async Format" })
 vim.keymap.set("n", "<leader>uFs", ":noautocmd w<CR>", { desc = "Save No Format / C-S-s" })
 vim.keymap.set("", "<localleader>Fs", ":noautocmd w<CR>", { desc = "Save No Format" })
-vim.keymap.set("", "<C-S-s>", ":noautocmd w<CR>", { desc = "Save No Format" })
+vim.keymap.set({"i", "n"}, "<C-S-s>", ":noautocmd w<CR>", { desc = "Save No Format" })
 
 -- From docs : https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#leave-visual-mode-after-range-format
 vim.keymap.set("", "<localleader>ff", function()

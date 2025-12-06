@@ -1,4 +1,4 @@
-local lazygitTerm = {}
+local lazygitTerm = { count = 100 }
 local KeyUtils = require("utils.keyutil")
 local key_g = KeyUtils.key_g
 local key_l = KeyUtils.key_l
@@ -23,22 +23,30 @@ end
 ---@param termOpts TermCreateArgs?
 ---@param name string
 local isToggleCurrentLazyTerm = function(name, termOpts)
-  if lazygitTerm and lazygitTerm.term and name == lazygitTerm.name then
-    lazygitTerm.term:toggle()
+  if lazygitTerm[name] and lazygitTerm[name].term then
+    lazygitTerm[name].term:toggle()
   else
     local lazygitBaseTerm = {
       on_create = function(term)
         -- vim.notify("OPEN.CREATE", vim.log.levels.INFO, { title = "Lazygit" })
         -- These keys will overwrite the lazygit keymap !! - only t mode keymap will work
-        vim.api.nvim_buf_set_keymap(term.bufnr, "t", "<c-q>", "<cmd>close<CR>", { noremap = true, silent = true })
+        vim.api.nvim_buf_set_keymap(term.bufnr, "t", "<c-q>", "<cmd>stopinsert<CR>", { noremap = true, silent = true })
+        vim.api.nvim_buf_set_keymap(term.bufnr, "n", "<c-q>", "<cmd>close<CR>", { noremap = true, silent = true })
         -- All keys (q) break when type in input prompt a
         -- q will quit like Q
         -- Q already do the job to quit buffer (still work on typing input)
         -- vim.api.nvim_buf_set_keymap(term.bufnr, "t", "Q", "<cmd>bd!<CR>", { noremap = true, silent = true })
+        vim.notify("ON CREATE" .. name, vim.log.levels.INFO, { title = "Lazygit"})
+        lazygitTerm.count = lazygitTerm.count + 1
+      end,
+      -- @
+      on_exit = function(t, jobnum, exit_code, namein)
+        vim.notify("ON Exit " .. name .. " namein " .. namein " code=" .. exit_code, vim.log.levels.INFO, { title = "Lazygit"})
+        lazygitTerm[name] = {}
       end,
       on_open = function(term)
         vim.cmd("startinsert!")
-        -- vim.notify("OPEN", vim.log.levels.INFO, { title = "Lazygit" })
+        vim.notify("OPEN " .. name, vim.log.levels.INFO, { title = "Lazygit" })
 
         -- Allow to make it work for lazygit for Esc and ctrl + hjkl
         vim.keymap.set("t", "<c-h>", "<c-h>", { buffer = term.bufnr, nowait = true })
@@ -46,10 +54,39 @@ local isToggleCurrentLazyTerm = function(name, termOpts)
         vim.keymap.set("t", "<c-k>", "<c-k>", { buffer = term.bufnr, nowait = true })
         vim.keymap.set("t", "<c-l>", "<c-l>", { buffer = term.bufnr, nowait = true })
         vim.keymap.set("t", "<esc>", "<esc>", { buffer = term.bufnr, nowait = true })
+
+
+        local opts = { buffer = term.bufnr, nowait = true }
+        opts.desc = "normal mode"
+        vim.keymap.set("t", "<ESC><ESC>", function()
+          vim.cmd("stopinsert")
+        end, opts)
+        local currDir = lazygitTerm[name].term.direction or "float"
+        print([==[ currDir:]==], vim.inspect(currDir)) -- __AUTO_GENERATED_PRINT_VAR_END__
+        opts.desc = "Toggle layout flat/tab"
+        vim.keymap.set("t", "<M-1>", function()
+          local nextDirection = currDir == "float" and "tab" or "float"
+          lazygitTerm[name].term:toggle()
+          lazygitTerm[name].term:toggle(95, nextDirection)
+          -- vim.cmd("TmuxNavigatePrevious")
+        end, opts)
+        opts.desc = "Toggle layout vert/horiz"
+        vim.keymap.set("t", "<M-2>", function()
+          local nextDirection = currDir == "vertical" or currDir == "vertical" and "horizontal"
+          lazygitTerm[name].term:toggle()
+          lazygitTerm[name].term:toggle(95, nextDirection)
+        end, opts)
+        opts.desc = "Toggle layout all"
+        vim.keymap.set("t", "<c-\\>", function()
+          local nextDirection = currDir == "float" and "vertical" or currDir == "vertical" and "horizontal" or currDir == "horizontal" and "tab" or "float"
+          lazygitTerm[name].term:toggle()
+          lazygitTerm[name].term:toggle(95, nextDirection)
+        end, { buffer = term.bufnr, nowait = true })
+
       end,
       -- function to run on closing the terminal
       on_close = function(_)
-        -- vim.notify("Closing", vim.log.levels.INFO, { title = "Lazygit" })
+        vim.notify("Closing term: " .. name, vim.log.levels.INFO, { title = "Lazygit" })
         vim.cmd("startinsert!")
       end,
     }
@@ -57,23 +94,41 @@ local isToggleCurrentLazyTerm = function(name, termOpts)
     termOpts.on_open = lazygitBaseTerm.on_open
     termOpts.on_create = lazygitBaseTerm.on_create
     termOpts.on_close = lazygitBaseTerm.on_close
+    -- https://github.com/akinsho/toggleterm.nvim?tab=readme-ov-file#custom-terminal-usage
+    -- termOpts.hidden = true -- doesnot really work in this fn but works in demo code - do not show when toggle with ToggleTerm cmd
+    -- termOpts.count = 100 -- since hidden not work move the term to high count to avoid toggle it (but need to avoid overriding same num)
+    termOpts.count = lazygitTerm.count -- since hidden not work move the term to high count to avoid toggle it
+    -- __AUTO_GENERATED_PRINT_VAR_START__
+    print([==[isToggleCurrentLazyTerm#if termOpts:]==], vim.inspect(termOpts)) -- __AUTO_GENERATED_PRINT_VAR_END__
     local lazygit = require("toggleterm.terminal").Terminal:new(termOpts)
-    lazygitTerm = {
-      name = name,
+
+    -- local Terminal  = require('toggleterm.terminal').Terminal
+    -- local lazygit = Terminal:new({ cmd = "lazygit", hidden = true })
+    -- lazygit:toggle()
+    -- sleep 1s
+    -- toggle again 
+    --
+
+
+
+    lazygitTerm[name] = {
       term = lazygit,
     }
-    lazygitTerm.term:toggle()
+    lazygitTerm[name].term:toggle()
   end
+  lazygitTerm.last_toggle = name
 end
 
 -- check key overrides in lua/config/mykeymaps.lua:350
 return {
   "akinsho/toggleterm.nvim",
-  enabled = true,
+  version = "*",
+  -- enabled = true,
+  -- cmd = { "ToggleTerm", "TermSelect", "ToggleTermSetName", "ToggleTermSendCurrentLine" },
   opts = {
     persist_size = false,
     persist_mode = false,
-    -- open_mapping = isSnacksEnable and [[<localleader-t>]] or [[<c-_>]],
+    -- open_mapping = [[<c-\>]],
   },
   keys = {
     -- c; c= c\ c/ not working
@@ -89,18 +144,18 @@ return {
       desc = "Toggle ToggleTerm",
     },
     -- { "<c-/>", function() Snacks.terminal() end, desc = "Snacks Terminal" },
-
-    {
-      isSnacksEnable and "<c-_>" or "<c-:>",
-      function()
-        if isSnacksEnable then
-          Snacks.terminal()
-        else
-          require("toggleterm").toggle()
-        end
-      end,
-      desc = "Toggle term",
-    },
+    -- { "<c-_>", function() vim.cmd(":ToggleTerm " .. vim.v.count1) end, desc = "Toggle Terminal" },
+    -- {
+    --   isSnacksEnable and "<c-_>" or "<c-:>",
+    --   function()
+    --     if isSnacksEnable then
+    --       Snacks.terminal()
+    --     else
+    --       require("toggleterm").toggle()
+    --     end
+    --   end,
+    --   desc = "Toggle term",
+    -- },
     {
       "<localleader><c-_>",
       "<cmd>:ToggleTermSendCurrentLine<cr>",

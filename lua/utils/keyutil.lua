@@ -1,6 +1,6 @@
 local M = {}
 
-M.isSnackEnabled = vim.g.enable_extra_plugins and vim.tbl_contains(vim.g.enable_extra_plugins, "snacks") or true
+M.isSnackEnabled = vim.g.enable_extra_plugins and vim.tbl_contains(vim.g.enable_extra_plugins, "snacks")
 M.isToggleTermEnabled = vim.g.enable_extra_plugins and vim.tbl_contains(vim.g.enable_extra_plugins, "myToggleterm")
 
 local function get_prefix_key(key)
