@@ -15,6 +15,17 @@
   - WIP (https://github.com/nvim-neo-tree/neo-tree.nvim/blob/main/lua/neo-tree/defaults.lua)
     - try disable neotree cwd and move json lsp `root_markers` from .git to
 
+To verify
+1 - terminal search snacks 
+2 - tmux search
+3 - copilot prompt contenxt check
+3 - glab ci snippets fixes
+4 - pickers tmux 
+
+- [] AI: 
+  - [ ] 08/12/2025 - Code companion prompts context
+
+
 - [ ] fix toggle term keymap term cycle and other mappings - 20251201 wip
   - cycle C-E for all term type works
   - C-Tab not mappable work
@@ -22,6 +33,7 @@
     - [x] toggleterm work no
     - [ ] snacks term no
   - [ ] c\_/ consistency to use snacks
+  - issues : 
 - [x] Feat: luasnip add in /scripts needs package.json
   - add p.json still not work print get correct dir [file](lua/plugins/coding.lua:72)
   - works now make sure the package.json settings and path link to corret json dir (copilot change from lazyload -> load but when revert still works)
@@ -242,6 +254,22 @@ Neo Tree
   - Fg => fzf grep in node
   - Tf/Tg => telescope
   - TC,Tc => telescope cd / cd
+
+
+### Issues
+
+Keymap code terminal, tmux, vim
+
+Tmux non compatible
+- c_- and c-/ : is same code inside tmux
+
+Terminal compatible (not tmux)
+- c-s-s : ghostty only
+- c-tab / c-s-tab : work in ghostty keymap only
+
+To check more 
+- [ ] https://apple.stackexchange.com/questions/24261/how-do-i-send-c-that-is-control-slash-to-the-terminal
+
 
 ## Others
 
