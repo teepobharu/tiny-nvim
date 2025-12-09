@@ -79,6 +79,7 @@ npm install -g \
 # bash-language-server --version
 
 echo "MY installation part"
+brew install alesbrelih/gitlab-ci-ls/gitlab-ci-ls
 brew install marksman
 echo "End MY installation part"
 

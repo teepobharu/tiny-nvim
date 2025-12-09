@@ -5,20 +5,143 @@
 
 local M = {}
 
+-- Get detailed information about a terminal
+local function get_terminal_info(terminal)
+  local info = {
+    terminal = terminal,
+    buf = terminal.buf,
+    win = terminal.win,
+    id = terminal.id or 1, -- Default to 1 if no id
+    closed = terminal.closed or false,
+    win_valid = false,
+    visible_in_current_tab = false,
+    tab = nil,
+    name = nil,
+  }
+
+  -- Check if window is valid
+  if terminal.win and vim.api.nvim_win_is_valid(terminal.win) then
+    info.win_valid = true
+
+    -- Get the tab page for this window
+    info.tab = vim.api.nvim_win_get_tabpage(terminal.win)
+
+    -- Check if it's in the current tab
+    local current_tab = vim.api.nvim_get_current_tabpage()
+    info.visible_in_current_tab = (info.tab == current_tab)
+  end
+
+  -- Get terminal name from buffer or winbar
+  if terminal.buf and vim.api.nvim_buf_is_valid(terminal.buf) then
+    -- Try to get term_title from buffer variable
+    local ok, term_title = pcall(vim.api.nvim_buf_get_var, terminal.buf, 'term_title')
+    if ok and term_title then
+      info.name = term_title
+    else
+      info.name = string.format("Terminal %d", info.id)
+    end
+  end
+
+  return info
+end
+
+-- Find the best terminal to use based on visibility and count
+local function find_best_terminal(terminals, count)
+  if #terminals == 0 then
+    return nil
+  end
+
+  -- print([==[find_best_terminal#if count:]==], vim.inspect(count)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  -- If count is specified, use that terminal (user explicitly chose it)
+  if count and count > 0 then
+    -- __AUTO_GENERATED_PRINT_VAR_START__
+    -- First try to match the explicit count to a terminal's assigned id
+    for _, term in ipairs(terminals) do
+      -- Match by terminal.id if present
+      if term.id and term.id == count then
+        -- print([==[find_best_terminal#if#for#if term.id and term.id == count:]==], vim.inspect(term.id and term.id == count)) -- __AUTO_GENERATED_PRINT_VAR_END__
+        return term
+      end
+
+      -- Match by buffer variable snacks_terminal.id if present
+      if term.buf and vim.api.nvim_buf_is_valid(term.buf) then
+        local ok, buf_var = pcall(vim.api.nvim_buf_get_var, term.buf, 'snacks_terminal')
+        if ok and buf_var and buf_var.id == count then
+          -- print([==[find_best_terminal#if#for# == count buf_var:]==], vim.inspect(buf_var)) -- __AUTO_GENERATED_PRINT_VAR_END__
+          return term
+        end
+      end
+    end
+
+    -- Fallback to positional indexing if no id match found
+    local idx = math.min(count, #terminals)
+    print([==[find_best_terminal#if count (#terminals):]==], vim.inspect(idx)) -- __AUTO_GENERATED_PRINT_VAR_END__
+    return terminals[idx]
+  end
+
+  -- No count specified - find visible terminal in current tab first
+  local current_tab = vim.api.nvim_get_current_tabpage()
+  local terminal_infos = {}
+
+  -- Gather info about all terminals
+  for i, term in ipairs(terminals) do
+    local info = get_terminal_info(term)
+    info.index = i
+    table.insert(terminal_infos, info)
+  end
+
+  -- Print terminal info for debugging
+  print([==[Available terminals:]==])
+  for _, info in ipairs(terminal_infos) do
+    print(string.format("  [%d] buf=%d win=%s tab=%s visible=%s name=%s",
+      info.index,
+      info.buf,
+      info.win or "none",
+      info.tab or "none",
+      info.visible_in_current_tab and "YES" or "no",
+      info.name or "unknown"
+    ))
+  end
+
+  -- Priority 1: Visible terminal in current tab
+  for _, info in ipairs(terminal_infos) do
+    if info.visible_in_current_tab and info.win_valid and not info.closed then
+      print(string.format("→ Selected terminal [%d] (visible in current tab)", info.index))
+      return info.terminal
+    end
+  end
+
+  -- Priority 2: Any valid terminal in current tab (even if hidden)
+  for _, info in ipairs(terminal_infos) do
+    if info.tab == current_tab and not info.closed then
+      print(string.format("→ Selected terminal [%d] (in current tab)", info.index))
+      return info.terminal
+    end
+  end
+
+  -- Priority 3: First non-closed terminal
+  for _, info in ipairs(terminal_infos) do
+    if not info.closed then
+      print(string.format("→ Selected terminal [%d] (first available)", info.index))
+      return info.terminal
+    end
+  end
+
+  -- Fallback: First terminal
+  print(string.format("→ Selected terminal [1] (fallback)"))
+  return terminals[1]
+end
+
 -- Get the current Snacks terminal or create one
 local function get_snacks_terminal(count)
   local terminals = require("snacks").terminal.list()
-  -- __AUTO_GENERATED_PRINT_VAR_START__
-  print([==[get_snacks_terminal terminals:]==], vim.inspect(terminals)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
   -- Find an existing terminal or create a new one
   if #terminals > 0 then
-    count = count or (vim.v.count > 0 and vim.v.count or 1)
-    -- Clamp count to available terminals to avoid index out of bounds
-    count = math.min(count, #terminals)
-    return terminals[count] -- Use the specified terminal number or the first available
+    return find_best_terminal(terminals, count)
   else
     -- Create a new terminal only if none exist
+    print("→ Creating new terminal (none exist)")
     return require("snacks").terminal()
   end
 end
@@ -26,7 +149,6 @@ end
 -- Send text to Snacks terminal
 local function send_to_snacks_terminal(text, count)
   local terminal = get_snacks_terminal(count)
-  -- __AUTO_GENERATED_PRINT_VAR_START__
   -- print([==[send_to_snacks_terminal terminal:]==], vim.inspect(terminal)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
   if not terminal or not terminal.buf then
