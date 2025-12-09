@@ -48,11 +48,11 @@ uv tool list
 
 Fixes attempt
 
-- [ ] uf auto format not working
+- [x] uf auto format not works 
 
 Migration added
 
-- [ ] Zozxide snacks
+- [x] Zozxide snacks
 
 LSP
 Guides: https://lsp-zero.netlify.app/blog/lsp-config-without-plugins.html
