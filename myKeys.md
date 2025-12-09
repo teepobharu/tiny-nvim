@@ -16,16 +16,32 @@
     - try disable neotree cwd and move json lsp `root_markers` from .git to
 
 - terminal 
-  - [ ] Send to active terminal in visible tab / screen  (current snacks key only send when there is term not open)
+  snacks term
+  - [x] Send to active terminal in visible tab / screen  (current snacks key only send when there is term not open)
+  - [x] 
+  - desired logic when count is sent always match with snacks id term else create new and send if no count send find best match term visible / first terminal (id=1) if > 1 visible or the next available id by ascending sorting
+  - [ ] fix: count in visual mode not work
+  - [ ] fix: count in n, v mode not force new term when id not match
+  search
   - [x] tmux win search
     - [ ] support preview + delete 
 
+- LSP
+ - [x] glab works strangely on some files 2025-12-10
+    - references,def: build,releases,rules,cache but not tests on tripsweb 
+    - custom ft works
+    - [ ] check if root matter (on git root currently)
+    - ./lsp/gitlablsp.lua
+
 To verify
-1 - terminal search snacks 
-3 - copilot prompt contenxt check
-3 - glab ci snippets fixes
-4 - pickers tmux 
-4 - send text to terminal from visible screen first then trust vcount later
+1 - copilot prompt context check
+2 - glab ci snippets fixes
+3 - send text to terminal from visible screen first then trust vcount later
+  - trust vcount with id
+4 - global snippets not work again ...
+
+To fix 
+- Avante slash cmd get depreioritize to be below folder cmp
 
 - [] AI: 
   - [ ] 08/12/2025 - Code companion prompts context
