@@ -15,12 +15,17 @@
   - WIP (https://github.com/nvim-neo-tree/neo-tree.nvim/blob/main/lua/neo-tree/defaults.lua)
     - try disable neotree cwd and move json lsp `root_markers` from .git to
 
+- terminal 
+  - [ ] Send to active terminal in visible tab / screen  (current snacks key only send when there is term not open)
+  - [x] tmux win search
+    - [ ] support preview + delete 
+
 To verify
 1 - terminal search snacks 
-2 - tmux search
 3 - copilot prompt contenxt check
 3 - glab ci snippets fixes
 4 - pickers tmux 
+4 - send text to terminal from visible screen first then trust vcount later
 
 - [] AI: 
   - [ ] 08/12/2025 - Code companion prompts context
