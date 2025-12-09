@@ -184,12 +184,16 @@ local getTermBuffer = function(filter_ft)
   print([==[getTermBuffer filter_ft:]==], vim.inspect(filter_ft)) -- __AUTO_GENERATED_PRINT_VAR_END__
   local term_buffers = {}
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    local current_ft = vim.bo[buf].filetype -- toggleterm
-    local is_term = (filter_ft and current_ft == filter_ft) or
-        (
-          filter_ft == nil and (
-            current_ft == "toggleterm" or current_ft == "snacks_terminal")
-        )
+    local ft = vim.bo[buf].filetype -- toggleterm
+    local bufName = vim.api.nvim_buf_get_name(buf)
+    local is_toggleterm = ft == "toggleterm"
+    local is_snacks = ft == "snacks_terminal"
+    local is_sidekick = ft == "sidekick_terminal"
+    local is_lazygit = bufName:match("lazygit") ~= nil
+
+
+    local is_term = (filter_ft and ft == filter_ft) or
+        (filter_ft == nil and (not is_lazygit and (is_toggleterm or is_snacks)))
 
     print([==[getTermBuffer#for#if is_term:]==], vim.inspect(is_term)) -- __AUTO_GENERATED_PRINT_VAR_END__
     if is_term == true then
@@ -309,10 +313,6 @@ local function toggleSnacks()
   Snacks.terminal()
 end
 
--- TODO: still conflicting ?
--- vim.keymap.set("n", "<C-/>", toggleSnacks, { silent = true, desc = "Toggle snacks BF" })
-vim.keymap.set("n", "<C-S-Tab>", toggleSnacks, { silent = true, desc = "Toggle snacks BF" })
-vim.keymap.set("n", "<S-A-Tab>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], { desc = "ToggleTerm", silent = true, noremap = true })
 
 
 function _G.set_toggleterm_keymaps()
@@ -322,19 +322,44 @@ function _G.set_toggleterm_keymaps()
   local bufnum = vim.api.nvim_get_current_buf()
   opts.buffer = 0 -- only current buffer
   local ft = vim.bo.filetype
+  local bufName = vim.api.nvim_buf_get_name(bufnum)
   local is_toggleterm = ft == "toggleterm"
   local is_snacks = ft == "snacks_terminal"
-  local buffername = vim.fn.expand("%:t")
-  if string.find(buffername, "lazygit") then
+  local is_sidekick = ft == "sidekick_terminal"
+  local is_lazygit = bufName:match("lazygit") ~= nil
+  -- print([==[_G.set_toggleterm_keymaps bufName:]==], vim.inspect(bufName)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  -- print([==[_G.set_toggleterm_keymaps is_lazygit:]==], vim.inspect(is_lazygit)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  if is_lazygit then
     print("Lazygit buffer")
+  elseif is_sidekick then
+    print("Sidekick buffer")
   else
     opts.desc = "Enter normal mode"
     vim.keymap.set("t", "jk", [[<C-\><C-n>]], opts)
     -- vim.keymap.set("n", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
       -- { desc = "Toggle term BF", noremap = true, silent = true })
 
+    -- TODO: still conflicting ?
+    -- vim.keymap.set("n", "<C-/>", toggleSnacks, { silent = true, desc = "Toggle snacks BF" })
+    -- vim.keymap.set("n", "<C-S-Tab>", toggleSnacks, { silent = true, desc = "Toggle snacks BF" })
+    -- vim.keymap.set("n", "<S-A-Tab>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], { desc = "ToggleTerm", silent = true, noremap = true })
+
+    if is_snacks or is_toggleterm then
+      opts.desc = "Cycle all terms"
+      vim.keymap.set("n", "<S-Tab>", ":lua cycle_term_buffers()<CR>", opts)
+      vim.keymap.set("t", "<S-Tab>", cycle_term_buffers, opts)
+      opts.desc = "Cycle term buffer"
+      -- TODO: this c-s-tab key not working
+      vim.keymap.set("n", "<C-S-Tab>", ":lua cycle_term_buffers()<CR>", opts)
+      vim.keymap.set({ "t" }, "<C-S-Tab>", function()
+        local current_ft = vim.bo.filetype
+        print("Cycle map current_ft" .. current_ft)
+        cycle_term_buffers(current_ft)
+      end, opts)
+    end
+
     if is_snacks then
-      print("Snacks terminal buffer")
+      -- print("Snacks terminal buffer")
       opts.desc = "Toggle Snacks Term in normal mode"
       opts.desc = "Toggle Snacks Terminal"
       vim.keymap.set("n", "<C-t>", toggleSnacks, opts)
@@ -404,32 +429,22 @@ function _G.set_toggleterm_keymaps()
       opts.desc = "Toggle Term"
       vim.keymap.set("t", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
         opts)
+      -- cycle through all terminal buffers
+      -- J and K to move between all buffers next and rpev
+      opts.desc = "Toggle Term next toggle"
+      vim.keymap.set("n", "J", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], opts)
     else
       -- print("Other terminal buffer" .. ft)
     end
     -- direction=float|horizontal|vertical
     opts.desc = "Quit Current Term"
     vim.keymap.set("n", "Q", ":bd!<CR>", opts)
-    opts.desc = "Cycle term buffer"
-    vim.keymap.set("n", "<C-Tab>", ":lua cycle_term_buffers()<CR>", opts)
-    vim.keymap.set({ "t" }, "<C-Tab>", function()
-      local current_ft = vim.bo.filetype
-      print("Cycle map current_ft" .. vim.bo.filetype)
-      cycle_term_buffers(current_ft)
-    end, opts)
 
-    opts.desc = "Cycle all terms"
-    vim.keymap.set("n", "<S-Tab>", ":lua cycle_term_buffers()<CR>", opts)
-    vim.keymap.set("t", "<S-Tab>", cycle_term_buffers, opts)
-    -- cycle through all terminal buffers
-    -- J and K to move between all buffers next and rpev
-    opts.desc = "Toggle Term next toggle"
-    vim.keymap.set("n", "J", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], opts)
   end
   -- what about buffername ?
   -- if not lazygit then do mapping
   -- resize
-  opts.desc = "Resize" -- not working
+  -- opts.desc = "Resize" -- not working
   -- vim.keymap.set("t", "Up", [[<C-\><C-n>:resize -3<CR>]], opts)
   -- vim.keymap.set("t", "Down", [[:resize +3<CR>]], opts)
   -- vim.keymap.set("t", "<C-Left>", [[<C-\><C-n>:vertical resize -3<CR>]], opts)

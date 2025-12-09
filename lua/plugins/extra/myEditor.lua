@@ -426,10 +426,17 @@ return {
                 "/Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua",
               },
             },
+            {
+              type = "url",
+              url = "https://github.com/folke/snacks.nvim/blob/main/docs/picker.md"
+            },
+            {
+              type = "url",
+              url = "https://www.reddit.com/r/neovim/comments/1j4e7fq/share_your_custom_snackspicker_sources"
+            }
           },
           prompts = {
             {
-              name = "Snacks Nvim Context", -- example edit <-> test in available
               role = "user",
               opts = { auto_submit = false },
               content = function()
@@ -443,10 +450,8 @@ Your instructions here
 
       You are required to write code with correct usage of nvim lazy libraries and preferably in lua then fallback to vim if necessary
       1. Update the code in #buffer{watch} using the @editor tool
-      2.
-      3. Make sure you trigger both tools in the same response
-      Specification:
-      - Check the documentation from https://github.com/folke/snacks.nvim/blob/main/docs/picker.md
+      2. Make sure you trigger both tools in the same response Specification
+      3. Follow the given documentation 
       ]]
               end,
             },
@@ -1067,19 +1072,20 @@ Your instructions here
       --   end,
       --   desc = "Snacks Terminal"
       -- },
+      -- "<C-_>" is same code as C-/ try use cat -v and type the key sequences to check
       {
-        "<c-/>",
+        "<C-_>",
         function()
-          print "🔄 SNACKS TERMINAL CALLED FROM myEditor.lua"
           Snacks.terminal()
         end,
         desc = "Snacks Terminal",
+        mode = { "n", "v" }
       },
       -- Send current line to Snacks terminal
       {
         -- This universal fn tested and work
         -- TOFIX: will always send to the last terminal while Toggle term can choose from count
-        "<localleader>S",
+        "<localleader>s",
         function()
           local text = require("utils.input").getSelectedLines()
           require("utils.snacks_terminal").send_to_snacks_terminal(text)
@@ -1088,14 +1094,14 @@ Your instructions here
         mode = { "n", "v" },
       },
       {
-        "<localleader>sa",
+        "<localleader>Sa",
         function()
           require("utils.snacks_terminal").send_all_lines()
         end,
         desc = "Send all to Snacks terminal",
       },
       {
-        "<localleader>ss",
+        "<localleader>Sr",
         function()
           require("utils.snacks_terminal").send_previous_selection()
         end,

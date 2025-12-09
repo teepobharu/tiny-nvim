@@ -7,16 +7,16 @@ local isSnacksEnable = KeyUtils.isSnackEnabled
 function sentSelectedToTerminal()
   local mode = vim.fn.mode()
   if mode == "V" then
-    -- print("in V mode")
-    require("toggleterm").send_lines_to_terminal("visual_lines", true, { args = vim.v.count })
+    require("toggleterm").send_lines_to_terminal("visual_lines", true, { args = vim.v.count1 })
   elseif mode == "\22" then -- "\22" is the ASCII representation for CTRL-V
     -- print("in ^V mode")
-    require("toggleterm").send_lines_to_terminal("visual_selection", true, { args = vim.v.count })
+    require("toggleterm").send_lines_to_terminal("visual_selection", true, { args = vim.v.count1 })
   elseif mode == "v" then
     -- print("in v mode")
-    require("toggleterm").send_lines_to_terminal("visual_selection", true, { args = vim.v.count })
+    require("toggleterm").send_lines_to_terminal("visual_selection", true, { args = vim.v.count1 })
   else
-    require("toggleterm").send_lines_to_terminal("single_line", true, {})
+    -- vim.cmd("ToggleTermSendCurrentLine") -- will not auto propogate
+    require("toggleterm").send_lines_to_terminal("single_line", true, { args = vim.v.count1 })
   end
 end
 
@@ -32,6 +32,10 @@ local isToggleCurrentLazyTerm = function(name, termOpts)
         -- These keys will overwrite the lazygit keymap !! - only t mode keymap will work
         vim.api.nvim_buf_set_keymap(term.bufnr, "t", "<c-q>", "<cmd>stopinsert<CR>", { noremap = true, silent = true })
         vim.api.nvim_buf_set_keymap(term.bufnr, "n", "<c-q>", "<cmd>close<CR>", { noremap = true, silent = true })
+        vim.api.nvim_buf_set_keymap(term.bufnr, "t", "<c-q>", "<cmd>close<CR>", { noremap = true, silent = true })
+        vim.api.nvim_buf_set_keymap(term.bufnr, "t", "<c-_>", "<cmd>stopinsert<CR>", { noremap = true, silent = true })
+        -- below will cause lagging since might always need to check within timeout len before executing ?
+        -- vim.api.nvim_buf_set_keymap(term.bufnr, "t", "jk", "<cmd>stopinsert<CR>", { noremap = true, silent = true })
         -- All keys (q) break when type in input prompt a
         -- q will quit like Q
         -- Q already do the job to quit buffer (still work on typing input)
@@ -39,7 +43,7 @@ local isToggleCurrentLazyTerm = function(name, termOpts)
         vim.notify("ON CREATE" .. name, vim.log.levels.INFO, { title = "Lazygit"})
         lazygitTerm.count = lazygitTerm.count + 1
       end,
-      -- @
+      -- TODO: when press Q will not exit yet
       on_exit = function(t, jobnum, exit_code, namein)
         vim.notify("ON Exit " .. name .. " namein " .. namein " code=" .. exit_code, vim.log.levels.INFO, { title = "Lazygit"})
         lazygitTerm[name] = {}
@@ -62,29 +66,59 @@ local isToggleCurrentLazyTerm = function(name, termOpts)
           vim.cmd("stopinsert")
         end, opts)
         local currDir = lazygitTerm[name].term.direction or "float"
-        print([==[ currDir:]==], vim.inspect(currDir)) -- __AUTO_GENERATED_PRINT_VAR_END__
-        opts.desc = "Toggle layout flat/tab"
+        opts.desc = "Toggle layout all"
+        -- vim.keymap.set("t", "<c-\\>", function()
         vim.keymap.set("t", "<M-1>", function()
+          local nextDirection = currDir == "float" and "vertical" or currDir == "vertical" and "horizontal" or currDir == "horizontal" and "tab" or "float"
+          lazygitTerm[name].term:toggle()
+          local win_count = 1
+          if nextDirection == "horizontal" or nextDirection == "vertical" then
+            win_count = vim.fn.winnr('$')
+          end
+          local size = win_count == 1 and 50 or 95
+
+          if currDir == "tab" then
+            local tab_count = vim.fn.tabpagenr('$')
+            local curr_tab = vim.fn.tabpagenr()
+            if tab_count > 1 and curr_tab > 1 and curr_tab < tab_count then
+              vim.cmd("tabprevious")
+            end
+          end
+          -- __AUTO_GENERATED_PRINT_VAR_START__
+          print([==[isToggleCurrentLazyTerm#if#on_open#(anon) win_count:]==], vim.inspect(win_count)) -- __AUTO_GENERATED_PRINT_VAR_END__
+          lazygitTerm[name].term:toggle(size, nextDirection)
+        end, { buffer = term.bufnr, nowait = true })
+
+        opts.desc = "Toggle layout flat/tab"
+        vim.keymap.set("t", "<M-2>", function()
           local nextDirection = currDir == "float" and "tab" or "float"
           lazygitTerm[name].term:toggle()
+          if currDir == "tab" then
+            local tab_count = vim.fn.tabpagenr('$')
+            local curr_tab = vim.fn.tabpagenr()
+            if tab_count > 1 and curr_tab > 1 and curr_tab < tab_count then
+              vim.cmd("tabprevious")
+            end
+          end
           lazygitTerm[name].term:toggle(95, nextDirection)
           -- vim.cmd("TmuxNavigatePrevious")
         end, opts)
-        opts.desc = "Toggle layout vert/horiz"
-        vim.keymap.set("t", "<M-2>", function()
-          local nextDirection = currDir == "vertical" or currDir == "vertical" and "horizontal"
-          lazygitTerm[name].term:toggle()
-          lazygitTerm[name].term:toggle(95, nextDirection)
-        end, opts)
-        opts.desc = "Toggle layout all"
-        vim.keymap.set("t", "<c-\\>", function()
-          local nextDirection = currDir == "float" and "vertical" or currDir == "vertical" and "horizontal" or currDir == "horizontal" and "tab" or "float"
-          lazygitTerm[name].term:toggle()
-          lazygitTerm[name].term:toggle(95, nextDirection)
-        end, { buffer = term.bufnr, nowait = true })
 
+        opts.desc = "Toggle layout vert/horiz"
+        vim.keymap.set("t", "<M-3>", function()
+          local nextDirection = currDir == "horizontal" and "vertical" or "horizontal"
+          local win_count = 1
+          if nextDirection == "horizontal" or nextDirection == "vertical" then
+            win_count = vim.fn.winnr('$')
+          end
+          local size = win_count == 1 and 50 or 95
+
+          lazygitTerm[name].term:toggle()
+          lazygitTerm[name].term:toggle(size, nextDirection)
+        end, opts)
       end,
       -- function to run on closing the terminal
+      -- Will trigger even when use c-q
       on_close = function(_)
         vim.notify("Closing term: " .. name, vim.log.levels.INFO, { title = "Lazygit" })
         vim.cmd("startinsert!")
@@ -143,8 +177,12 @@ return {
       end,
       desc = "Toggle ToggleTerm",
     },
+    -- these mapping does not work
     -- { "<c-/>", function() Snacks.terminal() end, desc = "Snacks Terminal" },
-    -- { "<c-_>", function() vim.cmd(":ToggleTerm " .. vim.v.count1) end, desc = "Toggle Terminal" },
+    -- { "<Esc>[47;5u", function() Snacks.terminal() end, desc = "Snacks Terminal" },
+-- >", function() vim.cmd(":ToggleTerm " .. vim.v.count1) end, desc = "Toggle Terminal" },
+    -- { "<c-/>", function() vim.cmd(":ToggleTerm " .. vim.v.count1) end, desc = "Toggle Terminal" },
+    -- { "<C-/", false },
     -- {
     --   isSnacksEnable and "<c-_>" or "<c-:>",
     --   function()
@@ -156,6 +194,7 @@ return {
     --   end,
     --   desc = "Toggle term",
     -- },
+    -- end test mapping
     {
       "<localleader><c-_>",
       "<cmd>:ToggleTermSendCurrentLine<cr>",
@@ -178,11 +217,6 @@ return {
       desc = "Send visual selection to terminal",
       mode = { "n", "v" },
     },
-    {
-      "<localleader>T",
-      sentSelectedToTerminal,
-      desc = "Send visual selection to terminal",
-    },
     -- { -- seem not to work use c-space to
     --   "<localleader>tf",
     --   "<cmd>:ToggleTerm direction=float<cr>",
@@ -199,9 +233,9 @@ return {
     --   desc = "Toggle term vertical",
     -- },
     {
-      "<localleader>ft",
-      "<cmd>:2ToggleTerm<cr>",
-      desc = "Find Terminal",
+      "<localleader>Tt",
+      sentSelectedToTerminal,
+      desc = "Send selection to Toggle terminal",
     },
     {
       "<localleader>Tr",
