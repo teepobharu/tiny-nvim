@@ -172,7 +172,7 @@ vim.api.nvim_create_autocmd("User", {
       vscode.action "editor.action.quickFix"
     end)
     -- Code format
-    vim.keymap.set("n", "<leader>cf", function()
+    vim.keymap.set("n", "<localleader>ff", function()
       vscode.action "editor.action.formatDocument"
     end)
     -- Refactor
@@ -886,16 +886,16 @@ function my_vscode_keymaps(vscode)
     vscode.action("workbench.action.tasks.build")
   end)
   -- Navigation
-  vim.keymap.set("n", "<leader>fY", function()
+  vim.keymap.set("n", "<localleader>fY", function()
     vscode.action("workbench.action.files.copyPathOfActiveFile")
   end)
-  vim.keymap.set("n", "<leader>cf", function()
+  vim.keymap.set("n", "<localleader>cf", function()
     vscode.action("copyRelativeFilePath")
   end)
-  vim.keymap.set("n", "<leader>cF", function()
+  vim.keymap.set("n", "<localleader>cF", function()
     vscode.action("workbench.action.files.copyPathOfActiveFile")
   end)
-  vim.keymap.set("n", "<leader>fy", function()
+  vim.keymap.set("n", "<localleader>fy", function()
     -- access clipboard
     vscode.action("copyRelativeFilePath")
     -- __AUTO_GENERATED_PRINT_VAR_START__

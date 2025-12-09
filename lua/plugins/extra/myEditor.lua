@@ -310,6 +310,12 @@ return {
     "olimorris/codecompanion.nvim",
     keys = {
       {
+        mapping_key_prefix .. "a",
+        "<cmd>CodeCompanionAction<cr>",
+        desc = "Code Companion - actions",
+        mode = "v",
+      },
+      {
         mapping_key_prefix .. "A",
         "<cmd>CodeCompanionChat Add<cr>",
         desc = "Code Companion - Add selected",
@@ -410,35 +416,59 @@ return {
         },
       },
       prompt_library = {
+        -- will work only when open new chat with the action cmd else not change model while there is prompt
+        ["Model GPT mini 5 - G5"] = {
+          strategy = "chat",
+          opts = {
+            adapter = {
+              name = "copilot",
+              model = "gpt-5-mini",
+            },
+            is_slash_cmd = true,
+            short_name = "gpt5mini_g5m_gfree",
+            stop_context_insertion = true,
+          },
+          prompts = {
+            {
+              role = "user",
+              content = ""
+            }
+          },
+        },
         ["Snacks Nvim Context"] = {
           strategy = "chat",
           description = "Write documentation for me",
           opts = {
             index = 11,
-            is_slash_cmd = false,
+            adapter = {
+              name = "copilot",
+              model = "gpt-5-mini",
+            },
+            is_slash_cmd = true,
             auto_submit = false,
-            short_name = "snacks nvim context",
+            short_name = "snacks_nvim_context",
+            stop_context_insertion = true,
           },
           context = {
             {
               type = "file",
               path = {
-                "/Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua",
+                -- expand HOME
+                vim.fn.expand("$HOME/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua")
               },
             },
             {
               type = "url",
-              url = "https://github.com/folke/snacks.nvim/blob/main/docs/picker.md"
+              url = "https://github.com/folke/snacks.nvim/blob/main/docs/picker.md",
             },
             {
               type = "url",
-              url = "https://www.reddit.com/r/neovim/comments/1j4e7fq/share_your_custom_snackspicker_sources"
-            }
+              url = "https://www.reddit.com/r/neovim/comments/1j4e7fq/share_your_custom_snackspicker_sources",
+            },
           },
           prompts = {
             {
               role = "user",
-              opts = { auto_submit = false },
               content = function()
                 -- Leverage auto_tool_mode which disables the requirement of approvals and automatically saves any edited buffer
                 vim.g.codecompanion_auto_tool_mode = true
@@ -457,6 +487,81 @@ Your instructions here
             },
           },
         },
+        -- will still replace the chat !!
+        ["📂 Attach File:Line Refs (t)"] = {
+          strategy = "chat",
+          opts = {
+            is_slash_cmd = false,
+            auto_submit = false,
+            -- placement = "add", -- for inline or "replace"|"add"|"before"|"chat"
+            stop_context_insertion = true,
+
+          },
+          description = "Attach references to the chat",
+          -- # sample context
+          -- {
+          --   bufnr = 7,
+          --   buftype = "",
+          --   cursor_pos = { 10, 3 },
+          --   end_col = 3,
+          --   end_line = 10,
+          --   filetype = "lua",
+          --   is_normal = false,
+          --   is_visual = true,
+          --   lines = { "local function fire_autocmd(status)", '  vim.api.nvim_exec_autocmds("User", { pattern = "CodeCompanionInline", data = { status = status } })', "end" },
+          --   mode = "V",
+          --   start_col = 1,
+          --   start_line = 8,
+          --   winnr = 1000
+          -- }
+          --
+          -- # sample ref with selection
+          -- > - file: @lua/plugins/extra/myEditor.lua :L26:C1-L26:C999
+          -- # sample ref with no selection
+          -- > - file: @lua/plugins/extra/myEditor.lua :L26:C1
+          prompts = {
+            {
+              role = "user",
+              content = function(context)
+                print([==[content context:]==], vim.inspect(context)) -- __AUTO_GENERATED_PRINT_VAR_END__
+
+                context = context or {}
+                local bufnr = context.bufnr or vim.api.nvim_get_current_buf()
+                local start_line = context.start_line or context.start or (context.range and context.range.start_line)
+                local start_col = context.start_col or context.start_col
+                local end_line = context.end_line or context.finish or (context.range and context.range.end_line)
+                local end_col = context.end_col or context.end_col
+
+                -- Fallback to cursor if no range provided
+                if not start_line then
+                  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+                  start_line = row
+                  start_col = col
+                  end_line = row
+                  end_col = col
+                end
+
+                local bufname = context.filepath or vim.api.nvim_buf_get_name(bufnr)
+                local relpath = vim.fn.fnamemodify(bufname == "" and vim.api.nvim_buf_get_name(0) or bufname, ":.")
+
+                -- Normalize columns
+                start_col = start_col or 1
+                end_col = end_col or 999
+
+                local attachref=""
+                if start_line and end_line and (start_line ~= end_line or start_col ~= end_col) then
+                  attachref =
+                    string.format("> - file: @%s :L%d:C%d-L%d:C%d", relpath, start_line, start_col, end_line, end_col)
+                else
+                  attachref = string.format("> - file: @%s :L%d:C%d", relpath, start_line, start_col)
+                end
+
+                return attachref .. "\n"
+              end,
+            },
+          },
+        },
+        -- sample workflow: https://codecompanion.olimorris.dev/extending/workflows
         ["Setup Test Example"] = {
           strategy = "workflow",
           description = "My workflow",
@@ -884,6 +989,35 @@ Your instructions here
               },
             },
           },
+          my_terminal = {
+            finder = function(opts, ctx)
+              -- local picker_opts = {
+              --   cmd = ""
+              -- }
+              -- TODO: fix text not showing properly
+              return require("utils.term_util").get_terminal_buffers()
+              -- -- finder = function()
+              --     return require("snacks.picker.source.proc").proc({
+              --       opts,
+              --       {
+              --         cmd = picker_opts.cmd,
+              --         args = picker_opts.args,
+              --         transform = function(item)
+              --           item.cwd = picker_opts.cwd or git_root
+              --           item.file = item.text
+              --         end,
+              --       },
+              --     }, ctx)
+            end,
+            win = {
+              input = {
+                keys = {
+                  ["<c-x>"] = { "bufdelete", mode = { "n", "i" } },
+                },
+              },
+              list = { keys = { ["dd"] = "bufdelete" } },
+            },
+          },
         },
         actions = {
           open_mr = function(picker, item)
@@ -1079,16 +1213,17 @@ Your instructions here
           Snacks.terminal()
         end,
         desc = "Snacks Terminal",
-        mode = { "n", "v" }
+        mode = { "n", "v" },
       },
       -- Send current line to Snacks terminal
       {
         -- This universal fn tested and work
-        -- TOFIX: will always send to the last terminal while Toggle term can choose from count
+        -- Fixed: Now properly reuses existing terminals and handles count-based selection
         "<localleader>s",
         function()
+          local count = vim.v.count > 0 and vim.v.count or nil
           local text = require("utils.input").getSelectedLines()
-          require("utils.snacks_terminal").send_to_snacks_terminal(text)
+          require("utils.snacks_terminal").send_to_snacks_terminal(text, count)
         end,
         desc = "Send to Snacks terminal",
         mode = { "n", "v" },
@@ -1096,16 +1231,27 @@ Your instructions here
       {
         "<localleader>Sa",
         function()
-          require("utils.snacks_terminal").send_all_lines()
+          local count = vim.v.count > 0 and vim.v.count or nil
+          require("utils.snacks_terminal").send_all_lines(count)
         end,
         desc = "Send all to Snacks terminal",
       },
       {
         "<localleader>Sr",
         function()
-          require("utils.snacks_terminal").send_previous_selection()
+          local count = vim.v.count > 0 and vim.v.count or nil
+          require("utils.snacks_terminal").send_previous_selection(count)
         end,
         desc = "Send previous selected to Snacks terminal",
+      },
+      {
+        "<localleader>Ss",
+        function()
+          Snacks.picker.my_terminal()
+          -- Snacks.picker.terminal()
+        end,
+        desc = "Snacks Terminal Picker",
+        mode = { "n" },
       },
       -- { "<c-_>", function() vim.cmd(":ToggleTerm") end, desc = "ToggleTerm" },
       -- default keys for toggle term
@@ -1113,6 +1259,20 @@ Your instructions here
       --   "<c-_>",
       --   false
       -- },
+      {
+        "<leader>sx",
+        function()
+          require("utils.snacks_terminal").pick_tmux_window()
+        end,
+        desc = "Pick Tmux Win",
+      },
+      {
+        "<leader>fG",
+        function()
+          require("utils.snacks_terminal").custom_git_pickers.git_diff_upstream()
+        end,
+        desc = "Git File Upstream",
+      },
       {
         "<leader>gb",
         function()
@@ -1511,8 +1671,7 @@ Your instructions here
         ["javascriptreact"] = function(bufnr)
           return {
             "rustywind",
-            first(bufnr, "biome", "deno_fmt", "prettier", "prettierd",
-              "dprint")
+            first(bufnr, "biome", "deno_fmt", "prettier", "prettierd", "dprint"),
           }
         end,
         ["typescript"] = { "biome", "deno_fmt", "prettier", "prettierd", "dprint", stop_after_first = true },
@@ -1520,13 +1679,12 @@ Your instructions here
         ["typescriptreact"] = function(bufnr)
           return {
             "rustywind",
-            first(bufnr, "biome", "deno_fmt", "prettier", "prettierd",
-              "dprint")
+            first(bufnr, "biome", "deno_fmt", "prettier", "prettierd", "dprint"),
           }
         end,
       },
       default_format_opts = {
-        lsp_format = vim.g.lsp_format_mode or "fallback"
+        lsp_format = vim.g.lsp_format_mode or "fallback",
       },
       format_on_save = function(bufnr)
         -- Disable with a global or buffer-local variable
