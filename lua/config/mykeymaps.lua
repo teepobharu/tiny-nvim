@@ -733,11 +733,32 @@ local function url_repo()
   return cursorword or ""
 end
 
+-- Clean input by removing newlines and normalizing whitespace
+local function clean_selected_text(s)
+  if not s then return s end
+  -- Remove actual newlines and carriage returns
+  s = s:gsub("[\r\n]+", "")
+  -- Remove leading/trailing whitespace
+  s = vim.trim(s)
+  return s
+end
+
 local function url_repo(tryParseGit)
-  local cursorword = vim.fn.expand("<cfile>")
+  local cursorword
+  local mode = vim.fn.mode()
+  if mode == "v" or mode == "V" then
+    -- use visual selection if available
+    cursorword = inputUtil.get_selected_or_cursor_word()
+  else
+    cursorword = vim.fn.expand("<cfile>")
+  end
+  
+  -- Clean the text (remove newlines, trim whitespace)
+  cursorword = clean_selected_text(cursorword)
+  
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[url_repo cursorword:]==], vim.inspect(cursorword)) -- __AUTO_GENERATED_PRINT_VAR_END__
-  if tryParseGit and string.find(cursorword, "^[a-zA-Z0-9-_.]*/[a-zA-Z0-9-_.]*$") then
+  if tryParseGit and cursorword and string.find(cursorword, "^[a-zA-Z0-9-_.]*/[a-zA-Z0-9-_.]*$") then
     cursorword = "https://github.com/" .. cursorword
   end
   print(cursorword or "")
@@ -759,6 +780,8 @@ end, { silent = true, desc = "Copy word / Open url" })
 -- map key maps to open directory
 keymap({ "n", "v" }, "gGs", function()
   local text = inputUtil.get_selected_or_cursor_word()
+  text = clean_selected_text(text)
+  
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[(anon) text:]==], vim.inspect(text)) -- __AUTO_GENERATED_PRINT_VAR_END__
   local escaped_text = text and text:gsub(" ", "%%20")
@@ -775,6 +798,8 @@ end, { silent = true, desc = "Google Search" })
 -- Common function to resolve directory path from cursor/selection
 local function resolve_directory_path()
   local selected_or_cursor_word = inputUtil.get_selected_or_cursor_word()
+  selected_or_cursor_word = clean_selected_text(selected_or_cursor_word)
+  
   local curr_buffer_path = vim.fn.expand("%:p:h")
   local paths_to_try = {
     selected_or_cursor_word,

@@ -32,6 +32,9 @@
     - custom ft works
     - [ ] check if root matter (on git root currently)
     - ./lsp/gitlablsp.lua
+Chore 
+- [x] handle selection gx Gf ignore space  / newline
+
 
 To verify
 1 - copilot prompt context check
@@ -39,6 +42,7 @@ To verify
 3 - send text to terminal from visible screen first then trust vcount later
   - trust vcount with id
 4 - global snippets not work again ...
+5 - gitsign hunks not support visual c-j,k
 
 To fix 
 - Avante slash cmd get depreioritize to be below folder cmp
@@ -127,6 +131,11 @@ Actions
 - does #lsp work - not shown in debug info ?
 - #viewport get all buffers that visible in all tabs ?
 - slash commands /now , /file , /clear
+
+2025-12-11 Breaking changes warning : https://github.com/olimorris/codecompanion.nvim/pull/2439
+
+Prompt actions
+- cannot be used together 
 
 ### Copilot-Chat
 
