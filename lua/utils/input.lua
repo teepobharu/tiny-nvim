@@ -13,6 +13,11 @@ function region_to_text(region)
   return text
 end
 
+function M.is_visual_mode()
+  local mode = vim.fn.mode()
+  return mode == "v" or mode == "V" or mode == "\22"
+end
+
 -- FIX: visual not selected correctly
 function M.get_selected_or_cursor_word()
   -- Check the current mode

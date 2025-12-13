@@ -369,6 +369,21 @@ return {
           },
           -- https://github.com/nvim-neo-tree/neo-tree.nvim/discussions/370
           filesystem = {
+            filtered_items = {
+              always_show = { -- remains visible even if other settings would normally hide it
+                ".gitignored",
+                ".gitlab",
+                ".gitlab-ci.yml",
+                ".vscode",
+                ".cursor",
+                ".claude",
+                ".nvim-config.lua",
+              },
+              always_show_by_pattern = { -- uses glob style patterns
+                ".env*",
+                "*.gitlab-ci.yml",
+              },
+            },
             window = {
               width = 30,
               mappings = {

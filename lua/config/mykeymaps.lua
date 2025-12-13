@@ -129,6 +129,11 @@ keymap("v", "<A-l>", "$", {
   desc = "Go to end of line",
   silent = true,
 })
+keymap("i", "<A-h>", "<C-o>^", { desc = "Go to start of line", silent = true, })
+keymap("i", "<A-l>", "<C-o>$", { desc = "Go to end of line", silent = true, })
+keymap("i", "<C-M-l>", "<C-o>e", { desc = "Move Forward Word", silent = true })
+keymap("i", "<C-M-h>", "<C-o>b", { desc = "Move Backward Word", silent = true })
+
 
 -- v mode esc to exit visual modej
 keymap("v", "<C-q>", "<esc>", { desc = "exit" })
@@ -145,17 +150,102 @@ keymap("n", "<leader>wv", ":vs<CR>", { desc = "VSplit", silent = true })
 keymap("n", "<M-Tab>", ":tabnext<CR>", { noremap = true, silent = true })
 keymap("t", "<M-Tab>", "<cmd>tabnext<CR>", { noremap = true, silent = true })
 keymap("n", "<leader>wp", ":windo b#<CR>", { desc = "Previous Window", silent = true })
-
+keymap("n", "<C-M-l>", ":tabnext<CR>" ,  { desc = "Next Tab", silent = true })
+keymap("n", "<C-M-h>", ":tabprevious<CR>" ,  { desc = "Previous Tab", silent = true })
+keymap("n", "<C-M-h>", ":tabprevious<CR>" ,  { desc = "Previous Tab", silent = true })
 -- map("n", "<C-Up>", ":resize -3<CR>", opts)
 -- map("n", "<C-Down>", ":resize +3<CR>", opts)
 -- map("n", "<C-Left>", ":vertical resize -3<CR>", opts)
 -- map("n", "<C-Right>", ":vertical resize +3<CR>", opts)
+
+
+local function calculate_tab_target(direction)
+  -- Use vcount if provided; otherwise move left (wrap to last when at first)
+  local total = vim.fn.tabpagenr('$')
+  local curr = vim.fn.tabpagenr()
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  -- print([==[calculate_tab_target curr:]==], vim.inspect(curr .. "/".. total)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  if direction == "left" then
+    if curr <= 1 then
+      return total
+    else
+      return curr - 2
+    end
+  elseif direction == "right" then
+    if curr == total then
+      return 0
+    else
+      return curr + 1
+    end
+  end
+end
+-- Prompt for target index (always prompt)
+keymap("n", "<leader><Tab>m", function()
+  local total = vim.fn.tabpagenr('$')
+  local count = vim.v.count
+  local current = vim.fn.tabpagenr()
+
+  local calculate_tab_pos = function(n)
+    local offset = (current < n) and 1 or 0
+    -- left and right shift adjustment
+    print("[==[(anon)#calculate_tab_idx#if total:]==]", vim.inspect(n .. "." .. total)) -- __AUTO_GENERATED_PRINT_VAR_END__
+    if n > total then
+      return total
+    elseif n <= 1 then
+      return 0
+    else
+      return n - 1 + offset
+    end
+  end
+
+  if count ~= 0 then
+    vim.cmd('tabmove' .. calculate_tab_pos(count))
+  else
+  vim.ui.input({ prompt = 'Move tab to index (1-' .. total .. ') ' }, function(input)
+    if not input or input == '' then return end
+    vim.cmd('tabmove ' .. calculate_tab_pos(tonumber(input)))
+  end)
+end
+
+
+end, { desc = 'Prompt for tab index and move current tab' })
+keymap('n', '<leader><Tab>H', function()
+  local target = calculate_tab_target("left")
+  vim.cmd('tabmove ' .. target)
+end, { desc = 'Move tab left (use vcount) or wrap to last' })
+
+keymap('n', '<leader><Tab>L', function()
+  local target = calculate_tab_target("right")
+  vim.cmd('tabmove ' .. target)
+end, { desc = 'Move tab right (use vcount) or wrap to first' })
 
 -- Resize with ESC keys - up down use for auto cmpl
 keymap("n", "<Up>", ":resize -3<CR>", opts)
 keymap("n", "<Down>", ":resize +3<CR>", opts)
 keymap("n", "<Left>", "<cmd>vertical resize -3<CR>", opts)
 keymap("n", "<Right>", "<cmd>vertical resize +3<CR>", opts)
+
+-- Smart buffer navigation: Try BufferLine first, fallback to native commands
+local function smart_buffer_prev()
+  local ok = pcall(vim.cmd, "BufferLineCyclePrev")
+  if not ok then
+    vim.cmd("bprevious")
+  end
+end
+
+local function smart_buffer_next()
+  local ok = pcall(vim.cmd, "BufferLineCycleNext")
+  if not ok then
+    vim.notify("Error executing BufferLineCycleNext", vim.log.levels.ERROR)
+  end
+  if not ok then
+    vim.cmd("bnext")
+  end
+end
+
+keymap("n", "<S-h>", smart_buffer_prev, { desc = "Prev Buffer" })
+keymap("n", "<S-l>", smart_buffer_next, { desc = "Next Buffer" })
+
 -- map("n", "H", ":bp<CR>", { desc = "Previous Buffer", silent = true })
 -- map("n", "L", ":bn<CR>", { desc = "Next Buffer", silent = true })
 -- use <l>bd instead
@@ -312,8 +402,6 @@ local function toggleSnacks()
   print("togglesnacks from map inner")
   Snacks.terminal()
 end
-
-
 
 function _G.set_toggleterm_keymaps()
   -- run on all terminal buffers
@@ -494,9 +582,10 @@ function gitsigns_jump_prev_hunk()
 end
 
 keymap("n", "<C-S-j>", gitsigns_jump_next_hunk, { desc = "Jump to next hunk", expr = true })
-keymap("n", "<C-M-j>", gitsigns_jump_next_hunk, { desc = "Jump to next hunk", expr = true })
+keymap({ "n", "v" }, "<C-M-j>", gitsigns_jump_next_hunk, { desc = "Jump to next hunk", expr = true })
 keymap("n", "<C-S-k>", gitsigns_jump_prev_hunk, { desc = "Jump to prev hunk", expr = true })
-keymap("n", "<C-M-k>", gitsigns_jump_prev_hunk, { desc = "Jump to prev hunk", expr = true })
+keymap({ "n", "v" }, "<C-M-k>", gitsigns_jump_prev_hunk, { desc = "Jump to prev hunk", expr = true })
+
 opts.desc = "Reset hunk"
 keymap("n", "<M-z>", function()
   require("gitsigns").reset_hunk()
@@ -665,7 +754,12 @@ keymap({'n', 'v'}, '<localleader>rL', function()
   if vim.api.nvim_get_mode().mode == 'v' or vim.api.nvim_get_mode().mode == 'V' then
     code = inputUtil.getSelectedLines()
   else
-    code = vim.api.nvim_get_current_line()
+    local clipboard = vim.fn.getreg('+')
+    if clipboard and #clipboard > 3 then
+      code = clipboard
+    else
+      code = vim.api.nvim_get_current_line()
+    end
   end
   local f = load(code)
   if f then f() end
@@ -722,24 +816,24 @@ if vim.fn.has("mac") == 1 then
   open_command = "open"
 end
 
-local function url_repo()
-  local cursorword = vim.fn.mode() == "v" and vim.fn.getreg("v") or vim.fn.expand("<cfile>")
-  -- __AUTO_GENERATED_PRINT_VAR_START__
-  print([==[url_repo cursorword:]==], vim.inspect(cursorword)) -- __AUTO_GENERATED_PRINT_VAR_END__
-  if string.find(cursorword, "^[a-zA-Z0-9-_.]*/[a-zA-Z0-9-_.]*$") then
-    cursorword = "https://github.com/" .. cursorword
-  end
-  print(cursorword or "")
-  return cursorword or ""
-end
 
 -- Clean input by removing newlines and normalizing whitespace
+local function _normalize_input_text(s)
+  if not s then return nil end
+  -- Replace any escaped sequences like \n or \t
+  s = s:gsub('\\n', '\n')
+  s = s:gsub('\\t', '\t')
+  -- Collapse multiple spaces into one and trim leading/trailing whitespace
+  s = s:gsub('%s+', ' ')
+  return vim.trim(s)
+end
+
 local function clean_selected_text(s)
   if not s then return s end
+  -- Reuse normalization utility function
+  s = _normalize_input_text(s)
   -- Remove actual newlines and carriage returns
-  s = s:gsub("[\r\n]+", "")
-  -- Remove leading/trailing whitespace
-  s = vim.trim(s)
+  s = s:gsub('[\r\n]+', '')
   return s
 end
 
@@ -853,46 +947,113 @@ keymap({ "n", "v" }, "gGd", function()
   end
 end, { desc = "Open NeoTree dir - select/cursor/file" })
 
-keymap({ "n" }, "gF", function()
-  -- " Enable gf to recognize file:/// paths and navigate to line numbers
-  -- set isfname+==file:// -- check with set isfname?
-  local function goto_file_line()
-    -- Extract file path and line number
-    local fileline = vim.fn.expand("<cfile>")
-    if fileline:match("^file://") then
-      -- Parse the path and line from the format file:///path/to/file:<line>:<column>
-      -- Match the file path and line number from a "file://" pattern.
-      -- The pattern captures everything after "file://" up to the colon (:) as the file path,
-      -- and captures the digits after the colon as the line number.
-      -- make sure to handle filepath:line:col where :line:col :line or no line can be passed through / optional
-      local path, line, col = fileline:match("file://(.-):(%d*):?(%d*)")
-      if path then
-        vim.cmd("edit " .. path)
-        if line ~= "" then
-          vim.cmd(line)
-          if col ~= "" then
-            vim.cmd("normal! " .. col .. "|")
-          end
-        end
-        return
-      end
-      print("filematched file:// |  path=", path, "line=", line)
-      if path and line then
-        vim.cmd("edit " .. path)
-        vim.cmd(line)
-        return
-      end
+local function goto_file_line(open_in_previous_buffer)
+  -- Extract file path and line number
+  local fileline = vim.fn.expand("<cfile>")
+  local current_line = vim.api.nvim_get_current_line()
+
+  -- Get the whole fileline with extra info like :line and :col from current line
+  -- Strategy: Find the complete non-whitespace token that contains the cfile path
+  local fileline_incurrentline_untilspace = nil
+  local escaped_fileline = vim.pesc(fileline)
+  for token in current_line:gmatch("%S+") do
+    if token:match(escaped_fileline) then
+      fileline_incurrentline_untilspace = token
+      break
     end
-    -- how to send file via g
-    -- file://https://www.goggle.com/search?q=
-    -- file://tests/myTest.lua
-    -- file:///Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/tests/myTest.lua
-    -- file:///Users/tharutaipree/AgodaGit/fe/mmbweb/src/Clientside/.storybook/preview-head.html
-    -- print("Using gF fallback")
-    vim.cmd("normal! gf")
   end
 
-  goto_file_line()
+  -- Use the extended version if found, otherwise use the basic fileline
+  local target = fileline_incurrentline_untilspace or fileline
+
+  -- Initialize variables
+  local path, line, col
+
+  -- Handle visual mode selection
+  if inputUtil.is_visual_mode() then
+    target = inputUtil.get_selected_or_cursor_word()
+  end
+
+  -- Handle file:// URI scheme
+  if target:match("^file://") then
+    -- Extract from file:// URI: file:///path/to/file:line:col
+    -- Remove the file:// prefix first
+    -- Note: file:/// means absolute path, file:// means relative path
+    local without_prefix = target:match("^file://(.+)$")
+
+    if without_prefix then
+      -- Now apply the same pattern matching as regular paths
+      -- First, try to match path:line:col pattern
+      local test_path, test_line, test_col = without_prefix:match("^(.+):(%d+):(%d+)$")
+      if test_path then
+        path, line, col = test_path, test_line, test_col
+      else
+        -- Try to match path:line pattern
+        test_path, test_line = without_prefix:match("^(.+):(%d+)$")
+        if test_path then
+          path, line, col = test_path, test_line, ""
+        else
+          -- No line/col info, just the path
+          path = without_prefix
+          line, col = "", ""
+        end
+      end
+    end
+  else
+    -- Regular file path with optional :line:col
+    -- Strategy: Find the last occurrence of :number or :number:number pattern
+    -- First, try to match path:line:col pattern
+    local test_path, test_line, test_col = target:match("^(.+):(%d+):(%d+)$")
+    if test_path then
+      path, line, col = test_path, test_line, test_col
+    else
+      -- Try to match path:line pattern
+      test_path, test_line = target:match("^(.+):(%d+)$")
+      if test_path then
+        path, line, col = test_path, test_line, ""
+      else
+        -- No line/col info, just the path
+        path = target
+        line, col = "", ""
+      end
+    end
+  end
+
+  -- Validate and open the file
+  if path and path ~= "" then
+    -- Open the file
+    if open_in_previous_buffer then
+      local current_win = vim.api.nvim_get_current_win()
+      if current_win == vim.g.prev_win then
+        vim.cmd("vsplit")
+      elseif not (vim.g.prev_win and vim.api.nvim_win_is_valid(vim.g.prev_win)) then
+        vim.cmd("vsplit") -- in case window already closed ?
+      end
+    end
+
+    vim.cmd("edit " .. vim.fn.fnameescape(path))
+
+    -- Jump to line if provided
+    if line and line ~= "" then
+      vim.cmd(line)
+
+      -- Jump to column if provided
+      if col and col ~= "" then
+        vim.cmd("normal! " .. col .. "|")
+      end
+    end
+  else
+    -- Fallback to default gf behavior
+    vim.cmd("normal! gf")
+  end
+end
+
+keymap({ "n", "v" }, "gF", function()
+  goto_file_line(false)
+end, { desc = "Go to file+line" })
+
+keymap({ "n", "v" }, "gB", function()
+  goto_file_line(true)
 end, { desc = "Go to file+line" })
 
 keymap({ "n", "v" }, "gX", function()
@@ -1374,7 +1535,26 @@ if not vim.g.vscode then
   vim.api.nvim_del_keymap("i", "<A-j>")
   vim.api.nvim_del_keymap("i", "<A-k>")
   vim.api.nvim_del_keymap("n", "<C-c>")
+  -- bufferline.nvim once sort need it's own fn's
+  -- but this load after lazy ?
+  -- vim.api.nvim_del_keymap("n", "<S-h>")
+  -- vim.api.nvim_del_keymap("n", "<S-l>")
 end
 -- OVERRIDE MAP ==========================
 keymap("n", "zj", "zj")
 keymap("n", "zk", "zk")
+
+-- ===============================================
+-- PROMPT HELPER - Load and paste custom prompts
+-- ===============================================
+local prompts_helper = require("utils.prompts_helper")
+
+-- Paste prompt at cursor position
+keymap("n", "<localleader>aP", function()
+  prompts_helper.select_and_paste_prompt({ paste_mode = 'cursor' })
+end, { desc = "Paste prompt at cursor" })
+
+-- Paste prompt on new line below cursor
+keymap("n", "<localleader>aP", function()
+  prompts_helper.select_and_paste_prompt({ paste_mode = 'newline' })
+end, { desc = "Paste prompt on new line" })
