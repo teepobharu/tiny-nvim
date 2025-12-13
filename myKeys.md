@@ -3,6 +3,15 @@
 - General
   Old key info at [Old keys](../nvim2_jelly_lzmigrate/myREADME_leg.md)
 
+References docs:
+- Snacks
+-> previewer: /Users/tharutaipree/.local/share/nvim3_jelly_tinynvim/lazy/snacks.nvim/lua/snacks/picker/init.lua
+> - /Users/tharutaipree/.local/share/nvim3_jelly_tinynvim/lazy/snacks.nvim/lua/snacks/picker/preview.lua
+> - <url>https://www.reddit.com/r/neovim/comments/1j4e7fq/share_your_custom_snackspicker_sources</url>
+> - <url>https://github.com/folke/snacks.nvim/blob/main/docs/picker.md</url>
+
+
+
 ## TODOs
 
 - bind check qflist WIP
@@ -26,6 +35,7 @@
   - [x] tmux win search
     - [ ] support preview + delete 
 
+
 - LSP
  - [x] glab works strangely on some files 2025-12-10
     - references,def: build,releases,rules,cache but not tests on tripsweb 
@@ -34,18 +44,29 @@
     - ./lsp/gitlablsp.lua
 Chore 
 - [x] handle selection gx Gf ignore space  / newline
+- [x] gitsign hunks not support visual c-j,k
 
+Nav
+- [x] tab navigations
 
-To verify
+*Done*
+0 - files hidden by default and pass options between toggle - don
+  - caveat buffer hidden will also persist since it use current opts to persist state
+ 5 - Avante slash cmd get deprioritize to be below folder cmp
+ 1 - companion load prompt slash cmd*2
+ 2 - search term (with fix needed)
+ - [ ] keybind to switch back search not work
+
+*current*
+
+*To verify*
 1 - copilot prompt context check
-2 - glab ci snippets fixes
+2 - snippets fixes
 3 - send text to terminal from visible screen first then trust vcount later
   - trust vcount with id
 4 - global snippets not work again ...
-5 - gitsign hunks not support visual c-j,k
-
+    - [ ] buffer to last buffer (currently can use snacks) is there better way ?
 To fix 
-- Avante slash cmd get depreioritize to be below folder cmp
 
 - [] AI: 
   - [ ] 08/12/2025 - Code companion prompts context

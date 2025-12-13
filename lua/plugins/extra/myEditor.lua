@@ -609,95 +609,10 @@ Your instructions here
           prompts = {
             {
               role = "user",
-              content = function()
-                -- allow automated tool mode when running from CodeCompanion
-                vim.g.codecompanion_auto_tool_mode = true
-
-                local prompt_dir = vim.fn.expand("$HOME/Personal/mynotes/Extras/Template/copilot-custom-prompts/")
-                local patterns = { "*.prompt.md", "*.instructions.md" }
-
-                local files = {}
-                for _, pat in ipairs(patterns) do
-                  local ok = vim.fn.globpath(prompt_dir, pat, false, true)
-                  if ok and #ok > 0 then
-                    vim.list_extend(files, ok)
-                  end
-                end
-
-                if vim.tbl_isempty(files) then
-                  vim.notify("No prompt files found in " .. prompt_dir, vim.log.levels.WARN)
-                  return ""
-                end
-
-                local function readfile(path)
-                  local ok, lines = pcall(vim.fn.readfile, path)
-                  if not ok or not lines then
-                    return ""
-                  end
-                  return table.concat(lines, "\n")
-                end
-
-                local function strip_frontmatter(s)
-                  if not s then return "" end
-                  -- If starts with YAML frontmatter '---', remove until the closing '---'
-                  if s:match("^%s*%-%-%-") then
-                    local s_idx, e_idx = s:find("%-%-%-", 1)
-                    if e_idx then
-                      local s2, e2 = s:find("%-%-%-", e_idx + 1)
-                      if e2 then
-                        return s:sub(e2 + 1):gsub("^%s+", "")
-                      end
-                    end
-                  end
-                  return s
-                end
-
-                local selected_content = nil
-
-                local items = {}
-                for _, f in ipairs(files) do
-                  table.insert(items, { text = vim.fn.fnamemodify(f, ":t"), file = f })
-                end
-
-                Snacks.picker.pick {
-                  source = "select",
-                  title = "Select Prompt File",
-                  items = items,
-                  format = "text",
-                  preview = "file",
-                  --   function(ctx)
-                  --   local item = ctx and ctx.item
-                  --   if not item or not item.file then return "" end
-                  --   return readfile(item.file)
-                  -- end,
-                  actions = {
-                    confirm = function(picker, item)
-                      if not item or not item.file then
-                        picker:close()
-                        return
-                      end
-                      local c = readfile(item.file)
-                      c = strip_frontmatter(c)
-                      selected_content = c
-                      picker:close()
-                    end,
-                  },
-                }
-
-                -- Wait for user selection (timeout 60s) when wait not seems to work in frooze can not pic using snacks
-                -- with out this when select nothing is returned
-                local ok = vim.wait(60000, function() return selected_content ~= nil end, 50)
-                if not ok then
-                  vim.notify("Prompt selection timed out", vim.log.levels.WARN)
-                  return ""
-                end
-
-                return selected_content or ""
-              end,
+              content = require("utils.prompts_helper").create_codecompanion_content_fn(),
             },
           },
         },
-
         ["Iterative Workflow with Documentation"] = {
           strategy = "chat",
           description = "Iteratively improve documentation",
@@ -1234,25 +1149,6 @@ Your instructions here
               },
             },
           },
-          my_terminal = {
-            finder = function(opts, ctx)
-              local terminals = require("utils.term_util").get_terminal_buffers()
-              return coroutine.wrap(function()
-                for _, item in ipairs(terminals) do
-                  coroutine.yield(item)
-                end
-              end)
-            end,
-            format = "text",
-            win = {
-              input = {
-                keys = {
-                  ["<c-x>"] = { "bufdelete", mode = { "n", "i" } },
-                },
-              },
-              list = { keys = { ["dd"] = "bufdelete" } },
-            },
-          },
         },
         actions = {
           open_mr = function(picker, item)
@@ -1504,8 +1400,86 @@ Your instructions here
       {
         "<localleader>Ss",
         function()
-          Snacks.picker.my_terminal()
-          -- Snacks.picker.terminal()
+          local term_util = require("utils.term_util")
+          local terminals = term_util.get_terminal_buffers()
+          -- require("snacks.picker")
+          Snacks.picker.pick {
+            --@types snacks.picker.preview
+            source = "select",
+            title = "Terminal Buffers",
+            items = terminals,
+            --@types snacks.picker.format
+            format = function(item, opts)
+              return term_util.format_terminal(item, opts)
+            end,
+            layout = {
+              preview = {
+                layout = "flex",
+              },
+              layout = {
+                box = "horizontal",
+                width = 0.9,
+                height = 0.9,
+                {
+                  box = "vertical",
+                  width = 0.4,
+                  { win = "input", height = 1 },
+                  { win = "list" },
+                },
+                { win = "preview", width = 0.6 },
+              },
+            },
+            actions = {
+              confirm = function(picker, item)
+                picker:close()
+                if item and item.buf then
+                  vim.api.nvim_set_current_buf(item.buf)
+                end
+              end,
+            },
+            win = {
+              input = {
+                keys = {
+                  ["<C-Space>"] = {
+                    "focus_preview",
+                    mode = { "n", "i" },
+                    desc = "Focus preview"
+                  },
+                  ["<c-x>"] = {
+                    function(picker, item)
+                      if item and item.buf then
+                        vim.api.nvim_buf_delete(item.buf, { force = true })
+                        picker:refresh()
+                      end
+                    end,
+                    mode = { "n", "i" },
+                    desc = "Delete terminal buffer"
+                  },
+                },
+              },
+              list = {
+                keys = {
+                  ["<C-Space>"] = { "focus_preview", desc = "Focus preview" },
+                  ["<C-x>"] = function(picker, item)
+                    if item and item.buf then
+                      vim.api.nvim_buf_delete(item.buf, { force = true })
+                      picker:refresh()
+                    end
+                  end
+                }
+              },
+              preview = {
+                keys = {
+                  -- ["<C-Space>"] = { "focus_input", desc = "Focus back to input" },
+                  -- TOFIX: preview seems strange and when put some value not show nay
+                  -- bind to move back not work not sure why
+                  -- ["<C-q>"] = { "cycle_win", desc = "Cycle windows" },
+                  -- ["<C-Space>"] = { "cycle_win", desc = "Focus back to input" , mode = { "n", "i", "t" } },
+                  -- ["<C-h>"] = { "cycle_win", desc = "Cycle windows" , mode = { "n", "i", "t" } },
+                }
+              },
+            },
+          }
         end,
         desc = "Snacks Terminal Picker",
         mode = { "n" },

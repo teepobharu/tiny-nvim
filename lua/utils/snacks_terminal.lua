@@ -285,13 +285,28 @@ local function pick_cmd_result(picker_opts)
     return require("snacks.picker.source.proc").proc(proc_opts, ctx)
   end
 
-  Snacks.picker.pick {
+  local pick_opts = {
     source = picker_opts.name,
     finder = finder,
     format = "file",
-    preview = picker_opts.preview,
     title = picker_opts.title,
   }
+
+  -- Use custom preview function if provided
+  if picker_opts.preview_fn then
+    pick_opts.preview = function(ctx)
+      local item = ctx and ctx.item
+      if not item then
+        return nil
+      end
+      -- preview_fn(item, ctx) should return a previewer spec table or nil
+      return picker_opts.preview_fn(item, ctx)
+    end
+  elseif picker_opts.preview then
+    pick_opts.preview = picker_opts.preview
+  end
+
+  Snacks.picker.pick(pick_opts)
 end
 
 -- Custom Pickers
@@ -307,15 +322,113 @@ function M.custom_git_pickers.git_show()
   }
 end
 
+
+local function make_git_preview(item)
+  if not item or not item.file then
+    return nil
+  end
+
+  local file = vim.fn.expand(item.file)
+  local file_dir = vim.fn.fnamemodify(file, ":h")
+
+  -- get git root
+  local git_root_lines = vim.fn.systemlist({ "git", "-C", file_dir, "rev-parse", "--show-toplevel" })
+  if vim.v.shell_error ~= 0 or not git_root_lines[1] or git_root_lines[1] == "" then
+    -- not in a git repo -> fallback: show file contents
+    return {
+      cmd = "cat",
+      args = { file },
+      ft = vim.bo.filetype or vim.fn.fnamemodify(file, ":e"),
+    }
+  end
+  local git_root = git_root_lines[1]
+
+  -- get path relative to repo root (works only for tracked files)
+  local rel_lines = vim.fn.systemlist({ "git", "-C", git_root, "ls-files", "--full-name", "--", file })
+  if vim.v.shell_error ~= 0 or not rel_lines[1] or rel_lines[1] == "" then
+    -- untracked file -> fallback to showing file contents
+    return {
+      cmd = "cat",
+      args = { file },
+      ft = vim.bo.filetype or vim.fn.fnamemodify(file, ":e"),
+    }
+  end
+  local relpath = rel_lines[1]
+
+  -- decide diff range: prefer upstream if present
+  vim.fn.systemlist({ "git", "-C", git_root, "rev-parse", "--verify", "HEAD@{u}" })
+  local diff_range = (vim.v.shell_error == 0) and "HEAD@{u}..HEAD" or "HEAD~1..HEAD"
+
+  return {
+    cmd = "git",
+    args = { "-c", "core.pager=", "diff", diff_range, "--", relpath },
+    cwd = git_root,
+    ft = "diff",
+  }
+end
+
+-- @type: snacks.picker.preview
 function M.custom_git_pickers.git_diff_upstream()
   pick_cmd_result {
     cmd = "git",
     args = { "diff-tree", "--no-commit-id", "--name-only", "--diff-filter=d", "HEAD@{u}..HEAD", "-r" },
     name = "git_diff_upstream",
     title = "Git Branch Changed Files",
-    preview = "file",
-  }
+      -- preview_fn receives (item, ctx) and must return a preview spec table
+    preview_fn = function(item, _ctx)
+      -- print([==[M.custom_git_pickers.git_diff_upstream#preview_fn#if item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
+      -- sample item 
+      -- {
+    -- item = <1>{
+    --   _path = "/Users/tharutaipree/Personal/mynotes/study/Programming/scripting/shell/bashUtils.sh",
+    --   cwd = "/Users/tharutaipree/Personal/mynotes",
+    --   file = "study/Programming/scripting/shell/bashUtils.sh",
+    --   idx = 1,
+    --   match_tick = 0,
+    --   score = 1000,
+    --   text = "study/Programming/scripting/shell/bashUtils.sh"
+    -- },
+    -- picker = <2>{
+    --   _main = {
+    --     opts = {
+    --       current = false,
+    --       file = true,
+    --       float = false
+    --     },
+    --     win = 1000,
+    --     <metatable> = <3>{
+    --       __index = <table 3>,
+    --       find = <function 1>,
+    --       get = <function 2>,
+    --       new = <function 3>,
+    --       set = <function 4>,
+    --       update = <function 5>
+    --     }
+    --   },
+  --
+      -- __AUTO_GENERATED_PRINT_VAR_START__
+      print([==[M.custom_git_pickers.git_diff_upstream#preview_fn item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
+      -- if not item or not item.file then
+      --   return nil
+      -- end
+        return {
+        cmd = "sh",
+        args = { "-c", "printf 'PREVIEW_OK\n'" },
+        ft = "text",
+        preview = function()
+          return { text = "PREVIEW_OK", ft = "text" }
+        end,
+      }
+     
+      -- return {
+      --   cmd = "git",
+      --   args = { "-c", "core.pager=", "diff", "HEAD@{u}..HEAD", "--", item.file },
+      --   ft = "diff",
+      -- }
+    end,
+}
 end
+
 
 --
 --#endregion
