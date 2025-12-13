@@ -6,7 +6,8 @@
       "Bash(rg:*)",
       "Bash(git add:*)",
       "Bash(git push:*)",
-      "WebSearch"
+      "WebSearch",
+      "WebFetch(domain:github.com)"
     ],
     "deny": []
   }

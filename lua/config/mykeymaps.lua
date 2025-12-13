@@ -833,7 +833,7 @@ local function clean_selected_text(s)
   -- Reuse normalization utility function
   s = _normalize_input_text(s)
   -- Remove actual newlines and carriage returns
-  s = s:gsub('[\r\n]+', '')
+  s = s:gsub('[\r\n]+', ''):gsub('%s+', '')
   return s
 end
 
