@@ -1019,7 +1019,8 @@ function PL_testPasteImage()
 end
 
 local function main()
-  testGitrefFzfLua()
+  goto_file_line()
+  -- testGitrefFzfLua()
   -- snacks_qfgrep()
   -- snacks_qffiles()
   -- PL_testPasteImage()

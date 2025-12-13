@@ -382,6 +382,8 @@ return {
       end,
     },
     opts = {
+      -- log_level = "ERROR", -- TRACE|DEBUG|ERROR|INFO not work
+      -- [WARN] above not help disable textmsg: CodeCompanion.nvim will experience breaking changes soon. Pin to version v17.33.0 or earlier to avoid this.
       -- https://codecompanion.olimorris.dev/configuration/chat-buffer
       strategies = {
         chat = {
@@ -433,6 +435,53 @@ return {
               role = "user",
               content = ""
             }
+          },
+        },
+        ["Codecompanion Context"] = {
+          strategy = "chat",
+          description = "Write documentation for me",
+          opts = {
+            index = 11,
+            adapter = {
+              name = "copilot",
+              model = "gpt-5-mini",
+            },
+            is_slash_cmd = true,
+            auto_submit = false,
+            short_name = "codecompanion_nvim_context",
+            stop_context_insertion = true,
+          },
+          context = {
+            {
+              type = "file",
+              path = {
+                -- expand HOME
+                vim.fn.expand("$HOME/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua")
+              },
+            },
+            {
+              type = "url",
+              url = "https://codecompanion.olimorris.dev/configuration/prompt-library",
+            },
+          },
+          prompts = {
+            {
+              role = "user",
+              content = function()
+                vim.g.codecompanion_auto_tool_mode = true
+                -- Some clear instructions for the LLM to follow
+                return [[### Instructions
+Your instructions here
+
+### Steps to Follow
+
+      You are required to write code with correct usage of the lua settings provided by the documentation
+      1. Update the code in #buffer{watch} using the @editor tool
+      2. Make sure you trigger both tools in the same response Specification
+      3. Follow the given documentation 
+      ]]
+              end,
+            },
           },
         },
         ["Snacks Nvim Context"] = {
@@ -498,23 +547,6 @@ Your instructions here
 
           },
           description = "Attach references to the chat",
-          -- # sample context
-          -- {
-          --   bufnr = 7,
-          --   buftype = "",
-          --   cursor_pos = { 10, 3 },
-          --   end_col = 3,
-          --   end_line = 10,
-          --   filetype = "lua",
-          --   is_normal = false,
-          --   is_visual = true,
-          --   lines = { "local function fire_autocmd(status)", '  vim.api.nvim_exec_autocmds("User", { pattern = "CodeCompanionInline", data = { status = status } })', "end" },
-          --   mode = "V",
-          --   start_col = 1,
-          --   start_line = 8,
-          --   winnr = 1000
-          -- }
-          --
           -- # sample ref with selection
           -- > - file: @lua/plugins/extra/myEditor.lua :L26:C1-L26:C999
           -- # sample ref with no selection
@@ -523,8 +555,6 @@ Your instructions here
             {
               role = "user",
               content = function(context)
-                print([==[content context:]==], vim.inspect(context)) -- __AUTO_GENERATED_PRINT_VAR_END__
-
                 context = context or {}
                 local bufnr = context.bufnr or vim.api.nvim_get_current_buf()
                 local start_line = context.start_line or context.start or (context.range and context.range.start_line)
@@ -558,6 +588,189 @@ Your instructions here
 
                 return attachref .. "\n"
               end,
+            },
+          },
+        },
+        ["Sample loaded prompts"] = {
+          strategy = "chat",
+          description = "Sample loaded prompts description",
+
+          -- Dynamically present prompt files using Snacks picker. Supports
+          -- both `*.prompt.md` and `*.instructions.md` files in the target dir.
+          -- The picker previews the file contents; when the user confirms the
+          -- selection the file content (with YAML frontmatter stripped) is
+          -- returned and used as the prompt content.
+          opts = {
+            is_slash_cmd = true,
+            auto_submit = false,
+            short_name = "load_prompt",
+            stop_context_insertion = true,
+          },
+          prompts = {
+            {
+              role = "user",
+              content = function()
+                -- allow automated tool mode when running from CodeCompanion
+                vim.g.codecompanion_auto_tool_mode = true
+
+                local prompt_dir = vim.fn.expand("$HOME/Personal/mynotes/Extras/Template/copilot-custom-prompts/")
+                local patterns = { "*.prompt.md", "*.instructions.md" }
+
+                local files = {}
+                for _, pat in ipairs(patterns) do
+                  local ok = vim.fn.globpath(prompt_dir, pat, false, true)
+                  if ok and #ok > 0 then
+                    vim.list_extend(files, ok)
+                  end
+                end
+
+                if vim.tbl_isempty(files) then
+                  vim.notify("No prompt files found in " .. prompt_dir, vim.log.levels.WARN)
+                  return ""
+                end
+
+                local function readfile(path)
+                  local ok, lines = pcall(vim.fn.readfile, path)
+                  if not ok or not lines then
+                    return ""
+                  end
+                  return table.concat(lines, "\n")
+                end
+
+                local function strip_frontmatter(s)
+                  if not s then return "" end
+                  -- If starts with YAML frontmatter '---', remove until the closing '---'
+                  if s:match("^%s*%-%-%-") then
+                    local s_idx, e_idx = s:find("%-%-%-", 1)
+                    if e_idx then
+                      local s2, e2 = s:find("%-%-%-", e_idx + 1)
+                      if e2 then
+                        return s:sub(e2 + 1):gsub("^%s+", "")
+                      end
+                    end
+                  end
+                  return s
+                end
+
+                local selected_content = nil
+
+                local items = {}
+                for _, f in ipairs(files) do
+                  table.insert(items, { text = vim.fn.fnamemodify(f, ":t"), file = f })
+                end
+
+                Snacks.picker.pick {
+                  source = "select",
+                  title = "Select Prompt File",
+                  items = items,
+                  format = "text",
+                  preview = "file",
+                  --   function(ctx)
+                  --   local item = ctx and ctx.item
+                  --   if not item or not item.file then return "" end
+                  --   return readfile(item.file)
+                  -- end,
+                  actions = {
+                    confirm = function(picker, item)
+                      if not item or not item.file then
+                        picker:close()
+                        return
+                      end
+                      local c = readfile(item.file)
+                      c = strip_frontmatter(c)
+                      selected_content = c
+                      picker:close()
+                    end,
+                  },
+                }
+
+                -- Wait for user selection (timeout 60s) when wait not seems to work in frooze can not pic using snacks
+                -- with out this when select nothing is returned
+                local ok = vim.wait(60000, function() return selected_content ~= nil end, 50)
+                if not ok then
+                  vim.notify("Prompt selection timed out", vim.log.levels.WARN)
+                  return ""
+                end
+
+                return selected_content or ""
+              end,
+            },
+          },
+        },
+
+        ["Iterative Workflow with Documentation"] = {
+          strategy = "chat",
+          description = "Iteratively improve documentation",
+          opts = {
+            is_slash_cmd = true,
+            auto_submit = false,
+            short_name = "iterative_removal_doc",
+            stop_context_insertion = true,
+            adapter = {
+              name = "copilot",
+              model = "claude-sonnet-4.5",
+            },
+          },
+          prompts = {
+            {
+              role = "user",
+              content = [[Create a plan to remove related code from other entries
+
+Do an in-depth analysis and develop comprehensive commands and scripts to ensure the task is fully achieved and verified.
+
+For a large and complex task:
+- Break it down into smaller, actionable steps along the achievement path.
+- Validate each step with appropriate commands like:
+  - `yarn test`: to validate functionality.
+  - `yarn lint-fix`: to ensure code consistency.
+
+Proposed Workflow:
+1. Systematically remove unnecessary files and unreachable references in the `<path>src/Clientside</path>` directory.
+2. Execute verification commands to ensure proper cleanup.
+3. If issues arise, log and analyze problematic files, directories, or approaches:
+   - Determine root causes preventing successful execution.
+   - Explore alternate strategies to address failures.
+4. Group changes into logical, coherent commits with clear descriptions.
+5. Repeat this cycle iteratively, refining the approach until the task is completed or instructed to halt.
+
+Documentation and Tracking:
+- Keep detailed records of the process in markdown files:
+  - Logs of commands executed, errors, and changes made with references.
+  - Summarized reports linking daily actions and changes for better traceability.
+- Maintain an overarching summary file (`DATE-actions.md`), consolidating all changes and providing a single reference point for handover purposes.
+          ]]
+          }
+        },
+        -- overrides the prompt frmo jellydn to
+        ["Generate a Commit Message for Staged"] = {
+          strategy = "chat",
+          description = "Generate a commit message for staged change",
+          opts = {
+            short_name = "staged-commit",
+            auto_submit = false,
+            is_slash_cmd = true,
+          },
+          prompts = {
+            {
+              role = "user",
+              content = function()
+                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (with only 1 line break)"
+                  .. [[
+feat(release): add slack msg and create release after deploy
+- Enhance GitLab CI release job:
+- Update dependency job name to `buckbeak-deploy-prod-tripviewbff` for clarity.
+- Add detailed release description with deploy time, package version, rollback pipeline, quick deploy link, and changelog.
+- Include direct release link in Slack notifications for better traceability.
+- Update README:
+- Expand "Clone repo" section to "Clone and Overview" with folder structure, cloning instructions, and IDE setup steps.
+- Provide clearer onboarding for new contributors.
+                  ]] .. "\n\n```\n"
+                  .. vim.fn.system("git diff --staged")
+                  .. "\n```"
+              end,
+              opts = {
+                contains_code = true,
+              },
             },
           },
         },
@@ -611,6 +824,7 @@ Your instructions here
         },
       },
     },
+  },
   },
   {
     "CopilotC-Nvim/CopilotChat.nvim",
@@ -862,6 +1076,36 @@ Your instructions here
       },
     },
   },
+  --#region Session and windows
+    {
+    "akinsho/bufferline.nvim",
+    opts = {
+      -- check on health groups
+      -- options = {
+        -- groups = {
+          -- items = {
+          --   require('bufferline.groups').builtin.ungrouped,
+          -- }
+        -- }
+      -- }
+    },
+    keys = {
+      { "<S-l>", "<Cmd>BufferLineCycleNext<CR>", desc = "Next Buffer" },
+      { "<S-h>", "<Cmd>BufferLineCyclePrev<CR>", desc = "Prev Buffer" },
+      { "<leader>bp", "<Cmd>BufferLineTogglePin<CR>", desc = "Toggle Pin" },
+      { "<leader><Tab>r", ":BufferLineTabRename ", desc = "Rename Tab" },
+      { "<leader>bs", ":BufferLineSortBy", desc = "Buffer Sort By.." },
+      { "<leader>bsd", ":BufferLineSortByDirectory<CR>", desc = "Buffer Sort By Directory" },
+      { "<leader>bse", ":BufferLineSortByExtension<CR>", desc = "Buffer Sort By Extension" },
+      { "<leader>bsr", ":BufferLineSortByRelativeDirectory<CR>", desc = "Buffer Sort By Relative Directory" },
+      { "<leader>bst", ":BufferLineSortByTabs<CR>", desc = "Buffer Sort By Tabs" },
+      { "<leader>bg", ":BufferLinePick<CR>", desc = "Buffer Group Toggle Pin" },
+      { "<leader>bup", ":BufferLineGroupToggle ungrouped<CR>", desc = "Buffer Group Toggle ungroup" },
+      { "<leader>bup", ":BufferLineGroupToggle pinned<CR>", desc = "Buffer Group Toggle ungroup" },
+      { "<leader>bcP", ":BufferLineGroupClose pinned<CR>", desc = "Buffer Close pin" },
+      { "<leader>bcp", ":BufferLineGroupClose ungrouped<CR>", desc = "Buffer Close ungroup" },
+    }
+  },
   {
     "folke/persistence.nvim",
     opts = {
@@ -908,6 +1152,7 @@ Your instructions here
       },
     },
   },
+  --#endregion Session and windows
   {
     "folke/snacks.nvim",
     enabled = isSnackEnabled,
@@ -930,7 +1175,7 @@ Your instructions here
           -- sample pickers: https://github.com/WizardStark/dotfiles/blob/main/home/.config/nvim/lua/workspaces/ui.lua#L417
           -- buffers and file to use tooggle key map when press c-space
           files = {
-            hidden = false,
+            hidden = true,
             win = {
               input = {
                 keys = {
@@ -991,24 +1236,14 @@ Your instructions here
           },
           my_terminal = {
             finder = function(opts, ctx)
-              -- local picker_opts = {
-              --   cmd = ""
-              -- }
-              -- TODO: fix text not showing properly
-              return require("utils.term_util").get_terminal_buffers()
-              -- -- finder = function()
-              --     return require("snacks.picker.source.proc").proc({
-              --       opts,
-              --       {
-              --         cmd = picker_opts.cmd,
-              --         args = picker_opts.args,
-              --         transform = function(item)
-              --           item.cwd = picker_opts.cwd or git_root
-              --           item.file = item.text
-              --         end,
-              --       },
-              --     }, ctx)
+              local terminals = require("utils.term_util").get_terminal_buffers()
+              return coroutine.wrap(function()
+                for _, item in ipairs(terminals) do
+                  coroutine.yield(item)
+                end
+              end)
             end,
+            format = "text",
             win = {
               input = {
                 keys = {
@@ -1117,27 +1352,49 @@ Your instructions here
             local preview_source = picker.init_opts and picker.init_opts.source
             if not preview_source then
               vim.notify("Error: picker.init_opts is nil", vim.log.levels.ERROR)
+              return
             end
-            -- require("snacks"). -- to see types
-            local pickern
+
             local current_search = picker.input.filter and picker.input.filter.pattern
-            ---@type snacks.picker.previewers.Config
-            local picker_params = {}
-            if current_search and current_search ~= "" then
-              picker_params.pattern = current_search
+            ---@type snacks.picker.Config
+            local picker_params = {
+              pattern = current_search or "",
+            }
+
+            -- Helper to get toggle state (clean, no override logic)
+            local function get_toggle_state(name)
+              -- First check picker.opts (runtime state)
+              if picker.opts[name] ~= nil then
+                return picker.opts[name]
+              end
+              -- Fall back to init_opts (initial state)
+              if picker.init_opts and picker.init_opts[name] ~= nil then
+                return picker.init_opts[name]
+              end
+              return nil
             end
+
             if preview_source == "files" then
-              -- TODO: check if get words and put in search is good idea, no need to close ?
-              -- picker:close()
+              picker_params.hidden = false
               Snacks.picker.buffers(picker_params)
               vim.defer_fn(function()
-                -- Ensure the picker is focused after closing and reopening only happens in buffer mode
                 if vim.api.nvim_get_mode().mode == "n" then
                   vim.cmd "startinsert"
                 end
               end, 50)
             else
-              -- picker:close()
+              -- Switching from buffers to files
+              -- For files: persist both hidden and ignored states
+              local hidden_state = get_toggle_state("hidden")
+              local ignored_state = get_toggle_state("ignored")
+
+              if hidden_state ~= nil then
+                picker_params.hidden = hidden_state
+              end
+              if ignored_state ~= nil then
+                picker_params.ignored = ignored_state
+              end
+
               Snacks.picker.files(picker_params)
             end
             -- Snacks.picker.actions.insert(picker) -- nothing
@@ -1749,19 +2006,19 @@ Your instructions here
           avante_commands = {
             name = "avante_commands",
             module = "blink.compat.source",
-            -- score_offset = 90, -- show at a higher priority than lsp
-            opts = {},
-          },
-          avante_files = {
-            name = "avante_commands",
-            module = "blink.compat.source",
-            -- score_offset = 100, -- show at a higher priority than lsp
+            score_offset = 1000, -- highest priority - show commands first
             opts = {},
           },
           avante_mentions = {
             name = "avante_mentions",
             module = "blink.compat.source",
-            -- score_offset = 1000, -- show at a higher priority than lsp
+            score_offset = 900, -- high priority - show mentions second
+            opts = {},
+          },
+          avante_files = {
+            name = "avante_files", -- FIXED: was incorrectly set to "avante_commands"
+            module = "blink.compat.source",
+            score_offset = 800, -- medium-high priority - show files third
             opts = {},
           },
         },
