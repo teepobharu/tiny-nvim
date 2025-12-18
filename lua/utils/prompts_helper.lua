@@ -105,21 +105,12 @@ function M.select_and_paste_prompt(opts)
     if not content or content == "" then
       return
     end
-
-    -- Determine paste mode: 'cursor' (default), 'newline', 'append'
-    local paste_mode = opts.paste_mode or 'cursor'
-
-    if paste_mode == 'newline' then
-      -- Paste on new line below cursor
-      vim.cmd('normal! o')
-      vim.api.nvim_put(vim.split(content, "\n"), 'l', true, true)
-    elseif paste_mode == 'append' then
-      -- Append to current line
-      vim.api.nvim_put(vim.split(content, "\n"), 'c', true, true)
-    else
-      -- Default: paste at cursor position
-      vim.api.nvim_put(vim.split(content, "\n"), 'c', true, true)
+    local content = vim.split(content, "\n")
+    -- if content line is more than 10 then set mark
+    if #content > 10 then
+      vim.api.nvim_command("normal! m'")
     end
+    vim.api.nvim_put(content, 'c', true, true)
   end)
 end
 

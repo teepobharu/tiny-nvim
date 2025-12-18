@@ -31,7 +31,24 @@ local function fzfcompareref(selected)
     vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
     return
   end
-  local commit_hash = selected[1]:match "%w+"
+  -- Extract branch/commit reference from selected line
+  -- Format examples:
+  --   remotes/origin/TRIPWEB-2627       a9020d5785 refactor: ...
+  --   main                              b1234567   feat: ...
+  --   feature/my-branch                 c9876543   fix: ...
+  local line = selected[1]
+  local commit_hash
+
+  -- Try to match remote branch: "remotes/origin/BRANCH_NAME"
+  -- Strip "remotes/" prefix and use "origin/BRANCH_NAME"
+  local remote_ref = line:match("^remotes/(.-)%s+")
+  if remote_ref then
+    commit_hash = remote_ref
+  else
+    -- Try to match local branch or commit hash (everything before first whitespace)
+    commit_hash = line:match("^(%S+)")
+  end
+
   print([==["ctrl-s" commit_hash:]==], vim.inspect(commit_hash)) -- __AUTO_GENERATED_PRINT_VAR_END__
   local file_path = vim.fn.expand "%:p"
   vim.cmd("tabnew " .. file_path)
@@ -860,7 +877,7 @@ Your instructions here
           -- const formattedDate = format(new Date(), "yyyy-MM-dd");
           -- console.log(formattedDate);
 
-          "deno run --allow-import",
+          "deno run --allow-import --allow-env --allow-sys --allow-read",
         },
         --  end common -------------------
         sh = {
@@ -1400,86 +1417,7 @@ Your instructions here
       {
         "<localleader>Ss",
         function()
-          local term_util = require("utils.term_util")
-          local terminals = term_util.get_terminal_buffers()
-          -- require("snacks.picker")
-          Snacks.picker.pick {
-            --@types snacks.picker.preview
-            source = "select",
-            title = "Terminal Buffers",
-            items = terminals,
-            --@types snacks.picker.format
-            format = function(item, opts)
-              return term_util.format_terminal(item, opts)
-            end,
-            layout = {
-              preview = {
-                layout = "flex",
-              },
-              layout = {
-                box = "horizontal",
-                width = 0.9,
-                height = 0.9,
-                {
-                  box = "vertical",
-                  width = 0.4,
-                  { win = "input", height = 1 },
-                  { win = "list" },
-                },
-                { win = "preview", width = 0.6 },
-              },
-            },
-            actions = {
-              confirm = function(picker, item)
-                picker:close()
-                if item and item.buf then
-                  vim.api.nvim_set_current_buf(item.buf)
-                end
-              end,
-            },
-            win = {
-              input = {
-                keys = {
-                  ["<C-Space>"] = {
-                    "focus_preview",
-                    mode = { "n", "i" },
-                    desc = "Focus preview"
-                  },
-                  ["<c-x>"] = {
-                    function(picker, item)
-                      if item and item.buf then
-                        vim.api.nvim_buf_delete(item.buf, { force = true })
-                        picker:refresh()
-                      end
-                    end,
-                    mode = { "n", "i" },
-                    desc = "Delete terminal buffer"
-                  },
-                },
-              },
-              list = {
-                keys = {
-                  ["<C-Space>"] = { "focus_preview", desc = "Focus preview" },
-                  ["<C-x>"] = function(picker, item)
-                    if item and item.buf then
-                      vim.api.nvim_buf_delete(item.buf, { force = true })
-                      picker:refresh()
-                    end
-                  end
-                }
-              },
-              preview = {
-                keys = {
-                  -- ["<C-Space>"] = { "focus_input", desc = "Focus back to input" },
-                  -- TOFIX: preview seems strange and when put some value not show nay
-                  -- bind to move back not work not sure why
-                  -- ["<C-q>"] = { "cycle_win", desc = "Cycle windows" },
-                  -- ["<C-Space>"] = { "cycle_win", desc = "Focus back to input" , mode = { "n", "i", "t" } },
-                  -- ["<C-h>"] = { "cycle_win", desc = "Cycle windows" , mode = { "n", "i", "t" } },
-                }
-              },
-            },
-          }
+          require("utils.snacks_terminal").custom_terminal_show()
         end,
         desc = "Snacks Terminal Picker",
         mode = { "n" },
@@ -1503,6 +1441,20 @@ Your instructions here
           require("utils.snacks_terminal").custom_git_pickers.git_diff_upstream()
         end,
         desc = "Git File Upstream",
+      },
+      {
+        "<leader>fL",
+        function()
+          require("utils.snacks_terminal").custom_git_pickers.git_show()
+        end,
+        desc = "Last commit files",
+      },
+      {
+        "<leader>fZ",
+        function()
+          require("utils.snacks_terminal").custom_change_list_picker()
+        end,
+        desc = "Git files by custom ref",
       },
       {
         "<leader>gb",
