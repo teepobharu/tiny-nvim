@@ -1,7 +1,7 @@
 -- Snacks terminal utilities for sending lines/visual selections
 -- Similar functionality to ToggleTerm's send_lines_to_terminal
 
-  local term_util = require("utils.term_util")
+local term_util = require("utils.term_util")
 -- done : send with vcount 20251209:17:34:53
 
 local M = {}
@@ -52,15 +52,12 @@ local function find_best_terminal(terminals, count)
     return nil
   end
 
-  -- print([==[find_best_terminal#if count:]==], vim.inspect(count)) -- __AUTO_GENERATED_PRINT_VAR_END__
   -- If count is specified, use that terminal (user explicitly chose it)
   if count and count > 0 then
-    -- __AUTO_GENERATED_PRINT_VAR_START__
     -- First try to match the explicit count to a terminal's assigned id
     for _, term in ipairs(terminals) do
       -- Match by terminal.id if present
       if term.id and term.id == count then
-        -- print([==[find_best_terminal#if#for#if term.id and term.id == count:]==], vim.inspect(term.id and term.id == count)) -- __AUTO_GENERATED_PRINT_VAR_END__
         return term
       end
 
@@ -68,7 +65,6 @@ local function find_best_terminal(terminals, count)
       if term.buf and vim.api.nvim_buf_is_valid(term.buf) then
         local ok, buf_var = pcall(vim.api.nvim_buf_get_var, term.buf, 'snacks_terminal')
         if ok and buf_var and buf_var.id == count then
-          -- print([==[find_best_terminal#if#for# == count buf_var:]==], vim.inspect(buf_var)) -- __AUTO_GENERATED_PRINT_VAR_END__
           return term
         end
       end
@@ -76,7 +72,6 @@ local function find_best_terminal(terminals, count)
 
     -- Fallback to positional indexing if no id match found
     local idx = math.min(count, #terminals)
-    print([==[find_best_terminal#if count (#terminals):]==], vim.inspect(idx)) -- __AUTO_GENERATED_PRINT_VAR_END__
     return terminals[idx]
   end
 
@@ -91,23 +86,9 @@ local function find_best_terminal(terminals, count)
     table.insert(terminal_infos, info)
   end
 
-  -- Print terminal info for debugging
-  print([==[Available terminals:]==])
-  for _, info in ipairs(terminal_infos) do
-    print(string.format("  [%d] buf=%d win=%s tab=%s visible=%s name=%s",
-      info.index,
-      info.buf,
-      info.win or "none",
-      info.tab or "none",
-      info.visible_in_current_tab and "YES" or "no",
-      info.name or "unknown"
-    ))
-  end
-
   -- Priority 1: Visible terminal in current tab
   for _, info in ipairs(terminal_infos) do
     if info.visible_in_current_tab and info.win_valid and not info.closed then
-      print(string.format("→ Selected terminal [%d] (visible in current tab)", info.index))
       return info.terminal
     end
   end
@@ -115,7 +96,6 @@ local function find_best_terminal(terminals, count)
   -- Priority 2: Any valid terminal in current tab (even if hidden)
   for _, info in ipairs(terminal_infos) do
     if info.tab == current_tab and not info.closed then
-      print(string.format("→ Selected terminal [%d] (in current tab)", info.index))
       return info.terminal
     end
   end
@@ -123,13 +103,11 @@ local function find_best_terminal(terminals, count)
   -- Priority 3: First non-closed terminal
   for _, info in ipairs(terminal_infos) do
     if not info.closed then
-      print(string.format("→ Selected terminal [%d] (first available)", info.index))
       return info.terminal
     end
   end
 
   -- Fallback: First terminal
-  print(string.format("→ Selected terminal [1] (fallback)"))
   return terminals[1]
 end
 
@@ -142,7 +120,6 @@ local function get_snacks_terminal(count)
     return find_best_terminal(terminals, count)
   else
     -- Create a new terminal only if none exist
-    print("→ Creating new terminal (none exist)")
     return require("snacks").terminal()
   end
 end
@@ -150,7 +127,6 @@ end
 -- Send text to Snacks terminal
 local function send_to_snacks_terminal(text, count)
   local terminal = get_snacks_terminal(count)
-  -- print([==[send_to_snacks_terminal terminal:]==], vim.inspect(terminal)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
   if not terminal or not terminal.buf then
     vim.notify("No Snacks terminal available", vim.log.levels.ERROR)
@@ -171,17 +147,11 @@ local function send_to_snacks_terminal(text, count)
   if terminal.closed or not terminal.win or not vim.api.nvim_win_is_valid(terminal.win) then
     terminal:show()
   end
-
-  -- Focus the terminal if it has a valid window
-  -- if terminal.win and vim.api.nvim_win_is_valid(terminal.win) then
-  --   vim.api.nvim_set_current_win(terminal.win)
-  -- end
 end
 
 -- Send current line to Snacks terminal
 function M.send_current_line(count)
   local line = vim.api.nvim_get_current_line()
-  -- print("📤 Sending line to Snacks terminal: " .. line)
   send_to_snacks_terminal(line, count)
 end
 
@@ -189,15 +159,13 @@ end
 function M.send_all_lines(count)
   local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
   local text = table.concat(lines, "\n")
-  -- print("📤 Sending all lines to Snacks terminal (" .. #lines .. " lines)")
   send_to_snacks_terminal(text, count)
 end
 
 function M.send_previous_selection(count)
   -- previous selected with gv
   local current_win = vim.api.nvim_get_current_win()
-  local curr_pos = vim.api.nvim_win_get_cursor(current_win)
-  local curr_mode = vim.fn.mode()
+  local curr_pos = vim.api.nvim_get_current_cursor and vim.api.nvim_get_current_cursor() or vim.api.nvim_win_get_cursor(current_win)
   vim.cmd("normal! gv")
   local start_pos = vim.fn.getpos("v") -- Use 'v' for visual mode
   local end_pos = vim.fn.getpos(".")   -- Use '.' for current cursor position in visual mode
@@ -208,12 +176,13 @@ function M.send_previous_selection(count)
     return
   end
 
-  vim.cmd("normal! ")
+  -- clear visual
+  vim.cmd("normal! \27")
   send_to_snacks_terminal(text, count)
-  -- set win and same mode as before
+
+  -- restore window and cursor
   vim.api.nvim_set_current_win(current_win)
-  vim.api.nvim_win_set_cursor(0, curr_pos)
-  -- n mode
+  pcall(vim.api.nvim_win_set_cursor, 0, curr_pos)
   vim.cmd("stopinsert")
 end
 
@@ -231,7 +200,7 @@ end
 
 --#region Pickers tmux
 
-function _get_tmux_windows()
+local function _get_tmux_windows()
     local windows_raw = vim.fn.system("tmux list-windows -F '#{window_index}: #{window_name}'")
     local windows = {}
 
@@ -263,13 +232,8 @@ function M.pick_tmux_window()
 end
 
 --#endregion
---
---
+
 --#region Pickers Git file pick
--- -- ref: https://www.reddit.com/r/neovim/comments/1j4e7fq/comment/mgd5wto/
---     { "<leader>fs", custom_pickers.git_show, desc = "Find in Git Show" },
---     { "<leader>fb", custom_pickers.git_diff_upstream, desc = "Find in Git Branch" },
---     { "<leader>fd", function() Snacks.picker.git_status() end, desc = "Find in Git Diff" },
 
 local function pick_cmd_result(picker_opts)
   local git_root = Snacks.git.get_root()
@@ -279,25 +243,11 @@ local function pick_cmd_result(picker_opts)
       cmd = picker_opts.cmd,
       args = picker_opts.args,
       transform = function(item)
-        -- __AUTO_GENERATED_PRINT_VAR_START__
-        print([==[pick_cmd_result#finder#transform item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
         item.cwd = picker_opts.cwd or git_root
         item.file = item.text
       end,
     })
-    -- __AUTO_GENERATED_PRINT_VAR_START__
-    print([==[pick_cmd_result#finder proc_opts:]==], vim.inspect(proc_opts)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
-    -- ctx =  vim.tbl_extend("force", ctx, {
-    --   picker = {
-    --     opts = {
-    --       debug = {
-    --         proc = proc_opts,
-    --       },
-    --     },
-    --   },
-    -- })
-    -- ctx.picker.opts.debug.proc -- add debug 
     return require("snacks.picker.source.proc").proc(proc_opts, ctx)
   end
 
@@ -315,8 +265,75 @@ local function pick_cmd_result(picker_opts)
       if not item then
         return nil
       end
-      -- preview_fn(item, ctx) should return a previewer spec table or nil
-      return picker_opts.preview_fn(item, ctx)
+
+      -- Call preview function safely
+      local ok, res = pcall(picker_opts.preview_fn, item, ctx)
+      if not ok then
+        -- If preview function errored, write the error into the preview buffer if available
+        if ctx and ctx.buf and vim.api.nvim_buf_is_valid(ctx.buf) then
+          vim.api.nvim_buf_set_option(ctx.buf, "modifiable", true)
+          vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, {"Preview error:", tostring(res)})
+          vim.api.nvim_buf_set_option(ctx.buf, "modifiable", false)
+          return true
+        end
+        return nil
+      end
+
+      if not res then
+        return nil
+      end
+
+      local rtype = type(res)
+
+      -- If preview_fn returned a preview spec table (cmd/args or text/ft), handle accordingly
+      if rtype == "table" then
+        -- If res is a proc spec (cmd/args), return it directly
+        if res.cmd or res.args then
+          return res
+        end
+
+        -- If res contains text, populate preview buffer if available
+        if res.text then
+          if ctx and ctx.buf and vim.api.nvim_buf_is_valid(ctx.buf) then
+            vim.api.nvim_buf_set_option(ctx.buf, "modifiable", true)
+            local lines = vim.split(res.text, "\n")
+            vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, lines)
+            vim.api.nvim_buf_set_option(ctx.buf, "modifiable", false)
+            if res.ft then
+              vim.bo[ctx.buf].filetype = res.ft
+            end
+            return true
+          else
+            -- Return a simple preview spec with text
+            return { text = res.text, ft = res.ft }
+          end
+        end
+
+        -- Otherwise return the table and hope Snacks knows how to handle it
+        return res
+
+      elseif rtype == "string" then
+        -- Treat string as raw preview text
+        if ctx and ctx.buf and vim.api.nvim_buf_is_valid(ctx.buf) then
+          vim.api.nvim_buf_set_option(ctx.buf, "modifiable", true)
+          vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, vim.split(res, "\n"))
+          vim.api.nvim_buf_set_option(ctx.buf, "modifiable", false)
+          return true
+        end
+        return { text = res }
+
+      elseif rtype == "boolean" then
+        -- Allow explicit boolean returned by preview fn
+        return res
+
+      elseif rtype == "function" then
+        -- If the preview fn returned a function, call it with ctx
+        local ok2, handled = pcall(res, ctx)
+        if ok2 then return handled end
+        return nil
+      end
+
+      return nil
     end
   elseif picker_opts.preview then
     pick_opts.preview = picker_opts.preview
@@ -339,7 +356,7 @@ function M.custom_git_pickers.git_show()
 end
 
 
-local function make_git_preview(item)
+local function make_git_preview(item, upstream_ref)
   if not item or not item.file then
     return nil
   end
@@ -371,9 +388,14 @@ local function make_git_preview(item)
   end
   local relpath = rel_lines[1]
 
-  -- decide diff range: prefer upstream if present
-  vim.fn.systemlist({ "git", "-C", git_root, "rev-parse", "--verify", "HEAD@{u}" })
-  local diff_range = (vim.v.shell_error == 0) and "HEAD@{u}..HEAD" or "HEAD~1..HEAD"
+  -- decide diff range: use provided upstream_ref or auto-detect
+  local diff_range
+  if upstream_ref then
+    diff_range = upstream_ref .. "..HEAD"
+  else
+    vim.fn.systemlist({ "git", "-C", git_root, "rev-parse", "--verify", "HEAD@{u}" })
+    diff_range = (vim.v.shell_error == 0) and "HEAD@{u}..HEAD" or "HEAD~1..HEAD"
+  end
 
   return {
     cmd = "git",
@@ -383,9 +405,7 @@ local function make_git_preview(item)
   }
 end
 
---
---
--- @type: snacks.picker.preview
+--@type: snacks.picker.preview
 function M.custom_git_pickers.git_diff_upstream()
   local upstream_ref = nil
   local use_branch_upstream = false
@@ -481,105 +501,60 @@ function M.custom_git_pickers.git_diff_upstream()
     -- Dynamically compare with upstream or origin default branch
     -- Prefers branch upstream if it has changes, otherwise uses origin's default branch
     args = { "diff-tree", "--no-commit-id", "--name-only", "--diff-filter=d", upstream_ref .. "..HEAD", "-r" },
-    -- args = { "diff-tree", "--no-commit-id", "--name-only", "--diff-filter=d", "HEAD", "-r" },
-    -- git diff-tree --no-commit-id --name-only --diff-filter=d HEAD@{u}..HEAD -r
     name = "git_diff_upstream",
     title = "Git Branch Changed Files",
-      -- preview_fn receives (item, ctx) and must return a preview spec table
-    -- preview_fn = function(item, _ctx)
-    --   if not item or not item.file then
-    --     return nil
-    --   end
-    --
-    --   -- Use the make_git_preview helper function for robust git diff preview
-    --   return make_git_preview(item)
-    -- end,
-    --     cmd = "git",
-
-}
+    -- Use helper preview function to show file diff in preview
+    preview_fn = function(item, _ctx)
+      if not item or not item.file then
+        return nil
+      end
+      return make_git_preview(item, upstream_ref)
+    end,
+  }
 end
 
+-- Step 2: File list picker for selected ref
+local function show_file_list_picker(selected_ref_stats, on_back)
+  local git_root = Snacks.git.get_root()
 
-function M.custom_terminal_show()
-  local terminals = term_util.get_terminal_buffers()
-  -- require("snacks.picker")
-  Snacks.picker.pick {
-    --@types snacks.picker.preview
-    source = "select",
-    title = "Terminal Buffers",
-    items = terminals,
-    --@types snacks.picker.format
-    format = function(item, opts)
-      return term_util.format_terminal(item, opts)
+  Snacks.picker.pick({
+    source = "git_diff_files",
+    title = "Changed Files vs " .. selected_ref_stats.refAlias,
+    finder = function(opts, ctx)
+      local proc_opts = vim.tbl_extend("force", opts, {
+        cmd = "git",
+        args = { "diff", "--name-only", "--diff-filter=d", selected_ref_stats.refAlias .. "..HEAD" },
+        cwd = git_root,
+        transform = function(item)
+          item.cwd = git_root
+          item.file = item.text
+          return item
+        end,
+      })
+      return require("snacks.picker.source.proc").proc(proc_opts, ctx)
     end,
-    layout = {
-      preview = {
-        layout = "flex",
-      },
-      layout = {
-        box = "horizontal",
-        width = 0.9,
-        height = 0.9,
-        {
-          box = "vertical",
-          width = 0.4,
-          { win = "input", height = 1 },
-          { win = "list" },
-        },
-        { win = "preview", width = 0.6 },
-      },
-    },
-    actions = {
-      confirm = function(picker, item)
-        picker:close()
-        if item and item.buf then
-          vim.api.nvim_set_current_buf(item.buf)
-        end
-      end,
-    },
+    format = "file",
+    -- Use helper preview function to show file diff in preview
+    preview_fn = function(item, _ctx)
+      return make_git_preview(item)
+    end,
     win = {
       input = {
         keys = {
-          ["<C-Space>"] = {
-            "focus_preview",
-            mode = { "n", "i" },
-            desc = "Focus preview"
-          },
-          ["<c-x>"] = {
-            function(picker, item)
-              if item and item.buf then
-                vim.api.nvim_buf_delete(item.buf, { force = true })
-                picker:refresh()
+          ["<C-[>"] = {
+            function(picker)
+              picker:close()
+              if on_back then
+                on_back()
               end
             end,
             mode = { "n", "i" },
-            desc = "Delete terminal buffer"
+            desc = "Back to ref selection"
           },
         },
       },
-      list = {
-        keys = {
-          ["<C-Space>"] = { "focus_preview", desc = "Focus preview" },
-          ["<C-x>"] = function(picker, item)
-            if item and item.buf then
-              vim.api.nvim_buf_delete(item.buf, { force = true })
-              picker:refresh()
-            end
-          end
-        }
-      },
-      preview = {
-        keys = {
-          -- ["<C-Space>"] = { "focus_input", desc = "Focus back to input" },
-          -- TOFIX: preview seems strange and when put some value not show nay
-          -- bind to move back not work not sure why
-          -- ["<C-q>"] = { "cycle_win", desc = "Cycle windows" },
-          -- ["<C-Space>"] = { "cycle_win", desc = "Focus back to input" , mode = { "n", "i", "t" } },
-          -- ["<C-h>"] = { "cycle_win", desc = "Cycle windows" , mode = { "n", "i", "t" } },
-        }
-      },
     },
-  }
+  })
 end
 
 -- -- NOTES (do not remove)
@@ -851,15 +826,6 @@ function M.custom_change_list_picker()
   local git_root = Snacks.git.get_root()
   local candidates = collect_candidate_refs()
 
-  -- Debug: Print candidates
-  print("=== custom_change_list_picker ===")
-  print("Git root: " .. (git_root or "nil"))
-  print("Found " .. #candidates .. " candidates")
-  for i, candidate in ipairs(candidates) do
-    print(string.format("[%d] refAlias=%s priority=%d text=%s",
-      i, candidate.refAlias, candidate.priority, candidate.text))
-  end
-
   if #candidates == 0 then
     vim.notify("No valid refs found for comparison", vim.log.levels.WARN)
     return
@@ -888,34 +854,53 @@ function M.custom_change_list_picker()
     source = "git_refs",
     title = "Select Reference to Compare",
     items = picker_items,
-    -- Use default text-based format
-    format = "text",
+    -- Custom formatted display with counts
+    format = function(item)
+      local meta = {}
+      if item.commitsAheadCount and item.commitsAheadCount > 0 then
+        table.insert(meta, string.format("+%d ahead", item.commitsAheadCount))
+      end
+      if item.commitsBehindCount and item.commitsBehindCount > 0 then
+        table.insert(meta, string.format("-%d behind", item.commitsBehindCount))
+      end
+      if item.fileChangesCount and item.fileChangesCount > 0 then
+        table.insert(meta, string.format("%d files", item.fileChangesCount))
+      end
+      if (item.lineAddedCount and item.lineAddedCount > 0) or (item.lineDeletedCount and item.lineDeletedCount > 0) then
+        table.insert(meta, string.format("+%d/-%d lines", item.lineAddedCount or 0, item.lineDeletedCount or 0))
+      end
+
+      local meta_text = (#meta > 0) and (" — " .. table.concat(meta, " | ")) or ""
+
+      return {
+        { item.refAlias or item.text or "<ref>", "SnacksPickerTitle" },
+        { meta_text, "Comment" },
+      }
+    end,
+
+    -- Enhanced preview: show commit log (top N) and diff stat for the ref
     preview = function(ctx)
       local item = ctx and ctx.item
-      print("=== Ref Preview Debug ===")
-      print("ctx:", vim.inspect(ctx))
-      print("item:", item and vim.inspect(item) or "nil")
-
       if not item or not item.refAlias then
-        print("Preview SKIP: no item or refAlias")
         return nil
       end
 
-      print("Preview: showing log for ref: " .. item.refAlias)
-      print("Preview: git_root: " .. (git_root or "nil"))
+      local ref = item.refAlias
+      -- Limit output size for preview to avoid huge buffers
+      local log_cmd = string.format("git --no-pager log --oneline --graph --decorate %s..HEAD | sed -n '1,200p'", ref)
+      local stat_cmd = string.format("git --no-pager diff --stat %s..HEAD | sed -n '1,200p'", ref)
+      print([==[M.custom_change_list_picker#preview stat_cmd:]==], vim.inspect(stat_cmd)) -- __AUTO_GENERATED_PRINT_VAR_END__
+      local combined = log_cmd .. "\n\n" .. stat_cmd
 
-      -- Show commit log between ref and HEAD
-      local preview_spec = {
-        cmd = "git",
-        args = { "log", "--oneline", "--graph", "--decorate", item.refAlias .. "..HEAD" },
+      return {
+        cmd = "bash",
+        args = { "-lc", combined },
         cwd = git_root,
         ft = "git",
       }
-      print("Preview spec:", vim.inspect(preview_spec))
-      return preview_spec
     end,
+
     confirm = function(picker, item)
-      print("Confirm: selected " .. (item and item.refAlias or "nil"))
       picker:close()
       if item then
         -- Open step 2: file list picker
@@ -927,5 +912,114 @@ function M.custom_change_list_picker()
     end,
   })
 end
+
+function WorkingSamplePickerWithCustomPreviewAndList()
+-- Simple custom picker with:
+-- - custom items
+-- - custom display (format)
+-- - custom preview
+  -- 1) Define items (any table; just ensure they have at least `text`)
+  local items = {
+    {
+      text = "Item A",
+      detail = "This is item A. It does something interesting.",
+      extra = "extra A data",
+    },
+    {
+      text = "Item B",
+      detail = "Item B has a different description.",
+      extra = "extra B data",
+    },
+    {
+      text = "Item C",
+      detail = "Yet another item with custom data.",
+      extra = "extra C data",
+    },
+  }
+
+  --@type: snacks.picker
+  Snacks.picker({
+    items = items,
+
+    ----------------------------------------------------------------
+    -- 2) Custom format: how each row is rendered in the list
+    ----------------------------------------------------------------
+    -- Return a list of “chunks”. Each chunk is:
+    -- { text, hl_group? } or more advanced structures.
+    format = function(item, picker)
+      -- show: [Item A] - This is item A. It does something interesting.
+      return {
+        { "[" .. (item.text or "") .. "]", "SnacksPickerTitle" },
+        { " - ", "Comment" },
+        { item.detail or "", "Normal" },
+      }
+    end,
+
+    ----------------------------------------------------------------
+    -- 3) Custom preview: what appears in the preview window
+    ----------------------------------------------------------------
+    -- Preview function: (ctx) -> boolean?
+    -- ctx.item: current item
+    -- ctx.buf: buffer handle for preview
+    -- ctx.win: window handle for preview
+    preview = function(ctx)
+      local item = ctx.item
+      if not item then
+        return false
+      end
+
+      -- Build preview text
+      local lines = {
+        "Name:   " .. (item.text or ""),
+        "Detail: " .. (item.detail or ""),
+        "",
+        "Extra data:",
+        vim.inspect(item.extra),
+      }
+
+      -- Write into the preview buffer
+      vim.api.nvim_buf_set_option(ctx.buf, "modifiable", true)
+      vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, lines)
+      vim.api.nvim_buf_set_option(ctx.buf, "modifiable", false)
+
+      -- optionally set filetype for syntax highlight
+      vim.bo[ctx.buf].filetype = "markdown"
+
+      return true
+    end,
+
+    ----------------------------------------------------------------
+    -- 4) What happens when user confirms a selection
+    ----------------------------------------------------------------
+    confirm = function(picker, item)
+      if not item then
+        picker:close()
+        return
+      end
+      picker:close()
+
+      -- Example “next step”
+      print("You picked:", item.text)
+      print("Detail:    ", item.detail)
+      print("Extra:     ", item.extra)
+    end,
+    ---@class snacks.picker.config
+    ---@type snacks.picker.layout.Config
+    layout = {
+      preset = "default",
+      hidden = false,
+      layout = {
+        backdrop = false,
+        height = 0.7,
+        -- box = "horizontal",
+      },
+    }
+  })
+end
+
 --#endregion
+
 return M
+
+-- TODO
+-- fix custom_change_list_picker not show inside ref log step

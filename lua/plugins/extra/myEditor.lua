@@ -219,6 +219,9 @@ return {
         "common_shell.grep_async",
         "agoda.android_client.and_build",
         "agoda.mmb.mmb_pick",
+        "agoda.mmb.mmb_tests",
+        "agoda.tripviewbff.tripviewbff_pick",
+        "agoda.dotnet.dotnet_test",
         "agoda.android_client.and_test",
         "agoda.android_client.and_pick",
       },
@@ -553,6 +556,58 @@ Your instructions here
             },
           },
         },
+        ["FZF Context"] = {
+          strategy = "chat",
+          description = "Write documentation for me",
+          opts = {
+            index = 11,
+            adapter = {
+              name = "copilot",
+              model = "gpt-5-mini",
+            },
+            is_slash_cmd = true,
+            auto_submit = false,
+            short_name = "snacks_nvim_context",
+            stop_context_insertion = true,
+          },
+          context = {
+            -- {
+            --   type = "file",
+            --   path = {
+            --     -- expand HOME
+            --     vim.fn.expand("$HOME/dotfiles")
+            --   },
+            -- },
+            {
+              type = "url",
+              url = "https://github.com/junegunn/fzf/blob/master/man/man1/fzf.1",
+            },
+            {
+              type = "url",
+              url = "https://junegunn.github.io/fzf/releases/0.66.0",
+            },
+          },
+          prompts = {
+            {
+              role = "user",
+              content = function()
+                -- Leverage auto_tool_mode which disables the requirement of approvals and automatically saves any edited buffer
+                vim.g.codecompanion_auto_tool_mode = true
+                -- Some clear instructions for the LLM to follow
+                return [[### Instructions
+Your instructions here
+
+### Steps to Follow
+
+      You are required to write code with correct usage of nvim lazy libraries and preferably in lua then fallback to vim if necessary
+      1. Update the code in #buffer{watch} using the @editor tool
+      2. Make sure you trigger both tools in the same response Specification
+      3. Follow the given documentation 
+      ]]
+              end,
+            },
+          },
+        },
         -- will still replace the chat !!
         ["📂 Attach File:Line Refs (t)"] = {
           strategy = "chat",
@@ -605,28 +660,6 @@ Your instructions here
 
                 return attachref .. "\n"
               end,
-            },
-          },
-        },
-        ["Sample loaded prompts"] = {
-          strategy = "chat",
-          description = "Sample loaded prompts description",
-
-          -- Dynamically present prompt files using Snacks picker. Supports
-          -- both `*.prompt.md` and `*.instructions.md` files in the target dir.
-          -- The picker previews the file contents; when the user confirms the
-          -- selection the file content (with YAML frontmatter stripped) is
-          -- returned and used as the prompt content.
-          opts = {
-            is_slash_cmd = true,
-            auto_submit = false,
-            short_name = "load_prompt",
-            stop_context_insertion = true,
-          },
-          prompts = {
-            {
-              role = "user",
-              content = require("utils.prompts_helper").create_codecompanion_content_fn(),
             },
           },
         },
@@ -804,7 +837,40 @@ Your instructions here
     --   },
     -- },
     -- },
+    -- https://github.com/yetone/avante.nvim?tab=readme-ov-file#default-setup-configuration
     opts = {
+      provider = "copilot", -- You can then change this provider here
+      web_search_engine = {
+        -- provider = "tavily", -- tavily, serpapi, google, kagi, brave, or searxng
+        provider = "google", 
+      },
+      providers = {
+        -- not sure why not work yet
+        copilot = {
+          model = "gpt-5-mini",
+        },
+        openai = {
+          endpoint = "http://openai-proxy.agoda.is",
+          model = "gpt-5-mini",
+          timeout = 30000, -- Timeout in milliseconds
+          extra_request_body = {
+            temperature = 0,
+            max_completion_tokens  = 4096,
+          },
+        },
+        -- bedrock = {
+        --   endpoint = "https://genai-gateway.agoda.is/claude",
+        --   -- model = "claude-sonnet-4-20250514",
+        --   model = "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        --   timeout = 30000, -- Timeout in milliseconds
+        --   disable_tools = true, -- disable tools!
+        --   extra_request_body = {
+        --     temperature = 0,
+        --     max_tokens = 4096,
+        --   }
+        -- },
+      },
+      acp_follow_agent_locations = false,
       selection = {
         enabled = true,
         hint_display = "none",
@@ -836,11 +902,14 @@ Your instructions here
     keys = {
       {
         "<leader>cP",
-        "gg0vGg$:QuickCodeRunner<CR>",
+        function()
+          require("utils.cmd").quickCommandRunCurrentFile()
+        end,
+        --     -- "gg0vGg$:QuickCodeRunner<CR>",
         desc = "Code Run File",
         mode = "n",
+        },
       },
-    },
     opts = {
       -- debug = true, -- add to debug and see what happens when codepad is called
       file_types = {
