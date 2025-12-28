@@ -28,6 +28,12 @@ keymap("n", "<leader>ll", "<cmd>Lazy<CR>", { desc = "Lazy" })
 -- ============================
 -- EDITING
 -- ============================
+-- selection
+keymap('n', '<M-a>', function()
+  vim.cmd('normal! ggVG')
+end, { noremap = true, silent = true })
+
+keymap('v', '<M-a>', ":'<,'>QuickCodeRunner<CR>", { noremap = true, silent = true })
 -- Move Lines (add silence original didnot have will blip in visual mode)
 keymap("n", "<A-j>", "<cmd>m .+1<cr>==", { desc = "Move Down", silent = true })
 keymap("n", "<A-k>", "<cmd>m .-2<cr>==", { desc = "Move Up", silent = true })
@@ -68,7 +74,6 @@ opts.desc = "Yank in visual"
 keymap("v", "v", handleMode("v"), opts)
 keymap("v", "V", handleMode("V"), opts)
 
-local keymap = vim.keymap.set
 -- Duplicate line and preserve previous yank register
 --  support mode v as
 function duplicateselected()
@@ -761,8 +766,15 @@ keymap({'n', 'v'}, '<localleader>rL', function()
       code = vim.api.nvim_get_current_line()
     end
   end
-  local f = load(code)
-  if f then f() end
+  local f = code and load(code)
+  if f then
+    f()
+    local current_win = vim.api.nvim_get_current_win()
+    vim.cmd('NoiceAll')
+    if vim.api.nvim_get_current_win() ~= current_win then
+      vim.api.nvim_set_current_win(current_win)
+    end
+  end
 end, { desc = "Execute selected Lua code" })
 
 
@@ -829,11 +841,38 @@ local function _normalize_input_text(s)
 end
 
 local function clean_selected_text(s)
+  -- Handle selected multi-line paths or general text gracefully.
+  -- /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua
+  local sampleDonotdelete=[[
+  /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra
+  /myEditor.lua
+  ]]
+  -- For path-like inputs (contain path separators or URI schemes), remove
+  -- newlines and any indentation introduced by wrapping so segments join
+  -- correctly (e.g. "di\n  st" -> "dist"). For ordinary text, replace
+  -- newlines with a single space and collapse repeated whitespace.
   if not s then return s end
-  -- Reuse normalization utility function
-  s = _normalize_input_text(s)
-  -- Remove actual newlines and carriage returns
-  s = s:gsub('[\r\n]+', ''):gsub('%s+', '')
+
+  -- Normalize escaped sequences and trim/normalize whitespace first
+  s = _normalize_input_text(s) or ""
+
+  -- Heuristic: treat as a path if it contains a path separator, URI scheme,
+  -- or ends with a common file extension fragment
+  local path_like = (s:find("[/\\]") ~= nil) or (s:find("://") ~= nil) or (s:find("%.%w+%s*$") ~= nil)
+
+  if path_like then
+    -- Remove newlines and any following indentation/whitespace so wrapped
+    -- path segments are concatenated without accidental spaces.
+    s = s:gsub("[\r\n]+%s*", "")
+    -- Remove any remaining stray whitespace inside path-like strings
+    s = s:gsub("%s+", "")
+  else
+    -- For general text: convert newlines to spaces and collapse whitespace
+    s = s:gsub("[\r\n]+", " ")
+    s = s:gsub("%s+", " ")
+    s = vim.trim(s)
+  end
+
   return s
 end
 
@@ -972,6 +1011,21 @@ local function goto_file_line(open_in_previous_buffer)
   -- Handle visual mode selection
   if inputUtil.is_visual_mode() then
     target = inputUtil.get_selected_or_cursor_word()
+    -- Clean multiline selections to remove newlines and extra spaces
+    target = clean_selected_text(target)
+    -- __AUTO_GENERATED_PRINT_VAR_START__
+    print([==[goto_file_line#if clean_selected_text(target):]==], vim.inspect(clean_selected_text(target))) -- __AUTO_GENERATED_PRINT_VAR_END__
+  end
+
+  -- Normalize target for common markdown link patterns like [text](file.md#anchor)
+  -- Attempt to extract a file:// URI or a markdown link target
+  local md_link = target:match("%b()")
+  if md_link then
+    -- remove surrounding parentheses
+    local inner = md_link:sub(2, -2)
+    if inner and inner ~= "" then
+      target = inner
+    end
   end
 
   -- Handle file:// URI scheme
@@ -1019,6 +1073,16 @@ local function goto_file_line(open_in_previous_buffer)
     end
   end
 
+  -- Support simple README-style anchors: path.md#anchor
+  local anchor = nil
+  if path and path:match("#") then
+    local before, after = path:match("^(.-)#(.*)$")
+    if before and after then
+      path = before
+      anchor = after
+    end
+  end
+
   -- Validate and open the file
   if path and path ~= "" then
     -- Open the file
@@ -1031,7 +1095,47 @@ local function goto_file_line(open_in_previous_buffer)
       end
     end
 
+  -- Extra requirements Do not remove the notes:
+  -- ie. current file /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/config/mykeymaps.lua
+  -- when use gF on this text in above open files ../../snippets/global.json
+  -- will go to /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/snippets/global.json
     vim.cmd("edit " .. vim.fn.fnameescape(path))
+
+    -- If an anchor was provided (e.g. file.md#section-name), attempt a simple heading search
+    if anchor and anchor ~= "" then
+      -- Normalize anchor for loose matching
+      local norm_anchor = anchor:gsub("[-_]+", " "):gsub("^#", ""):lower()
+      -- Get all buffer lines and search for Markdown headings
+      local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+      local found_line = nil
+      for i, l in ipairs(lines) do
+        -- Match Markdown heading like: # Heading, ## Subheading
+        local heading = l:match("^%s*#+%s*(.+)$")
+        if heading then
+          local norm_heading = heading:gsub("%s+", " "):lower()
+          -- Simple contains match (case-insensitive, normalized)
+          if norm_heading:find(norm_anchor, 1, true) or norm_anchor:find(norm_heading, 1, true) then
+            found_line = i
+            break
+          end
+        end
+      end
+
+      -- If we didn't find a heading, fallback to searching the file for the anchor substring
+      if not found_line then
+        for i, l in ipairs(lines) do
+          if l:lower():find(norm_anchor, 1, true) then
+            found_line = i
+            break
+          end
+        end
+      end
+
+      if found_line then
+        -- Move the cursor to the heading line
+        vim.api.nvim_win_set_cursor(0, { found_line, 0 })
+      end
+    end
 
     -- Jump to line if provided
     if line and line ~= "" then
@@ -1554,7 +1658,3 @@ keymap("n", "<localleader>aP", function()
   prompts_helper.select_and_paste_prompt({ paste_mode = 'cursor' })
 end, { desc = "Paste prompt at cursor" })
 
--- Paste prompt on new line below cursor
-keymap("n", "<localleader>aP", function()
-  prompts_helper.select_and_paste_prompt({ paste_mode = 'newline' })
-end, { desc = "Paste prompt on new line" })

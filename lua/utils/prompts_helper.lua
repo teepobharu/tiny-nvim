@@ -1,8 +1,72 @@
+-- NOTE (DO NOT REMOVE): Snacks picker requirements and expectations
+-- The prompt helper requirements:
+-- 1. be able to read prompt files from configured directories
+--     vim.fn.expand("$HOME/Personal/mynotes/Extras/Template/copilot-custom-prompts/"),
+    -- vim.fn.expand("$HOME/AgodaGit/tools/trip-ai-tools/prompt/"),
+    -- vim.fn.expand("$HOME/AgodaGit/tools/trip-ai-tools/instruction/"),
+-- 2. be able to filter files by patterns like "*.prompt.md", "*.instructions.md"
+-- 3. show a picker UI to select from the found prompt files
+-- 4. show a preview of the selected prompt file content
+-- 5. Sort the list by parent directory and filename
+-- 6. on selection, read the file content, strip any YAML frontmatter, and paste at the current cursor position
+-- 7. keybind support
+--  - Below is same as normal files mappings in neovim (reuse or create new if not possible)
+--  - Ctrl-v to open selected prompt file in a vertical split 
+--  - Ctrl-s to open selected prompt file in a horizontal split
+--  - New mappings below
+--  - None right now
+--  8. UI guidelines, preview pane is open by default, show 50% of the preview in conjunction with main axis the list is shown
+-- - Requires the "Snacks" picker plugin exposing an API compatible with:
+--     Snacks.picker.pick { ... }  -- used in this module
+-- - Expected options/behavior of Snacks.picker.pick used here:
+--     * items: array of tables { text = string, name = string, parent = string, file = string }
+--     * title: string
+--     * format: can be "text" or a function; this code uses "text"
+--         format = function(item, picker)
+--   sample fns
+    --   return {
+    --     { "[" .. (item.text or "") .. "]", "SnacksPickerTitle" },
+    --     { " - ", "Comment" },
+    --     { item.detail or "", "Normal" },
+    --   }
+    -- end,
+--     * layout: supports preset "vscode" and preview = { width = number, height = number }
+--     sample : https://github.com/folke/snacks.nvim/blob/fe7cfe9800a182274d0f868a74b7263b8c0c020b/lua/snacks/picker/config/layouts.lua#L163
+--     * preview: function(ctx) -> either:
+--         - return true after writing to ctx.buf (ctx.buf must be a valid buffer id), or
+--         - return { text = string, ft = string } as preview content
+--       The preview function is passed ctx with ctx.item and ctx.buf.
+--     * mappings: table mapping key strings to functions (picker, item) -> void
+--     * actions: table with confirm = function(picker, item) -> void
+-- - The preview function in this module relies on:
+--     * ctx.buf being a valid buffer id (nvim_buf_* APIs are used)
+--     * `vim.api.nvim_buf_set_lines`, `vim.api.nvim_buf_set_option`,
+--       `vim.api.nvim_buf_add_highlight`, `vim.api.nvim_buf_is_valid`
+--     * a named namespace created via vim.api.nvim_create_namespace
+--     * ability to set buffer filetype via vim.bo[buf].filetype
+-- - File discovery expects Neovim vim.fn functions:
+--     * vim.fn.globpath, vim.fn.isdirectory, vim.fn.filereadable, vim.fn.fnamemodify,
+--       vim.fn.readfile, vim.fn.expand, vim.fn.globmatch
+-- - The code uses vim.pesc for safe pattern escaping; ensure your Neovim version provides vim.pesc
+--   (or adapt into a fallback if using older Neovim).
+-- - Notifications and UI fallbacks:
+--     * Uses vim.notify for warnings
+--     * Falls back to vim.ui.select if Snacks is not available (earlier versions may rely on this)
+-- - Misc:
+--     * The module uses standard Lua / Neovim APIs; ensure Neovim >= 0.5 (better with 0.7+) for full API support.
+-- NOTE (DO NOT REMOVE): This comment documents runtime requirements for the Snacks picker integration.
+
 local M = {}
+local preview_ns = vim.api.nvim_create_namespace("prompts_helper_preview")
 
 -- Default configuration
+-- Support both a single prompt_dir (backwards compatible) and prompt_dirs (array)
 M.config = {
-  prompt_dir = vim.fn.expand("$HOME/Personal/mynotes/Extras/Template/copilot-custom-prompts/"),
+  prompt_dirs = {
+    vim.fn.expand("$HOME/Personal/mynotes/Extras/Template/copilot-custom-prompts/"),
+    vim.fn.expand("$HOME/AgodaGit/tools/trip-ai-tools/prompt/"),
+    vim.fn.expand("$HOME/AgodaGit/tools/trip-ai-tools/instruction/"),
+  },
   patterns = { "*.prompt.md", "*.instructions.md" },
   timeout_ms = 60000,
 }
@@ -36,71 +100,249 @@ local function strip_frontmatter(s)
   return s
 end
 
--- Get list of prompt files from configured directory
----@param opts? table Optional config override { prompt_dir, patterns }
+-- Get list of prompt files from configured directories or explicit files
+---@param opts? table Optional config override { prompt_dir, prompt_dirs, patterns }
 ---@return table List of prompt file paths
 function M.get_prompt_files(opts)
   opts = opts or {}
-  local prompt_dir = opts.prompt_dir or M.config.prompt_dir
-  local patterns = opts.patterns or M.config.patterns
 
+  -- Resolve directories / paths list with precedence:
+  -- opts.prompt_dirs -> opts.prompt_dir -> M.config.prompt_dirs -> M.config.prompt_dir
+  local dirs = nil
+  if opts.prompt_dirs then
+    dirs = opts.prompt_dirs
+  elseif opts.prompt_dir then
+    dirs = { opts.prompt_dir }
+  elseif M.config and M.config.prompt_dirs then
+    dirs = M.config.prompt_dirs
+  elseif M.config and M.config.prompt_dir then
+    dirs = { M.config.prompt_dir }
+  else
+    dirs = {}
+  end
+
+  local patterns = opts.patterns or (M.config and M.config.patterns) or { "*" }
   local files = {}
-  for _, pat in ipairs(patterns) do
-    local ok = vim.fn.globpath(prompt_dir, pat, false, true)
-    if ok and #ok > 0 then
-      vim.list_extend(files, ok)
+
+  for _, entry in ipairs(dirs) do
+    if not entry or entry == "" then goto continue end
+
+    -- If entry is a directory, use globpath to find pattern matches
+    if vim.fn.isdirectory(entry) == 1 then
+      for _, pat in ipairs(patterns) do
+        local ok = vim.fn.globpath(entry, pat, false, true)
+        if ok and type(ok) == "table" and #ok > 0 then
+          vim.list_extend(files, ok)
+        end
+      end
+      goto continue
     end
+
+    -- If entry is a file and readable, include it if it matches one of the patterns
+    if vim.fn.filereadable(entry) == 1 then
+      local basename = vim.fn.fnamemodify(entry, ":t")
+      for _, pat in ipairs(patterns) do
+        -- Use globmatch for pattern matching against the basename
+        if vim.fn.globmatch(basename, pat) == 1 then
+          table.insert(files, entry)
+          break
+        end
+      end
+      goto continue
+    end
+
+    ::continue::
   end
 
   return files
 end
 
 -- Select a prompt using Snacks picker and call callback with content
----@param opts? table Optional config { prompt_dir, patterns, timeout_ms, callback }
+---@param opts? table Optional config { prompt_dirs, prompt_dir, patterns, timeout_ms, callback }
 ---@param callback? function Function to call with selected content
 function M.select_prompt(opts, callback)
   opts = opts or {}
   local files = M.get_prompt_files(opts)
 
   if vim.tbl_isempty(files) then
-    local prompt_dir = opts.prompt_dir or M.config.prompt_dir
-    vim.notify("No prompt files found in " .. prompt_dir, vim.log.levels.WARN)
+    local msg = "No prompt files found in configured prompt_dirs"
+    if opts.prompt_dir then
+      msg = msg .. ": " .. opts.prompt_dir
+    elseif M.config.prompt_dir then
+      msg = msg .. ": " .. M.config.prompt_dir
+    end
+    vim.notify(msg, vim.log.levels.WARN)
     if callback then callback(nil) end
     return
   end
 
-  local items = {}
-  for _, f in ipairs(files) do
-    table.insert(items, { text = vim.fn.fnamemodify(f, ":t"), file = f })
+    local items = {}
+    for _, f in ipairs(files) do
+      local basename = vim.fn.fnamemodify(f, ":t")
+      local dir = vim.fn.fnamemodify(f, ":h")
+      local parts = {}
+      for part in dir:gmatch("[^/]+") do table.insert(parts, part) end
+      local last_two = ""
+      if #parts >= 2 then
+        last_two = parts[#parts-1] .. "/" .. parts[#parts]
+      elseif #parts == 1 then
+        last_two = parts[1]
+      else
+        last_two = dir
+      end
+      -- store basename and parent; formatting will render parent separately
+      table.insert(items, { text = basename, name = basename, parent = last_two, file = f })
+    end
+
+    -- sort by parent directory then name
+    table.sort(items, function(a, b)
+      if a.parent == b.parent then
+        return (a.name or "") < (b.name or "")
+      end
+      return (a.parent or "") < (b.parent or "")
+    end)
+
+
+  -- Use Snacks picker with a larger preview and custom preview renderer (if available)
+  local function launch_snacks()
+    Snacks.picker.pick {
+      source = "select",
+      title = "Select Prompt File",
+      items = items,
+      format = function(item, picker)
+        -- show filename with a dimmed full absolute path
+        local full = vim.fn.fnamemodify(item.file or "", ":p")
+        return {
+          { item.text or "", "SnacksPickerTitle" },
+          { "  ", "Normal" },
+          { full or "", "Comment" },
+        }
+      end,
+
+
+      layout = {
+        preset = "default",
+        hidden = false,
+        layout = {
+          backdrop = false,
+          height = 0.7,
+        },
+      },
+      preview_custom_donotremove = function(ctx)
+        local item = ctx and ctx.item
+        if not item or not item.file then return nil end
+
+        local file = vim.fn.expand(item.file)
+        local basename = vim.fn.fnamemodify(file, ":t")
+        local dir = vim.fn.fnamemodify(file, ":h")
+
+        -- compute last two path components
+        local parts = {}
+        for part in dir:gmatch("[^/]+") do table.insert(parts, part) end
+        local last_two = ""
+        if #parts >= 2 then
+          last_two = parts[#parts-1] .. "/" .. parts[#parts]
+        elseif #parts == 1 then
+          last_two = parts[1]
+        else
+          last_two = dir
+        end
+
+        local ok, lines = pcall(vim.fn.readfile, file)
+        if not ok or not lines then lines = { "" } end
+
+        local header = basename .. "  (" .. last_two .. ")"
+        local preview_lines = {}
+        table.insert(preview_lines, header)
+        table.insert(preview_lines, string.rep("-", math.max(10, #header)))
+        for _, l in ipairs(lines) do table.insert(preview_lines, l) end
+
+        if ctx and ctx.buf and vim.api.nvim_buf_is_valid(ctx.buf) then
+          pcall(vim.api.nvim_buf_set_option, ctx.buf, "modifiable", true)
+          vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, preview_lines)
+          -- dim the last_two portion using Comment highlight
+          local patt = "%(" .. vim.pesc(last_two) .. "%)"
+          local s, e = header:find(patt)
+          if s and e then
+            pcall(vim.api.nvim_buf_add_highlight, ctx.buf, preview_ns, "Comment", 0, s-1, e)
+          end
+          -- set filetype for syntax highlighting in preview (use buffer API)
+          pcall(function()
+            local ft = vim.fn.fnamemodify(file, ":e")
+            if ft and ft ~= "" then pcall(vim.api.nvim_buf_set_option, ctx.buf, "filetype", ft) end
+          end)
+
+          pcall(vim.api.nvim_buf_set_option, ctx.buf, "modifiable", false)
+          return true
+        end
+
+        return { text = table.concat(preview_lines, "\n"), ft = vim.fn.fnamemodify(file, ":e") }
+      end,
+      -- mappings: ctrl-v opens vsplit, s opens horizontal split
+      win = {
+        list = {
+          keys = {}
+        },
+        input = {
+          keys = {
+            ["<C-y>"] = { 'paste_content', mode = { 'n', 'i' }, desc = "Paste Prompt Content" },
+            ["<CR>"] = { 'paste_content', mode = { 'n', 'i' }, desc = "Paste Prompt Content" },
+          },
+        },
+      },
+      actions = {
+        -- confirm = function(picker, item)
+        -- __AUTO_GENERATED_PRINT_VAR_START__
+        paste_content = function(picker, item)
+          if not item or not item.file then
+            picker:close()
+            if callback then callback(nil) end
+            return
+          end
+          local c = readfile(item.file)
+          c = strip_frontmatter(c)
+          picker:close()
+          if callback then callback(c) end
+        end,
+      },
+    }
   end
 
-  Snacks.picker.pick {
-    source = "select",
-    title = "Select Prompt File",
-    items = items,
-    format = "text",
-    preview = "file",
-    actions = {
-      confirm = function(picker, item)
-        if not item or not item.file then
-          picker:close()
-          if callback then callback(nil) end
-          return
-        end
-        local c = readfile(item.file)
-        c = strip_frontmatter(c)
-        picker:close()
-        if callback then callback(c) end
+  -- If Snacks picker is available use it, otherwise fall back to vim.ui.select
+  if type(Snacks) == "table" and Snacks.picker and type(Snacks.picker.pick) == "function" then
+    launch_snacks()
+  else
+    -- fallback: use vim.ui.select (no preview)
+    local ui_items = {}
+    for _, it in ipairs(items) do
+      table.insert(ui_items, it)
+    end
+    local ui_opts = {
+      prompt = "Select Prompt File",
+      format_item = function(it)
+        local full = vim.fn.fnamemodify(it.file or "", ":p")
+        return (it.text or "") .. "  " .. (full or "")
       end,
-    },
-  }
+    }
+
+    vim.ui.select(ui_items, ui_opts, function(choice)
+      if not choice or not choice.file then
+        if callback then callback(nil) end
+        return
+      end
+      local c = readfile(choice.file)
+      c = strip_frontmatter(c)
+      if callback then callback(c) end
+    end)
+  end
+
 end
 
 -- Select and paste prompt at cursor position
----@param opts? table Optional config { prompt_dir, patterns, paste_mode }
+---@param opts? table Optional config { prompt_dirs, prompt_dir, patterns, paste_mode }
 function M.select_and_paste_prompt(opts)
   opts = opts or {}
-  
+
   M.select_prompt(opts, function(content)
     if not content or content == "" then
       return
@@ -114,32 +356,10 @@ function M.select_and_paste_prompt(opts)
   end)
 end
 
--- Helper function to create CodeCompanion prompt content function
----@param opts? table Optional config { prompt_dir, patterns }
----@return function Function that returns selected prompt content
-function M.create_codecompanion_content_fn(opts)
-  return function()
-    -- Enable auto tool mode for CodeCompanion
-    vim.g.codecompanion_auto_tool_mode = true
-    
-    -- Create a promise-like mechanism to wait for selection
-    local co = coroutine.running()
-    local result = nil
-    
-    M.select_prompt(opts, function(content)
-      result = content or ""
-      if co then
-        coroutine.resume(co)
-      end
-    end)
-    
-    -- If we're in a coroutine, yield and wait for result
-    if co then
-      coroutine.yield()
-    end
-    
-    return result or ""
-  end
-end
-
 return M
+
+-- looks good but help improve this
+-- 1. the item list format still not show last 2 part of the parent dir 
+-- 2. preview height should be longer
+-- 3. c-v/s mapping should open that file in new vsplit 
+
