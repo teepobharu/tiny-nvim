@@ -56,15 +56,24 @@ Nav
  1 - companion load prompt slash cmd*2
  2 - search term (with fix needed)
  - [ ] keybind to switch back search not work
+ 4 - global snippets not work again ...
+- select new line fix gGx , gF - yes?
+- select fix relative path from current file gF ?
+commands :
+- oseer run dotnet test
 
 *current*
-
+1 - snacks upstream diff
+2 - mega ref git diff files
+- improve speed
+  - preview
 *To verify*
 1 - copilot prompt context check
-2 - snippets fixes
+  - prompt preview 
+  - prompt additiona path of /Users/tharutaipree/AgodaGit/tools/trip-ai-tools/prompt/update_test_by_change.prompt.md
+3 - codecompanion update try https://github.com/olimorris/codecompanion.nvim/blob/main/lua/codecompanion/config.lua
 3 - send text to terminal from visible screen first then trust vcount later
   - trust vcount with id
-4 - global snippets not work again ...
     - [ ] buffer to last buffer (currently can use snacks) is there better way ?
 To fix 
 
@@ -84,7 +93,7 @@ To fix
   - add p.json still not work print get correct dir [file](lua/plugins/coding.lua:72)
   - works now make sure the package.json settings and path link to corret json dir (copilot change from lazyload -> load but when revert still works)
   - https://github.com/rafamadriz/friendly-snippets/blob/main/package.json
-  - https://github.com/rafamadriz/friendly-snippets/blob/main/package.json
+  - example: https://github.com/rafamadriz/friendly-snippets/blob/main/snippets/global.json
 - [x] branches 20251204
   - fzf c-s
   - bind open glab mr on branch
@@ -188,6 +197,12 @@ Cons
 - a bit hard to navigate to the conv chat / edit (only hover cmnd when focus user prompt)
 - file apply on root dir
 - cursor alwasy move when response streaming
+
+Search providers support : https://github.com/yetone/avante.nvim?tab=readme-ov-file#web-search-engines
+- tavily 
+- google json: https://developers.google.com/custom-search/v1/introduction/?apix=true
+  - create new search engine : https://programmablesearchengine.google.com/controlpanel/create
+  - ie. https://cse.google.com/cse?cx=649b8d161c6074aca
 
 ## Keymaps
 

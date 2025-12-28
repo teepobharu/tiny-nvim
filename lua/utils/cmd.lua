@@ -46,7 +46,17 @@ local function run_command(command, callback)
   })
 end
 
+local function quickCommandRunCurrentFile()
+  vim.api.nvim_buf_set_mark(0, "<", 1, 0, {})
+  local last_line = vim.fn.line("$")
+  local last_line_text = vim.api.nvim_buf_get_lines(0, last_line - 1, last_line, false)[1] or ""
+  local last_col = math.max(0, #last_line_text - 1)
+  vim.api.nvim_buf_set_mark(0, ">", last_line, last_col, {})
+  vim.cmd("'<,'>QuickCodeRunner")
+end
+
 return {
   create_cmd = create_cmd,
   run_command = run_command,
+  quickCommandRunCurrentFile = quickCommandRunCurrentFile,
 }
