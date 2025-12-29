@@ -258,84 +258,8 @@ local function pick_cmd_result(picker_opts)
     title = picker_opts.title,
   }
 
-  -- Use custom preview function if provided
-  if picker_opts.preview_fn then
-    pick_opts.preview = function(ctx)
-      local item = ctx and ctx.item
-      if not item then
-        return nil
-      end
-
-      -- Call preview function safely
-      local ok, res = pcall(picker_opts.preview_fn, item, ctx)
-      if not ok then
-        -- If preview function errored, write the error into the preview buffer if available
-        if ctx and ctx.buf and vim.api.nvim_buf_is_valid(ctx.buf) then
-          vim.api.nvim_buf_set_option(ctx.buf, "modifiable", true)
-          vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, {"Preview error:", tostring(res)})
-          vim.api.nvim_buf_set_option(ctx.buf, "modifiable", false)
-          return true
-        end
-        return nil
-      end
-
-      if not res then
-        return nil
-      end
-
-      local rtype = type(res)
-
-      -- If preview_fn returned a preview spec table (cmd/args or text/ft), handle accordingly
-      if rtype == "table" then
-        -- If res is a proc spec (cmd/args), return it directly
-        if res.cmd or res.args then
-          return res
-        end
-
-        -- If res contains text, populate preview buffer if available
-        if res.text then
-          if ctx and ctx.buf and vim.api.nvim_buf_is_valid(ctx.buf) then
-            vim.api.nvim_buf_set_option(ctx.buf, "modifiable", true)
-            local lines = vim.split(res.text, "\n")
-            vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, lines)
-            vim.api.nvim_buf_set_option(ctx.buf, "modifiable", false)
-            if res.ft then
-              vim.bo[ctx.buf].filetype = res.ft
-            end
-            return true
-          else
-            -- Return a simple preview spec with text
-            return { text = res.text, ft = res.ft }
-          end
-        end
-
-        -- Otherwise return the table and hope Snacks knows how to handle it
-        return res
-
-      elseif rtype == "string" then
-        -- Treat string as raw preview text
-        if ctx and ctx.buf and vim.api.nvim_buf_is_valid(ctx.buf) then
-          vim.api.nvim_buf_set_option(ctx.buf, "modifiable", true)
-          vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, vim.split(res, "\n"))
-          vim.api.nvim_buf_set_option(ctx.buf, "modifiable", false)
-          return true
-        end
-        return { text = res }
-
-      elseif rtype == "boolean" then
-        -- Allow explicit boolean returned by preview fn
-        return res
-
-      elseif rtype == "function" then
-        -- If the preview fn returned a function, call it with ctx
-        local ok2, handled = pcall(res, ctx)
-        if ok2 then return handled end
-        return nil
-      end
-
-      return nil
-    end
-  elseif picker_opts.preview then
+  -- Use preview - either built-in string or custom function
+  if picker_opts.preview then
     pick_opts.preview = picker_opts.preview
   end
 
@@ -356,54 +280,6 @@ function M.custom_git_pickers.git_show()
 end
 
 
-local function make_git_preview(item, upstream_ref)
-  if not item or not item.file then
-    return nil
-  end
-
-  local file = vim.fn.expand(item.file)
-  local file_dir = vim.fn.fnamemodify(file, ":h")
-
-  -- get git root
-  local git_root_lines = vim.fn.systemlist({ "git", "-C", file_dir, "rev-parse", "--show-toplevel" })
-  if vim.v.shell_error ~= 0 or not git_root_lines[1] or git_root_lines[1] == "" then
-    -- not in a git repo -> fallback: show file contents
-    return {
-      cmd = "cat",
-      args = { file },
-      ft = vim.bo.filetype or vim.fn.fnamemodify(file, ":e"),
-    }
-  end
-  local git_root = git_root_lines[1]
-
-  -- get path relative to repo root (works only for tracked files)
-  local rel_lines = vim.fn.systemlist({ "git", "-C", git_root, "ls-files", "--full-name", "--", file })
-  if vim.v.shell_error ~= 0 or not rel_lines[1] or rel_lines[1] == "" then
-    -- untracked file -> fallback to showing file contents
-    return {
-      cmd = "cat",
-      args = { file },
-      ft = vim.bo.filetype or vim.fn.fnamemodify(file, ":e"),
-    }
-  end
-  local relpath = rel_lines[1]
-
-  -- decide diff range: use provided upstream_ref or auto-detect
-  local diff_range
-  if upstream_ref then
-    diff_range = upstream_ref .. "..HEAD"
-  else
-    vim.fn.systemlist({ "git", "-C", git_root, "rev-parse", "--verify", "HEAD@{u}" })
-    diff_range = (vim.v.shell_error == 0) and "HEAD@{u}..HEAD" or "HEAD~1..HEAD"
-  end
-
-  return {
-    cmd = "git",
-    args = { "-c", "core.pager=", "diff", diff_range, "--", relpath },
-    cwd = git_root,
-    ft = "diff",
-  }
-end
 
 --@type: snacks.picker.preview
 function M.custom_git_pickers.git_diff_upstream()
@@ -502,59 +378,10 @@ function M.custom_git_pickers.git_diff_upstream()
     -- Prefers branch upstream if it has changes, otherwise uses origin's default branch
     args = { "diff-tree", "--no-commit-id", "--name-only", "--diff-filter=d", upstream_ref .. "..HEAD", "-r" },
     name = "git_diff_upstream",
-    title = "Git Branch Changed Files",
-    -- Use helper preview function to show file diff in preview
-    preview_fn = function(item, _ctx)
-      if not item or not item.file then
-        return nil
-      end
-      return make_git_preview(item, upstream_ref)
-    end,
+    title = "Git Branch Changed Files (vs " .. upstream_ref .. ")",
+    -- Use built-in git_diff preview
+    preview = "git_diff",
   }
-end
-
--- Step 2: File list picker for selected ref
-local function show_file_list_picker(selected_ref_stats, on_back)
-  local git_root = Snacks.git.get_root()
-
-  Snacks.picker.pick({
-    source = "git_diff_files",
-    title = "Changed Files vs " .. selected_ref_stats.refAlias,
-    finder = function(opts, ctx)
-      local proc_opts = vim.tbl_extend("force", opts, {
-        cmd = "git",
-        args = { "diff", "--name-only", "--diff-filter=d", selected_ref_stats.refAlias .. "..HEAD" },
-        cwd = git_root,
-        transform = function(item)
-          item.cwd = git_root
-          item.file = item.text
-          return item
-        end,
-      })
-      return require("snacks.picker.source.proc").proc(proc_opts, ctx)
-    end,
-    format = "file",
-    -- Use helper preview function to show file diff in preview
-    preview_fn = function(item, _ctx)
-      return make_git_preview(item)
-    end,
-    win = {
-      input = {
-        keys = {
-          ["<C-[>"] = {
-            function(picker)
-              picker:close()
-              if on_back then
-                on_back()
-              end
-            end,
-            mode = { "n", "i" },
-            desc = "Back to ref selection"
-          },
-        },
-      },
-    },
-  })
 end
 
 -- -- NOTES (do not remove)
@@ -754,16 +581,10 @@ end
 local function show_file_list_picker(selected_ref_stats, on_back)
   local git_root = Snacks.git.get_root()
 
-  print("=== show_file_list_picker ===")
-  print("Selected ref: " .. selected_ref_stats.refAlias)
-  print("Git root: " .. (git_root or "nil"))
-  print("File changes: " .. selected_ref_stats.fileChangesCount)
-
   Snacks.picker.pick({
     source = "git_diff_files",
     title = "Changed Files vs " .. selected_ref_stats.refAlias,
     finder = function(opts, ctx)
-      print("Finder: Getting changed files for " .. selected_ref_stats.refAlias)
       local proc_opts = vim.tbl_extend("force", opts, {
         cmd = "git",
         args = { "diff", "--name-only", "--diff-filter=d", selected_ref_stats.refAlias .. "..HEAD" },
@@ -777,36 +598,13 @@ local function show_file_list_picker(selected_ref_stats, on_back)
       return require("snacks.picker.source.proc").proc(proc_opts, ctx)
     end,
     format = "file",
-    preview = function(ctx)
-      local item = ctx and ctx.item
-      print("=== File Preview Debug ===")
-      print("ctx:", vim.inspect(ctx))
-      print("item:", item and vim.inspect(item) or "nil")
-
-      if not item or not item.file then
-        print("Preview SKIP: no item or file")
-        return nil
-      end
-
-      print("Preview: showing diff for file: " .. item.file)
-      print("Preview: ref: " .. selected_ref_stats.refAlias)
-      print("Preview: git_root: " .. (git_root or "nil"))
-
-      local preview_spec = {
-        cmd = "git",
-        args = { "diff", selected_ref_stats.refAlias .. "..HEAD", "--", item.file },
-        cwd = git_root,
-        ft = "diff",
-      }
-      print("Preview spec:", vim.inspect(preview_spec))
-      return preview_spec
-    end,
+    -- Use built-in git_diff preview
+    preview = "git_diff",
     win = {
       input = {
         keys = {
           ["<C-[>"] = {
             function(picker)
-              print("Back to ref selection")
               picker:close()
               if on_back then
                 on_back()
@@ -878,7 +676,7 @@ function M.custom_change_list_picker()
       }
     end,
 
-    -- Enhanced preview: show commit log (top N) and diff stat for the ref
+    -- Enhanced preview: show commit log and diff stat for the ref
     preview = function(ctx)
       local item = ctx and ctx.item
       if not item or not item.refAlias then
@@ -886,18 +684,37 @@ function M.custom_change_list_picker()
       end
 
       local ref = item.refAlias
-      -- Limit output size for preview to avoid huge buffers
-      local log_cmd = string.format("git --no-pager log --oneline --graph --decorate %s..HEAD | sed -n '1,200p'", ref)
-      local stat_cmd = string.format("git --no-pager diff --stat %s..HEAD | sed -n '1,200p'", ref)
-      print([==[M.custom_change_list_picker#preview stat_cmd:]==], vim.inspect(stat_cmd)) -- __AUTO_GENERATED_PRINT_VAR_END__
-      local combined = log_cmd .. "\n\n" .. stat_cmd
 
-      return {
-        cmd = "bash",
-        args = { "-lc", combined },
-        cwd = git_root,
-        ft = "git",
-      }
+      -- Get commit log
+      local log_output = vim.fn.systemlist({
+        "git", "--no-pager", "log", "--oneline", "--graph", "--decorate",
+        "-n", "50", -- limit to 50 commits
+        ref .. "..HEAD"
+      })
+
+      -- Get diff stat
+      local stat_output = vim.fn.systemlist({
+        "git", "--no-pager", "diff", "--stat",
+        ref .. "..HEAD"
+      })
+
+      -- Combine outputs with a separator
+      local preview_lines = {}
+      vim.list_extend(preview_lines, {"=== Commits ===", ""})
+      vim.list_extend(preview_lines, log_output or {})
+      vim.list_extend(preview_lines, {"", "=== Changes ===", ""})
+      vim.list_extend(preview_lines, stat_output or {})
+
+      -- Write to preview buffer
+      if ctx.buf and vim.api.nvim_buf_is_valid(ctx.buf) then
+        vim.api.nvim_buf_set_option(ctx.buf, "modifiable", true)
+        vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, preview_lines)
+        vim.api.nvim_buf_set_option(ctx.buf, "modifiable", false)
+        vim.bo[ctx.buf].filetype = "git"
+        return true
+      end
+
+      return nil
     end,
 
     confirm = function(picker, item)
@@ -1020,6 +837,3 @@ end
 --#endregion
 
 return M
-
--- TODO
--- fix custom_change_list_picker not show inside ref log step

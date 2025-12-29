@@ -66,10 +66,14 @@ M.config = {
     vim.fn.expand("$HOME/Personal/mynotes/Extras/Template/copilot-custom-prompts/"),
     vim.fn.expand("$HOME/AgodaGit/tools/trip-ai-tools/prompt/"),
     vim.fn.expand("$HOME/AgodaGit/tools/trip-ai-tools/instruction/"),
+    -- per-dir override: match any markdown in these folders
+    { dir = vim.fn.expand("$HOME/dotfiles/claude/commands/"), patterns = { "*.md" } },
+    { dir = vim.fn.expand("$HOME/dotfiles/claude/agents/"), patterns = { "*.md" } },
   },
   patterns = { "*.prompt.md", "*.instructions.md" },
   timeout_ms = 60000,
 }
+
 
 -- Read file content and return as string
 ---@param path string File path to read
@@ -121,30 +125,55 @@ function M.get_prompt_files(opts)
     dirs = {}
   end
 
-  local patterns = opts.patterns or (M.config and M.config.patterns) or { "*" }
+  -- global patterns default (can be overridden per-entry)
+  local patterns_global = opts.patterns or (M.config and M.config.patterns) or { "*" }
   local files = {}
 
   for _, entry in ipairs(dirs) do
     if not entry or entry == "" then goto continue end
 
-    -- If entry is a directory, use globpath to find pattern matches
-    if vim.fn.isdirectory(entry) == 1 then
+    -- Support table entries with per-directory patterns:
+    -- { dir = "/path/to/dir", patterns = { "*.md" } }
+    -- Also allow { path = "..." } or { "/path/to/dir" }
+    local path = nil
+    local entry_patterns = nil
+    if type(entry) == "table" then
+      path = entry.dir or entry.path or entry[1]
+      entry_patterns = entry.patterns
+    else
+      path = entry
+    end
+
+    if not path or path == "" then goto continue end
+
+    local patterns = entry_patterns or patterns_global
+
+    -- Debug: print path and patterns
+    print(string.format("[DEBUG] Processing path: %s", vim.inspect(path)))
+    print(string.format("[DEBUG] Patterns: %s", vim.inspect(patterns)))
+    print(string.format("[DEBUG] isdirectory result: %s", vim.inspect(vim.fn.isdirectory(path))))
+
+    -- If path is a directory, use globpath to find pattern matches
+    if vim.fn.isdirectory(path) == 1 then
+      print(string.format("[DEBUG] Path is directory, globbing..."))
       for _, pat in ipairs(patterns) do
-        local ok = vim.fn.globpath(entry, pat, false, true)
+        local ok = vim.fn.globpath(path, pat, false, true)
+        print(string.format("[DEBUG] Pattern '%s' found %d files", pat, (ok and type(ok) == "table") and #ok or 0))
         if ok and type(ok) == "table" and #ok > 0 then
+          print(string.format("[DEBUG] Adding files: %s", vim.inspect(ok)))
           vim.list_extend(files, ok)
         end
       end
       goto continue
     end
 
-    -- If entry is a file and readable, include it if it matches one of the patterns
-    if vim.fn.filereadable(entry) == 1 then
-      local basename = vim.fn.fnamemodify(entry, ":t")
+    -- If path is a file and readable, include it if it matches one of the patterns
+    if vim.fn.filereadable(path) == 1 then
+      local basename = vim.fn.fnamemodify(path, ":t")
       for _, pat in ipairs(patterns) do
         -- Use globmatch for pattern matching against the basename
         if vim.fn.globmatch(basename, pat) == 1 then
-          table.insert(files, entry)
+          table.insert(files, path)
           break
         end
       end
@@ -154,8 +183,11 @@ function M.get_prompt_files(opts)
     ::continue::
   end
 
+  print(string.format("[DEBUG] Total files found: %d", #files))
+  print(string.format("[DEBUG] Files: %s", vim.inspect(files)))
   return files
 end
+
 
 -- Select a prompt using Snacks picker and call callback with content
 ---@param opts? table Optional config { prompt_dirs, prompt_dir, patterns, timeout_ms, callback }
@@ -210,12 +242,11 @@ function M.select_prompt(opts, callback)
       title = "Select Prompt File",
       items = items,
       format = function(item, picker)
-        -- show filename with a dimmed full absolute path
-        local full = vim.fn.fnamemodify(item.file or "", ":p")
+        -- Use the pre-computed parent directory (last 2 parts)
+        local parent = item.parent or ""
         return {
+          { "[" .. parent .. "] ", "Comment" },
           { item.text or "", "SnacksPickerTitle" },
-          { "  ", "Normal" },
-          { full or "", "Comment" },
         }
       end,
 
@@ -225,7 +256,7 @@ function M.select_prompt(opts, callback)
         hidden = false,
         layout = {
           backdrop = false,
-          height = 0.7,
+          height = 0.9,
         },
       },
       preview_custom_donotremove = function(ctx)
@@ -361,5 +392,4 @@ return M
 -- looks good but help improve this
 -- 1. the item list format still not show last 2 part of the parent dir 
 -- 2. preview height should be longer
--- 3. c-v/s mapping should open that file in new vsplit 
 
