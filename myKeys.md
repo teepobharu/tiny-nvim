@@ -46,27 +46,36 @@ Chore
 - [x] handle selection gx Gf ignore space  / newline
 - [x] gitsign hunks not support visual c-j,k
 
+Snacks
+ - snacks upstream diff
+ - snacks upstream diff
+ - mega ref git diff files - preview
 Nav
 - [x] tab navigations
+- select fix relative path from current file gF ?
 
 *Done*
 0 - files hidden by default and pass options between toggle - don
   - caveat buffer hidden will also persist since it use current opts to persist state
+  - preview <leader-f-G> not show changes
+  - preview changes if not exist (show in preview)
  5 - Avante slash cmd get deprioritize to be below folder cmp
  1 - companion load prompt slash cmd*2
  2 - search term (with fix needed)
  - [ ] keybind to switch back search not work
  4 - global snippets not work again ...
 - select new line fix gGx , gF - yes?
-- select fix relative path from current file gF ?
 commands :
 - oseer run dotnet test
 
 *current*
-1 - snacks upstream diff
-2 - mega ref git diff files
+- feat: grep word scope changer - default, gitroot, monorepo root 
+- fix: fg in terminal wrong path based
+- mega ref git diff files - sort diff options, keybind
+  - diff ref alias compare , open fix
+  - feat: switch refs with c-space
 - improve speed
-  - preview
+  - preview file changes - seem like work on some files only (default preview)
 *To verify*
 1 - copilot prompt context check
   - prompt preview 

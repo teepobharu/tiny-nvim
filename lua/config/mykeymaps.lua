@@ -770,7 +770,10 @@ keymap({'n', 'v'}, '<localleader>rL', function()
   if f then
     f()
     local current_win = vim.api.nvim_get_current_win()
-    vim.cmd('NoiceAll')
+    -- some async delay then execute noice
+    vim.defer_fn(function()
+      vim.cmd('NoiceAll')
+    end, 200)
     if vim.api.nvim_get_current_win() ~= current_win then
       vim.api.nvim_set_current_win(current_win)
     end
@@ -1085,6 +1088,19 @@ local function goto_file_line(open_in_previous_buffer)
 
   -- Validate and open the file
   if path and path ~= "" then
+    -- Resolve relative paths relative to the current buffer's directory or terminal cwd
+    local resolved_path = path
+    if not path:match("^[/~]") and not path:match("^%w+://") then
+      -- Path is relative (doesn't start with /, ~, or a URI scheme)
+      -- Get the appropriate base directory (handles both terminal and normal buffers)
+      local base_dir = myPathUtil.get_buffer_cwd()
+
+      -- Resolve the relative path
+      if base_dir then
+        resolved_path = vim.fn.fnamemodify(base_dir .. "/" .. path, ":p")
+      end
+    end
+
     -- Open the file
     if open_in_previous_buffer then
       local current_win = vim.api.nvim_get_current_win()
@@ -1099,7 +1115,15 @@ local function goto_file_line(open_in_previous_buffer)
   -- ie. current file /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/config/mykeymaps.lua
   -- when use gF on this text in above open files ../../snippets/global.json
   -- will go to /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/snippets/global.json
-    vim.cmd("edit " .. vim.fn.fnameescape(path))
+    -- check if dir exists
+    vim.cmd("edit " .. vim.fn.fnameescape(resolved_path))
+
+    local is_file_readable = vim.fn.filereadable(resolved_path) == 1
+    if not is_file_readable then
+      vim.notify("File not found use gf: " .. resolved_path, vim.log.levels.WARN)
+      vim.cmd("normal! gf")
+    end
+
 
     -- If an anchor was provided (e.g. file.md#section-name), attempt a simple heading search
     if anchor and anchor ~= "" then

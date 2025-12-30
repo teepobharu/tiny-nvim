@@ -198,4 +198,71 @@ function M.get_sub_project_dir()
   return root_dir
 end
 
+function M.get_git_real_filepath(filepath)
+  if not filepath or filepath == "" then
+    filepath = vim.fn.expand("%:p")
+  end
+  local git_root = M.get_root_directory_current_buffer()
+
+  if not git_root then
+    return nil
+  end
+  -- testing
+  -- local git_root = "/Users/tharutaipree/AgodaGit/fe/trips-web.worktrees/exp-check/libs/cart/trip/src/crossSellWidget/core/store/features/constants/feature.enum.ts"
+  -- local filepath = "/Users/tharutaipree/AgodaGit/fe/trips-web.worktrees/exp-check/libs/cart/trip/src/crossSellWidget/core/store/features/constants/feature.enum.ts"
+  -- local git_root = "/Users/tharutaipree/AgodaGit/fe/trips-web.worktrees/exp-check"
+  local rel_path  = filepath:sub(#git_root + 2)
+  return rel_path
+end
+
+--- Get the current working directory for a buffer
+--- For terminal buffers, returns the terminal's actual cwd
+--- For normal buffers, returns the buffer's directory
+---@param bufnr number|nil Buffer number (default: current buffer)
+---@return string|nil The working directory path, or nil if it cannot be determined
+function M.get_buffer_cwd(bufnr)
+  bufnr = bufnr or vim.api.nvim_get_current_buf()
+
+  -- Check if buffer is a terminal buffer
+  local buftype = vim.api.nvim_buf_get_option(bufnr, "buftype")
+  if buftype == "terminal" then
+    -- Get the terminal's process ID
+    local ok, term_pid = pcall(vim.api.nvim_buf_get_var, bufnr, "terminal_job_pid")
+
+    if ok and term_pid then
+      -- Try to get the actual cwd from the terminal process
+      local cwd_result
+      if vim.fn.has("mac") == 1 or vim.fn.has("macunix") == 1 then
+        -- macOS: use lsof to get the terminal's current working directory
+        cwd_result = vim.fn.systemlist({ "lsof", "-a", "-d", "cwd", "-p", tostring(term_pid), "-Fn" })
+        -- lsof output format: n/path/to/cwd
+        print([==[M.get_buffer_cwd#if#if#if#for cwd_result:]==], vim.inspect(cwd_result)) -- __AUTO_GENERATED_PRINT_VAR_END__
+        for _, line in ipairs(cwd_result) do
+        -- __AUTO_GENERATED_PRINT_VAR_START__
+          if line:match("^n") then
+            return line:sub(2) -- Remove 'n' prefix
+          end
+        end
+      else
+        -- Linux: read from /proc/<pid>/cwd
+        local proc_cwd = "/proc/" .. term_pid .. "/cwd"
+        if vim.fn.isdirectory(proc_cwd) == 1 then
+          return vim.fn.resolve(proc_cwd)
+        end
+      end
+    end
+
+    -- Fallback: parse cwd from terminal buffer name
+    -- Format: term://path//pid:shell or term://path//pid:shell;#toggleterm#N
+    local bufname = vim.api.nvim_buf_get_name(bufnr)
+    local term_path = bufname:match("^term://(.-)//[0-9]+:")
+    if term_path then
+      return vim.fn.expand(term_path) -- Expand ~ if present
+    end
+  end
+
+  -- For normal buffers, use the buffer's directory
+  return vim.fn.fnamemodify(vim.api.nvim_buf_get_name(bufnr), ":p:h")
+end
+
 return M
