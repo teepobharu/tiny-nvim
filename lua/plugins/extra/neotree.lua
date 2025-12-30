@@ -12,20 +12,13 @@ local key_g = KeyUtils.key_g
 local isSnackEnabled = KeyUtils.isSnackEnabled
 
 function openGitRemote(state)
+  local gitUtils = require("utils.git")
   local node = state.tree:get_node()
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[openGitRemote node:]==], vim.inspect(node)) -- __AUTO_GENERATED_PRINT_VAR_END__
   local path = node:get_id()
-  local is_dir = node.type == "directory"
-  -- // run git remote url command to get the remote and construct in table_is_empty(table_to_check)he browser ( make sure to support ssh )
   local current_file = path or vim.fn.expand("%:p")
-  local relative_file_path = vim.fn.fnamemodify(current_file, ":.")
-
-  local urlPath = require("utils.git").get_remote_path()
-  local mainBranch = require("utils.git").git_main_branch()
-  local gitroot = require("utils.path").get_root_directory()
-  local currentBranch = require("lazy.util").git_info(gitroot)
-  local branch = ""
+  local branch = nil
   vim.ui.select({
     "1. Main Branch",
     "2. Current Branch",
@@ -33,15 +26,17 @@ function openGitRemote(state)
     if choice then
       local i = tonumber(choice:sub(1, 1))
       if i == 1 then
-        branch = mainBranch
+        branch = nil -- default open main branch
       else
-        branch = currentBranch
+        branch = gitUtils.get_current_branch_or_hash()
       end
     else
-    end
+        return
+      end
+      gitUtils.open_remote(branch, "file", current_file)
+      -- local fullUrl = "https://" .. urlPath .. "/blob/" .. (branch or "master") .. "/" .. relative_file_path
+      -- require("lazy.util").open(fullUrl)
   end)
-  local fullUrl = "https://" .. urlPath .. "/blob/" .. branch .. "/" .. current_file
-  require("lazy.util").open(fullUrl)
 end
 
 --- Get options for file and grep operations based on the current state and type.

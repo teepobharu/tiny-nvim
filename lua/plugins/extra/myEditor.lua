@@ -49,7 +49,6 @@ local function fzfcompareref(selected)
     commit_hash = line:match("^(%S+)")
   end
 
-  print([==["ctrl-s" commit_hash:]==], vim.inspect(commit_hash)) -- __AUTO_GENERATED_PRINT_VAR_END__
   local file_path = vim.fn.expand "%:p"
   vim.cmd("tabnew " .. file_path)
   gitsigns.diffthis(commit_hash, { vertical = true })
@@ -70,6 +69,112 @@ local function toggle_diffpreview_alt()
     print "side-by-side enabled"
     os.execute('git config -f "' .. gitconfig_file .. '" delta.side-by-side true')
   end
+end
+
+-- Helper function to open file diff with gitsigns
+-- @param file_path string: File path (relative or absolute)
+-- @param ref string: Git reference to compare with
+local function open_file_with_gitsigns_diff(file_path, ref)
+  if not pcall(require, "gitsigns") then
+    vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
+    return
+  end
+
+  local git_root = Snacks.git.get_root()
+
+  -- Convert to absolute path if needed
+  if vim.fn.filereadable(file_path) == 0 then
+    file_path = git_root .. "/" .. file_path
+  end
+
+  -- Open file in new tab
+  vim.cmd("tabnew " .. vim.fn.fnameescape(file_path))
+
+  -- Show diff with gitsigns
+  require("gitsigns").diffthis(ref, {
+    vertical = true,
+  })
+end
+
+-- Helper function to open current buffer in new tab with gitsigns diff
+-- @param ref string: Git reference to compare with
+local function open_current_buffer_with_gitsigns_diff(ref)
+  if not pcall(require, "gitsigns") then
+    vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
+    return
+  end
+
+  local current_file = vim.api.nvim_buf_get_name(0)
+
+  if current_file == "" then
+    vim.notify("No file in current buffer", vim.log.levels.WARN)
+    return
+  end
+
+  -- Open in new tab
+  vim.cmd("tabnew " .. vim.fn.fnameescape(current_file))
+
+  -- Show diff with gitsigns
+  require("gitsigns").diffthis(ref, {
+    vertical = true,
+  })
+end
+
+-- Helper function to build remote URL for a file at a specific ref
+-- @param file_path string: File path (relative or absolute)
+-- @param ref string: Git reference (branch, tag, or commit)
+-- @return string|nil: Remote URL or nil if error
+local function build_remote_url(file_path, ref)
+  local git_root = Snacks.git.get_root()
+  if not git_root then
+    return nil
+  end
+
+  -- Convert to absolute path if needed
+  if vim.fn.filereadable(file_path) == 0 then
+    file_path = git_root .. "/" .. file_path
+  end
+
+  -- Get relative path from git root
+  local rel_path = file_path:gsub("^" .. vim.pesc(git_root) .. "/?", "")
+
+  -- Get remote path using gitUtil
+  local remote_path = gitUtil.get_remote_path("origin")
+
+  if not remote_path or remote_path == "" then
+    return nil
+  end
+
+  -- Build URL - detect GitLab vs GitHub
+  local url
+  if remote_path:match("gitlab") then
+    -- GitLab style: /-/blob/
+    url = string.format("https://%s/-/blob/%s/%s", remote_path, ref, rel_path)
+  else
+    -- GitHub style: /blob/
+    url = string.format("https://%s/blob/%s/%s", remote_path, ref, rel_path)
+  end
+
+  return url
+end
+
+-- Helper function to open file in remote at specific ref
+-- @param file_path string: File path (relative or absolute)
+-- @param ref string: Git reference to open at
+local function open_file_in_remote(file_path, ref)
+  local url = build_remote_url(file_path, ref)
+
+  if not url then
+    vim.notify("Failed to build remote URL", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Get filename for notification
+  local filename = vim.fn.fnamemodify(file_path, ":t")
+
+  -- Open in browser
+  vim.fn.jobstart({ "open", url }, { detach = true })
+  vim.notify(string.format("Opening %s @ %s in browser", filename, ref), vim.log.levels.INFO)
 end
 
 return {
@@ -719,16 +824,16 @@ Documentation and Tracking:
             {
               role = "user",
               content = function()
-                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (with only 1 line break)"
+                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (use only 1 line break between title and body description). Important: keep the text clean no formatting (bad: **, '') keep plaintext with shortlist/dash prefix in body description"
                   .. [[
 feat(release): add slack msg and create release after deploy
-- Enhance GitLab CI release job:
-- Update dependency job name to `buckbeak-deploy-prod-tripviewbff` for clarity.
-- Add detailed release description with deploy time, package version, rollback pipeline, quick deploy link, and changelog.
-- Include direct release link in Slack notifications for better traceability.
-- Update README:
-- Expand "Clone repo" section to "Clone and Overview" with folder structure, cloning instructions, and IDE setup steps.
-- Provide clearer onboarding for new contributors.
+- enhance GitLab CI release job:
+- update dependency job name to `buckbeak-deploy-prod-tripviewbff` for clarity.
+- add detailed release description with deploy time, package version, rollback pipeline, quick deploy link, and changelog.
+- include direct release link in Slack notifications for better traceability.
+- update README
+- expand clone repo section to include overview with folder structure, instructions, and IDE setup
+- provide clearer onboarding for new contributors.
                   ]] .. "\n\n```\n"
                   .. vim.fn.system("git diff --staged")
                   .. "\n```"
@@ -1181,6 +1286,8 @@ Your instructions here
               input = {
                 keys = {
                   ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
+                  ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
+                  ["<A-d>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
                 },
               },
             },
@@ -1190,6 +1297,8 @@ Your instructions here
               input = {
                 keys = {
                   ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
+                  ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
+                  ["<A-d>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
                 },
               },
             },
@@ -1200,10 +1309,21 @@ Your instructions here
                 keys = {
                   ["<C-s>"] = { "my_diff_compare", mode = { "n", "i" }, desc = "Open Diff" },
                   ["<C-t>"] = { "test_picker", mode = { "n", "i" }, desc = "Test picker" },
+                  ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
                   ["f6"] = { "toggle_diffpreview_alt", mode = { "n", "i" }, desc = "Toggle Delta Mode" },
                   ["<C-g>"] = { "open_mr", mode = { "n", "i" }, desc = "Open Merge Request" },
                 },
               },
+            },
+          },
+          git_files = {
+            win = {
+              input = {
+                keys = {
+                  ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
+                  ["<A-d>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
+                },
+              }
             },
           },
           git_log = {
@@ -1222,6 +1342,7 @@ Your instructions here
               input = {
                 keys = {
                   ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove QF Item" },
+                  ["<A-d>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
                 },
               },
             },
@@ -1231,17 +1352,40 @@ Your instructions here
               input = {
                 keys = {
                   ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove QF Item" },
+                  ["<A-d>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
                 },
               },
             },
           },
         },
         actions = {
-          open_mr = function(picker, item)
-            print([==[ item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
-            local branch = item.branch
+          open_file_remote = function(picker, item)
             -- __AUTO_GENERATED_PRINT_VAR_START__
-            print([==[open_mr branch:]==], vim.inspect(branch)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            local preview_source = picker.init_opts and picker.init_opts.source
+            print([==[open_file_remote preview_source:]==], vim.inspect(preview_source)) -- __AUTO_GENERATED_PRINT_VAR_END__
+
+            -- debug - careful freeze when more result ?
+            -- print([==[open_file_remote picker:]==], vim.inspect(picker)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            local last_bufferpath = vim.api.nvim_buf_get_name(vim.fn.bufnr("#"))
+            -- local last_buffer0 = vim.api.nvim_buf_get_name(0) # empty
+            local filepath = pathUtil.get_git_real_filepath(item._path or last_bufferpath)
+            local ref = item.branch or item.commit
+            -- print([==[open_file_remote filepath:]==], vim.inspect(filepath)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            -- print([==[open_file_remote ref:]==], vim.inspect(ref)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            -- print([==[open_file_remote item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            if not ref then
+              if preview_source == "git_files" then
+                ref = gitUtil.get_current_git_branch()
+              elseif preview_source == "files" or preview_source == "buffers" then
+                ref = nil
+              else
+                vim.notify("No reference found for this item", vim.log.levels.WARN)
+              end
+            end
+            require('utils.git').open_remote(ref, "file", filepath)
+          end,
+          open_mr = function(picker, item)
+            local branch = item.branch
             if not branch then
               vim.notify("No branch found for this item", vim.log.levels.WARN)
               return
@@ -1276,8 +1420,6 @@ Your instructions here
               local removed = false
               for i = #qflist, 1, -1 do
                 local qf_item = qflist[i]
-                print([==[remove_qf_item#if#for item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
-                print([==[remove_qf_item#if#for qf_item:]==], vim.inspect(qf_item)) -- __AUTO_GENERATED_PRINT_VAR_END__
                 local qf_file = qf_item.filename or (qf_item.bufnr and vim.api.nvim_buf_get_name(qf_item.bufnr))
                 local item_file = item.file or item.filename
 
@@ -1300,35 +1442,28 @@ Your instructions here
             end
           end,
           test_picker = function(picker, item)
-            print([==[ item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            -- Debug action to inspect picker items
+            vim.notify("Item: " .. vim.inspect(item), vim.log.levels.INFO)
             picker:close()
           end,
           toggle_diffpreview_alt = toggle_diffpreview_alt,
           my_diff_compare = function(picker, item, action)
-            -- print([==[ item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
-            -- Check if Gitsigns is available
-            if not pcall(require, "gitsigns") then
-              vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
-              return
-            end
             -- Get the selected reference from the picker
             local ref = item.branch or item.commit
-            vim.notify("diff ref=" .. vim.inspect(ref))
 
             if not ref then
               local git_default = "master"
               ref = git_default
-              vim.notify("No reference compare with default", vim.log.levels.WARN)
+              vim.notify("No reference found, using default: " .. git_default, vim.log.levels.WARN)
             end
 
-            picker:close() -- require this else not work
-            vim.cmd "tabnew"
-            vim.cmd "b#" -- switch to the previous buffer
-            vim.cmd "bd#" -- delete the previous buffer (empty buffer)
-            print([==[run my_diff_compare ref:]==], vim.inspect(ref)) -- __AUTO_GENERATED_PRINT_VAR_END__
-            require("gitsigns").diffthis(ref, {
-              vertical = true,
-            })
+            picker:close() -- Close picker first
+
+            -- Use the helper function to open current buffer with diff
+            open_current_buffer_with_gitsigns_diff(ref)
+          end,
+          toggle_cwd_files_grep = function(picker, item)
+            require("utils.snacks_terminal").toggle_cwd_files_grep(picker, item)
           end,
           toggle_files_buffers = function(picker, item)
             local preview_source = picker.init_opts and picker.init_opts.source
@@ -1548,13 +1683,9 @@ Your instructions here
             local success, err = pcall(function()
               vim.cmd("Neotree " .. filepath)
             end)
-            print([==[(anon) err:]==], vim.inspect(err)) -- __AUTO_GENERATED_PRINT_VAR_END__
-            -- __AUTO_GENERATED_PRINT_VAR_START__
-            print([==[(anon) success:]==], vim.inspect(success)) -- __AUTO_GENERATED_PRINT_VAR_END__
             if not success then
               vim.notify("Error opening Neotree: " .. err, vim.log.levels.ERROR)
             else
-              -- print("success")
               return
             end
           end

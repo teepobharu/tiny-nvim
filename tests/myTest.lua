@@ -966,6 +966,21 @@ function lsp_signature()
   -- ISSUE = noice auto enable signature !!
 end
 
+-- Helper function to make a path absolute
+local function pathsHelper()
+  local function make_absolute(path, base)
+    -- append with current cwd
+    if vim.fn.fnamemodify(path, ":p") == path then
+      return path  -- already absolute
+    else
+      return vim.fn.fnamemodify(path, ":p")
+    end
+  end
+  -- local test = make_absolute("./somefile.txt")
+  -- local test2 = make_absolute("./somefile.txt")
+  print([==[ test:]==], vim.inspect(test)) -- __AUTO_GENERATED_PRINT_VAR_END__
+end
+
 local function getDirForCurWord()
   -- local filepath = "myTest.lua"
   local filepath = "../tests/myTest.lua"
@@ -1019,7 +1034,7 @@ function PL_testPasteImage()
 end
 
 local function main()
-  goto_file_line()
+  pathsHelper()
   -- testGitrefFzfLua()
   -- snacks_qfgrep()
   -- snacks_qffiles()
