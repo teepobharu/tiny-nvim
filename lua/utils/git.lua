@@ -53,11 +53,24 @@ function M.get_remote_path(upstream)
   return path
 end
 
----@param ref string
+function M.get_current_branch_or_hash()
+  local branch = vim.fn.system("git rev-parse --abbrev-ref HEAD"):gsub("\n", "")
+  if branch == "HEAD" then
+    -- Detached HEAD, get the commit hash instead
+    branch = vim.fn.system("git rev-parse HEAD"):gsub("\n", "")
+  end
+  return branch
+end
+
+---@param ref string | nil -- If nil, use main branch
 ---@param mode "file" | "commit" | "branch"
-function M.get_branch_url(ref, mode)
+---@param file string|nil
+function M.get_branch_url(ref, mode, file)
   -- print([==[function mode:]==], vim.inspect(mode)) -- __AUTO_GENERATED_PRINT_VAR_END__
-  local file_path = vim.fn.expand("%:p")
+  if not ref or ref == "" then
+    ref = M.git_main_branch()
+  end
+  local file_path = file or vim.fn.expand("%:p")
   local line_number = vim.fn.line(".")
 
   local gitroot = pathUtil.get_git_root()
@@ -86,8 +99,9 @@ end
 
 ---@param ref string
 ---@param mode "file" | "commit" | "branch"
-function M.open_remote(ref, mode)
-  local url = M.get_branch_url(ref, mode)
+---@param file string|nil
+function M.open_remote(ref, mode, file)
+  local url = M.get_branch_url(ref, mode, file)
   vim.fn.jobstart({ "open", url }, { detach = true })
 end
 
