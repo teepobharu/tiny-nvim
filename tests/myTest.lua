@@ -635,6 +635,133 @@ function snacks_qfgrep()
     title = "Grep Quickfix Files",
   })
 end
+function snacks_opts() 
+
+  local baseRgOpt = {
+    prompt = "NV3 dir",
+    dirs = { vim.fn.expand("$HOME/dotfiles/.config/nvim3_jelly_tinynvim") },
+    title = "Grep in NV3",
+  }
+
+  local rg_picker_withargs = Snacks.picker.grep(
+    -- vim.tbl_deep_extend("force", baseRgOpt, {
+    {
+    -- args = { "--hidden", "--glob", "!.git/", "--no-ignore" },
+          prompt = "NV3 dir",
+    dirs = { vim.fn.expand("$HOME/dotfiles/.config/nvim3_jelly_tinynvim") },
+    title = "Grep in NV3",
+    search = "files",
+    -- rg_opts = "--hidden --glob '!.git/'",
+    pattern = "contributor",
+    -- pattern = "-h",
+    -- prompt = "NV3 dir",
+    -- dirs = { vim.fn.expand("$HOME/dotfiles/.config/nvim3_jelly_tinynvim") },
+    -- title = "Grep in NV3",
+    -- search = "files", -- should see allcontributors with hidden args
+    hidden = false,
+  }
+  -- )
+)
+
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  -- print([==[snacks_opts rg_picker_withargs:]==], vim.inspect(rg_picker_withargs)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[snacks_opts rg_picker_withargs opts]==], vim.inspect(rg_picker_withargs.opts)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  print([==[snacks_opts rg_picker_withargs initopts:]==], vim.inspect(rg_picker_withargs.init_opts)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  print([==[snacks_opts rg_picker_withargs initopts:]==], vim.inspect(rg_picker_withargs.init_opts)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  -- sleep (2000)
+  vim.defer_fn(function()
+    print("defer fn called after 2s upadting rg_picker_withargs hidden and max depth 1")
+    -- this works but not retain selection
+    rg_picker_withargs.opts.args = { "--max-depth", "1", "--hidden", "--glob", "!.git/", "--no-ignore" }
+    rg_picker_withargs:refresh() 
+    -- __AUTO_GENERATED_PRINT_VAR_START__
+    print([==[snacks_opts#(anon) rg_picker_withargs.opts after:]==], vim.inspect(rg_picker_withargs.opts)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  end, 2000)
+  --
+
+      
+    -- Refresh with new arguments  
+
+
+  local picker = Snacks.picker.grep({
+    prompt = "NV3 dir",
+    dirs = { vim.fn.expand("$HOME/dotfiles/.config/nvim3_jelly_tinynvim") },
+    title = "Grep in NV3",
+    search = "Test",
+    rg_opts = "--hidden --glob '!.git/'",
+    pattern = "-h",
+    win = {
+      input = {
+        keys = {
+          ["<C-u>"] = "clear_input",
+          ["<C-d>"] = "delete_char",
+          ["<C-x>"] = function(picker, item)
+            local opt = picker.opts
+            -- __AUTO_GENERATED_PRINT_VAR_START__
+            print([==[snacks_opts#"<C-x>" opt:]==], vim.inspect(opt)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            local input = picker.input
+            -- __AUTO_GENERATED_PRINT_VAR_START__
+            print([==[snacks_opts#check_info input:]==], vim.inspect(input)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            local initopts = picker.init_opts
+            -- __AUTO_GENERATED_PRINT_VAR_START__
+            print([==[snacks_opts#check_info initopts:]==], vim.inspect(initopts)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            print("check_info action executed")
+            vim.notify("You selected: " .. vim.inspect(item), vim.log.levels.INFO)
+            Snacks.notify("Checked item info!", vim.log.levels.INFO)
+          end,
+        }
+      }
+    },
+    actions = {
+      check_info = function(picker, item)
+        local opts = picker.opts
+        -- __AUTO_GENERATED_PRINT_VAR_START__
+        print([==[snacks_opts#check_info opts:]==], vim.inspect(opts)) -- __AUTO_GENERATED_PRINT_VAR_END__
+        local input = picker.input
+        -- __AUTO_GENERATED_PRINT_VAR_START__
+        print([==[snacks_opts#check_info input:]==], vim.inspect(input)) -- __AUTO_GENERATED_PRINT_VAR_END__
+        local initopts = picker.init_opts
+        -- __AUTO_GENERATED_PRINT_VAR_START__
+        print([==[snacks_opts#check_info initopts:]==], vim.inspect(initopts)) -- __AUTO_GENERATED_PRINT_VAR_END__
+        vim.notify("You selected: " .. vim.inspect(item), vim.log.levels.INFO)
+        Snacks.notify("Checked item info!", vim.log.levels.INFO)
+        print("check_info action executed")
+      end,
+    }
+  })
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  -- print([==[snacks_opts picker input:]==], vim.inspect(picker.input)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  local baseFilesOpt = {
+    prompt = "Files:",
+    pattern = "",
+    dirs = { vim.fn.expand("$HOME/dotfiles/.config/nvim3_jelly_tinynvim") },
+    title = "File search",
+    live = false,
+  }
+
+  local files_picker_help = Snacks.picker.files(vim.tbl_deep_extend("force", baseFilesOpt, {
+    search = "-h",
+  }))
+
+  local files_picker_2_update = Snacks.picker.files({
+    args = { "--hidden", "--glob", "!.git/" },
+
+  })
+
+  print([==[snacks_opts picker filter:]==], vim.inspect(picker.input.filter)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  print([==[snacks_opts picker state:]==], vim.inspect(picker.state)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  print([==[snacks_opts picker opts:]==], vim.inspect(picker.opts)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  print([==[snacks_opts picker opts live:]==], vim.inspect(picker.opts.live)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  print([==[snacks_opts picker opts picker.opts.supports_live:]==], vim.inspect(picker.opts.supports_live)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  print([==[snacks_opts picker filter.search:]==], vim.inspect(picker.input.filter.search)) -- __AUTO_GENERATED_PRINT_VAR_END__
+
+  -- pattern is used to fuzzy match result after ?
+  -- search is passed to params ?
+  -- The parsed pattern is added as the final argument to the search command grep -- <pattern>
+  -- try use -h when use c-g in files (not in grep) search will see output command of help
+
+end
 
 local function overseertestTask()
   -- Insert args at the '$*' in the grepprg

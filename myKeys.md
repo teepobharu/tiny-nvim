@@ -67,13 +67,25 @@ Nav
 - select new line fix gGx , gF - yes?
 commands :
 - oseer run dotnet test
+- feat wip: grep word scope changer - default, gitroot, monorepo root 
 
 *current*
-- feat: grep word scope changer - default, gitroot, monorepo root 
+- grep/files depth changer - a-/+
 - fix: fg in terminal wrong path based
 - mega ref git diff files - sort diff options, keybind
   - diff ref alias compare , open fix
   - feat: switch refs with c-space
+- ai: 
+   - avante
+      -  check gpt via oai 5.2 works when switch takes v long to load 
+      -  check claude via vertex/
+      -  check gemini via opai 
+        - answer done
+        - run tools ls / view error write tools ? :
+            - Unable to submit request because function call `default_api:grep` in the 15. content block is missing a `thought_signature` \n No fallback model group found for original model_group=vertex_ai-gemini-3-pro-preview
+            - https://docs.cloud.google.com/vertex-ai/generative-ai/docs/thought-signatures
+
+      -  check gemini via vert/gem
 - improve speed
   - preview file changes - seem like work on some files only (default preview)
 *To verify*
