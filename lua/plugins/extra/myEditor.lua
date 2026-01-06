@@ -8,6 +8,17 @@ local key_s = keyutil.key_s
 local key_g = keyutil.key_g
 local open_remote = gitUtil.open_remote
 
+-- Helper: return the full path of the current buffer if available
+local function get_current_buffer_path()
+  -- Use the Neovim API to get the current buffer name (absolute or empty)
+  local bufname = vim.api.nvim_buf_get_name(0)
+  if bufname and bufname ~= "" then
+    -- Ensure an absolute path is returned
+    return vim.fn.fnamemodify(bufname, ":p")
+  end
+  return nil
+end
+
 ---Run the first available formatter followed by more formatters
 ---@param bufnr integer
 ---@param ... string
@@ -23,7 +34,7 @@ local function first(bufnr, ...)
   return select(1, ...)
 end
 
-local mapping_key_prefix = vim.g.ai_prefix_key or "<leader>A" -- orginal from codecompanion.lua
+local companion_mapping_key_prefix = vim.g.ai_prefix_key or "<leader>A" -- orginal from codecompanion.lua
 
 local function fzfcompareref(selected)
   local ok, gitsigns = pcall(require, "gitsigns")
@@ -435,37 +446,40 @@ return {
     "olimorris/codecompanion.nvim",
     keys = {
       {
-        mapping_key_prefix .. "a",
+        companion_mapping_key_prefix .. "a",
         "<cmd>CodeCompanionAction<cr>",
         desc = "Code Companion - actions",
         mode = "v",
       },
       {
-        mapping_key_prefix .. "A",
+        companion_mapping_key_prefix .. "A",
         "<cmd>CodeCompanionChat Add<cr>",
         desc = "Code Companion - Add selected",
         mode = "v",
       },
       {
-        mapping_key_prefix .. "V",
+        companion_mapping_key_prefix .. "V",
         -- "<cmd>CodeCompanionChat Toggle<cr>",
         "<cmd>CodeCompanionChat<cr>", -- will add selected input and toggle
         desc = "Code Companion - Add and Toggle",
         mode = "v",
       },
-      { mapping_key_prefix .. "v", "<cmd>CodeCompanionChat<cr>", mode = "v" }, -- not sure why not override
+      { companion_mapping_key_prefix .. "v", "<cmd>CodeCompanionChat<cr>", mode = "v" }, -- not sure why not override
 
       {
-        mapping_key_prefix .. "q",
+        companion_mapping_key_prefix .. "q",
         "<cmd>CodeCompanionChat<cr>",
         desc = "Code Companion - Chat",
         mode = "v",
       },
       {
-        mapping_key_prefix .. "Q",
-        function()
-          vim.cmd "CodeCompanion"
-        end,
+        companion_mapping_key_prefix .. "M",
+        "<cmd>CodeCompanion /short-staged-commit<cr>",
+        desc = "Code Companion - Git commit message (staged)",
+      },
+      {
+        companion_mapping_key_prefix .. "Q",
+        "<cmd>'<,'>CodeCompanion<cr>",
         desc = "Code Companion - Quick chat",
         mode = "v",
       },
@@ -810,22 +824,28 @@ Documentation and Tracking:
 - Maintain an overarching summary file (`DATE-actions.md`), consolidating all changes and providing a single reference point for handover purposes.
           ]]
           }
+          },
         },
         -- overrides the prompt frmo jellydn to
-        ["Generate a Commit Message for Staged"] = {
+        ["Generate a Commit Message for Staged Short"] = {
           strategy = "chat",
           description = "Generate a commit message for staged change",
           opts = {
-            short_name = "staged-commit",
-            auto_submit = false,
+            short_name = "short-staged-commit",
+            auto_submit = true,
             is_slash_cmd = true,
+            adapter = {
+              name = "copilot",
+              model = "gpt-5-mini", -- slower but more complete than gpt-4.1 ?
+            },
           },
           prompts = {
             {
               role = "user",
               content = function()
-                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (use only 1 line break between title and body description). Important: keep the text clean no formatting (bad: **, '') keep plaintext with shortlist/dash prefix in body description"
+                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (use only 1 line break between title and body description). Important: keep the text clean no formatting (bad: **, '') keep plaintext with shortlist/dash prefix in body description. Only output the commit message. Do not output more than 5 bullet points. Do use acronym to save space."
                   .. [[
+Example commit message:
 feat(release): add slack msg and create release after deploy
 - enhance GitLab CI release job:
 - update dependency job name to `buckbeak-deploy-prod-tripviewbff` for clarity.
@@ -894,7 +914,6 @@ Your instructions here
         },
       },
     },
-  },
   },
   {
     "CopilotC-Nvim/CopilotChat.nvim",
@@ -1360,19 +1379,26 @@ Your instructions here
         },
         actions = {
           open_file_remote = function(picker, item)
-            -- __AUTO_GENERATED_PRINT_VAR_START__
+            -- Determine picker source for fallback decisions
             local preview_source = picker.init_opts and picker.init_opts.source
-            print([==[open_file_remote preview_source:]==], vim.inspect(preview_source)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
-            -- debug - careful freeze when more result ?
-            -- print([==[open_file_remote picker:]==], vim.inspect(picker)) -- __AUTO_GENERATED_PRINT_VAR_END__
+            -- Prefer explicit item path, then the current buffer, then the alternate buffer
+            local current_buf_path = get_current_buffer_path()
             local last_bufferpath = vim.api.nvim_buf_get_name(vim.fn.bufnr("#"))
-            -- local last_buffer0 = vim.api.nvim_buf_get_name(0) # empty
-            local filepath = pathUtil.get_git_real_filepath(item._path or last_bufferpath)
+
+            local chosen_path = item._path
+            if not chosen_path or chosen_path == "" then
+              if current_buf_path and current_buf_path ~= "" then
+                chosen_path = current_buf_path
+              else
+                chosen_path = last_bufferpath
+              end
+            end
+
+            -- Normalize to git real filepath
+            local filepath = pathUtil.get_git_real_filepath(chosen_path)
+
             local ref = item.branch or item.commit
-            -- print([==[open_file_remote filepath:]==], vim.inspect(filepath)) -- __AUTO_GENERATED_PRINT_VAR_END__
-            -- print([==[open_file_remote ref:]==], vim.inspect(ref)) -- __AUTO_GENERATED_PRINT_VAR_END__
-            -- print([==[open_file_remote item:]==], vim.inspect(item)) -- __AUTO_GENERATED_PRINT_VAR_END__
             if not ref then
               if preview_source == "git_files" then
                 ref = gitUtil.get_current_git_branch()
@@ -1382,6 +1408,7 @@ Your instructions here
                 vim.notify("No reference found for this item", vim.log.levels.WARN)
               end
             end
+
             require('utils.git').open_remote(ref, "file", filepath)
           end,
           open_mr = function(picker, item)
@@ -1517,6 +1544,15 @@ Your instructions here
             -- Snacks.picker.actions.insert(picker) -- nothing
             -- Snacks.picker.actions.toggle_focus(picker) -- not help sometimes still show
           end,
+          increase_picker_depth = function(picker, item)
+            require("utils.snacks_terminal").adjust_picker_depth(picker, item, 1)
+          end,
+          decrease_picker_depth = function(picker, item)
+            require("utils.snacks_terminal").adjust_picker_depth(picker, item, -1)
+          end,
+          reset_picker_depth = function(picker, item)
+            require("utils.snacks_terminal").adjust_picker_depth(picker, item, 0)
+          end,
         },
         -- win : overrides here does not really work - not sure why
         win = {
@@ -1542,6 +1578,9 @@ Your instructions here
               ["<a-a>"] = { "select_all", mode = { "n", "i" } },
               ["<a-q>"] = { "qflist", mode = { "n", "i" } },
               ["<c-q>"] = "cancel",
+              ["<M-=>"] = { "increase_picker_depth", mode = { "n", "i" }, desc = "Increase search depth" },
+              ["<M-->"] = { "decrease_picker_depth", mode = { "n", "i" }, desc = "Decrease search depth" },
+              ["<M-0>"] = { "reset_picker_depth", mode = { "n", "i" }, desc = "Reset search depth" },
             },
           },
           preview = {
@@ -1666,6 +1705,18 @@ Your instructions here
           Snacks.picker.git_branches()
         end,
         desc = "Git Branches",
+      },
+      {
+        "<leader>fw",
+        function()
+          Snacks.picker.grep_word {
+            show_empty = true,
+            need_search = false,
+            hidden = true,
+          }
+        end,
+        desc = "Visual selection or word",
+        mode = { "n", "x" },
       },
       {
         "<leader>E",

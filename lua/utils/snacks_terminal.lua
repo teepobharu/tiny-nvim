@@ -1324,37 +1324,88 @@ function M.toggle_cwd_files_grep(picker, item)
     vim.g.picker_cwd_cycle_state = "current"
   end
 
-  -- Define the cycle order and get next state
-  local cycle_order = {"current", "gitroot", "subproject", "prevbuffer"}
-  local current_idx = vim.fn.index(cycle_order, vim.g.picker_cwd_cycle_state) + 1
-  local next_idx = (current_idx % #cycle_order) + 1
-  vim.g.picker_cwd_cycle_state = cycle_order[next_idx]
+  -- Define the initial cycle order (will be filtered for duplicates/invalid)
+  local cycle_order = {"current", "current_d1", "gitroot", "subproject", "prevbuffer"}
 
   -- Map states to actual directories
   local cwd_map = {
     current = current_dir,
+    current_d1 = current_dir, -- Same as current, but with depth-1 search for grep
     gitroot = git_root,
     subproject = sub_project_dir,
     prevbuffer = prev_buffer_dir,
   }
 
-  local new_cwd = cwd_map[vim.g.picker_cwd_cycle_state]
+  -- Remove duplicates from cwd_map
+  -- Keep track of seen directories and remove duplicate entries
+  -- Note: current_d1 is kept separate from current even if same dir (different behavior for grep)
+  local seen_dirs = {}
+  local unique_cycle_order = {}
 
-  -- Skip if the directory doesn't exist or is nil
-  while (not new_cwd or new_cwd == "" or vim.fn.isdirectory(new_cwd) == 0) and next_idx ~= current_idx do
-    -- Try next in cycle
-    next_idx = (next_idx % #cycle_order) + 1
-    vim.g.picker_cwd_cycle_state = cycle_order[next_idx]
-    new_cwd = cwd_map[vim.g.picker_cwd_cycle_state]
+  for _, state in ipairs(cycle_order) do
+    local dir = cwd_map[state]
+    -- Only add if directory is valid and not seen before
+    if dir and dir ~= "" and vim.fn.isdirectory(dir) == 1 then
+      -- Treat current_d1 as distinct from current (different grep behavior)
+      local dir_key = (state == "current_d1") and "current_d1" or dir
+
+      if not seen_dirs[dir_key] then
+        seen_dirs[dir_key] = true
+        table.insert(unique_cycle_order, state)
+      else
+        -- Remove duplicate from cwd_map
+        cwd_map[state] = nil
+      end
+    else
+      -- Remove invalid directories
+      cwd_map[state] = nil
+    end
   end
+
+  -- Update cycle_order to only include unique, valid directories
+  cycle_order = unique_cycle_order
+
+  -- If all directories are the same or invalid, keep at least current
+  if #cycle_order == 0 then
+    cycle_order = {"current"}
+    cwd_map = { current = current_dir }
+  end
+
+  -- If only one unique directory, notify user and don't cycle
+  if #cycle_order == 1 then
+    vim.notify("Only one unique directory available - no other scopes to cycle to", vim.log.levels.INFO)
+    return
+  end
+
+  -- Find next valid state in the new cycle_order
+  local current_state_idx = nil
+  for i, state in ipairs(cycle_order) do
+    if state == vim.g.picker_cwd_cycle_state then
+      current_state_idx = i
+      break
+    end
+  end
+
+  -- If current state is not in cycle (was removed as duplicate), start from beginning
+  if not current_state_idx then
+    current_state_idx = 0
+  end
+
+  -- Move to next state
+  local next_idx = (current_state_idx % #cycle_order) + 1
+  vim.g.picker_cwd_cycle_state = cycle_order[next_idx]
+  local new_cwd = cwd_map[vim.g.picker_cwd_cycle_state]
 
   -- Get current picker source and pattern
   local source = picker.init_opts and picker.init_opts.source
-  local current_search = picker.input.filter and picker.input.filter.pattern
+  -- search = for grep pickers
+  local filter_pattern = picker.input.filter and (picker.input.filter.pattern ~= "" and picker.input.filter.pattern)
+  local filter_search = picker.input.filter and (picker.input.filter.search ~= "" and picker.input.filter.search)
 
   -- State labels
   local state_labels = {
     current = "Current Directory",
+    current_d1 = "Current Directory (Depth 1)",
     gitroot = "Git Root",
     subproject = "Sub-Project Directory",
     prevbuffer = "Previous Buffer Directory",
@@ -1373,35 +1424,41 @@ function M.toggle_cwd_files_grep(picker, item)
   local scope_label = state_labels[vim.g.picker_cwd_cycle_state]
   local picker_params = {
     cwd = new_cwd,
-    pattern = current_search or "",
+    pattern = filter_pattern or "",
+    search = filter_search or "",
+    live = picker.opts.supports_live and picker.opts.live,
     title = string.format("%s [%s]", source or "Picker", scope_label),
   }
+  local hidden_state = picker.opts.hidden
+  local ignored_state = picker.opts.ignored
+
+  -- Fallback to init_opts if opts don't have the values
+  if hidden_state == nil and picker.init_opts then
+    hidden_state = picker.init_opts.hidden
+  end
+  if ignored_state == nil and picker.init_opts then
+    ignored_state = picker.init_opts.ignored
+  end
+
+  if hidden_state ~= nil then
+    picker_params.hidden = hidden_state
+  end
+  if ignored_state ~= nil then
+    picker_params.ignored = ignored_state
+  end
 
   -- Handle different picker types and preserve their state
   if source == "files" then
-    -- Preserve files picker state
-    local hidden_state = picker.opts.hidden
-    local ignored_state = picker.opts.ignored
-
-    -- Fallback to init_opts if opts don't have the values
-    if hidden_state == nil and picker.init_opts then
-      hidden_state = picker.init_opts.hidden
+    -- Add max-depth for current_d1 mode (depth 1 search) - fd supports --max-depth
+    if vim.g.picker_cwd_cycle_state == "current_d1" then
+      picker_params.args = { "--max-depth", "1" }
     end
-    if ignored_state == nil and picker.init_opts then
-      ignored_state = picker.init_opts.ignored
-    end
-
-    if hidden_state ~= nil then
-      picker_params.hidden = hidden_state
-    end
-    if ignored_state ~= nil then
-      picker_params.ignored = ignored_state
-    end
-
     Snacks.picker.files(picker_params)
   elseif source == "grep" then
-    -- Preserve grep picker state
-    -- Grep doesn't have hidden/ignored but may have other options
+    -- Add max-depth for current_d1 mode (depth 1 search) - ripgrep supports --max-depth
+    if vim.g.picker_cwd_cycle_state == "current_d1" then
+      picker_params.args = { "--max-depth", "1" }
+    end
     Snacks.picker.grep(picker_params)
   elseif source == "buffers" then
     -- Buffers picker - preserve any relevant state
@@ -1420,6 +1477,77 @@ function M.toggle_cwd_files_grep(picker, item)
       vim.cmd("startinsert")
     end
   end, 50)
+end
+
+-- Adjust max-depth for files/grep pickers dynamically
+-- @param direction number: 1 to increase depth, -1 to decrease depth, 0 to reset to unlimited
+function M.adjust_picker_depth(picker, item, direction, max_depth_limit)
+  -- Get current depth from picker.opts (not global)
+  local current_depth = picker.opts.max_depth
+  local new_depth
+
+  if direction == 0 then
+    -- Reset to unlimited
+    -- Return early if already unlimited
+    if current_depth == nil then
+      return
+    end
+    new_depth = nil
+  elseif direction > 0 then
+    -- Increase depth (make it deeper)
+    if current_depth == nil then
+      new_depth = 10 -- Start with 10 if unlimited
+    else
+      new_depth = current_depth + 1
+      -- enable this if you want to cap max depth
+      if max_depth_limit and new_depth > max_depth_limit then
+        new_depth = nil -- Remove limit at max
+      end
+    end
+  else
+    -- Decrease depth (make it shallower)
+    if current_depth == nil then
+      new_depth = 10 -- Start with 10 if unlimited
+    elseif current_depth > 1 then
+      new_depth = current_depth - 1
+    else
+      new_depth = 1 -- Minimum depth is 1
+    end
+  end
+
+  -- Store depth in picker.opts
+  picker.opts.max_depth = new_depth
+
+  local depth_label = new_depth and tostring(new_depth) or "unlimited"
+  -- Update args based on depth
+  if new_depth then
+    picker.opts.args = { "--max-depth", tostring(new_depth) }
+  else
+    -- Remove depth args when unlimited
+    picker.opts.args = nil
+  end
+
+  -- Update title to show depth
+  -- Snacks.notify.info("Updating picker title with depth: " .. depth_label)
+
+  if picker.title then
+    -- __AUTO_GENERATED_PRINT_VAR_START__
+    -- Remove existing -d={number} pattern
+    -- Also replace (Depth {number}) if exists
+    local base_title = picker.title:gsub("%s*%-d=%d+", "")
+    base_title = base_title:gsub("%s*%((Depth%s*%d+|Unlimited)%s*%)", "")
+
+    -- Add new depth indicator if depth is set
+    if new_depth then
+      picker.title = base_title .. " -d=" .. tostring(new_depth)
+
+    else
+      picker.title = base_title
+    end
+  end
+
+  -- Refresh picker with new args
+  picker:refresh()
 end
 
 -- Export helper functions for use in other modules
