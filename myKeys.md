@@ -52,7 +52,6 @@ Snacks
  - mega ref git diff files - preview
 Nav
 - [x] tab navigations
-- select fix relative path from current file gF ?
 
 *Done*
 0 - files hidden by default and pass options between toggle - don
@@ -68,9 +67,14 @@ Nav
 commands :
 - oseer run dotnet test
 - feat wip: grep word scope changer - default, gitroot, monorepo root 
+- grep/files depth changer - a-/+
+- select fix relative path from current file gF ? works need to check other example why sometime not
 
 *current*
-- grep/files depth changer - a-/+
+- avante models quick select switch between 4.1 mini and 5 mini and 5.2 codex 
+  - ./docs/avante_20260107_keys_model.md
+3 - codecompanion update try https://github.com/olimorris/codecompanion.nvim/blob/main/lua/codecompanion/config.lua
+  - choose model in inline chat explore
 - fix: fg in terminal wrong path based
 - mega ref git diff files - sort diff options, keybind
   - diff ref alias compare , open fix
@@ -92,7 +96,6 @@ commands :
 1 - copilot prompt context check
   - prompt preview 
   - prompt additiona path of /Users/tharutaipree/AgodaGit/tools/trip-ai-tools/prompt/update_test_by_change.prompt.md
-3 - codecompanion update try https://github.com/olimorris/codecompanion.nvim/blob/main/lua/codecompanion/config.lua
 3 - send text to terminal from visible screen first then trust vcount later
   - trust vcount with id
     - [ ] buffer to last buffer (currently can use snacks) is there better way ?

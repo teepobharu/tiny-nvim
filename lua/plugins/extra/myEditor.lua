@@ -1,23 +1,10 @@
 local pathUtil = require "utils.mypath"
 local gitUtil = require "utils.git"
 local keyutil = require "utils.keyutil"
+local editor_keymaps = require "utils.editor_keymaps"
 
 local isSnackEnabled = keyutil.isSnackEnabled
-local key_f = keyutil.key_f
-local key_s = keyutil.key_s
-local key_g = keyutil.key_g
 local open_remote = gitUtil.open_remote
-
--- Helper: return the full path of the current buffer if available
-local function get_current_buffer_path()
-  -- Use the Neovim API to get the current buffer name (absolute or empty)
-  local bufname = vim.api.nvim_buf_get_name(0)
-  if bufname and bufname ~= "" then
-    -- Ensure an absolute path is returned
-    return vim.fn.fnamemodify(bufname, ":p")
-  end
-  return nil
-end
 
 ---Run the first available formatter followed by more formatters
 ---@param bufnr integer
@@ -32,160 +19,6 @@ local function first(bufnr, ...)
     end
   end
   return select(1, ...)
-end
-
-local companion_mapping_key_prefix = vim.g.ai_prefix_key or "<leader>A" -- orginal from codecompanion.lua
-
-local function fzfcompareref(selected)
-  local ok, gitsigns = pcall(require, "gitsigns")
-  if not ok then
-    vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
-    return
-  end
-  -- Extract branch/commit reference from selected line
-  -- Format examples:
-  --   remotes/origin/TRIPWEB-2627       a9020d5785 refactor: ...
-  --   main                              b1234567   feat: ...
-  --   feature/my-branch                 c9876543   fix: ...
-  local line = selected[1]
-  local commit_hash
-
-  -- Try to match remote branch: "remotes/origin/BRANCH_NAME"
-  -- Strip "remotes/" prefix and use "origin/BRANCH_NAME"
-  local remote_ref = line:match("^remotes/(.-)%s+")
-  if remote_ref then
-    commit_hash = remote_ref
-  else
-    -- Try to match local branch or commit hash (everything before first whitespace)
-    commit_hash = line:match("^(%S+)")
-  end
-
-  local file_path = vim.fn.expand "%:p"
-  vim.cmd("tabnew " .. file_path)
-  gitsigns.diffthis(commit_hash, { vertical = true })
-end
-
-local function toggle_diffpreview_alt()
-  -- Toggle delta.side-by-side in ~/.gitconfig.local
-  local gitconfig_file = os.getenv "HOME" .. "/.gitconfig.local"
-  local handle = io.popen('git config -f "' .. gitconfig_file .. '" delta.side-by-side')
-  local is_side_side_enabled = handle:read "*a"
-  handle:close()
-  is_side_side_enabled = is_side_side_enabled:gsub("%s+", "")
-
-  if is_side_side_enabled == "true" then
-    print "side-by-side disabled"
-    os.execute('git config -f "' .. gitconfig_file .. '" delta.side-by-side false')
-  else
-    print "side-by-side enabled"
-    os.execute('git config -f "' .. gitconfig_file .. '" delta.side-by-side true')
-  end
-end
-
--- Helper function to open file diff with gitsigns
--- @param file_path string: File path (relative or absolute)
--- @param ref string: Git reference to compare with
-local function open_file_with_gitsigns_diff(file_path, ref)
-  if not pcall(require, "gitsigns") then
-    vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
-    return
-  end
-
-  local git_root = Snacks.git.get_root()
-
-  -- Convert to absolute path if needed
-  if vim.fn.filereadable(file_path) == 0 then
-    file_path = git_root .. "/" .. file_path
-  end
-
-  -- Open file in new tab
-  vim.cmd("tabnew " .. vim.fn.fnameescape(file_path))
-
-  -- Show diff with gitsigns
-  require("gitsigns").diffthis(ref, {
-    vertical = true,
-  })
-end
-
--- Helper function to open current buffer in new tab with gitsigns diff
--- @param ref string: Git reference to compare with
-local function open_current_buffer_with_gitsigns_diff(ref)
-  if not pcall(require, "gitsigns") then
-    vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
-    return
-  end
-
-  local current_file = vim.api.nvim_buf_get_name(0)
-
-  if current_file == "" then
-    vim.notify("No file in current buffer", vim.log.levels.WARN)
-    return
-  end
-
-  -- Open in new tab
-  vim.cmd("tabnew " .. vim.fn.fnameescape(current_file))
-
-  -- Show diff with gitsigns
-  require("gitsigns").diffthis(ref, {
-    vertical = true,
-  })
-end
-
--- Helper function to build remote URL for a file at a specific ref
--- @param file_path string: File path (relative or absolute)
--- @param ref string: Git reference (branch, tag, or commit)
--- @return string|nil: Remote URL or nil if error
-local function build_remote_url(file_path, ref)
-  local git_root = Snacks.git.get_root()
-  if not git_root then
-    return nil
-  end
-
-  -- Convert to absolute path if needed
-  if vim.fn.filereadable(file_path) == 0 then
-    file_path = git_root .. "/" .. file_path
-  end
-
-  -- Get relative path from git root
-  local rel_path = file_path:gsub("^" .. vim.pesc(git_root) .. "/?", "")
-
-  -- Get remote path using gitUtil
-  local remote_path = gitUtil.get_remote_path("origin")
-
-  if not remote_path or remote_path == "" then
-    return nil
-  end
-
-  -- Build URL - detect GitLab vs GitHub
-  local url
-  if remote_path:match("gitlab") then
-    -- GitLab style: /-/blob/
-    url = string.format("https://%s/-/blob/%s/%s", remote_path, ref, rel_path)
-  else
-    -- GitHub style: /blob/
-    url = string.format("https://%s/blob/%s/%s", remote_path, ref, rel_path)
-  end
-
-  return url
-end
-
--- Helper function to open file in remote at specific ref
--- @param file_path string: File path (relative or absolute)
--- @param ref string: Git reference to open at
-local function open_file_in_remote(file_path, ref)
-  local url = build_remote_url(file_path, ref)
-
-  if not url then
-    vim.notify("Failed to build remote URL", vim.log.levels.ERROR)
-    return
-  end
-
-  -- Get filename for notification
-  local filename = vim.fn.fnamemodify(file_path, ":t")
-
-  -- Open in browser
-  vim.fn.jobstart({ "open", url }, { detach = true })
-  vim.notify(string.format("Opening %s @ %s in browser", filename, ref), vim.log.levels.INFO)
 end
 
 return {
@@ -207,125 +40,12 @@ return {
   {
     "stevearc/oil.nvim",
     enabled = true,
-    opts = {
-      -- default_file_explorer = false,
-    },
-    keys = {
-      -- disabled <leader-e> key
-      {
-        "<leader>e",
-        false,
-      },
-      {
-        "<leader>fO",
-        function()
-          require("oil").toggle_float()
-        end,
-        desc = "Open OIL explorer",
-      },
-    },
+    opts = {},
+    keys = editor_keymaps.keymaps.oil,
   },
   {
     "stevearc/overseer.nvim",
-    -- tutorials : https://github.com/stevearc/overseer.nvim/blob/master/doc/tutorials.md#run-a-file-on-save
-    -- support on vscode tasks ?
-    -- template syntax: https://github.com/stevearc/overseer.nvim/blob/master/doc/reference.md
-    --  form: https://github.com/stevearc/overseer.nvim/blob/fe7b2f9ba263e150ab36474dfc810217b8cf7400/lua/overseer/form/utils.lua#L49
-    keys = {
-      {
-        "<leader>ow",
-        function()
-          local overseer = require "overseer"
-          overseer.run_template({ name = "run script" }, function(task)
-            if task then
-              task:add_component { "restart_on_save", paths = { vim.fn.expand "%:p" } }
-              local main_win = vim.api.nvim_get_current_win()
-              overseer.run_action(task, "open vsplit")
-              vim.api.nvim_set_current_win(main_win)
-            else
-              vim.notify("WatchRun not supported for filetype " .. vim.bo.filetype, vim.log.levels.ERROR)
-            end
-          end)
-        end,
-        desc = "WatchRun overseer",
-      },
-      {
-        "<leader>oR",
-        function()
-          local overseer = require "overseer"
-          local tasks = overseer.list_tasks { recent_first = true }
-          if vim.tbl_isempty(tasks) then
-            vim.notify("No tasks found", vim.log.levels.WARN)
-          else
-            -- Store tasks in a lookup table by index
-            local task_lookup = {}
-            local items = {}
-            for i, task in ipairs(tasks) do
-              task_lookup[i] = task
-              table.insert(items, {
-                text = task.name,
-                task_idx = i,
-              })
-            end
-
-            Snacks.picker.pick {
-              source = "select",
-              title = "Rerun Task",
-              items = items,
-              format = "text",
-              actions = {
-                confirm = function(picker, item)
-                  if item and item.task_idx then
-                    local task = task_lookup[item.task_idx]
-                    picker:close()
-                    overseer.run_action(task, "restart")
-                  end
-                end,
-                ["<c-x>"] = function(picker, item)
-                  if item and item.task_idx then
-                    local task = task_lookup[item.task_idx]
-                    overseer.run_action(task, "dispose")
-                    picker:close()
-                  end
-                end,
-              },
-            }
-          end
-        end,
-        desc = "Select Rerun Task overseer",
-      },
-
-      {
-        "<leader>oT",
-        ":OverseerTaskAction<CR>", -- Add the command you want to run here
-        desc = "Run Task Action overseer",
-      },
-      {
-        "<leader>oQ",
-        ":OverseerDeleteBundle<CR>",
-        desc = "Delete Bundle overseer",
-      },
-      {
-        "<leader>oC",
-        ":OverseerClearCache<CR>",
-        desc = "Clear Cache overseer",
-      },
-      {
-        "<leader>os",
-        ":OverseerSaveBundle<CR>",
-        desc = "Save Bundle overseer",
-      },
-      {
-        "<leader>ol",
-        ":OverseerLoadBundle<CR>",
-        desc = "Load Bundle overseer",
-      },
-      {
-        "<leader>on",
-        ":OverseerBuild<CR>",
-        desc = "New Task overseer",
-      },
-    },
+    keys = editor_keymaps.keymaps.overseer,
     opts = {
       -- default config: https://github.com/stevearc/overseer.nvim/blob/a2734d90c514eea27c4759c9f502adbcdfbce485/lua/overseer/config.lua#L4
       templates = {
@@ -382,24 +102,14 @@ return {
   },
   {
     "echasnovski/mini.bufremove",
-    keys = {
-      {
-        "<C-q>",
-        false,
-      },
-    },
+    keys = editor_keymaps.keymaps.bufremove,
   },
-
   -- [Image](/Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/assets/2025-09-06-23-28-21.png)
   -- image support for code companion , requires pngpaste , brew install pngpaste https://github.com/jcsalterego/pngpaste
   {
     "HakonHarnes/img-clip.nvim",
     event = "VeryLazy",
-    keys = {
-      -- suggested keymap
-      { "<leader>iv", "<cmd>PasteImage<cr>", desc = "Paste image from system clipboard" },
-    },
-    -- command = { "PasteImage" },
+    keys = editor_keymaps.keymaps.img_clip,
     opts = {
       default = {
         prompt_for_file_name = false,
@@ -423,7 +133,7 @@ return {
     -- end,
   },
   {
-    "greggh/claude-code.nvim",
+    "greggh/claude-code.nvim", -- will soon be replaced with another claude code libs   - [claudecode.nvim](https://github.com/coder/claudecode.nvim
     opts = {
       keymaps = {
         toggle = {
@@ -444,46 +154,7 @@ return {
   },
   {
     "olimorris/codecompanion.nvim",
-    keys = {
-      {
-        companion_mapping_key_prefix .. "a",
-        "<cmd>CodeCompanionAction<cr>",
-        desc = "Code Companion - actions",
-        mode = "v",
-      },
-      {
-        companion_mapping_key_prefix .. "A",
-        "<cmd>CodeCompanionChat Add<cr>",
-        desc = "Code Companion - Add selected",
-        mode = "v",
-      },
-      {
-        companion_mapping_key_prefix .. "V",
-        -- "<cmd>CodeCompanionChat Toggle<cr>",
-        "<cmd>CodeCompanionChat<cr>", -- will add selected input and toggle
-        desc = "Code Companion - Add and Toggle",
-        mode = "v",
-      },
-      { companion_mapping_key_prefix .. "v", "<cmd>CodeCompanionChat<cr>", mode = "v" }, -- not sure why not override
-
-      {
-        companion_mapping_key_prefix .. "q",
-        "<cmd>CodeCompanionChat<cr>",
-        desc = "Code Companion - Chat",
-        mode = "v",
-      },
-      {
-        companion_mapping_key_prefix .. "M",
-        "<cmd>CodeCompanion /short-staged-commit<cr>",
-        desc = "Code Companion - Git commit message (staged)",
-      },
-      {
-        companion_mapping_key_prefix .. "Q",
-        "<cmd>'<,'>CodeCompanion<cr>",
-        desc = "Code Companion - Quick chat",
-        mode = "v",
-      },
-    },
+    keys = editor_keymaps.keymaps.codecompanion(),
     adapters = {
       llama3_2 = function()
         return require("codecompanion.adapters").extend("ollama", {
@@ -843,17 +514,16 @@ Documentation and Tracking:
             {
               role = "user",
               content = function()
-                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (use only 1 line break between title and body description). Important: keep the text clean no formatting (bad: **, '') keep plaintext with shortlist/dash prefix in body description. Only output the commit message. Do not output more than 5 bullet points. Do use acronym to save space."
+                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (use only 1 line break between title and body description). Important: keep the text clean no formatting (bad: **, '') keep plaintext with shortlist/dash prefix in body description. Only output the commit message. Do not output more than 5 bullet points. Do use acronym to save space and each point not too long. Don't include filepath, specific code changes or variables name"
                   .. [[
 Example commit message:
 feat(release): add slack msg and create release after deploy
-- enhance GitLab CI release job:
-- update dependency job name to `buckbeak-deploy-prod-tripviewbff` for clarity.
-- add detailed release description with deploy time, package version, rollback pipeline, quick deploy link, and changelog.
-- include direct release link in Slack notifications for better traceability.
-- update README
+- enhance GL CI release job
+- update dependency job name to have common prefix
+- add release desc with deploy dt, ver, pipeline, quick link, and changelog
+- include direct release link in Slack notifications for better traceability
 - expand clone repo section to include overview with folder structure, instructions, and IDE setup
-- provide clearer onboarding for new contributors.
+- provide clearer onboarding for new contributors
                   ]] .. "\n\n```\n"
                   .. vim.fn.system("git diff --staged")
                   .. "\n```"
@@ -918,13 +588,7 @@ Your instructions here
   {
     "CopilotC-Nvim/CopilotChat.nvim",
     enabled = true,
-    keys = {
-      {
-        "<localleader>aE",
-        "<cmd>CopilotChatBuffEdit<cr>",
-        desc = "~ Copilot Chat Buf Edit ",
-      },
-    },
+    keys = editor_keymaps.keymaps.copilot_chat,
     opts = {
       -- model = "", -- override claude-sonnet model since not support on my copilot (get ereror)
       -- debug = true, -- add to debug message by calling l-a-d and  see in file using <gf> or check :messages in the logfile name else see only error (not prompt and embedding used)
@@ -1020,20 +684,11 @@ Your instructions here
         focus = "<localleader>ax", -- discard to some random key
       },
     },
+    keys = editor_keymaps.keymaps.avante,
   },
   {
     "jellydn/quick-code-runner.nvim",
-    keys = {
-      {
-        "<leader>cP",
-        function()
-          require("utils.cmd").quickCommandRunCurrentFile()
-        end,
-        --     -- "gg0vGg$:QuickCodeRunner<CR>",
-        desc = "Code Run File",
-        mode = "n",
-        },
-      },
+    keys = editor_keymaps.keymaps.quick_code_runner,
     opts = {
       -- debug = true, -- add to debug and see what happens when codepad is called
       file_types = {
@@ -1091,118 +746,11 @@ Your instructions here
   {
     "ibhagwan/fzf-lua",
     enabled = true,
-    opts = {
-      git = {
-        branches = {
-          -- add actions that open remote the the file at current line remotely
-          actions = {
-            ["ctrl-o"] = function(selected)
-              local ref = selected[1]:match "[^%w_]+(.*)$" -- Extract only the 'ref' part after special characters and space prefixes
-              ref = ref:match "^(%S+)" -- Get the first word which is the ref
-              open_remote(ref, "file")
-              open_remote(ref, "branch")
-            end,
-            ["ctrl-s"] = fzfcompareref,
-            ["ctrl-g"] = function(selected)
-              -- Open merge request for selected branch
-              local ref = selected[1]:match "[^%w_]+(.*)$" -- Extract only the 'ref' part after special characters and space prefixes
-              ref = ref:match "^(%S+)" -- Get the first word which is the ref
-              -- __AUTO_GENERATED_PRINT_VAR_START__
-              gitUtil.open_mr(ref)
-            end,
-          },
-        },
-        bcommits = {
-          actions = {
-            ["ctrl-o"] = function(selected)
-              -- Custom action to open remote file
-              local commit_hash = selected[1]:match "%w+"
-              open_remote(commit_hash, "file")
-              open_remote(commit_hash, "commit")
-            end,
-            ["ctrl-s"] = fzfcompareref,
-            ["f6"] = toggle_diffpreview_alt,
-          },
-        },
-        blame = {
-          actions = {
-            ["ctrl-o"] = function(selected)
-              -- Custom action to open remote file
-              local commit_hash = selected[1]:match "%w+"
-              open_remote(commit_hash, "file")
-              open_remote(commit_hash, "commit")
-            end,
-            ["ctrl-s"] = fzfcompareref,
-            ["f6"] = toggle_diffpreview_alt,
-          },
-        },
-        commits = {
-          actions = {
-            -- ["default"] = function(selected)
-            --   -- Default action (e.g., open commit diff)
-            -- end,
-            ["ctrl-o"] = function(selected)
-              -- Custom action to open remote file
-              local commit_hash = selected[1]:match "%w+"
-              open_remote(commit_hash, "file")
-              open_remote(commit_hash, "commit")
-              -- local file_path = vim.fn.expand("%:p")
-              -- local line_number = vim.fn.line(".")
-              --
-              -- local gitroot = pathUtil.get_git_root()
-              -- local remote_path = gitUtil.get_remote_path("origin")
-              -- local git_file_path = file_path:gsub(gitroot .. "/?", "")
-              -- local url_pattern = "https://%s/blob/%s/%s#L%d"
-              -- local url = string.format(url_pattern, remote_path, commit_hash, git_file_path, line_number)
-              -- vim.fn.jobstart({ "open", url }, { detach = true })
-              --
-              -- vim.cmd("e " .. file_path)
-            end,
-            ["ctrl-s"] = fzfcompareref,
-            ["f6"] = toggle_diffpreview_alt,
-          },
-        },
-      },
-    },
-    keys = {
-      -- opts.desc = "Git branch FZF"
-      -- keymap("n", "<localleader>gO", function()
-      --   require("config.telescope_pickers").fzf.pickers.open_git_pickers_telescope()
-      -- end, opts)
-      {
-        "<leader>" .. key_g .. "S",
-        "<cmd> :FzfLua git_blame<CR>",
-        desc = "FZF Git Blame",
-        mode = "n",
-      },
-      {
-        "<leader>" .. key_g .. "o",
-        function()
-          require("config.telescope_pickers").fzf.pickers.open_git_pickers()
-        end,
-        desc = "Git branch FZF",
-        mode = "n",
-      },
-      -- session_pickers leader-fS
-      {
-        "<leader>" .. key_f .. "s",
-        function()
-          require("config.telescope_pickers").fzf.pickers.session_picker()
-        end,
-        desc = "Session FZF",
-      },
-      -- session_pickers leader-fS
-      {
-        "<leader>" .. "f" .. "s",
-        function()
-          require("config.telescope_pickers").fzf.pickers.session_picker()
-        end,
-        desc = "Session FZF",
-      },
-    },
+    opts = editor_keymaps.fzf_opts,
+    keys = editor_keymaps.keymaps.fzf_lua,
   },
   --#region Session and windows
-    {
+  {
     "akinsho/bufferline.nvim",
     opts = {
       -- check on health groups
@@ -1214,70 +762,21 @@ Your instructions here
         -- }
       -- }
     },
-    keys = {
-      { "<S-l>", "<Cmd>BufferLineCycleNext<CR>", desc = "Next Buffer" },
-      { "<S-h>", "<Cmd>BufferLineCyclePrev<CR>", desc = "Prev Buffer" },
-      { "<leader>bp", "<Cmd>BufferLineTogglePin<CR>", desc = "Toggle Pin" },
-      { "<leader><Tab>r", ":BufferLineTabRename ", desc = "Rename Tab" },
-      { "<leader>bs", ":BufferLineSortBy", desc = "Buffer Sort By.." },
-      { "<leader>bsd", ":BufferLineSortByDirectory<CR>", desc = "Buffer Sort By Directory" },
-      { "<leader>bse", ":BufferLineSortByExtension<CR>", desc = "Buffer Sort By Extension" },
-      { "<leader>bsr", ":BufferLineSortByRelativeDirectory<CR>", desc = "Buffer Sort By Relative Directory" },
-      { "<leader>bst", ":BufferLineSortByTabs<CR>", desc = "Buffer Sort By Tabs" },
-      { "<leader>bg", ":BufferLinePick<CR>", desc = "Buffer Group Toggle Pin" },
-      { "<leader>bup", ":BufferLineGroupToggle ungrouped<CR>", desc = "Buffer Group Toggle ungroup" },
-      { "<leader>bup", ":BufferLineGroupToggle pinned<CR>", desc = "Buffer Group Toggle ungroup" },
-      { "<leader>bcP", ":BufferLineGroupClose pinned<CR>", desc = "Buffer Close pin" },
-      { "<leader>bcp", ":BufferLineGroupClose ungrouped<CR>", desc = "Buffer Close ungroup" },
-    }
+    keys = editor_keymaps.keymaps.bufferline,
   },
   {
     "folke/persistence.nvim",
     opts = {
       dir = vim.fn.stdpath "state" .. "/my-sessions/", -- directory where session files are saved
     },
-    keys = {
-      {
-        "<leader>qs",
-        function()
-          require("persistence").save()
-        end,
-        desc = "Save session",
-      },
-      {
-        "<leader>ql",
-        function()
-          require("persistence").load { last = true }
-        end,
-        desc = "Restore last session",
-      },
-      {
-        "<leader>qS",
-        function()
-          require("persistence").select()
-        end,
-        desc = "Select session to restore",
-      },
-      {
-        "<leader>qd",
-        function()
-          require("persistence").stop()
-        end,
-        desc = "Stop persistence",
-      },
-    },
+    keys = editor_keymaps.keymaps.persistence,
   },
   {
     "folke/trouble.nvim",
-    keys = {
-      {
-        "<leader>xf",
-        "<cmd>Trouble snacks_files<cr>",
-        desc = "Trouble Snacks",
-      },
-    },
+    keys = editor_keymaps.keymaps.trouble,
   },
   --#endregion Session and windows
+  --#region Files / Search
   {
     "folke/snacks.nvim",
     enabled = isSnackEnabled,
@@ -1379,11 +878,9 @@ Your instructions here
         },
         actions = {
           open_file_remote = function(picker, item)
-            -- Determine picker source for fallback decisions
             local preview_source = picker.init_opts and picker.init_opts.source
 
-            -- Prefer explicit item path, then the current buffer, then the alternate buffer
-            local current_buf_path = get_current_buffer_path()
+            local current_buf_path = editor_keymaps.helpers.get_current_buffer_path()
             local last_bufferpath = vim.api.nvim_buf_get_name(vim.fn.bufnr("#"))
 
             local chosen_path = item._path
@@ -1395,7 +892,6 @@ Your instructions here
               end
             end
 
-            -- Normalize to git real filepath
             local filepath = pathUtil.get_git_real_filepath(chosen_path)
 
             local ref = item.branch or item.commit
@@ -1473,7 +969,7 @@ Your instructions here
             vim.notify("Item: " .. vim.inspect(item), vim.log.levels.INFO)
             picker:close()
           end,
-          toggle_diffpreview_alt = toggle_diffpreview_alt,
+          toggle_diffpreview_alt = editor_keymaps.helpers.toggle_diffpreview_alt,
           my_diff_compare = function(picker, item, action)
             -- Get the selected reference from the picker
             local ref = item.branch or item.commit
@@ -1487,7 +983,7 @@ Your instructions here
             picker:close() -- Close picker first
 
             -- Use the helper function to open current buffer with diff
-            open_current_buffer_with_gitsigns_diff(ref)
+            editor_keymaps.helpers.open_current_buffer_with_gitsigns_diff(ref)
           end,
           toggle_cwd_files_grep = function(picker, item)
             require("utils.snacks_terminal").toggle_cwd_files_grep(picker, item)
@@ -1602,324 +1098,14 @@ Your instructions here
         },
       },
     },
-    keys = {
-      {
-        "<leader>e",
-        false,
-      },
-      -- {
-      --   "<c-_>",
-      --   false,
-      -- },
-      -- {
-      --   "<c-]>",
-      --   function()
-      --     print("🔄 SNACKS TERMINAL CALLED FROM myEditor.lua")
-      --     Snacks.terminal()
-      --   end,
-      --   desc = "Snacks Terminal"
-      -- },
-      -- "<C-_>" is same code as C-/ try use cat -v and type the key sequences to check
-      {
-        "<C-_>",
-        function()
-          Snacks.terminal()
-        end,
-        desc = "Snacks Terminal",
-        mode = { "n", "v" },
-      },
-      -- Send current line to Snacks terminal
-      {
-        -- This universal fn tested and work
-        -- Fixed: Now properly reuses existing terminals and handles count-based selection
-        "<localleader>s",
-        function()
-          local count = vim.v.count > 0 and vim.v.count or nil
-          local text = require("utils.input").getSelectedLines()
-          require("utils.snacks_terminal").send_to_snacks_terminal(text, count)
-        end,
-        desc = "Send to Snacks terminal",
-        mode = { "n", "v" },
-      },
-      {
-        "<localleader>Sa",
-        function()
-          local count = vim.v.count > 0 and vim.v.count or nil
-          require("utils.snacks_terminal").send_all_lines(count)
-        end,
-        desc = "Send all to Snacks terminal",
-      },
-      {
-        "<localleader>Sr",
-        function()
-          local count = vim.v.count > 0 and vim.v.count or nil
-          require("utils.snacks_terminal").send_previous_selection(count)
-        end,
-        desc = "Send previous selected to Snacks terminal",
-      },
-      {
-        "<localleader>Ss",
-        function()
-          require("utils.snacks_terminal").custom_terminal_show()
-        end,
-        desc = "Snacks Terminal Picker",
-        mode = { "n" },
-      },
-      -- { "<c-_>", function() vim.cmd(":ToggleTerm") end, desc = "ToggleTerm" },
-      -- default keys for toggle term
-      -- {
-      --   "<c-_>",
-      --   false
-      -- },
-      {
-        "<leader>sx",
-        function()
-          require("utils.snacks_terminal").pick_tmux_window()
-        end,
-        desc = "Pick Tmux Win",
-      },
-      {
-        "<leader>fG",
-        function()
-          require("utils.snacks_terminal").custom_git_pickers.git_diff_upstream()
-        end,
-        desc = "Git File Upstream",
-      },
-      {
-        "<leader>fL",
-        function()
-          require("utils.snacks_terminal").custom_git_pickers.git_show()
-        end,
-        desc = "Last commit files",
-      },
-      {
-        "<leader>fZ",
-        function()
-          require("utils.snacks_terminal").custom_change_list_picker()
-        end,
-        desc = "Git files by custom ref",
-      },
-      {
-        "<leader>gb",
-        function()
-          Snacks.picker.git_branches()
-        end,
-        desc = "Git Branches",
-      },
-      {
-        "<leader>fw",
-        function()
-          Snacks.picker.grep_word {
-            show_empty = true,
-            need_search = false,
-            hidden = true,
-          }
-        end,
-        desc = "Visual selection or word",
-        mode = { "n", "x" },
-      },
-      {
-        "<leader>E",
-        function()
-          local defaultDir = vim.fn.expand "%:p:h"
-          local curword = vim.fn.expand "<cfile>"
-          local filepath = curword and pathUtil.getFullPathFromRelativePath(curword)
-          local notcurdir = (
-            curword == "" or (vim.fn.filereadable(filepath) == 0 and vim.fn.isdirectory(filepath) == 0)
-          )
-          local cwddir = notcurdir and defaultDir or filepath
-          -- lua/plugins/extra/myEditor.lua
-          --     /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua
-          if not notcurdir then
-            local success, err = pcall(function()
-              vim.cmd("Neotree " .. filepath)
-            end)
-            if not success then
-              vim.notify("Error opening Neotree: " .. err, vim.log.levels.ERROR)
-            else
-              return
-            end
-          end
-
-          Snacks.picker.explorer {
-            cwd = defaultDir,
-            auto_close = true,
-            layout = {
-              preset = "vertical",
-            },
-            win = {
-              list = {
-                keys = {
-                  ["-"] = "explorer_up",
-                  ["g."] = "toggle_hidden",
-                },
-              },
-            },
-          }
-        end,
-      },
-      {
-        "<C-e>",
-        function()
-          Snacks.picker.smart {
-            win = {
-              input = {
-                keys = {
-                  ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
-                },
-              },
-            },
-          }
-        end,
-        desc = "Find Smart",
-      },
-      {
-        "<leader><space>",
-        -- find files and use ctrl_space toggle to find buffer with
-        function()
-          Snacks.picker.buffers {
-            win = {
-              input = {
-                keys = {},
-              },
-            },
-          }
-        end,
-      },
-      {
-        "<leader>fq",
-        function()
-          Snacks.picker.qflist()
-        end,
-        desc = "Quickfix List",
-      },
-      {
-        "<leader>sq",
-        function()
-          -- Get the current quickfix list
-          local items = vim.fn.getqflist({ items = 0 }).items
-
-          if not items or #items == 0 then
-            vim.notify("Quickfix list is empty", vim.log.levels.WARN)
-            return
-          end
-
-          local files = {}
-          local seen = {}
-          for _, item in ipairs(items) do
-            -- Check if filename exists and hasn't been added yet
-            if item.filename and item.filename ~= "" and not seen[item.filename] then
-              table.insert(files, item.filename)
-              seen[item.filename] = true
-            elseif item.bufnr and item.bufnr > 0 then
-              local name = vim.api.nvim_buf_get_name(item.bufnr)
-              if name ~= "" and not seen[name] then
-                table.insert(files, name)
-                seen[name] = true
-              end
-            end
-          end
-
-          if #files == 0 then
-            vim.notify("No valid files found in quickfix list", vim.log.levels.WARN)
-            return
-          end
-          -- Use Snacks.picker.grep with the file list as 'dirs'
-          -- This works because rg accepts file paths as arguments to search in
-          Snacks.picker.grep {
-            dirs = files,
-            title = "Grep Quickfix Files",
-          }
-        end,
-        desc = "Grep Quickfix Files",
-      },
-      {
-        "<leader>sG",
-        function()
-          Snacks.picker.grep {
-            cwd = pathUtil.get_sub_project_dir(),
-            title = "Grep Monorepo Files",
-          }
-        end,
-        desc = "Grep Dir Monorepo",
-      },
-      {
-        "<leader>fWg",
-        function()
-          Snacks.picker.grep {
-            cwd = pathUtil.get_sub_project_dir(),
-            title = "Grep Monorepo Files",
-          }
-        end,
-        desc = "Grep Dir Monorepo",
-      },
-      {
-        "<leader>ff",
-        function()
-          Snacks.picker.files {
-            -- pattern = function(picker)
-            --   return picker:word()
-            -- end,
-          }
-        end,
-        desc = "Find Files",
-        -- desc = "Find Files (word)",
-        mode = { "n", "v" },
-      },
-      {
-        "<leader>fF",
-        function()
-          Snacks.picker.files {
-            cwd = pathUtil.get_sub_project_dir(),
-            -- use fn from mypath.get_sub_project_dirs
-            -- only search in current scope of mono repo on buffer files propogating to the closest file in this order
-            --   return picker:word()
-            -- end,
-          }
-        end,
-        desc = "Find Files monorepo",
-        mode = { "n", "v" },
-      },
-      {
-        "<leader>fz", -- https://github.com/folke/snacks.nvim/discussions/617
-        function()
-          Snacks.picker.zoxide {
-            finder = "files_zoxide",
-            format = "file",
-            -- confirm = "load_session" -- Disable loading session by default.
-            confirm = function(picker, item)
-              picker:close()
-              if item then
-                Snacks.picker.files { cwd = item.text }
-              end
-              local dir = item.file
-              vim.fn.chdir(dir) -- Change current working directory
-              vim.cmd("tcd " .. dir) -- Change tab-local current working directory
-            end,
-            win = {
-              preview = {
-                minimal = true,
-              },
-            },
-          }
-        end,
-        desc = "Zoxide",
-      },
-    },
+    keys = editor_keymaps.keymaps.snacks,
   },
   {
     "ThePrimeagen/harpoon",
-    keys = {
-      {
-        "<leader>fhl",
-        function()
-          local harpoon = require "harpoon"
-          harpoon.ui:toggle_quick_menu(harpoon:list())
-        end,
-        desc = "Harpoon menu",
-      },
-    },
+    keys = editor_keymaps.keymaps.harpoon,
   },
+  --#endregion Files / Search
+  --#region AI Assistants
   {
     "folke/sidekick.nvim",
     -- https://github.com/folke/sidekick.nvim?tab=readme-ov-file
@@ -1941,49 +1127,9 @@ Your instructions here
         },
       },
     },
-    keys = {
-      {
-        "<leader>aV",
-        function()
-          require("sidekick.cli").send { msg = "{selection}" }
-        end,
-        mode = { "x" },
-        desc = "Send Visual Selection",
-      },
-      {
-        "<leader>aNt",
-        function()
-          require("sidekick.nes").toggle()
-        end,
-        mode = { "n" },
-        desc = "Sidekick Toggle CLI",
-      },
-      {
-        "<leader>aNe",
-        function()
-          require("sidekick.nes").enable()
-        end,
-        mode = { "n" },
-        desc = "Sidekick Enable CLI",
-      },
-      {
-        "<leader>aNd",
-        function()
-          require("sidekick.nes").disable()
-        end,
-        mode = { "n" },
-        desc = "Sidekick Disable Nes",
-      },
-      {
-        "<leader>aNu",
-        function()
-          require("sidekick.nes").update()
-        end,
-        mode = { "n" },
-        desc = "Sidekick Nes Update",
-      },
-    },
+    keys = editor_keymaps.keymaps.sidekick,
   },
+  --#endregion AI Assistants
   {
     "folke/which-key.nvim",
     optional = true,
@@ -2065,22 +1211,22 @@ Your instructions here
           icon = { color = "black" },
         },
         {
-          "<leader>" .. key_f,
+          "<leader>" .. keyutil.key_f,
           group = "Find(Fzf)",
           mode = { "n" },
-          icon = { icon = "", color = "black" },
+          icon = { icon = "", color = "black" },
         },
         {
-          "<leader>" .. key_g,
+          "<leader>" .. keyutil.key_g,
           group = "Git(Fzf)",
           mode = { "n", "v" },
-          icon = { icon = "", color = "black" },
+          icon = { icon = "", color = "black" },
         },
         {
-          "<leader>" .. key_s,
+          "<leader>" .. keyutil.key_s,
           group = "Search(Fzf)",
           mode = { "n", "v" },
-          icon = { icon = "", color = "black" },
+          icon = { icon = "", color = "black" },
         },
       } or {}),
     },
@@ -2093,6 +1239,7 @@ Your instructions here
   --     -- { "<C-p>", "<cmd>Lspsaga hover_doc<CR>", desc = "Hover Doc", mode = "i" },
   --   },
   -- },
+  --#region LSP and Formatting
   {
     "stevearc/conform.nvim",
     -- ../conform.lua | https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#format-command
@@ -2209,21 +1356,12 @@ Your instructions here
       },
     },
   },
+  --#endregion LSP and Formatting
+  --#region Code edition 
   -- handle conflict with surround
   {
     "folke/flash.nvim",
-    -- enabled = false,
-    keys = {
-      -- prevent conflict with surround
-      {
-        "s",
-        mode = { "x", "o" },
-        false,
-        -- function()
-        --   require("flash").jump()
-        -- end,
-      },
-    },
+    keys = editor_keymaps.keymaps.flash,
   },
   {
     "kylechui/nvim-surround",
@@ -2242,6 +1380,7 @@ Your instructions here
       }
     end,
   },
+  -- #endregion Code edition
   -- { import = "plugins.extra.copilot-chat-v2" },
   -- {
   --   "neovim/nvim-lspconfig",
