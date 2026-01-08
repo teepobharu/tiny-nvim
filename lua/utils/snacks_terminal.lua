@@ -1417,8 +1417,8 @@ function M.toggle_cwd_files_grep(picker, item)
     vim.log.levels.INFO
   )
 
-  -- Close current picker
-  picker:close()
+  -- -- Close current picker
+  -- picker:close()
 
   -- Build picker params with scope label in title
   local scope_label = state_labels[vim.g.picker_cwd_cycle_state]
@@ -1427,6 +1427,7 @@ function M.toggle_cwd_files_grep(picker, item)
     pattern = filter_pattern or "",
     search = filter_search or "",
     live = picker.opts.supports_live and picker.opts.live,
+    show_empty = true,
     title = string.format("%s [%s]", source or "Picker", scope_label),
   }
   local hidden_state = picker.opts.hidden
@@ -1448,35 +1449,51 @@ function M.toggle_cwd_files_grep(picker, item)
   end
 
   -- Handle different picker types and preserve their state
-  if source == "files" then
-    -- Add max-depth for current_d1 mode (depth 1 search) - fd supports --max-depth
-    if vim.g.picker_cwd_cycle_state == "current_d1" then
-      picker_params.args = { "--max-depth", "1" }
-    end
-    Snacks.picker.files(picker_params)
-  elseif source == "grep" then
-    -- Add max-depth for current_d1 mode (depth 1 search) - ripgrep supports --max-depth
-    if vim.g.picker_cwd_cycle_state == "current_d1" then
-      picker_params.args = { "--max-depth", "1" }
-    end
-    Snacks.picker.grep(picker_params)
-  elseif source == "buffers" then
-    -- Buffers picker - preserve any relevant state
-    Snacks.picker.buffers(picker_params)
-  elseif source == "git_files" then
-    -- Git files picker
-    Snacks.picker.git_files(picker_params)
-  else
-    -- Fallback to smart picker for unknown sources
-    Snacks.picker.smart(picker_params)
+  if vim.g.picker_cwd_cycle_state == "current_d1" and type(source) == "string" and (source:match("grep") or source:match("files")) and not source:match("^git") then
+    picker_params.args = { "--max-depth", "1" }
   end
-
-  -- Re-enter insert mode after picker opens (Snacks default behavior)
-  vim.defer_fn(function()
-    if vim.api.nvim_get_mode().mode == "n" then
-      vim.cmd("startinsert")
+  -- clone picker_params in to picker.opts
+  picker.opts.cwd =picker_params.cwd
+  picker.opts.args = picker_params.args
+  picker.opts.pattern = picker_params.pattern
+  picker.opts.search = picker_params.search
+  picker.opts.live = picker_params.live
+  picker.opts.show_empty = true
+  picker.title = picker_params.title
+  picker:refresh()
+  
+  local backupmanual_whenneed = function()
+    if source == "files" then
+      -- Add max-depth for current_d1 mode (depth 1 search) - fd supports --max-depth
+      Snacks.picker.files(picker_params)
+    elseif source == "grep" then
+      -- Add max-depth for current_d1 mode (depth 1 search) - ripgrep supports --max-depth
+      Snacks.picker.grep(picker_params)
+    elseif source == "buffers" then
+      -- Buffers picker - preserve any relevant state
+      Snacks.picker.buffers(picker_params)
+    -- elseif source == "git_files" then
+    --   -- Git files picker
+    --   Snacks.picker.git_files(picker_params)
+    else
+      Snacks.notify.warn("picker source" .. tostring(source) .. "Not configured to use change cwd")
+      -- check for Snacks.picker[source]
+      if Snacks.picker[source] and type(Snacks.picker[source]) == "function" then
+        Snacks.picker[source](picker_params)
+      else
+        Snacks.notify.warn("Unknown picker source: " .. tostring(source) .. ". Falling back to smart picker.")
+        -- Fallback to smart picker for unknown sources
+        Snacks.picker.smart(picker_params)
+      end
     end
-  end, 50)
+
+    -- Re-enter insert mode after picker opens (Snacks default behavior)
+    vim.defer_fn(function()
+      if vim.api.nvim_get_mode().mode == "n" then
+        vim.cmd("startinsert")
+      end
+    end, 50)
+  end
 end
 
 -- Adjust max-depth for files/grep pickers dynamically

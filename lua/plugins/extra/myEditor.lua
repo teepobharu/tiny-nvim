@@ -2,6 +2,7 @@ local pathUtil = require "utils.mypath"
 local gitUtil = require "utils.git"
 local keyutil = require "utils.keyutil"
 local editor_keymaps = require "utils.editor_keymaps"
+local avante_utils   = require "utils.my_avante_utils"
 
 local isSnackEnabled = keyutil.isSnackEnabled
 local open_remote = gitUtil.open_remote
@@ -627,37 +628,32 @@ Your instructions here
     -- },
     -- https://github.com/yetone/avante.nvim?tab=readme-ov-file#default-setup-configuration
     opts = {
-      provider = "copilot", -- You can then change this provider here
+      -- provider = "copilot", -- You can then change this provider here
+      provider = "openai_agd", -- You can then change this provider here
       web_search_engine = {
         -- provider = "tavily", -- tavily, serpapi, google, kagi, brave, or searxng
         provider = "google", 
       },
-      providers = {
-        -- not sure why not work yet
+      -- Providers: base providers merged with Agoda-specific providers from utils
+      -- See lua/utils/my_avante_utils.lua for Agoda provider configurations
+      providers = vim.tbl_extend("force", {
         copilot = {
           model = "gpt-5-mini",
         },
-        openai = {
-          endpoint = "http://openai-proxy.agoda.is",
-          model = "gpt-5-mini",
-          timeout = 30000, -- Timeout in milliseconds
-          extra_request_body = {
-            temperature = 0,
-            max_completion_tokens  = 4096,
-          },
-        },
-        -- bedrock = {
-        --   endpoint = "https://genai-gateway.agoda.is/claude",
-        --   -- model = "claude-sonnet-4-20250514",
-        --   model = "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
-        --   timeout = 30000, -- Timeout in milliseconds
-        --   disable_tools = true, -- disable tools!
-        --   extra_request_body = {
-        --     temperature = 0,
-        --     max_tokens = 4096,
-        --   }
+        ---@type AvanteSupportedProvider
+        -- vclaude = {
+        --   __inherited_from ="openai_agd",
+        --   model = "claude-3-7-sonnet",
         -- },
-      },
+        -- lua print(require('avante.config').provider)
+        -- lua print(vim.inspect(require('avante.config').get_last_used_model(require('avante.config').providers)))
+      }, avante_utils.get_agoda_providers()),
+
+      -- Removed inline Agoda provider definitions (claude_agd, vertex_vclaude_2, vertex_claude_agd, openai_agd)
+      -- These are now imported from lua/utils/my_avante_utils.lua
+      -- To get a lean provider list without Agoda providers, use:
+      -- providers = vim.tbl_extend("force", { copilot = { model = "gpt-5-mini" } }, {})
+
       acp_follow_agent_locations = false,
       selection = {
         enabled = true,
@@ -805,7 +801,7 @@ Your instructions here
                 keys = {
                   ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
                   ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
-                  ["<A-d>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
+                  ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
                 },
               },
             },
@@ -816,7 +812,7 @@ Your instructions here
                 keys = {
                   ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
                   ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
-                  ["<A-d>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
+                  ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
                 },
               },
             },
@@ -839,7 +835,6 @@ Your instructions here
               input = {
                 keys = {
                   ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
-                  ["<A-d>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
                 },
               }
             },
@@ -860,7 +855,7 @@ Your instructions here
               input = {
                 keys = {
                   ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove QF Item" },
-                  ["<A-d>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
+                  ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
                 },
               },
             },
@@ -870,7 +865,16 @@ Your instructions here
               input = {
                 keys = {
                   ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove QF Item" },
-                  ["<A-d>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
+                  ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
+                },
+              },
+            },
+          },
+          grep_word = {
+            win = {
+              input = {
+                keys = {
+                  ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
                 },
               },
             },
