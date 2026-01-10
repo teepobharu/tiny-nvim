@@ -696,20 +696,8 @@ function snacks_opts()
         keys = {
           ["<C-u>"] = "clear_input",
           ["<C-d>"] = "delete_char",
-          ["<C-x>"] = function(picker, item)
-            local opt = picker.opts
-            -- __AUTO_GENERATED_PRINT_VAR_START__
-            print([==[snacks_opts#"<C-x>" opt:]==], vim.inspect(opt)) -- __AUTO_GENERATED_PRINT_VAR_END__
-            local input = picker.input
-            -- __AUTO_GENERATED_PRINT_VAR_START__
-            print([==[snacks_opts#check_info input:]==], vim.inspect(input)) -- __AUTO_GENERATED_PRINT_VAR_END__
-            local initopts = picker.init_opts
-            -- __AUTO_GENERATED_PRINT_VAR_START__
-            print([==[snacks_opts#check_info initopts:]==], vim.inspect(initopts)) -- __AUTO_GENERATED_PRINT_VAR_END__
-            print("check_info action executed")
-            vim.notify("You selected: " .. vim.inspect(item), vim.log.levels.INFO)
-            Snacks.notify("Checked item info!", vim.log.levels.INFO)
-          end,
+          ["<C-x>"] = "check_info",
+
         }
       }
     },
@@ -998,96 +986,41 @@ function test_overseerbuilder()
   end
 end
 
-function snacks_preview()
-  -- snacks preview
-  -- require("snacks.picker").preview({ source = "asd.zxc" })
-  ---@type snacks.picker
-  -- @type snacks.picker.core.picker -- https://github.com/folke/snacks.nvim/blob/main/docs/picker.md#-snackspickercorepicker
-  function test1()
-    local B = Snacks.picker.buffers()
-    print(vim.inspect(B.init_opts.source))
-    print(vim.inspect(B.init_opts.source.asd and B.init_opts.source.asd.zxc)) -- stop
-    print(123)
-    print(vim.inspect(B.init_opts.source.asd.zxc))                            -- stop
-    print(321)
-  end
-
-  ---@class snacks.picker.input
-  local p1 = Snacks.picker.files {
-    -- search = "test"
-    pattern = "test" -- intial query
-  }
-  vim.defer_fn(function()
-    vim.notify("waiting", vim.log.levels.INFO)
-    print("waiting . . .")
-  end, 2000)
-  local p2 = Snacks.picker.buffers {
-    -- search = "test"
-    pattern = "testp2" -- intial query
-  }
-  -- wait 3s
-  print([==[snacks_preview#(anon) p1:active1]==], vim.inspect(p1:is_active()))
-  vim.defer_fn(function()
-    p1:toggle()
-    print([==[snacks_toggle#(anon) p1:active2]==], vim.inspect(p1:is_active()))
-  end, 3000)
-  vim.defer_fn(function()
-    p2:toggle()
-    print([==[snacks_preview#(anon) p1:]==], vim.inspect(p1:is_focused()))
-    print([==[snacks_preview#(anon) p2:]==], vim.inspect(p2:is_active()))
-  end, 3000)
-  -- lua Snacks.picker.get()
-  -- test1()
+function test_asyncsyncmap()
+--**Synchronous Example (blocking):**
+local function sync_run()
+  print("Start sync")
+    vim.defer_fn(function()
+      Snacks.debug("End sync")
+      vim.cmd("messages") -- this will block all debug and show all after
+      vim.cmd("NoiceAll") -- this will block all debug and show all after
+      Snacks.debug("After noice")
+    end, 1000)
 end
 
-function snacks_qffiles()
-  -- get list of quickfix items files
-  -- do rg on these files
-  local items = vim.fn.getqflist({
-    items = 0,
-  }).items
-
-  if not items or #items == 0 then
-    vim.notify("Quickfix list is empty", vim.log.levels.WARN)
-    return
-  end
-
-  local files = {}
-  for _, item in ipairs(items) do
-    if item.filename then
-      table.insert(files, item.filename)
-    end
-  end
-  ---@type snacks.picker.Config
-  --- require("snacks.picker").files
-  local snacks_picker_files
-  Snacks.picker.files {
-    input = {
-      initial_value = "",
-      keys = {
-        J = {
-          function()
-            vim.cmd "colder"
-          end,
-          mode = { "n", "i" },
-          desc = "Navigate to older list",
-        },
-        K = {
-          function()
-            vim.cmd "cnewer"
-          end,
-          mode = { "n", "i" },
-          desc = "Navigate to newer list",
-        },
-      },
-    },
-    preview = {
-      minimal = true,
-    },
-    values = files,
-  }
+local function async_run()
+  local code = "print('Async code running')"
+  print("Start async")
+  vim.defer_fn(function()
+    load(code)()
+    print("End async")
+  end, 2000) -- 2000ms = 2 seconds
 end
 
+vim.keymap.set("n", "<localleader>zSR", async_run, { desc = "Async run" })
+end
+-- test_asyncsyncmap()
+
+-- #region Snacks Picker Tests
+-- Use testingmap_snacks for keymap config with auto mapper
+-- Example usage:
+-- autoMapSnacksKeys(testingmap_snacks, {
+--   _all = { live = true },
+--   files = { pattern = "init" },
+-- }, true)
+-- then test with key map like <localleader>zf for files picker with this new opts
+
+-- #endregion Snacks Picker Tests
 function lsp_signature()
   -- :lua vim.lsp.buf.signature_help()
   -- ISSUE = noice auto enable signature !!
@@ -1152,6 +1085,105 @@ local function getDirForCurWord()
   local fullPath = getFullPathFromRelativePath(filepath)
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[getDirForCurWord fullPath:]==], vim.inspect(fullPath)) -- __AUTO_GENERATED_PRINT_VAR_END__
+end
+
+function codeCompanion_adapter_setup()
+
+  -- echo "Testing OpenAI API access via Agoda proxy... $OPENAI_API_KEY"
+  -- curl http://openai-proxy.agoda.is/v1/models -H "Authorization: Bearer $OPENAI_API_KEY" -- works fine
+
+  require("codecompanion").setup({  
+  adapters = {  
+    http = {  
+      openai_agd = function()  
+        return require("codecompanion.adapters").extend("openai", {  
+          env = {  
+            -- why error mssage has domain is domain=.api.openai.com
+            endpoint = "http://openai-proxy.agoda.is/v1",  
+              -- Plain environment variable name (string): if the value is the name of an environment variable that has already been set (e.g. "HOME" or "GEMINI_API_KEY"), the plugin will read the value.
+              -- https://github.com/olimorris/codecompanion.nvim/blob/ca87f13b/doc/configuration/adapters.md
+            api_key = "OPENAI_API_KEY"
+          },  
+          schema = {  
+            model = {  
+              default = "gpt-5.2",  
+              choices = {  
+                "gpt-4.1",  
+                "gpt-4.1-mini",   
+                "gpt-5-mini",  
+                "gpt-5.1",  
+                "gpt-5.2",  
+                "gemini-3-pro-preview",  
+              },  
+            },  
+            temperature = {  
+              default = 0,  
+            },  
+            max_completion_tokens = {  
+              default = 4096,  
+            },  
+          },  
+          timeout = 30000,  
+        })  
+      end,  
+    },  
+  },  
+  -- strategies = {  
+  --   inline = {  
+  --     adapter = {  
+  --       name = "openai_agd",  
+  --       model = "gpt-5.2",  
+  --     },  
+  --   },  
+  -- },  
+})
+end
+function codeCompanion_setup()
+
+  require("codecompanion").setup({  
+    prompt_library = {  
+      ["Boilerplate HTML"] = {
+        strategy = "inline",
+        description = "Generate some boilerplate HTML",
+        opts = {
+          ---@return number
+          pre_hook = function()
+            local bufnr = vim.api.nvim_create_buf(true, false)
+            vim.api.nvim_set_current_buf(bufnr)
+            vim.api.nvim_set_option_value("filetype", "html", { buf = bufnr } )
+            return bufnr
+          end
+        }
+        ---
+      },
+    ["Custom Inline"] = {  
+      strategy = "inline",  
+      description = "Inline chat with AGD model",  
+      opts = {  
+        adapter = {  
+          name = "openai_agd",  
+          model = "gpt-5.2",  
+        },  
+      },  
+      prompts = {  
+        {  
+          role = "user",  
+          content = function(context)  
+            return context.visual_selection or "Please help with this code"  
+          end,  
+          opts = {  
+            visible = false,  
+          },  
+        },  
+      },  
+    },  
+  },  
+})
+
+require("codecompanion").prompt("Boilerplate HTML")
+require("codecompanion").prompt("Model GPT mini 5 - G5")
+
+
 end
 
 function PL_testPasteImage()
