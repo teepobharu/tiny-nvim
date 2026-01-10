@@ -196,4 +196,41 @@ function M.restore_visual_selection(start_pos, end_pos, mode)
   vim.api.nvim_win_set_cursor(0, {end_pos[2], end_pos[3] - 1})
 end
 
+--- Get the text from the previous visual selection
+--- Uses the '< and '> marks to retrieve the last selected text
+---@return string|nil The previously selected text, or nil if no previous selection
+function M.getPreviousSelectedText()
+  -- Get the start and end positions of the last visual selection
+  local start_pos = vim.fn.getpos("'<")
+  local end_pos = vim.fn.getpos("'>")
+
+  -- Check if marks are valid (line number > 0)
+  if start_pos[2] == 0 or end_pos[2] == 0 then
+    return nil
+  end
+
+  local start_line = start_pos[2]
+  local start_col = start_pos[3]
+  local end_line = end_pos[2]
+  local end_col = end_pos[3]
+
+  -- Get the text between the marks
+  -- nvim_buf_get_text uses 0-based indexing for lines and columns
+  local lines = vim.api.nvim_buf_get_text(
+    0,
+    start_line - 1,
+    start_col - 1,
+    end_line - 1,
+    end_col,
+    {}
+  )
+
+  -- Join the lines with newline character
+  if lines and #lines > 0 then
+    return table.concat(lines, "\n")
+  end
+
+  return nil
+end
+
 return M

@@ -1354,6 +1354,7 @@ function M.toggle_cwd_files_grep(picker, item)
         table.insert(unique_cycle_order, state)
       else
         -- Remove duplicate from cwd_map
+        print(string.format("Removing duplicate cwd state '%s' for directory '%s'", state, dir))
         cwd_map[state] = nil
       end
     else
@@ -1404,8 +1405,8 @@ function M.toggle_cwd_files_grep(picker, item)
 
   -- State labels
   local state_labels = {
-    current = "Current Directory",
-    current_d1 = "Current Directory (Depth 1)",
+    current = cwd_map.current == cwd_map.gitroot and "Default/Git" or "Default/current",
+    current_d1 = (cwd_map.current == cwd_map.gitroot and "Default/Git" or "Default/current") .. "(D=1)",
     gitroot = "Git Root",
     subproject = "Sub-Project Directory",
     prevbuffer = "Previous Buffer Directory",

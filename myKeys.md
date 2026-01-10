@@ -50,6 +50,7 @@ Snacks
  - snacks upstream diff
  - snacks upstream diff
  - mega ref git diff files - preview
+- fix switch cwd to use refresh instead
 Nav
 - [x] tab navigations
 
@@ -71,6 +72,7 @@ commands :
 - select fix relative path from current file gF ? works need to check other example why sometime not
 
 *current*
+- ignore case toggle: 
 - avante models quick select switch between 4.1 mini and 5 mini and 5.2 codex 
   - ./docs/avante_20260107_keys_model.md
 3 - codecompanion update try https://github.com/olimorris/codecompanion.nvim/blob/main/lua/codecompanion/config.lua
@@ -444,6 +446,10 @@ Action bind
   - grep in quicklist (default only support file search)
   - binding smart to trigger files / buffers switches
 
+CAVEAT actions
+- function(picker,items) only works in action
+ie. `picker:refresh()` and items will be nil if put as inline function inside win.input.keys
+
 #### Gitsign
 
 - good features
@@ -581,3 +587,24 @@ Code companion
 | Key        | Description     |
 | ---------- | --------------- |
 | <leader> A | toggle commands |
+
+
+## Adapater AI notes
+
+Codecompanion 
+- support value as ENV name inject when not empty
+- support header env 
+
+more answer: https://deepwiki.com/search/how-to-bind-key-to-do-inline-c_1b187fa6-d9be-448a-be94-c77c3e2de23f?mode=fast
+default 
+api_key = "OPENAI_API_KEY"
+
+
+## Lua notes
+
+'<'> marks will only be available when user select text in visual mode and exit visual mode
+so binding with execution on v mode with
+
+```lua
+vim.cmd("'<'>Command") might get error like not found mark '<>
+```
