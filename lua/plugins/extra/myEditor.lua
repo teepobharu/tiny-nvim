@@ -133,6 +133,8 @@ return {
     --   print([==[ opt:]==], vim.inspect(opt)) -- __AUTO_GENERATED_PRINT_VAR_END__
     -- end,
   },
+  --
+  --#region AI Assistants
   {
     "greggh/claude-code.nvim", -- will soon be replaced with another claude code libs   - [claudecode.nvim](https://github.com/coder/claudecode.nvim
     opts = {
@@ -196,6 +198,35 @@ return {
       -- log_level = "ERROR", -- TRACE|DEBUG|ERROR|INFO not work
       -- [WARN] above not help disable textmsg: CodeCompanion.nvim will experience breaking changes soon. Pin to version v17.33.0 or earlier to avoid this.
       -- https://codecompanion.olimorris.dev/configuration/chat-buffer
+      adapters = {  
+         -- TODO FIX AUTH ERRORS
+        -- http = {  
+        --   openai_agd = function()  
+        --     return require("codecompanion.adapters").extend("openai", {  
+        --       env = {  
+        --         -- why error mssage has domain is domain=.api.openai.com
+        --         endpoint = "http://openai-proxy.agoda.is/v1",  
+        --         -- Plain environment variable name (string): if the value is the name of an environment variable that has already been set (e.g. "HOME" or "GEMINI_API_KEY"), the plugin will read the value.
+        --         -- https://github.com/olimorris/codecompanion.nvim/blob/ca87f13b/doc/configuration/adapters.md
+        --         api_key = "OPENAI_API_KEY"
+        --       },
+        --       schema = {  
+        --         model = {
+        --           default = "gpt-5.2",  
+        --           choices = {  
+        --             "gpt-4.1",  
+        --             "gpt-4.1-mini",   
+        --             "gpt-5-mini",  
+        --             "gpt-5.1",  
+        --             "gpt-5.2",  
+        --             "gemini-3-pro-preview",  
+        --           },  
+        --         },  
+        --       }
+        --     })
+        --   end
+        -- }
+      },
       strategies = {
         chat = {
           slash_commands = {
@@ -628,8 +659,8 @@ Your instructions here
     -- },
     -- https://github.com/yetone/avante.nvim?tab=readme-ov-file#default-setup-configuration
     opts = {
-      -- provider = "copilot", -- You can then change this provider here
-      provider = "openai_agd", -- You can then change this provider here
+      provider = "copilot", -- You can then change this provider here
+      -- provider = "openai_agd", -- You can then change this provider here
       web_search_engine = {
         -- provider = "tavily", -- tavily, serpapi, google, kagi, brave, or searxng
         provider = "google", 
@@ -647,7 +678,9 @@ Your instructions here
         -- },
         -- lua print(require('avante.config').provider)
         -- lua print(vim.inspect(require('avante.config').get_last_used_model(require('avante.config').providers)))
-      }, avante_utils.get_agoda_providers()),
+      }, 
+      {}), -- default = no custom provider
+      -- avante_utils.get_agoda_providers()),
 
       -- Removed inline Agoda provider definitions (claude_agd, vertex_vclaude_2, vertex_claude_agd, openai_agd)
       -- These are now imported from lua/utils/my_avante_utils.lua
@@ -682,6 +715,31 @@ Your instructions here
     },
     keys = editor_keymaps.keymaps.avante,
   },
+  {
+    "folke/sidekick.nvim",
+    -- https://github.com/folke/sidekick.nvim?tab=readme-ov-file
+    opts = {
+      -- enabled = false, -- or default is fn and use vim.g.sidekick_nes
+      cli = {
+        prompts = {
+          fname = function()
+            return vim.fn.expand "%:t"
+          end,
+          fpath = function(ctx)
+            -- in this format file: <> \n name <> in newline separate
+            -- try sending just the file name not the content
+            return vim.fn.expand "%:p"
+            -- \nname: " .. vim.fn.expand("%:t")
+            -- this sends the current file content
+            -- return "Current file: " .. ctx.buf .. " at line " .. ctx.row
+          end,
+        },
+      },
+    },
+    keys = editor_keymaps.keymaps.sidekick,
+  },
+  --#endregion AI Assistants
+  --
   {
     "jellydn/quick-code-runner.nvim",
     keys = editor_keymaps.keymaps.quick_code_runner,
@@ -772,6 +830,7 @@ Your instructions here
     keys = editor_keymaps.keymaps.trouble,
   },
   --#endregion Session and windows
+  --
   --#region Files / Search
   {
     "folke/snacks.nvim",
@@ -880,7 +939,91 @@ Your instructions here
             },
           },
         },
+        toggles = {  
+          -- Existing toggles...  
+          case_sensitive_custom = {   
+            icon = "C",  -- Icon to show in title  
+            value = true -- Show when case_sensitive is true  
+          },
+          case_nonsensitive_custom = {   
+            icon = "~",  -- Icon to show in title  
+            value = true -- Show when case_sensitive is true  
+          },
+        },
         actions = {
+          toggle_case_sensitivity = function(picker, item)
+            local current_args = vim.deepcopy(picker.opts.args) or {}
+            local has_ignore_case = vim.tbl_contains(current_args, "-i") or vim.tbl_contains(current_args, "--ignore-case")
+            local has_casesens = vim.tbl_contains(current_args, "-s") or vim.tbl_contains(current_args, "--case-sensitive")
+            -- local current_search = picker.input.filter and picker.input.filter.search
+            local current_pattern = picker.input.filter and picker.input.filter.pattern
+            local currentmatchpattern = picker.matcher and picker.matcher.pattern
+            -- exists in file same as matcher
+            local current_search = picker.input.filter and picker.input.filter.search
+            local search_query_has_upper = current_search:match("%u")
+
+            -- Determine source type (fd for files, rg for grep)
+            local source = picker.opts.source
+
+
+            function remove_exist_flags(args, flags)
+              return vim.tbl_filter(function(arg)
+                return not vim.tbl_contains(flags, arg)
+              end, args)
+            end
+
+            local is_case_sensitive_perceived = has_casesens or (not has_ignore_case and search_query_has_upper)
+
+
+
+            local is_next_sensitive = nil
+            print([==[Toggle before args:]==], vim.inspect(picker.opts.args))
+            if has_ignore_case then
+              current_args = remove_exist_flags(current_args, {"-i", "--ignore-case"})
+              current_args = remove_exist_flags(current_args, {"-s", "--case-sensitive"})
+
+            elseif is_case_sensitive_perceived then
+              -- Add ignore case flag
+              current_args = remove_exist_flags(current_args, {"-i", "--ignore-case"})
+              current_args = remove_exist_flags(current_args, {"-s", "--case-sensitive"})
+              table.insert(current_args, "--ignore-case")
+              is_next_sensitive = false
+            else -- (search_query_has_both_case and not has_casesens and not has_ignore_case)
+              -- Remove ignore case flag
+              current_args = remove_exist_flags(current_args, {"-i", "--ignore-case"})
+              current_args = remove_exist_flags(current_args, {"-s", "--case-sensitive"})
+              table.insert(current_args, "--case-sensitive")
+              is_next_sensitive = true
+            end
+            picker.opts.args = current_args
+            if source == "files" or source == "buffers" or source == "smart" then
+              local smartcase = picker.opts.matcher.smartcase
+              local ignorecase = picker.opts.matcher.ignorecase
+              local init_smartcase = picker.init_opts.matcher and picker.init_opts.matcher.smartcase
+              local init_ignorecase = picker.init_opts.matcher and picker.init_opts.matcher.ignorecase
+              -- print all smart,init , ignore in table
+              print([==[snacks_opt_tgg#picker.opts.matcher:]==], vim.inspect({ 
+                smartcase = smartcase, ignorecase = ignorecase, init_smartcase = init_smartcase, init_ignorecase = init_ignorecase,
+              }))
+              if is_next_sensitive then
+                picker.opts.matcher.ignorecase = false
+                picker.opts.matcher.smartcase = false
+              elseif is_next_sensitive == false then
+                picker.opts.matcher.ignorecase = true
+                picker.opts.matcher.smartcase = false
+              else
+                picker.opts.matcher.ignorecase = false
+                picker.opts.matcher.smartcase = false
+              end
+              picker.matcher = require("snacks.picker.core.matcher").new(picker.opts.matcher)
+            end
+
+            picker.opts.case_sensitive_custom = is_next_sensitive
+            picker.opts.case_nonsensitive_custom = is_next_sensitive == false
+            print([==[Toggle after args:]==], vim.inspect(picker.opts.args))
+            -- picker:find()
+            picker:find()
+          end,
           open_file_remote = function(picker, item)
             local preview_source = picker.init_opts and picker.init_opts.source
 
@@ -1072,6 +1215,7 @@ Your instructions here
               -- ["="] = "toggle_focus",
               -- ["<C-i>"] = "toggle_focus",
               ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
+              ["<M-c>"] = { "toggle_case_sensitivity", mode = { "n", "i" }, desc = "Toggle case sensitivity" },
               ["0"] = { "focus_preview", mode = { "n" }, desc = "Focus Preview" },
               -- make consistent as FZFlua
               ["<c-a>"] = { "sidekick_send", mode = { "n", "i" } },
@@ -1109,31 +1253,7 @@ Your instructions here
     keys = editor_keymaps.keymaps.harpoon,
   },
   --#endregion Files / Search
-  --#region AI Assistants
-  {
-    "folke/sidekick.nvim",
-    -- https://github.com/folke/sidekick.nvim?tab=readme-ov-file
-    opts = {
-      -- enabled = false, -- or default is fn and use vim.g.sidekick_nes
-      cli = {
-        prompts = {
-          fname = function()
-            return vim.fn.expand "%:t"
-          end,
-          fpath = function(ctx)
-            -- in this format file: <> \n name <> in newline separate
-            -- try sending just the file name not the content
-            return vim.fn.expand "%:p"
-            -- \nname: " .. vim.fn.expand("%:t")
-            -- this sends the current file content
-            -- return "Current file: " .. ctx.buf .. " at line " .. ctx.row
-          end,
-        },
-      },
-    },
-    keys = editor_keymaps.keymaps.sidekick,
-  },
-  --#endregion AI Assistants
+  --
   {
     "folke/which-key.nvim",
     optional = true,
@@ -1207,6 +1327,19 @@ Your instructions here
           mode = { "n" },
           icon = { icon = "💻", color = "black" },
         },
+        -- Avante model selection groups
+        {
+          "<leader>rs",
+          -- group = "avante",
+          desc = "pick Avante models",
+          mode = { "n", "x", "v" },
+          -- icon = { icon = " ", color = "green" },
+        },
+        {
+          "<leader>rS",
+          desc = "pick Avante custom models",
+          mode = { "n", "x", "v" },
+        }
       }, isSnackEnabled and {
         {
           "<leader>L",

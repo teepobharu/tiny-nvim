@@ -3,7 +3,6 @@ local keymap = vim.keymap.set
 local Cmd = require("utils.cmd")
 local run_command = Cmd.run_command
 local inputUtil = require("utils.input")
-local myPathUtil = require("utils.mypath")
 -- ===========================
 -- LAZY NVIM ====================
 -- =======================
@@ -751,16 +750,17 @@ keymap(
 )
 keymap("n", "<localleader>rsn", addNvimConfigInRoot, { desc = "Setup nvim proj lang & plugin config" })
 keymap("n", "<localleader>rp", "", { desc = "Profile" })
-keymap("n", "<localleader>rl", ":luafile %<CR>", { desc = "Reload Lua file" })
-keymap("v", "<localleader>rl", ":luafile %<CR>", { desc = "Reload Lua file" })
+keymap("n", "<localleader>rF", ":luafile %<CR>", { desc = "Reload Lua file" })
 
-keymap({'n', 'v'}, '<localleader>rL', function()
+local function execute_selected_lua(showOutput, lastselected, clipenable)
   local code
-  if vim.api.nvim_get_mode().mode == 'v' or vim.api.nvim_get_mode().mode == 'V' then
+  if lastselected then
+    code = inputUtil.getPreviousSelectedText()
+  elseif vim.api.nvim_get_mode().mode == 'v' or vim.api.nvim_get_mode().mode == 'V' then
     code = inputUtil.getSelectedLines()
   else
     local clipboard = vim.fn.getreg('+')
-    if clipboard and #clipboard > 3 then
+    if clipenable and clipboard and #clipboard > 3 then
       code = clipboard
     else
       code = vim.api.nvim_get_current_line()
@@ -769,16 +769,22 @@ keymap({'n', 'v'}, '<localleader>rL', function()
   local f = code and load(code)
   if f then
     f()
-    local current_win = vim.api.nvim_get_current_win()
-    -- some async delay then execute noice
-    vim.defer_fn(function()
-      vim.cmd('NoiceAll')
-    end, 200)
-    if vim.api.nvim_get_current_win() ~= current_win then
-      vim.api.nvim_set_current_win(current_win)
+    if showOutput then
+      local current_win = vim.api.nvim_get_current_win()
+      -- some async delay then execute noice
+      vim.defer_fn(function()
+        vim.cmd('NoiceAll')
+        if vim.api.nvim_get_current_win() ~= current_win then
+          vim.api.nvim_set_current_win(current_win)
+        end
+      end, 200)
     end
   end
-end, { desc = "Execute selected Lua code" })
+end
+
+keymap({'n', 'v'}, '<localleader>rl', function() execute_selected_lua(true) end, { desc = "Execute selected Lua code (show output)" })
+keymap({'n', 'v'}, '<localleader>rL', function() execute_selected_lua(false) end, { desc = "Execute selected Lua code (no output)" })
+keymap('n', '<localleader>rT', function() execute_selected_lua(false, true) end, { desc = "Execute last selected Lua code (show output)" })
 
 
 keymap("n", "<localleader>rps", function()

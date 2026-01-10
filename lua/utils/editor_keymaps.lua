@@ -366,16 +366,36 @@ M.keymaps = {
   },
 
   -- Avante AI
-  avante = {
+  -- Keymaps are generated from my_avante_utils.lua using generate_avante_keymaps()
+  -- This provides a clear mapping structure and reduces duplication
+  --
+  -- Structure:
+  --   <leader>rsm - Select model (lean/copilot only)
+  --   <leader>rsM - Select model (all/with AGD)
+  --   <leader>rs[f|F|h|H|c|C] - Copilot models (visual=ask, normal=switch)
+  --     f/F = fast (GPT-4.1-mini, GPT-5-mini)
+  --     h/H = heavy (Claude Sonnet 4.5, Claude Opus 4.5)
+  --     c/C = codex (GPT-5.1-codex-max, GPT-5.1-codex-mini)
+  --   <leader>rS[f|F|h|H|c] - AGD models (visual=ask, normal=switch)
+  --     f/F = fast OpenAI AGD, h/H = Claude AGD, c = GPT-5.2 AGD
+  avante = require("utils.my_avante_utils").generate_avante_keymaps({
     {
-      "<leader>rm",
+      "<leader>rsm",
       function()
-        -- use copilot provider and output copilot models for selection
+        require("utils.my_avante_utils").select_model_lean()
       end,
-      desc = "Avante Models lean (copilot)",
-      mode = { "v", "x" },
+      desc = "Avante Models (lean/copilot)",
+      mode = "n",
     },
-  },
+    {
+      "<leader>rsM",
+      function()
+        require("utils.my_avante_utils").select_model_all()
+      end,
+      desc = "Avante Models (all/AGD)",
+      mode = "n",
+    }
+  }),
 
   -- Quick code runner
   quick_code_runner = {
@@ -613,6 +633,7 @@ M.keymaps = {
           },
         }
       end,
+      desc = "Neotree cursor/Snacks",
     },
     {
       "<C-e>",

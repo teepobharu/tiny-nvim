@@ -239,7 +239,7 @@ function M.select_prompt(opts, callback)
   local function launch_snacks()
     Snacks.picker.pick {
       source = "select",
-      title = "Select Prompt File",
+      title = "Select Prompt File (c-y copy)",
       items = items,
       format = function(item, picker)
         -- Use the pre-computed parent directory (last 2 parts)
@@ -253,6 +253,7 @@ function M.select_prompt(opts, callback)
 
       layout = {
         preset = "default",
+        -- preset = "vscode",
         hidden = false,
         layout = {
           backdrop = false,
@@ -316,7 +317,7 @@ function M.select_prompt(opts, callback)
         },
         input = {
           keys = {
-            ["<C-y>"] = { 'paste_content', mode = { 'n', 'i' }, desc = "Paste Prompt Content" },
+            ["<C-y>"] = { 'copy_content', mode = { 'n', 'i' }, desc = "Copy Prompt Content" },
             ["<CR>"] = { 'paste_content', mode = { 'n', 'i' }, desc = "Paste Prompt Content" },
           },
         },
@@ -324,6 +325,27 @@ function M.select_prompt(opts, callback)
       actions = {
         -- confirm = function(picker, item)
         -- __AUTO_GENERATED_PRINT_VAR_START__
+        copy_content = function(picker, item)
+          -- Copy the selected prompt (without frontmatter) to system clipboard and unnamed register
+          if not item or not item.file then
+            picker:close()
+            Snacks.notify.warn("No prompt selected to copy")
+            return
+          end
+          local c = readfile(item.file)
+          c = strip_frontmatter(c)
+          -- Safely set system and primary clipboard registers
+          pcall(function()
+            vim.fn.setreg('+', c)
+            vim.fn.setreg('*', c)
+            -- also set unnamed register for immediate pasting
+            vim.fn.setreg('"', c)
+            Snacks.notify.warn("Successfully copied prompt to clipboard from" .. item.file)
+          end)
+
+          picker:close()
+          vim.notify("Prompt copied to clipboard", vim.log.levels.INFO)
+        end,
         paste_content = function(picker, item)
           if not item or not item.file then
             picker:close()
