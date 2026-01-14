@@ -574,12 +574,215 @@ function snacks_opt_tgg()
           -- picker:find()
           picker:find()
         end,
+        toggle_cwd_files_grep = function(picker, item)
+          -- require does not really updated on the fly
+          -- require("utils.snacks_terminal").toggle_cwd_files_grep(picker, item)
+          local path = require("utils.path")
+          local pathUtil = require("utils.mypath")
 
-    },
+          -- Get available cwd options
+          local current_dir = vim.fn.getcwd()
+          local git_root = path.get_root_directory()
+          local sub_project_dir = pathUtil.get_sub_project_dir()
+          local prev_buf = vim.api.nvim_buf_get_name(vim.fn.bufnr("#"))
+          local prev_buffer_dir = prev_buf ~= "" and vim.fn.fnamemodify(prev_buf, ":p:h") or nil
+
+          -- Initialize cwd cycle state if not exists
+          if not vim.g.picker_cwd_cycle_state then
+            vim.g.picker_cwd_cycle_state = "current"
+          end
+
+          -- Define the initial cycle order (will be filtered for duplicates/invalid)
+          local cycle_order = {"current", "gitroot", "subproject", "prevbuffer", "current_d1"}
+
+          -- Map states to actual directories
+          local cwd_map = {
+            current = current_dir,
+            current_d1 = current_dir, -- Same as current, but with depth-1 search for grep
+            gitroot = git_root,
+            subproject = sub_project_dir,
+            prevbuffer = prev_buffer_dir,
+          }
+
+          -- Remove duplicates from cwd_map
+          -- Keep track of seen directories and remove duplicate entries
+          -- Note: current_d1 is kept separate from current even if same dir (different behavior for grep)
+          local seen_dirs = {}
+          local unique_cycle_order = {}
+
+          for _, state in ipairs(cycle_order) do
+            local dir = cwd_map[state]
+            -- Only add if directory is valid and not seen before
+            if dir and dir ~= "" and vim.fn.isdirectory(dir) == 1 then
+              -- Treat current_d1 as distinct from current (different grep behavior)
+              local dir_key = (state == "current_d1") and "current_d1" or dir
+
+              if not seen_dirs[dir_key] then
+                seen_dirs[dir_key] = true
+                table.insert(unique_cycle_order, state)
+              else
+                -- Remove duplicate from cwd_map
+                print(string.format("Removing duplicate cwd state '%s' for directory '%s'", state, dir))
+                cwd_map[state] = nil
+              end
+            else
+              -- Remove invalid directories
+              cwd_map[state] = nil
+            end
+          end
+
+          -- Update cycle_order to only include unique, valid directories
+          cycle_order = unique_cycle_order
+
+          -- If all directories are the same or invalid, keep at least current
+          if #cycle_order == 0 then
+            cycle_order = {"current"}
+            cwd_map = { current = current_dir }
+          end
+
+          -- If only one unique directory, notify user and don't cycle
+          if #cycle_order == 1 then
+            vim.notify("Only one unique directory available - no other scopes to cycle to", vim.log.levels.INFO)
+            return
+          end
+
+          -- Find next valid state in the new cycle_order
+          local current_state_idx = nil
+          for i, state in ipairs(cycle_order) do
+            if state == vim.g.picker_cwd_cycle_state then
+              current_state_idx = i
+              break
+            end
+          end
+
+          -- If current state is not in cycle (was removed as duplicate), start from beginning
+          if not current_state_idx then
+            current_state_idx = 0
+          end
+
+          -- Move to next state
+          local next_idx = (current_state_idx % #cycle_order) + 1
+          vim.g.picker_cwd_cycle_state = cycle_order[next_idx]
+          local new_cwd = cwd_map[vim.g.picker_cwd_cycle_state]
+
+          -- Get current picker source and pattern
+          local source = picker.init_opts and picker.init_opts.source
+          -- search = for grep pickers
+          local filter_pattern = picker.input.filter and (picker.input.filter.pattern ~= "" and picker.input.filter.pattern)
+          local filter_search = picker.input.filter and (picker.input.filter.search ~= "" and picker.input.filter.search)
+
+          -- State labels
+          local state_labels = {
+            current = cwd_map.current == cwd_map.gitroot and "Default/Git" or "Default/current",
+            current_d1 = (cwd_map.current == cwd_map.gitroot and "Default/Git" or "Default/current") .. "(D=1)",
+            gitroot = "Git Root",
+            subproject = "Sub-Project Directory",
+            prevbuffer = "Previous Buffer Directory",
+          }
+
+          -- Notify user about the change
+          vim.notify(
+            string.format("CWD: %s\n%s", state_labels[vim.g.picker_cwd_cycle_state], new_cwd),
+            vim.log.levels.INFO
+          )
+
+          -- -- Close current picker
+          -- picker:close()
+
+          -- Build picker params with scope label in title
+          local scope_label = state_labels[vim.g.picker_cwd_cycle_state]
+          local picker_params = {
+            cwd = new_cwd,
+            pattern = filter_pattern or "",
+            search = filter_search or "",
+            live = picker.opts.supports_live and picker.opts.live,
+            show_empty = true,
+            title = string.format("%s [%s]", source or "Picker", scope_label),
+          }
+          local hidden_state = picker.opts.hidden
+          local ignored_state = picker.opts.ignored
+
+          -- Fallback to init_opts if opts don't have the values
+          if hidden_state == nil and picker.init_opts then
+            hidden_state = picker.init_opts.hidden
+          end
+          if ignored_state == nil and picker.init_opts then
+            ignored_state = picker.init_opts.ignored
+          end
+
+          if hidden_state ~= nil then
+            picker_params.hidden = hidden_state
+          end
+          if ignored_state ~= nil then
+            picker_params.ignored = ignored_state
+          end
+
+          -- Add git_cwd=true when current cwd is equal to git root
+          if new_cwd == git_root and git_root and git_root ~= "" then
+            picker_params.git_cwd = true
+          end
+
+          -- Handle different picker types and preserve their state
+          if vim.g.picker_cwd_cycle_state == "current_d1" and type(source) == "string" and (source:match("grep") or source:match("files")) and not source:match("^git") then
+            picker_params.args = { "--max-depth", "1" }
+          end
+          -- clone picker_params in to picker.opts
+          picker.opts.cwd =picker_params.cwd
+          picker.opts.args = picker_params.args
+          picker.opts.pattern = picker_params.pattern
+          picker.opts.search = picker_params.search
+          picker.opts.live = picker_params.live
+          picker.opts.show_empty = true
+          picker.title = picker_params.title
+          picker.opts.git_cwd = true
+          -- __AUTO_GENERATED_PRINT_VAR_START__
+          print([==[M.toggle_cwd_files_grep picker.opts:]==], vim.inspect(picker.opts)) -- __AUTO_GENERATED_PRINT_VAR_END__
+          picker:refresh()
+
+          local backupmanual_whenneed = function()
+            if source == "files" then
+              -- Add max-depth for current_d1 mode (depth 1 search) - fd supports --max-depth
+              Snacks.picker.files(picker_params)
+            elseif source == "grep" then
+              -- Add max-depth for current_d1 mode (depth 1 search) - ripgrep supports --max-depth
+              Snacks.picker.grep(picker_params)
+            elseif source == "buffers" then
+              -- Buffers picker - preserve any relevant state
+              Snacks.picker.buffers(picker_params)
+              -- elseif source == "git_files" then
+              --   -- Git files picker
+              --   Snacks.picker.git_files(picker_params)
+            else
+              Snacks.notify.warn("picker source" .. tostring(source) .. "Not configured to use change cwd")
+              -- check for Snacks.picker[source]
+              if Snacks.picker[source] and type(Snacks.picker[source]) == "function" then
+                Snacks.picker[source](picker_params)
+              else
+                Snacks.notify.warn("Unknown picker source: " .. tostring(source) .. ". Falling back to smart picker.")
+                -- Fallback to smart picker for unknown sources
+                Snacks.picker.smart(picker_params)
+              end
+            end
+
+            -- Re-enter insert mode after picker opens (Snacks default behavior)
+            vim.defer_fn(function()
+              if vim.api.nvim_get_mode().mode == "n" then
+                vim.cmd("startinsert")
+              end
+            end, 50)
+          end
+        end,
+    }          
+,
 
     win = {
       input = {
+          footer = function(picker)  
+            return "CWD: " .. (picker.opts.cwd or vim.fn.getcwd())  
+          end,  
+          footer_pos = "center",
         keys = {
+          ["<M-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Toggle files cwd" },
           ["<C-t>"] = { "toggle_smartcase", mode = { "n", "i" }, desc = "Toggle smartcase (requires refresh)" },
           ["<M-c>"] = { "toggle_case_sensitivity", mode = { "n", "i" }, desc = "Toggle case sensitivity" },
         }
@@ -607,6 +810,27 @@ function snacks_opt_tgg()
   print("To change matcher behavior, recreate the picker or use toggles.")
 end
 
+function snacks_grep()
+-- Toggle CWD scope for pickers (files/grep/etc)
+-- Cycles through: current dir → git root → sub-project dir → previous buffer dir
+Snacks.picker.grep{
+  smartcase = false,
+  ignorecase = true,
+  hidden = true,
+  -- opts = {
+  --   hidden = true,
+  -- },
+  args = { "--ignore-case"}
+}
+end
+
+function snacks_git_browse()
+  -- https://deepwiki.com/search/can-gitbrowse-be-configure-and_45650fa5-dddd-460a-8101-f405f8843dec?mode=fast
+  Snacks.gitbrowse({   
+    branch = require("utils.git").git_main_branch(),
+    what = "file",
+  })
+end
 
 function main()
   snacks_opt_tgg()

@@ -22,7 +22,6 @@ end
 function M.get_selected_or_cursor_word()
   -- Check the current mode
   local mode = vim.api.nvim_get_mode().mode
-  vim.print(mode)
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[M.get_selected_or_cursor_word mode:]==], vim.inspect(mode)) -- __AUTO_GENERATED_PRINT_VAR_END__
   print([==[expand]==], vim.fn.expand("<cword>"))
@@ -31,9 +30,6 @@ function M.get_selected_or_cursor_word()
   local mode = vim.fn.mode()
   local text = ""
   if mode == "v" or mode == "V" or mode == "\22" then
-    local r = vim.region(0, "'<", "'>", vim.fn.visualmode(), true)
-    vim.print("==region")
-    vim.print(region_to_text(r))
     -- Visual mode: get selected text
     vim.cmd('normal! "vy')
     selection = vim.fn.getreg('v')
@@ -43,7 +39,6 @@ function M.get_selected_or_cursor_word()
   end
 
   local finalText = selection:gsub("^%s*(.-)%s*$", "%1")
-  vim.print(finalText)
   print([==[finaltext]==], vim.inspect(finalText)) -- __AUTO_GENERATED_PRINT_VAR_END__
   return finalText
 end
@@ -53,9 +48,12 @@ end
 -- Copy from toggleterm send lines utils
 -- TODO: check and validate -- sample usage
 -- send_lines_to_terminal("single_line", true, args)
+---@param selection_type? 'single_line'|'visual_selection'|nil  -- Type hint for selection_type
+---@param trim_spaces boolean|nil
 M.getSelectedLines = function(selection_type, trim_spaces)
   local lines = {}
   -- Beginning of the selection: line number, column number
+  -- if visual_selection is used seems like it also returned last selected text as well
   local start_line, start_col
   if selection_type == nil then 
     if vim.fn.mode() == "n" then

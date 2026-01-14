@@ -47,12 +47,19 @@ Chore
 - [x] gitsign hunks not support visual c-j,k
 
 Snacks
- - snacks upstream diff
- - snacks upstream diff
- - mega ref git diff files - preview
+- snacks upstream diff
+- snacks upstream diff
+- mega ref git diff files - preview
 - fix switch cwd to use refresh instead
+- cwd: fuzzy matcher markers
+- ignore case toggle
+- toggle persist
+
 Nav
 - [x] tab navigations
+
+Git
+- leader-g-O open git on default browser rename leader-g-o
 
 *Done*
 0 - files hidden by default and pass options between toggle - don
@@ -72,7 +79,6 @@ commands :
 - select fix relative path from current file gF ? works need to check other example why sometime not
 
 *current*
-- ignore case toggle: 
 - avante models quick select switch between 4.1 mini and 5 mini and 5.2 codex 
   - ./docs/avante_20260107_keys_model.md
 3 - codecompanion update try https://github.com/olimorris/codecompanion.nvim/blob/main/lua/codecompanion/config.lua
