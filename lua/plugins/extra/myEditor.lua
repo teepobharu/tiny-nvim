@@ -566,6 +566,80 @@ feat(release): add slack msg and create release after deploy
             },
           },
         },
+        ["Review a Staged Commit Message"] = {
+          strategy = "chat",
+          description = "Review a staged commit message",
+          opts = {
+            short_name = "review-staged-commit",
+            auto_submit = true,
+            is_slash_cmd = true,
+            adapter = {
+              name = "copilot",
+              model = "gpt-5-mini", -- slower but more complete than gpt-4.1 ?
+            },
+          },
+          prompts = {
+            {
+              role = "user",
+              content = function()
+                return [[Help me review the following staged commit message for clarity, conciseness, and adherence to best practices.
+Part 1: Review & Feedback
+Analyze the commit message and organize feedback into the following sections, ordered by severity:
+
+Bugs
+Identify any inaccurate, incorrect, or misleading statements.
+Call out contradictions between the message and the implied change.
+Provide concrete examples or corrected wording.
+Potential Improvements
+
+Suggest ways to improve clarity, completeness, or intent.
+Recommend additional context when helpful (especially why the change exists).
+Propose improved phrasing where applicable.
+Style Suggestions
+
+Recommend improvements based on commit message conventions (e.g., imperative mood, tense, length).
+Fix grammar, structure, or readability issues.
+Flag deviations from common standards (e.g., Conventional Commits).
+For each section, provide:
+
+A short, concise numbered list of findings
+Specific examples or reworded alternatives
+A reference to the relevant file path when applicable
+                ]]
+                  .. [[Part 2: Final Commit Message (Strict Output Rules)
+After the review, compose a final commit message following Commitizen / Conventional Commits conventions.
+
+Rules for the final output:
+
+✅ Output ONLY the final commit message
+✅ Explain both what and why (not just how)
+✅ Use imperative, present tense
+✅ Keep text plain text only
+Do NOT use markdown, bold, quotes, or special formatting
+✅ Structure:
+Title line
+Exactly 1 blank line
+Body with bullet points using - 
+✅ Maximum 5 bullet points
+✅ Keep bullet points short and concise
+✅ Use common acronyms to save space where appropriate
+❌ Do NOT mention file paths
+❌ Do NOT mention specific variable names or code details
+❌ Do NOT exceed one blank line between title and body
+---
+staged-commits
+---
+
+                  ]] .. "\n\n```\n"
+                  .. vim.fn.system("git diff --staged")
+                  .. "\n```"
+              end,
+              opts = {
+                contains_code = true,
+              },
+            },
+          },
+        },
         -- sample workflow: https://codecompanion.olimorris.dev/extending/workflows
         ["Setup Test Example"] = {
           strategy = "workflow",
@@ -941,12 +1015,20 @@ Your instructions here
         },
         toggles = {  
           -- Existing toggles...  
+          git_cwd = {
+            icon = "",
+            value = true, -- Show when case_sensitive is true  
+          },
           case_sensitive_custom = {   
             icon = "C",  -- Icon to show in title  
             value = true -- Show when case_sensitive is true  
           },
           case_nonsensitive_custom = {   
             icon = "~",  -- Icon to show in title  
+            value = true -- Show when case_sensitive is true  
+          },
+          custom_cwd = {   
+            icon = ".",  -- Icon to show in title  
             value = true -- Show when case_sensitive is true  
           },
         },
@@ -1020,7 +1102,6 @@ Your instructions here
 
             picker.opts.case_sensitive_custom = is_next_sensitive
             picker.opts.case_nonsensitive_custom = is_next_sensitive == false
-            print([==[Toggle after args:]==], vim.inspect(picker.opts.args))
             -- picker:find()
             picker:find()
           end,

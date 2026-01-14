@@ -3,6 +3,10 @@
 Requirement Feature 
 Create a snacks helper to in snacks utils to get from explorer / files to copy the path info to clipboard
 
+To fix
+- c-num key not working
+- make enhancement ui to see previews and better msg (without dup prefix listing num )
+
 - Bind key 
   - C-1 to copy selected relative path compared with previous buffer / active buffer should support ../ if the path is outside the current buffer
   - C-2 to copy relative path to git path
@@ -12,6 +16,8 @@ Create a snacks helper to in snacks utils to get from explorer / files to copy t
 
 
 Sample explorer item debug info
+
+
 ```text
    Warn  21:40:03 notify.warn Debug: ~/.local/share/nvim3_jelly_tinynvim/lazy/snacks.nvim/lua/snacks/picker/actions.lua:741 {
   _path = "/Users/tharutaipree/Personal/mynotes/study/Programming/algorithms/agoda_interview/code_signals/shipWithinDays.js",
@@ -43,3 +49,19 @@ Sample explorer item debug info
   type = "file"
 }
 ```
+
+# 2. Help set toggle and persist cwd picker state
+
+1. use get_initial_picker_state to set cwd for files and grep related pickers to get initial cwd state
+2. use it to set existing mapping in editor_keymaps
+
+Check if git_files could work to filter out cwd by subproject ?
+
+# 3. Git selector on file
+
+Similar to leader+G+B 
+- which open the files history of current buffer
+- The picker has to support folder filter
+- first step: show all commits on that files / folder with git diff between previous commit and current commit in preview secction
+- once enter is pressed on a commit it show the diff of that commit on each files
+- in this step use git diff preview and use the same mapping support for existing snacks git picker

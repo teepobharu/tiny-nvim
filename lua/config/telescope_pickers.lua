@@ -109,21 +109,37 @@ M.fzf.pickers.open_git_pickers = function()
     return v.value
   end, results)
   fzf_lua.fzf_exec(results, {
-    prompt = "Open Branch URL (c-s to diff, c-y to copy url) >",
+    prompt = "(<default> open ref, c-o open url,c-y(copy), c-s to diff, c-r copy file/commit/tree url in clib/reg)",
     actions = {
       ["default"] = function(selected)
+        local success, err = pcall(function()
+          -- when not exist it will show blank buffer not actuall go to err case
+          vim.cmd("Gitsigns show " .. selected[1])
+          -- vim.cmd("Gitsigns show origin/main")
+        end)
+        if not success then
+          vim.notify("Gitsigns show failed: " .. tostring(err), vim.log.levels.WARN)
+        end
+        -- fn_list.open_branch_url(selected[1])
+      end,
+      ["ctrl-o"] = function(selected)
         fn_list.open_branch_url(selected[1])
       end,
       ["ctrl-s"] = function(selected)
         fn_list.diff_ref(selected[1])
       end,
-      ["ctrl-y"] = function(selected)
+      ["ctrl-r"] = function(selected)
         local file_url = gitUtil.get_branch_url(selected[1], "file")
         vim.fn.setreg("+", file_url)
         vim.fn.setreg("c", gitUtil.get_branch_url(selected[1], "commit"))
         vim.fn.setreg("b", gitUtil.get_branch_url(selected[1], "branch"))
         vim.fn.setreg("f", gitUtil.get_branch_url(file_url))
-        vim.notify("Copied and reg c,b,f (commit,file,branch)" .. file_url, vim.log.levels.INFO)
+        if Snacks and Snacks.debug then
+          Snacks.debug("Copied " .. file_url)
+          Snacks.debug("Set reg c,b,f (commit,file,branch)")
+        else
+          vim.notify("Copied and reg c,b,f (commit,file,branch)" .. file_url, vim.log.levels.WARN)
+        end
       end,
     },
   })
