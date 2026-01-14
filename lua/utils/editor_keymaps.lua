@@ -6,6 +6,7 @@ local M = {}
 local pathUtil = require "utils.mypath"
 local gitUtil = require "utils.git"
 local keyutil = require "utils.keyutil"
+local inputUtils = require "utils.input"
 
 local key_f = keyutil.key_f
 local key_s = keyutil.key_s
@@ -422,7 +423,7 @@ M.keymaps = {
       function()
         require("config.telescope_pickers").fzf.pickers.open_git_pickers()
       end,
-      desc = "Git branch FZF",
+      desc = "Git custom branch open,diff, FZF",
       mode = "n",
     },
     {
@@ -584,15 +585,48 @@ M.keymaps = {
       desc = "Git Branches",
     },
     {
+      "<leader>gO",
+      function()
+        Snacks.gitbrowse({   
+          branch = require("utils.git").git_main_branch(),
+          what = "file",
+        })
+      end,
+      desc = "Git open remote main",
+      mode = { "n", "x" }
+    },
+    {
       "<leader>fw",
       function()
-        Snacks.picker.grep_word {
+        local snacks_util = require("utils.snacks_terminal")
+        local picker_opts = snacks_util.get_initial_picker_state({
+          show_empty = true,
+          smartcase = false,
+          ignorecase = true,
+          hidden = true,
+          live = true, -- force in live mode (normally it switch to non live mode)
+          args = { "--ignore-case"},
+        })
+
+        Snacks.picker.grep_word(picker_opts)
+      end,
+      desc = "Grep cwd:Git Ignorecase",
+      mode = { "n", "x" },
+    },
+    {
+      "<leader>fW",
+      function()
+        local snacks_util = require("utils.snacks_terminal")
+        local picker_opts = snacks_util.get_initial_picker_state({
           show_empty = true,
           need_search = false,
+          live = true,
           hidden = true,
-        }
+        })
+
+        Snacks.picker.grep_word(picker_opts)
       end,
-      desc = "Visual selection or word",
+      desc = "Grep Visual selection or word",
       mode = { "n", "x" },
     },
     {
@@ -638,7 +672,8 @@ M.keymaps = {
     {
       "<C-e>",
       function()
-        Snacks.picker.smart {
+        local snacks_util = require("utils.snacks_terminal")
+        local picker_opts = snacks_util.get_initial_picker_state({
           win = {
             input = {
               keys = {
@@ -646,7 +681,8 @@ M.keymaps = {
               },
             },
           },
-        }
+        })
+        Snacks.picker.smart(picker_opts)
       end,
       desc = "Find Smart",
     },
@@ -709,40 +745,80 @@ M.keymaps = {
     {
       "<leader>sG",
       function()
-        Snacks.picker.grep {
-          cwd = pathUtil.get_sub_project_dir(),
-          title = "Grep Monorepo Files",
-        }
+        Snacks.picker.grep(
+          require("utils.snacks_terminal").get_initial_picker_state({
+            title = "Grep Subproject",
+            search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines('visual_selection'),
+            }, { cwd_default = "subproject", use_previous_cwd_state = false }
+          )
+        )
       end,
-      desc = "Grep Dir Monorepo",
+      mode = { "n", "x"},
+      desc = "Grep Dir Monorepo Selected",
     },
     {
       "<leader>fWg",
       function()
-        Snacks.picker.grep {
-          cwd = pathUtil.get_sub_project_dir(),
-          title = "Grep Monorepo Files",
-        }
+        Snacks.picker.grep(
+          require("utils.snacks_terminal").get_initial_picker_state({
+            title = "Grep Monorepo Files",
+          }, { cwd_default = "subproject", use_previous_cwd_state = false }
+          )
+      )
       end,
       desc = "Grep Dir Monorepo",
     },
     {
       "<leader>ff",
       function()
-        Snacks.picker.files {}
+        Snacks.picker.files(
+          require("utils.snacks_terminal").get_initial_picker_state({
+            search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines('visual_selection'),
+          })
+        )
       end,
       desc = "Find Files",
       mode = { "n", "v" },
     },
     {
+      "<leader>sb", 
+      -- normal mode set in default snacks
+      function()
+        Snacks.picker.lines(
+          require("utils.snacks_terminal").get_initial_picker_state({
+            search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines('visual_selection'),
+          })
+        )
+      end,
+      desc = "Buffer Lines Selected",
+      mode = "x"
+    },
+    {
+      "<leader>sB",
+      -- normal mode set in default snacks
+      function()
+        Snacks.picker.grep_buffers(
+          require("utils.snacks_terminal").get_initial_picker_state({
+            search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines('visual_selection'),
+          })
+        )
+      end,
+      desc = "Grep Open Buffers Selected",
+      mode = "x"
+    },
+    {
       "<leader>fF",
       function()
-        Snacks.picker.files {
-          cwd = pathUtil.get_sub_project_dir(),
-        }
+        Snacks.picker.files(
+          require("utils.snacks_terminal").get_initial_picker_state({
+            search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines('visual_selection'),
+            title = "Find Files Monorepo/Subproject",
+          }, { cwd_default = "subproject", use_previous_cwd_state = false }
+          )
+        )
       end,
       desc = "Find Files monorepo",
-      mode = { "n", "v" },
+      mode = { "n", "x" },
     },
     {
       "<leader>fz",

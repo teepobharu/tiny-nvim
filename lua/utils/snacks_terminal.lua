@@ -1315,9 +1315,11 @@ function M.toggle_cwd_files_grep(picker, item)
   -- Get available cwd options
   local current_dir = vim.fn.getcwd()
   local git_root = path.get_root_directory()
-  local sub_project_dir = pathUtil.get_sub_project_dir()
-  local prev_buf = vim.api.nvim_buf_get_name(vim.fn.bufnr("#"))
-  local prev_buffer_dir = prev_buf ~= "" and vim.fn.fnamemodify(prev_buf, ":p:h") or nil
+  local prev_buffer_dir = pathUtil.get_previous_buffer_dir()
+
+  -- Get sub-project info with metadata
+  local sub_project_info = pathUtil.get_sub_project_dir(prev_buffer_dir, true)
+  local sub_project_dir = sub_project_info and sub_project_info.dir or nil
 
   -- Initialize cwd cycle state if not exists
   if not vim.g.picker_cwd_cycle_state then
@@ -1325,20 +1327,19 @@ function M.toggle_cwd_files_grep(picker, item)
   end
 
   -- Define the initial cycle order (will be filtered for duplicates/invalid)
-  local cycle_order = {"current", "current_d1", "gitroot", "subproject", "prevbuffer"}
+  local cycle_order = {"current", "gitroot", "subproject", "prevbuffer", "current_d1"}
 
   -- Map states to actual directories
   local cwd_map = {
-    current = current_dir,
-    current_d1 = current_dir, -- Same as current, but with depth-1 search for grep
     gitroot = git_root,
     subproject = sub_project_dir,
+    current = current_dir,
+    current_d1 = current_dir, -- Same as current, but with depth-1 search for grep
     prevbuffer = prev_buffer_dir,
   }
 
-  -- Remove duplicates from cwd_map
-  -- Keep track of seen directories and remove duplicate entries
-  -- Note: current_d1 is kept separate from current even if same dir (different behavior for grep)
+  -- Keep track of all states that map to the same directory
+  -- seen_dirs[dir_key] = { "state1", "state2", ... }
   local seen_dirs = {}
   local unique_cycle_order = {}
 
@@ -1350,11 +1351,13 @@ function M.toggle_cwd_files_grep(picker, item)
       local dir_key = (state == "current_d1") and "current_d1" or dir
 
       if not seen_dirs[dir_key] then
-        seen_dirs[dir_key] = true
+        -- First time seeing this directory - initialize list with this state
+        seen_dirs[dir_key] = { state }
         table.insert(unique_cycle_order, state)
       else
+        -- Duplicate directory - add state to the list but don't add to cycle order
+        table.insert(seen_dirs[dir_key], state)
         -- Remove duplicate from cwd_map
-        print(string.format("Removing duplicate cwd state '%s' for directory '%s'", state, dir))
         cwd_map[state] = nil
       end
     else
@@ -1395,6 +1398,8 @@ function M.toggle_cwd_files_grep(picker, item)
   -- Move to next state
   local next_idx = (current_state_idx % #cycle_order) + 1
   vim.g.picker_cwd_cycle_state = cycle_order[next_idx]
+  vim.g.picker_cwd_cycle_state_value = cwd_map[vim.g.picker_cwd_cycle_state]
+  Snacks.notify.info("CWD Cycle State changed to: " .. vim.g.picker_cwd_cycle_state)
   local new_cwd = cwd_map[vim.g.picker_cwd_cycle_state]
 
   -- Get current picker source and pattern
@@ -1408,8 +1413,36 @@ function M.toggle_cwd_files_grep(picker, item)
     current = cwd_map.current == cwd_map.gitroot and "Default/Git" or "Default/current",
     current_d1 = (cwd_map.current == cwd_map.gitroot and "Default/Git" or "Default/current") .. "(D=1)",
     gitroot = "Git Root",
-    subproject = "Sub-Project Directory",
-    prevbuffer = "Previous Buffer Directory",
+    subproject = (function()
+      -- Use metadata to show project type and matched file if available
+      if sub_project_info and sub_project_info.project_type then
+        local label = "Sub-Project"
+        -- Add project type
+        if sub_project_info.project_type ~= "gitroot" then
+          label = label .. " (" .. sub_project_info.project_type .. ")"
+        end
+        -- if sub_project_info.matched_file then
+        --   label = label .. " [" .. sub_project_info.matched_file .. "]"
+        -- end
+        return label
+      end
+      return "Sub-Project Dir"
+    end)(),
+    prevbuffer = "Previous Buf Dir",
+  }
+
+  -- Alias configuration for shorter display names in duplicate list
+  local state_aliases = {
+    subproject = "subp",
+    prevbuffer = "pbuf",
+    current = "cur",
+    -- current_d1 and gitroot are excluded via exclusion list
+  }
+
+  -- States to exclude from duplicate append text
+  local excluded_label_text = {
+    gitroot = true,
+    current_d1 = true,
   }
 
   -- Notify user about the change
@@ -1423,6 +1456,28 @@ function M.toggle_cwd_files_grep(picker, item)
 
   -- Build picker params with scope label in title
   local scope_label = state_labels[vim.g.picker_cwd_cycle_state]
+
+  -- Append duplicate state names (excluding current state) to scope label
+  local current_state = vim.g.picker_cwd_cycle_state
+  local current_dir = new_cwd
+  local dir_key = (current_state == "current_d1") and "current_d1" or current_dir
+
+  if seen_dirs[dir_key] and #seen_dirs[dir_key] > 1 then
+    -- Get duplicate states excluding the current one and excluded states
+    local dup_states = {}
+    for _, state in ipairs(seen_dirs[dir_key]) do
+      if state ~= current_state and not excluded_label_text[state] then
+        -- Use alias if available, otherwise use the state name
+        local display_name = state_aliases[state] or state
+        table.insert(dup_states, display_name)
+      end
+    end
+
+    -- Append duplicate state names if any
+    if #dup_states > 0 then
+      scope_label = scope_label .. " (=" .. table.concat(dup_states, ",") .. ")"
+    end
+  end
   local picker_params = {
     cwd = new_cwd,
     pattern = filter_pattern or "",
@@ -1449,6 +1504,11 @@ function M.toggle_cwd_files_grep(picker, item)
     picker_params.ignored = ignored_state
   end
 
+  -- Add git_cwd=true when current cwd is equal to git root
+  if new_cwd == git_root and git_root and git_root ~= "" then
+    picker_params.git_cwd = true
+  end
+
   -- Handle different picker types and preserve their state
   if vim.g.picker_cwd_cycle_state == "current_d1" and type(source) == "string" and (source:match("grep") or source:match("files")) and not source:match("^git") then
     picker_params.args = { "--max-depth", "1" }
@@ -1461,6 +1521,7 @@ function M.toggle_cwd_files_grep(picker, item)
   picker.opts.live = picker_params.live
   picker.opts.show_empty = true
   picker.title = picker_params.title
+  picker.opts.git_cwd = picker_params.git_cwd
   picker:refresh()
   
   local backupmanual_whenneed = function()
@@ -1497,6 +1558,74 @@ function M.toggle_cwd_files_grep(picker, item)
   end
 end
 
+-- Get initial picker state with persistent cwd
+-- @param pickerOpts table: Base picker options to merge with
+-- @param opts table: Options for state initialization
+--   - cwd_default string: Default cwd type (see enum below)
+-- @enum CwdDefaultType
+--   "git"        -- Use git root as cwd
+--   "current"    -- Use current working directory
+--   "subproject" -- Use subproject root as cwd
+-- @return table: Merged picker options with cwd state
+---@param pickerOpts table
+---@param opts { cwd_default: "git"|"current"|"subproject" , use_previous_cwd_state : boolean}
+---@return table
+function M.get_initial_picker_state(pickerOpts, opts)
+  opts = opts or {}
+  local cwd_default = opts.cwd_default 
+
+  local path = require("utils.path")
+  local pathUtil = require("utils.mypath")
+
+  -- Map of default cwd types
+  local cwd_defaultmap = {
+    git = path.get_root_directory() or Snacks.git.get_root(),
+    current = vim.fn.getcwd(),
+    subproject = pathUtil.get_sub_project_dir(),
+  }
+
+  -- Get cwd - use persisted state if available, otherwise use default
+  -- TODO: check if interfere with normal cwd behavior (empty/default)
+  -- local cwd = vim.g.picker_cwd_cycle_state_value or cwd_defaultmap[cwd_default] or vim.fn.getcwd()
+  local cwd = nil
+  local cwd_state = vim.g.picker_cwd_cycle_state_value
+  local cwd_fallback = cwd_defaultmap[cwd_default]
+  local git_root = path.get_root_directory() or Snacks.git.get_root()
+
+  -- Build resuld
+  local result = vim.deepcopy(pickerOpts) or {}
+
+  if cwd_state and opts.use_previous_cwd_state ~= false then
+    cwd = cwd_state
+  else
+    -- Use default cwd if no previous state or empty if no default
+    if not cwd and not result.cwd and cwd_fallback then
+      cwd = cwd_fallback
+    end
+  end
+
+  local is_cwd_git_ui = git_root and (cwd and cwd == git_root or cwd_defaultmap["current"] == git_root)
+
+  if cwd then
+    result.cwd = cwd
+    -- Snacks.notify.info("Use cwd " .. tostring(cwd_default))
+  end
+  -- Set git_cwd flag if current cwd is the git root
+  if is_cwd_git_ui then
+    result.git_cwd = true
+  else
+    result.custom_cwd = result.cwd and true or nil
+  end
+
+  local args = pickerOpts.args or {}
+  local has_ignore_case = vim.tbl_contains(args, "-i") or vim.tbl_contains(args, "--ignore-case")
+  if has_ignore_case then
+    result.case_nonsensitive_custom = true
+  end
+
+
+  return result
+end
 -- Adjust max-depth for files/grep pickers dynamically
 -- @param direction number: 1 to increase depth, -1 to decrease depth, 0 to reset to unlimited
 function M.adjust_picker_depth(picker, item, direction, max_depth_limit)
@@ -1573,5 +1702,269 @@ M.open_file_with_gitsigns_diff = open_file_with_gitsigns_diff
 M.open_current_buffer_with_gitsigns_diff = open_current_buffer_with_gitsigns_diff
 M.open_file_in_remote = open_file_in_remote
 M.build_remote_url = build_remote_url
+
+--#region Path Copy Utilities for Snacks Picker
+
+-- Get the selected file path from picker item
+-- Handles both file picker items and explorer items
+local function get_item_path(item)
+  if not item then
+    return nil
+  end
+
+  -- Try different path fields in order of preference
+  return item._path or item.file or item.path
+end
+
+-- Get relative path from source to target with ../ if outside
+local function get_relative_path_with_parent(target_path, source_path)
+  if not target_path or target_path == "" then
+    return nil
+  end
+
+  -- Ensure absolute paths
+  target_path = vim.fn.fnamemodify(target_path, ":p")
+  source_path = vim.fn.fnamemodify(source_path, ":p")
+
+  -- Find common prefix
+  local target_parts = vim.split(target_path, "/", { plain = true })
+  local source_parts = vim.split(source_path, "/", { plain = true })
+
+  local common_len = 0
+  for i = 1, math.min(#target_parts, #source_parts) do
+    if target_parts[i] == source_parts[i] then
+      common_len = i
+    else
+      break
+    end
+  end
+
+  -- Build relative path
+  local ups = #source_parts - common_len - 1 -- -1 because last part is filename
+  local rel_parts = {}
+
+  -- Add ../ for each level up
+  for _ = 1, ups do
+    table.insert(rel_parts, "..")
+  end
+
+  -- Add remaining target parts
+  for i = common_len + 1, #target_parts do
+    table.insert(rel_parts, target_parts[i])
+  end
+
+  return table.concat(rel_parts, "/")
+end
+
+-- Generate different path formats
+local function generate_path_formats(file_path)
+  local git_root = Snacks.git.get_root()
+  local cwd = vim.fn.getcwd()
+
+  -- Get previous/active buffer path
+  local prev_buf = vim.api.nvim_buf_get_name(vim.fn.bufnr("#"))
+  local current_buf = vim.api.nvim_buf_get_name(0)
+  local ref_buf_path = (prev_buf ~= "" and prev_buf) or current_buf
+
+  local formats = {
+    {
+      label = "Relative to Previous/Active Buffer (with ../)",
+      path = get_relative_path_with_parent(file_path, ref_buf_path),
+      key = "buffer",
+    },
+    {
+      label = "Relative to Git Root",
+      path = git_root and file_path:gsub("^" .. vim.pesc(git_root) .. "/?", "") or nil,
+      key = "git",
+    },
+    {
+      label = "Relative to Current CWD",
+      path = vim.fn.fnamemodify(file_path, ":."),
+      key = "cwd",
+    },
+    {
+      label = "Absolute Path",
+      path = vim.fn.fnamemodify(file_path, ":p"),
+      key = "absolute",
+    },
+  }
+
+  return formats
+end
+
+-- Copy path to clipboard and notify
+local function copy_to_clipboard(path, label)
+  if not path or path == "" then
+    vim.notify("Path is empty or invalid", vim.log.levels.WARN)
+    return false
+  end
+
+  -- Copy to system clipboard and unnamed register
+  vim.fn.setreg("+", path)
+  vim.fn.setreg('"', path)
+
+  vim.notify(
+    string.format("Copied %s:\n%s", label, path),
+    vim.log.levels.INFO
+  )
+
+  return true
+end
+
+-- Picker action: Copy relative path to previous/active buffer
+function M.copy_path_relative_buffer(picker, item)
+  local file_path = get_item_path(item)
+  if not file_path then
+    vim.notify("No file path found", vim.log.levels.WARN)
+    return
+  end
+
+  local prev_buf = vim.api.nvim_buf_get_name(vim.fn.bufnr("#"))
+  local current_buf = vim.api.nvim_buf_get_name(0)
+  local ref_buf_path = (prev_buf ~= "" and prev_buf) or current_buf
+
+  local rel_path = get_relative_path_with_parent(file_path, ref_buf_path)
+  if copy_to_clipboard(rel_path, "relative path (to buffer)") then
+    picker:close()
+  end
+end
+
+-- Picker action: Copy relative path to git root
+function M.copy_path_relative_git(picker, item)
+  local file_path = get_item_path(item)
+  if not file_path then
+    vim.notify("No file path found", vim.log.levels.WARN)
+    return
+  end
+
+  local git_root = Snacks.git.get_root()
+  if not git_root then
+    vim.notify("Not in a git repository", vim.log.levels.WARN)
+    return
+  end
+
+  local rel_path = file_path:gsub("^" .. vim.pesc(git_root) .. "/?", "")
+  if copy_to_clipboard(rel_path, "relative path (to git root)") then
+    picker:close()
+  end
+end
+
+-- Picker action: Copy relative path to current CWD
+function M.copy_path_relative_cwd(picker, item)
+  local file_path = get_item_path(item)
+  if not file_path then
+    vim.notify("No file path found", vim.log.levels.WARN)
+    return
+  end
+
+  local rel_path = vim.fn.fnamemodify(file_path, ":.")
+  if copy_to_clipboard(rel_path, "relative path (to cwd)") then
+    picker:close()
+  end
+end
+
+-- Picker action: Copy absolute path
+function M.copy_path_absolute(picker, item)
+  local file_path = get_item_path(item)
+  if not file_path then
+    vim.notify("No file path found", vim.log.levels.WARN)
+    return
+  end
+
+  local abs_path = vim.fn.fnamemodify(file_path, ":p")
+  if copy_to_clipboard(abs_path, "absolute path") then
+    picker:close()
+  end
+end
+
+-- Picker action: Open Snacks picker to choose copy format with preview
+function M.copy_path_select(picker, item)
+  local file_path = get_item_path(item)
+  if not file_path then
+    vim.notify("No file path found", vim.log.levels.WARN)
+    return
+  end
+
+  local formats = generate_path_formats(file_path)
+
+  -- Filter out invalid paths and prepare picker items
+  local picker_items = {}
+  for _, format in ipairs(formats) do
+    if format.path and format.path ~= "" then
+      table.insert(picker_items, {
+        text = format.label,
+        path = format.path,
+        label = format.label,
+        key = format.key,
+      })
+    end
+  end
+
+  if #picker_items == 0 then
+    vim.notify("No valid path formats available", vim.log.levels.WARN)
+    return
+  end
+
+  -- Store the parent picker to close it after selection
+  local parent_picker = picker
+
+  Snacks.picker.pick({
+    source = "path_formats",
+    title = "Select Path Format to Copy",
+    items = picker_items,
+    format = function(picker_item)
+      return {
+        { picker_item.label, "SnacksPickerTitle" },
+        { picker_item.path, "Normal" },
+      }
+    end,
+    preview = function(ctx)
+      local picker_item = ctx.item
+      if not picker_item then
+        return false
+      end
+
+      -- Build preview showing the path that will be copied
+      local lines = {
+        "Path Format: " .. picker_item.label,
+        "",
+        "Path to copy:",
+        picker_item.path,
+        "",
+        "---",
+        "",
+        "Press <CR> to copy to clipboard",
+      }
+
+      -- Write into the preview buffer
+      if ctx.buf and vim.api.nvim_buf_is_valid(ctx.buf) then
+        vim.api.nvim_buf_set_option(ctx.buf, "modifiable", true)
+        vim.api.nvim_buf_set_lines(ctx.buf, 0, -1, false, lines)
+        vim.api.nvim_buf_set_option(ctx.buf, "modifiable", false)
+        vim.bo[ctx.buf].filetype = "text"
+        return true
+      end
+
+      return false
+    end,
+    confirm = function(format_picker, selected_item)
+      format_picker:close()
+      if selected_item and copy_to_clipboard(selected_item.path, selected_item.label) then
+        parent_picker:close()
+      end
+    end,
+  })
+end
+
+-- Export path copy actions
+M.path_copy_actions = {
+  copy_path_relative_buffer = M.copy_path_relative_buffer,
+  copy_path_relative_git = M.copy_path_relative_git,
+  copy_path_relative_cwd = M.copy_path_relative_cwd,
+  copy_path_absolute = M.copy_path_absolute,
+  copy_path_select = M.copy_path_select,
+}
+
+--#endregion Path Copy Utilities
 
 return M

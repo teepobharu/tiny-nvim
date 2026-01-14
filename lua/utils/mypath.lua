@@ -157,46 +157,105 @@ function M.getFullPathFromRelativePath(relPath)
   return result
 end
 
---- Get the closest sub-project directory in a monorepo
+function M.get_previous_buffer_dir()
+  local bufnr = vim.fn.bufnr("#")
+  if bufnr == -1 then
+    return nil
+  end
+  local bufname = vim.api.nvim_buf_get_name(bufnr)
+  if bufname == "" then
+    return nil
+  end
+  local bufdir = vim.fn.fnamemodify(bufname, ":p:h")
+  return bufdir
+end
+--- Get the closest sub-project directory in a monorepo with metadata
 --- Searches for common monorepo markers (package.json, pyproject.toml, etc.)
 --- in parent directories up to the git root
----@return string|nil
-function M.get_sub_project_dir()
+---@param fromdir string|nil Starting directory (default: current buffer directory)
+---@param return_metadata boolean|nil If true, returns table with metadata; if false, returns just dir path
+---@return string|table|nil Returns directory path or {dir, matched_file, project_type, marker_type}
+function M.get_sub_project_dir(fromdir, return_metadata)
   local path = require("utils.path")
   local current_file = vim.fn.expand("%:p")
-  local current_dir = vim.fn.expand("%:p:h")
+  local current_dir = fromdir or vim.fn.expand("%:p:h")
   local root_dir = path.get_root_directory()
 
-  if not root_dir then
-    return current_dir
+  if not root_dir  then
+    print([==[M.get_sub_project_dir#if root_dir:]==], vim.inspect(root_dir)) -- __AUTO_GENERATED_PRINT_VAR_END__
+    return return_metadata and { dir = current_dir, matched_file = nil, project_type = "unknown", marker_type = nil } or current_dir
   end
 
-  -- Common project markers for monorepos
+  -- Marker configuration with project type metadata
   local markers = {
-    "package.json",
-    "pyproject.toml",
-    "Cargo.toml",
-    "go.mod",
-    "pom.xml",
-    "build.gradle",
-    ".gitlab-ci.yml",
-    ".git",
+    { name = "package.json", type = "path", project_type = "yarn/npm" },
+    { name = "pyproject.toml", type = "path", project_type = "python" },
+    { name = "Cargo.toml", type = "path", project_type = "rust" },
+    { name = "go.mod", type = "path", project_type = "golang" },
+    { name = "pom.xml", type = "path", project_type = "maven" },
+    { name = "build.gradle", type = "path", project_type = "gradle" },
+    { name = ".gitlab-ci.yml", type = "path", project_type = "gitlab" },
+    { name = ".git", type = "path", project_type = "git" },
+    { name = "%.sln$", type = "pattern", project_type = "dotnet" },
   }
 
-  -- Walk up from current directory to root
   local dir = current_dir
-  while dir ~= root_dir and dir ~= "/" do
+
+  while dir and dir ~= "/" and dir ~= root_dir do
+    -- print([==[M.get_sub_project_dir#while dir:]==], vim.inspect(dir)) -- __AUTO_GENERATED_PRINT_VAR_END__
     for _, marker in ipairs(markers) do
-      if vim.fn.filereadable(dir .. "/" .. marker) == 1 then
-        return dir
+      if marker.type == "pattern" then
+        local ok, files = pcall(vim.fn.readdir, dir)
+        if ok then
+          for _, file in ipairs(files) do
+            if file:match(marker.name) then
+              if return_metadata then
+                return {
+                  dir = dir,
+                  matched_file = file,
+                  project_type = marker.project_type,
+                  marker_type = "pattern",
+                }
+              end
+              return dir
+            end
+          end
+        end
+      else
+        local file_path = dir .. "/" .. marker.name
+        if vim.fn.filereadable(file_path) == 1 or vim.fn.isdirectory(file_path) == 1 then
+          if return_metadata then
+            return {
+              dir = dir,
+              matched_file = marker.name,
+              project_type = marker.project_type,
+              marker_type = "path",
+            }
+          end
+          return dir
+        end
       end
     end
-    dir = vim.fn.fnamemodify(dir, ":h")
+    local parent = vim.fn.fnamemodify(dir, ":h")
+    if parent == dir then break end
+    dir = parent
   end
 
-  -- Fallback to root directory
+  if return_metadata then
+    return {
+      dir = root_dir,
+      matched_file = nil,
+      project_type = "gitroot",
+      marker_type = nil,
+    }
+  end
   return root_dir
 end
+
+-- vim.keymap.set("n", "<localleader>zt", function()
+--   local subdir = M.get_sub_project_dir()
+--   Snacks.debug(subdir)
+-- end, { desc = "Get Sub-Project Directory" })
 
 function M.get_git_real_filepath(filepath)
   if not filepath or filepath == "" then
