@@ -379,7 +379,7 @@ M.keymaps = {
   --     c/C = codex (GPT-5.1-codex-max, GPT-5.1-codex-mini)
   --   <leader>rS[f|F|h|H|c] - AGD models (visual=ask, normal=switch)
   --     f/F = fast OpenAI AGD, h/H = Claude AGD, c = GPT-5.2 AGD
-  avante = require("utils.my_avante_utils").generate_avante_keymaps({
+  avante = require("utils.my_avante_utils").generate_avante_keymaps {
     {
       "<leader>rsm",
       function()
@@ -395,8 +395,8 @@ M.keymaps = {
       end,
       desc = "Avante Models (all/AGD)",
       mode = "n",
-    }
-  }),
+    },
+  },
 
   -- Quick code runner
   quick_code_runner = {
@@ -566,7 +566,7 @@ M.keymaps = {
     {
       "<leader>fL",
       function()
-        require("utils.snacks_terminal").custom_git_pickers.git_show()
+        require("utils.snacks_terminal").custom_git_pickers.git_last_commit_show()
       end,
       desc = "Last commit files",
     },
@@ -578,6 +578,13 @@ M.keymaps = {
       desc = "Git files by custom ref",
     },
     {
+      "<leader>gB",
+      function()
+        Snacks.picker.git_log { current_file = true } -- BCommits equivalent
+      end,
+      desc = "Git BCommits Snacks",
+    },
+    {
       "<leader>gb",
       function()
         Snacks.picker.git_branches()
@@ -587,26 +594,26 @@ M.keymaps = {
     {
       "<leader>gO",
       function()
-        Snacks.gitbrowse({   
+        Snacks.gitbrowse {
           branch = require("utils.git").git_main_branch(),
           what = "file",
-        })
+        }
       end,
       desc = "Git open remote main",
-      mode = { "n", "x" }
+      mode = { "n", "x" },
     },
     {
       "<leader>fw",
       function()
-        local snacks_util = require("utils.snacks_terminal")
-        local picker_opts = snacks_util.get_initial_picker_state({
+        local snacks_util = require "utils.snacks_terminal"
+        local picker_opts = snacks_util.get_initial_picker_state {
           show_empty = true,
           smartcase = false,
           ignorecase = true,
           hidden = true,
           live = true, -- force in live mode (normally it switch to non live mode)
-          args = { "--ignore-case"},
-        })
+          args = { "--ignore-case" },
+        }
 
         Snacks.picker.grep_word(picker_opts)
       end,
@@ -616,13 +623,13 @@ M.keymaps = {
     {
       "<leader>fW",
       function()
-        local snacks_util = require("utils.snacks_terminal")
-        local picker_opts = snacks_util.get_initial_picker_state({
+        local snacks_util = require "utils.snacks_terminal"
+        local picker_opts = snacks_util.get_initial_picker_state {
           show_empty = true,
           need_search = false,
           live = true,
           hidden = true,
-        })
+        }
 
         Snacks.picker.grep_word(picker_opts)
       end,
@@ -745,53 +752,60 @@ M.keymaps = {
     {
       "<leader>sG",
       function()
-        Snacks.picker.grep(
-          require("utils.snacks_terminal").get_initial_picker_state({
-            title = "Grep Subproject",
-            search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines('visual_selection'),
-            }, { cwd_default = "subproject", use_previous_cwd_state = false }
-          )
-        )
+        Snacks.picker.grep(require("utils.snacks_terminal").get_initial_picker_state({
+          title = "Grep Subproject",
+          search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
+        }, { cwd_default = "subproject", use_previous_cwd_state = false }))
       end,
-      mode = { "n", "x"},
+      mode = { "n", "x" },
       desc = "Grep Dir Monorepo Selected",
     },
     {
       "<leader>fWg",
       function()
-        Snacks.picker.grep(
-          require("utils.snacks_terminal").get_initial_picker_state({
-            title = "Grep Monorepo Files",
-          }, { cwd_default = "subproject", use_previous_cwd_state = false }
-          )
-      )
+        Snacks.picker.grep(require("utils.snacks_terminal").get_initial_picker_state({
+          title = "Grep Monorepo Files",
+        }, { cwd_default = "subproject", use_previous_cwd_state = false }))
       end,
       desc = "Grep Dir Monorepo",
     },
     {
       "<leader>ff",
       function()
-        Snacks.picker.files(
-          require("utils.snacks_terminal").get_initial_picker_state({
-            search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines('visual_selection'),
-          })
-        )
+        Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state {
+          search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
+        })
       end,
       desc = "Find Files",
       mode = { "n", "v" },
     },
     {
-      "<leader>sb", 
+      "<leader>sb",
+      function()
+        Snacks.picker.lines {
+          supports_live = true,
+          -- live = true, -- didnot rellay filter (add hl)
+        }
+      end,
+        mode = "n",
+        desc = "Buffer Lines",
+    },
+    {
+      "<leader>sb",
       -- normal mode set in default snacks
       function()
-        Snacks.picker.lines(
-          require("utils.snacks_terminal").get_initial_picker_state({
-            search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines('visual_selection'),
-          })
-        )
+        Snacks.picker.lines {
+          -- this will prefill in pattern and let user type extra match
+          supports_live = true, -- Enable toggle support
+          -- live = true,
+          --   search is using live mode if not set to true
+          pattern = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
+          -- even though search (non grep) does not really filter out result it did highlight
+          -- search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines('visual_selection'),
+        }
       end,
       desc = "Buffer Lines Selected",
-      mode = "x"
+      mode = "x",
     },
     {
       "<leader>sB",
@@ -804,18 +818,15 @@ M.keymaps = {
         )
       end,
       desc = "Grep Open Buffers Selected",
-      mode = "x"
+      mode = "x",
     },
     {
       "<leader>fF",
       function()
-        Snacks.picker.files(
-          require("utils.snacks_terminal").get_initial_picker_state({
-            search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines('visual_selection'),
-            title = "Find Files Monorepo/Subproject",
-          }, { cwd_default = "subproject", use_previous_cwd_state = false }
-          )
-        )
+        Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state({
+          search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
+          title = "Find Files Monorepo/Subproject",
+        }, { cwd_default = "subproject", use_previous_cwd_state = false }))
       end,
       desc = "Find Files monorepo",
       mode = { "n", "x" },
@@ -966,5 +977,342 @@ M.fzf_opts = {
     },
   },
 }
+
+-- Snacks picker action factories
+-- These create reusable actions for git operations, file operations, etc.
+M.snacks_action_factories = {
+  --- Create git file actions with ref resolution
+  --- @param ref_provider string
+  --- @param no_resolve boolean
+  --- @return table actions Table containing action functions with metadata fields:
+  ---   - open_file_diff: function(picker, item) - Open file with diff against ref
+  ---   - open_remote_at_ref: function(picker, item) - Open file in remote at ref
+  ---   - open_remote_at_head: function(picker, item) - Open file in remote at HEAD
+  create_git_file_actions = function(ref_provider, no_resolve)
+    local ref = ref_provider
+    if not no_resolve and ref_provider then
+      ref = ref_provider and gitUtil.get_ref_metadata(ref_provider).resolved_ref or ref_provider
+    end
+    return {
+
+      -- Action functions
+      open_file_diff = function(picker, item)
+        if not item or not item.file then
+          vim.notify("No file selected", vim.log.levels.WARN)
+          return
+        end
+        picker:close()
+        open_file_with_gitsigns_diff(item.file, ref)
+      end,
+      open_remote_at_ref = function(picker, item)
+        if not item or not item.file then
+          vim.notify("No file selected", vim.log.levels.WARN)
+          return
+        end
+        open_file_in_remote(item.file, ref)
+      end,
+      open_remote_at_head = function(picker, item)
+        if not item or not item.file then
+          vim.notify("No file selected", vim.log.levels.WARN)
+          return
+        end
+        open_file_in_remote(item.file, "HEAD")
+      end,
+    }
+  end,
+}
+
+-- Snacks picker actions (stateless functions)
+M.snacks_actions = {
+  -- Path copy actions (to be provided by snacks_terminal module)
+  copy_path_relative_buffer = function(picker, item)
+    require("utils.snacks_terminal").copy_path_relative_buffer(picker, item)
+  end,
+  copy_path_relative_git = function(picker, item)
+    require("utils.snacks_terminal").copy_path_relative_git(picker, item)
+  end,
+  copy_path_relative_cwd = function(picker, item)
+    require("utils.snacks_terminal").copy_path_relative_cwd(picker, item)
+  end,
+  copy_path_absolute = function(picker, item)
+    require("utils.snacks_terminal").copy_path_absolute(picker, item)
+  end,
+  copy_path_select = function(picker, item)
+    require("utils.snacks_terminal").copy_path_select(picker, item)
+  end,
+}
+
+-- Common keymap groups for snacks pickers
+-- These can be merged into picker configurations using vim.tbl_extend("force", ...)
+--
+-- KEY ORGANIZATION:
+-- - common_keys: Universal keys used across all/most pickers (e.g., <C-o> for open_file_remote)
+-- - copy_path_keys: Path copy actions (Yy, Ye, YP, Yp, YY) for file/grep pickers
+-- - files_keys: File-specific actions (toggle, cycle cwd) for files/buffers
+-- - grep_keys: Grep-specific actions (<C-x>, <A-s>) for grep/qflist pickers
+-- - git_file_keys*: Git-specific actions for git pickers (not used in declarative sources)
+--
+-- MERGE ORDER (custom keys last to override):
+-- Example: vim.tbl_extend("force", common_keys, copy_path_keys, files_keys, {custom overrides})
+--          └─ base (applied first)                                           └─ overrides (applied last)
+local snacks_picker_shared_keys = {
+  files_and_grep = {
+    input = {
+      ["<M-c>"] = { "toggle_case_sensitivity", mode = { "n", "i" }, desc = "Toggle case sensitivity" },
+      ["<M-=>"] = { "increase_picker_depth", mode = { "n", "i" }, desc = "Increase search depth" },
+      ["<M-->"] = { "decrease_picker_depth", mode = { "n", "i" }, desc = "Decrease search depth" },
+      ["<M-0>"] = { "reset_picker_depth", mode = { "n", "i" }, desc = "Reset search depth" },
+    },
+  },
+  -- Common keys used across multiple pickers
+  common_keys = {
+    input = {
+      ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
+    },
+  },
+  -- Copy path actions - applies to file/grep/explorer pickers
+  copy_path_keys = {
+    input = {
+      ["Yy"] = { "copy_path_relative_buffer", mode = { "n" }, desc = "Copy Relative Path (Buffer)" },
+      ["Ye"] = { "copy_path_relative_git", mode = { "n" }, desc = "Copy Relative Path (Git)" },
+      ["Yp"] = { "copy_path_relative_cwd", mode = { "n" }, desc = "Copy Relative Path (CWD)" },
+      ["YP"] = { "copy_path_absolute", mode = { "n" }, desc = "Copy Absolute Path" },
+      ["YY"] = { "copy_path_select", mode = { "n" }, desc = "Copy Path (Select Format)" },
+    },
+  },
+}
+
+-- local test = vim.tbl_extend("force",{ t= 123})
+-- -- __AUTO_GENERATED_PRINT_VAR_START__
+-- print([==[ test:]==], vim.inspect(test)) -- __AUTO_GENERATED_PRINT_VAR_END__
+
+local snacks_picker_group_keys = {
+
+  -- File-specific keys (toggle, cycle cwd)
+  files_keys = {
+    input = vim.tbl_extend(
+      "force",
+      snacks_picker_shared_keys.common_keys.input,
+      snacks_picker_shared_keys.copy_path_keys.input,
+      snacks_picker_shared_keys.files_and_grep.input,
+      {
+        ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
+        ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
+      }
+    ),
+  },
+  -- Grep-specific keys (common across grep/qflist pickers)
+  grep_keys = {
+    input = vim.tbl_extend(
+      "force",
+      snacks_picker_shared_keys.common_keys.input,
+      snacks_picker_shared_keys.copy_path_keys.input,
+      snacks_picker_shared_keys.files_and_grep.input,
+      {
+        ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove QF Item" },
+        ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
+      }
+    ),
+  },
+
+  -- Git diff & remote actions - for git file pickers
+  git_file_keys = {
+    input = {
+      ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
+      ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at ref" },
+      ["<C-O>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
+    },
+    list = {
+      ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
+      ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at ref" },
+      ["<C-O>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
+    },
+  },
+
+  -- Alternate git keys for upstream picker (using different keybinds)
+  git_file_keys_upstream = {
+    input = {
+      ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
+      ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at upstream ref" },
+      ["<C-2>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
+    },
+    list = {
+      ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
+      ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open remote compared ref" },
+      ["<C-1>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open remote at HEAD" },
+    },
+  },
+
+  -- Git keys with back navigation (for custom change list picker)
+  git_file_keys_with_back = function(on_back)
+    return {
+      input = {
+        ["<C-h>"] = {
+          function(picker)
+            if on_back then
+              picker:close()
+              on_back()
+            end
+          end,
+          mode = { "n", "i" },
+          desc = "Back to ref selection",
+        },
+        ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
+        ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at selected ref" },
+        ["<M-o>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
+      },
+      list = {
+        ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
+        ["<M-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at selected ref" },
+        ["<C-h>"] = {
+          function(picker)
+            if on_back then
+              picker:close()
+              on_back()
+            end
+          end,
+          mode = { "n", "i" },
+          desc = "Back to ref selection",
+        },
+      },
+    }
+  end,
+}
+
+-- Declarative snacks picker key settings
+-- These are pre-merged configurations ready to use in myEditor.lua
+--
+-- USAGE IN myEditor.lua:
+--   sources = vim.tbl_deep_extend("force",
+--     editor_keymaps.snacks_picker_keys_setting.sources,
+--     { files = { hidden = true } }  -- Custom overrides per picker
+--   )
+--
+-- MERGE PATTERN:
+--   Each picker merges keys in order: common_keys → copy_path_keys/files_keys/grep_keys → custom
+--   Later keys override earlier ones (vim.tbl_extend("force", ...))
+M.snacks_picker_keys_setting = {
+  sources = {
+    -- Files picker: common + copy path + file-specific actions
+    files = {
+      win = {
+        input = {
+          keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.files_keys.input),
+        },
+      },
+    },
+
+    -- Buffers picker: common + copy path + file-specific actions
+    buffers = {
+      win = {
+        input = {
+          keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.files_keys.input),
+        },
+      },
+    },
+
+    -- Git files picker: common + copy path keys
+    git_files = {
+      win = {
+        input = {
+          keys = vim.tbl_extend(
+            "force",
+            snacks_picker_shared_keys.common_keys.input,
+            snacks_picker_shared_keys.copy_path_keys.input
+          ),
+        },
+      },
+    },
+
+    -- Git branches picker: common + git-specific actions
+    git_branches = {
+      win = {
+        input = {
+          keys = vim.tbl_extend("force", snacks_picker_shared_keys.common_keys.input, {
+            ["<C-s>"] = { "my_diff_compare", mode = { "n", "i" }, desc = "Open Diff" },
+            ["<C-t>"] = { "test_picker", mode = { "n", "i" }, desc = "Test picker" },
+            ["f6"] = { "toggle_diffpreview_alt", mode = { "n", "i" }, desc = "Toggle Delta Mode" },
+            ["<C-g>"] = { "open_mr", mode = { "n", "i" }, desc = "Open Merge Request" },
+          }),
+        },
+      },
+    },
+
+    -- Git log picker: common + git log actions
+    git_log = {
+      win = {
+        input = {
+          keys = vim.tbl_extend("force", snacks_picker_shared_keys.common_keys.input, {
+            ["<C-s>"] = { "my_diff_compare", mode = { "n", "i" }, desc = "Open Diff" },
+            ["f6"] = { "toggle_diffpreview_alt", mode = { "n", "i" }, desc = "Toggle Delta Mode" },
+            ["<C-t>"] = { "test_picker", mode = { "n", "i" }, desc = "Test picker" },
+          }),
+        },
+      },
+    },
+
+    -- Grep picker: common + copy path + grep actions
+    grep = {
+      win = {
+        input = {
+          keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.grep_keys.input),
+        },
+      },
+    },
+
+    -- Grep word picker: common + copy path + grep actions
+    grep_word = {
+      win = {
+        input = {
+          keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.grep_keys.input),
+          -- keys = snacks_picker_group_keys.grep_keys.input,
+        },
+      },
+    },
+
+    -- Quickfix list picker: common + grep actions
+    qflist = {
+      win = {
+        input = {
+          keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.grep_keys.input),
+        },
+      },
+    },
+  },
+
+  -- Common win settings used in opts.win in myEditor.lua
+  common = {
+    list = {
+      keys = {
+        ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
+        ["0"] = { "focus_preview", desc = "Focus Preview" },
+        ["<c-a>"] = { "sidekick_send", mode = { "n", "i" } },
+        ["<a-a>"] = { "select_all", mode = { "n", "i" } },
+        ["<a-q>"] = { "qflist", mode = { "n", "i" } },
+        ["<c-q>"] = "cancel",
+        -- ["<M-w>"] = default  is cycle_win but this will cycle back to input that can alreay be done with / or i
+        ["<M-w>"] = "focus_preview",
+        ["/"] = false, -- alow search to apply on list
+      },
+    },
+    input = {
+      keys = {
+        ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
+        ["0"] = { "focus_preview", mode = { "n" }, desc = "Focus Preview" },
+        ["<c-a>"] = { "sidekick_send", mode = { "n", "i" } },
+        ["<a-a>"] = { "select_all", mode = { "n", "i" } },
+        ["<a-q>"] = { "qflist", mode = { "n", "i" } },
+        ["<c-q>"] = "cancel",
+      },
+    },
+    preview = {
+      keys = {
+        ["<c-q>"] = "cycle_win",
+      },
+    },
+  },
+}
+
+M.snacks_picker_group_keys = snacks_picker_group_keys
 
 return M

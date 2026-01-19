@@ -50,12 +50,13 @@ end
 -- send_lines_to_terminal("single_line", true, args)
 ---@param selection_type? 'single_line'|'visual_selection'|nil  -- Type hint for selection_type
 ---@param trim_spaces boolean|nil
-M.getSelectedLines = function(selection_type, trim_spaces)
+---@param disable_n_clipboard boolean|nil  -- Disable clipboard fallback when in normal mode with empty line
+M.getSelectedLines = function(selection_type, trim_spaces, disable_n_clipboard)
   local lines = {}
   -- Beginning of the selection: line number, column number
   -- if visual_selection is used seems like it also returned last selected text as well
   local start_line, start_col
-  if selection_type == nil then 
+  if selection_type == nil then
     if vim.fn.mode() == "n" then
       selection_type = "single_line"
     else
@@ -66,7 +67,17 @@ M.getSelectedLines = function(selection_type, trim_spaces)
     start_line, start_col = unpack(api.nvim_win_get_cursor(0))
     -- nvim_win_get_cursor uses 0-based indexing for columns, while we use 1-based indexing
     start_col = start_col + 1
-    table.insert(lines, fn.getline(start_line))
+    local current_line = fn.getline(start_line)
+
+    -- If current line is empty and clipboard fallback is not disabled, use clipboard
+    if not disable_n_clipboard and current_line:match("^%s*$") then
+      local clipboard = vim.fn.getreg('+')
+      if clipboard and #clipboard > 0 then
+        return clipboard
+      end
+    end
+
+    table.insert(lines, current_line)
   else
     local res = nil
     if string.match(selection_type, "visual") then

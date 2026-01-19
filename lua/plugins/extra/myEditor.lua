@@ -924,95 +924,16 @@ Your instructions here
           },
         },
         ui_select = true, -- boolean set `vim.ui.select` to a snacks picker, might conflict with fzf
-        sources = {
-          -- sample pickers: https://github.com/WizardStark/dotfiles/blob/main/home/.config/nvim/lua/workspaces/ui.lua#L417
-          -- buffers and file to use tooggle key map when press c-space
-          files = {
-            hidden = true,
-            win = {
-              input = {
-                keys = {
-                  ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
-                  ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
-                  ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
-                },
-              },
+        -- Import pre-configured picker sources from editor_keymaps
+        sources = vim.tbl_deep_extend("force",
+          editor_keymaps.snacks_picker_keys_setting.sources,
+          {
+            -- Source-specific overrides (if needed)
+            files = {
+              hidden = true, -- files picker specific setting
             },
-          },
-          buffers = {
-            win = {
-              input = {
-                keys = {
-                  ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
-                  ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
-                  ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
-                },
-              },
-            },
-          },
-          git_branches = {
-            win = {
-              input = {
-                keys = {
-                  ["<C-s>"] = { "my_diff_compare", mode = { "n", "i" }, desc = "Open Diff" },
-                  ["<C-t>"] = { "test_picker", mode = { "n", "i" }, desc = "Test picker" },
-                  ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
-                  ["f6"] = { "toggle_diffpreview_alt", mode = { "n", "i" }, desc = "Toggle Delta Mode" },
-                  ["<C-g>"] = { "open_mr", mode = { "n", "i" }, desc = "Open Merge Request" },
-                },
-              },
-            },
-          },
-          git_files = {
-            win = {
-              input = {
-                keys = {
-                  ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
-                },
-              }
-            },
-          },
-          git_log = {
-            win = {
-              input = {
-                keys = {
-                  ["<C-s>"] = { "my_diff_compare", mode = { "n", "i" }, desc = "Open Diff" },
-                  ["f6"] = { "toggle_diffpreview_alt", mode = { "n", "i" }, desc = "Toggle Delta Mode" },
-                  ["<C-t>"] = { "test_picker", mode = { "n", "i" }, desc = "Test picker" },
-                },
-              },
-            },
-          },
-          qflist = {
-            win = {
-              input = {
-                keys = {
-                  ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove QF Item" },
-                  ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
-                },
-              },
-            },
-          },
-          grep = {
-            win = {
-              input = {
-                keys = {
-                  ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove QF Item" },
-                  ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
-                },
-              },
-            },
-          },
-          grep_word = {
-            win = {
-              input = {
-                keys = {
-                  ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
-                },
-              },
-            },
-          },
-        },
+          }
+        ),
         toggles = {  
           -- Existing toggles...  
           git_cwd = {
@@ -1032,7 +953,8 @@ Your instructions here
             value = true -- Show when case_sensitive is true  
           },
         },
-        actions = {
+        -- Merge path copy actions from editor_keymaps with local actions
+        actions = vim.tbl_extend("force", editor_keymaps.snacks_actions, {
           toggle_case_sensitivity = function(picker, item)
             local current_args = vim.deepcopy(picker.opts.args) or {}
             local has_ignore_case = vim.tbl_contains(current_args, "-i") or vim.tbl_contains(current_args, "--ignore-case")
@@ -1143,7 +1065,6 @@ Your instructions here
             end
             gitUtil.open_mr(branch)
           end,
-
           remove_qf_item = function(picker, item)
             if not item then
               return
@@ -1277,43 +1198,9 @@ Your instructions here
           reset_picker_depth = function(picker, item)
             require("utils.snacks_terminal").adjust_picker_depth(picker, item, 0)
           end,
-        },
-        -- win : overrides here does not really work - not sure why
-        win = {
-          list = {
-            keys = {
-              ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
-              ["0"] = { "focus_preview", desc = "Focus Preview" },
-              -- make consistent as FZFlua
-              ["<c-a>"] = { "sidekick_send", mode = { "n", "i" } },
-              ["<a-a>"] = { "select_all", mode = { "n", "i" } },
-              ["<a-q>"] = { "qflist", mode = { "n", "i" } },
-              ["<c-q>"] = "cancel",
-            },
-          },
-          input = {
-            keys = {
-              -- ["="] = "toggle_focus",
-              -- ["<C-i>"] = "toggle_focus",
-              ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
-              ["<M-c>"] = { "toggle_case_sensitivity", mode = { "n", "i" }, desc = "Toggle case sensitivity" },
-              ["0"] = { "focus_preview", mode = { "n" }, desc = "Focus Preview" },
-              -- make consistent as FZFlua
-              ["<c-a>"] = { "sidekick_send", mode = { "n", "i" } },
-              ["<a-a>"] = { "select_all", mode = { "n", "i" } },
-              ["<a-q>"] = { "qflist", mode = { "n", "i" } },
-              ["<c-q>"] = "cancel",
-              ["<M-=>"] = { "increase_picker_depth", mode = { "n", "i" }, desc = "Increase search depth" },
-              ["<M-->"] = { "decrease_picker_depth", mode = { "n", "i" }, desc = "Decrease search depth" },
-              ["<M-0>"] = { "reset_picker_depth", mode = { "n", "i" }, desc = "Reset search depth" },
-            },
-          },
-          preview = {
-            keys = {
-              ["<c-q>"] = "cycle_win",
-            },
-          },
-        },
+        }), -- Close vim.tbl_extend for actions
+        -- Import common win settings from editor_keymaps
+        win = editor_keymaps.snacks_picker_keys_setting.common,
       },
       -- https://github.com/folke/snacks.nvim/blob/main/docs/gitbrowse.md
       gitbrowse = {

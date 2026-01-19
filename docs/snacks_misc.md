@@ -1,11 +1,30 @@
+# Mini
+- copy path
+
 # 1. Explorer item debug info  20260107
 
-Requirement Feature 
+## TODO
+
+
+
+## DONE
+
+Fixed insert to buffer bug (20260118)
+- ✅ Simplified `insert_at_cursor` to use `nvim_put` API (similar to prompts_helper.lua)
+- ✅ Only tracks original window (not buffer/cursor) - `nvim_put` handles cursor positioning
+- ✅ Correctly inserts text into the buffer that was active when picker opened
+- ✅ Much simpler implementation: ~10 lines instead of ~25 lines
+- Implementation: lua/utils/snacks_terminal.lua:1800-1816 (insert_at_cursor), :1827-1834 (window capture in copy_path_select)
+
+Requirement Feature
 Create a snacks helper to in snacks utils to get from explorer / files to copy the path info to clipboard
 
-To fix
-- c-num key not working
-- make enhancement ui to see previews and better msg (without dup prefix listing num )
+Fixed (20260113)
+.
+- ✅ c-num keys: C-1, C-2, C-3, C-4 directly copy respective path formats
+- ✅ Enhanced UI: Replaced vim.ui.select with Snacks picker showing preview
+- ✅ Clean display: Removed numbered prefix (1., 2., etc.) from format list
+- ✅ Preview shows: Path format label and actual path that will be copied
 
 - Bind key 
   - C-1 to copy selected relative path compared with previous buffer / active buffer should support ../ if the path is outside the current buffer
@@ -65,3 +84,17 @@ Similar to leader+G+B
 - first step: show all commits on that files / folder with git diff between previous commit and current commit in preview secction
 - once enter is pressed on a commit it show the diff of that commit on each files
 - in this step use git diff preview and use the same mapping support for existing snacks git picker
+
+# 4. Snacks Git diff/status
+1 - keymap M-g diff + group + -> status switches currently 
+# 5. Git custom picker 
+- use opts to choose base against custom picker 
+- use default branch previewer/selectors - no remote
+
+# Refactor actions, keys
+
+## DONE 20260115 
+- move to keys and actions settings from lua/plugins/extra/myEditor.lua to lua/utils/editor_keymaps.lua
+
+
+add git action to get branch, fullref, ref, sha from refName/alias within git utils and used it in create_git_file_actions  and inside get_ref_stats

@@ -411,6 +411,18 @@ function errorHandling()
     print("error ==")
     vim.notify(result, vim.log.levels.ERROR)
   end
+
+  -- SHELL COMMAND vim command this case pcall can't be used
+  ref = "HEAD"
+  ref = "HEADXX" -- fail but continue if not catch with vshell + value wrong
+  branchName = vim.fn.systemlist({ "git", "rev-parse", "--abbrev-ref", ref })[1]
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  -- try parse
+  if vim.v.shell_error ~= 0 then
+    print("ERROR" .. vim.v.shell_error)
+  end
+  print([==[errorHandling branchName:]==], vim.inspect(branchName)) -- __AUTO_GENERATED_PRINT_VAR_END__
+
 end
 
 local function buffers()
