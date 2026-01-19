@@ -79,6 +79,10 @@ commands :
 - select fix relative path from current file gF ? works need to check other example why sometime not
 
 *current*
+- subproject utility enhancement : support multiple matches (and condition) and mutliple results sort by nearest-gitroot
+  - ie.  matcher { name = { "Clientside/", "Serverside/" } , type = "path", project_type = "dotnet" },
+  - ie result : { matcher[1], matcher[2],... }
+
 - avante models quick select switch between 4.1 mini and 5 mini and 5.2 codex 
   - ./docs/avante_20260107_keys_model.md
 3 - codecompanion update try https://github.com/olimorris/codecompanion.nvim/blob/main/lua/codecompanion/config.lua

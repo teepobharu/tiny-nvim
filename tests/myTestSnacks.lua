@@ -131,48 +131,43 @@ local SnacksFilesTest = function()
 end
 local SNACKS_GLOBAL_OPTS =  {
   win = {
-      input = {
-        keys = {
-            ["<C-p>"] = { "debug_print_actions_and_options", mode = { "n", "i" }, desc = "Debug: Print actions and options" },
-      }
-    }
+    input = {
+      keys = {
+        ["<C-p>"] = {
+          "debug_print_actions_and_options",
+          mode = { "n", "i" },
+          desc = "Debug: Print actions and options",
+        },
+      },
+    },
   },
   actions = {
-      -- debug_print_actions_and_options = function(picker, item)
-        -- Print available actions
-      debug_print_actions_and_options = function(picker, item)
-        -- Collect actions and print as a comma-separated list
-        local action_names = {}
-        if picker and picker.opts and picker.opts.actions then
-          for name, _ in pairs(picker.opts.actions) do
-            table.insert(action_names, name)
-          end
-        end
-        print("Actions:", table.concat(action_names, ", "))
-
-        -- Initial options (concise)
-        if picker and picker.init_opts then
-          local init = vim.deepcopy(picker.init_opts)
-          init.actions = nil
-          init.win = nil
-          print("Init:", vim.inspect(init))
-        end
-
-        -- Input / pattern / matcher / search
-        local current_args = vim.deepcopy((picker and picker.opts and picker.opts.args) or {}) or {}
-        local current_pattern = picker and picker.input and picker.input.filter and picker.input.filter.pattern
-        local currentmatchpattern = picker and picker.matcher and picker.matcher.pattern
-        local current_search = picker and picker.input and picker.input.filter and picker.input.filter.search or ""
-        print("Args:", vim.inspect(current_args))
-        print("Pattern:", vim.inspect(current_pattern))
-        print("MatcherPattern:", vim.inspect(currentmatchpattern))
-        print("Search:", vim.inspect(current_search))
-        print("SearchHasUpper:", tostring((current_search or ""):match("%u") and true or false))
-
-        -- Live mode and matcher opts (concise)
-        print("Live:", vim.inspect(picker and picker.opts and picker.opts.live))
-        if picker and picker.matcher then
-          print("MatcherOpts:", vim.inspect(picker.matcher.opts))
+    gitdiff_toggle_group = function(picker, item)
+      -- Toggle between git_diff and git_files sources
+      if picker.opts.source == "git_diff" and picker.opts.group then
+        picker.opts.group = false
+        picker.opts.source = "git_status"
+        Snacks.debug "Switched to status source"
+      elseif picker.opts.source == "git_diff" then
+        picker.opts.group = true
+        Snacks.debug "Switched to git_diff group"
+      elseif picker.opts.source == "git_status" then
+        picker.opts.source = "git_diff"
+        Snacks.debug "Switched to git_diff source"
+      else
+        picker.opts.source = "git_diff"
+        Snacks.debug "Switched to git_diff source"
+      end
+      picker:refresh()
+    end,
+    -- debug_print_actions_and_options = function(picker, item)
+    -- Print available actions
+    debug_print_actions_and_options = function(picker, item)
+      -- Collect actions and print as a comma-separated list
+      local action_names = {}
+      if picker and picker.opts and picker.opts.actions then
+        for name, _ in pairs(picker.opts.actions) do
+          table.insert(action_names, name)
         end
 
         -- Refresh the picker
@@ -210,7 +205,11 @@ local testingmap_snacks = {
       -- Default options for explorer
     },
   },
- sgit_files = {
+  git_diff = {
+    key = "<localleader>zd",
+    modes = { "n", "x" },
+  },
+  git_files = {
     key = "<localleader>zF",
     modes = { "n", "x" },
     default_opts = {
@@ -775,21 +774,20 @@ function snacks_opt_tgg()
     }          
 ,
 
-    win = {
-      input = {
-          footer = function(picker)  
-            return "CWD: " .. (picker.opts.cwd or vim.fn.getcwd())  
-          end,  
+      win = {
+        input = {
+          footer = function(picker)
+            return "CWD: " .. (picker.opts.cwd or vim.fn.getcwd())
+          end,
           footer_pos = "center",
-        keys = {
-          ["<M-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Toggle files cwd" },
-          ["<C-t>"] = { "toggle_smartcase", mode = { "n", "i" }, desc = "Toggle smartcase (requires refresh)" },
-          ["<M-c>"] = { "toggle_case_sensitivity", mode = { "n", "i" }, desc = "Toggle case sensitivity" },
-        }
-
-      }
-    }
-  },
+          keys = {
+            ["<M-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Toggle files cwd" },
+            ["<C-t>"] = { "toggle_smartcase", mode = { "n", "i" }, desc = "Toggle smartcase (requires refresh)" },
+            ["<M-c>"] = { "toggle_case_sensitivity", mode = { "n", "i" }, desc = "Toggle case sensitivity" },
+          },
+        },
+      },
+    },
 
     files = {
       -- Specific options only for files picker
@@ -804,10 +802,22 @@ function snacks_opt_tgg()
 
   -- Apply the configuration with default opts enabled
   autoMapSnacksKeys(testingmap_snacks, optsToTest, true, true)
-  
-  Snacks.debug("Snacks keymaps configured!")
-  print("Note: Matcher settings are initialized at creation time.")
-  print("To change matcher behavior, recreate the picker or use toggles.")
+  Snacks.debug "Snacks keymaps configured!"
+  print "Note: Matcher settings are initialized at creation time."
+  print "To change matcher behavior, recreate the picker or use toggles."
+end
+
+function map_layout()
+  local optsLayout = {
+    all = {
+      layout = {
+        strategy = "horizontal",
+        preview = "main",
+        preview_width = 0.6,
+      },
+    },
+  }
+  autoMapSnacksKeys(testingmap_snacks, optsLayout, true, true)
 end
 
 function snacks_grep()
@@ -823,6 +833,64 @@ Snacks.picker.grep{
   args = { "--ignore-case"}
 }
 end
+
+
+function mapGitOpts()
+  local gitMapOpts= {
+    git_diff = {
+      base = "HEAD~2", -- alias/commit works 
+      -- Use args for global git options like -c core.quotepath=false
+      -- -- fail with path filter error - cmd: `git -c core.quotepath=false --no-pager -- tests diff --no-color --no-ext-diff --diff-filter=u --merge-base HEAD~2`
+      -- args = {
+      --   "--", "tests"
+      -- },
+      cmd_args = { "--", "tests/" },
+      -- pathspec = "tests", -- not work 
+    },
+    git_grep = {
+        pathspec = "tests", -- works
+        search = "TODO"
+    }
+  }
+  -- Snacks.picker.git_diff(vim.tbl_extend("force",{}, gitMapOpts.git_diff))
+  autoMapSnacksKeys(testingmap_snacks ,gitMapOpts, true, true)
+end
+
+function git()
+  Snacks.picker.git_diff {}
+  return Snacks.picker.git_diff {
+    base = "HEAD~1",
+    group = true, --  else showq multiple pathces in multiple result
+  }
+end
+-- git()
+--
+function custom_git()
+  -- Custom picker to select branch then show diff
+  function git_diff_branch()
+    -- Step 1: Pick a branch/ref
+    Snacks.picker.git_branches {
+      title = "Select Branch to Diff Against HEAD",
+      confirm = function(picker, item)
+        if not item.branch then
+          return
+        end
+
+        -- Step 2: Show diff between chosen branch and HEAD
+        Snacks.picker.git_diff {
+          title = "Git Diff (HEAD vs " .. item.branch .. ")",
+          -- base = item.branch, -- Use chosen branch as base
+          -- hash works
+          -- base = "351108d8b6a7cedd264b364a76ee958ba552087f", -- Use chosen branch as base
+          -- Optional: customize actions or keys
+        }
+      end,
+    }
+  end
+  git_diff_branch()
+end
+
+-- custom_git()
 
 function snacks_git_browse()
   -- https://deepwiki.com/search/can-gitbrowse-be-configure-and_45650fa5-dddd-460a-8101-f405f8843dec?mode=fast

@@ -757,15 +757,11 @@ local function execute_selected_lua(showOutput, lastselected, clipenable)
   local code
   if lastselected then
     code = inputUtil.getPreviousSelectedText()
-  elseif vim.api.nvim_get_mode().mode == 'v' or vim.api.nvim_get_mode().mode == 'V' then
-    code = inputUtil.getSelectedLines()
   else
-    local clipboard = vim.fn.getreg('+')
-    if clipenable and clipboard and #clipboard > 3 then
-      code = clipboard
-    else
-      code = vim.api.nvim_get_current_line()
-    end
+    -- if vim.api.nvim_get_mode().mode == 'v' or vim.api.nvim_get_mode().mode == 'V' then
+      code = inputUtil.getSelectedLines()
+    -- end
+
   end
   local f = code and load(code)
   if f then

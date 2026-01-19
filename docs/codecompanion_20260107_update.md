@@ -1,6 +1,5 @@
 # 1. Update to latest version
 - fix the syntax and ensure compatibility with the latest Codecompanion breakin updates
-checkout [research](codecompanion_20260107_update.md)
 
 # 2. Support custom models similar to Avante
 
