@@ -2,7 +2,7 @@ local pathUtil = require "utils.mypath"
 local gitUtil = require "utils.git"
 local keyutil = require "utils.keyutil"
 local editor_keymaps = require "utils.editor_keymaps"
-local avante_utils   = require "utils.my_avante_utils"
+local avante_utils = require "utils.my_avante_utils"
 
 local isSnackEnabled = keyutil.isSnackEnabled
 local open_remote = gitUtil.open_remote
@@ -37,6 +37,9 @@ return {
   {
     "jellydn/hurl.nvim",
     keys = {},
+    -- opts = {
+    --   env_file = { 'vars.env' }, -- current->gitroot by default, abs file not work traverse https://deepwiki.com/search/is-this-opt-set-in-opts-correc_3aa3eb0a-7ff7-427f-a1b1-c446116091c9?mode=fast
+    -- }
   },
   {
     "stevearc/oil.nvim",
@@ -157,6 +160,8 @@ return {
   },
   {
     "olimorris/codecompanion.nvim",
+    -- version = "^17.33.0", -- pin to avoid breaking changes
+    version = "^18.4.1",
     keys = editor_keymaps.keymaps.codecompanion(),
     adapters = {
       llama3_2 = function()
@@ -195,59 +200,86 @@ return {
       end,
     },
     opts = {
-      -- log_level = "ERROR", -- TRACE|DEBUG|ERROR|INFO not work
+      -- log_level = "DEBUG", -- TRACE|DEBUG|ERROR|INFO not work
+      -- see logs in ~/.local/state/nvim/codecompanion.log -- not sure why not see
+      --
       -- [WARN] above not help disable textmsg: CodeCompanion.nvim will experience breaking changes soon. Pin to version v17.33.0 or earlier to avoid this.
       -- https://codecompanion.olimorris.dev/configuration/chat-buffer
-      adapters = {  
-         -- TODO FIX AUTH ERRORS
-        -- http = {  
-        --   openai_agd = function()  
-        --     return require("codecompanion.adapters").extend("openai", {  
-        --       env = {  
-        --         -- why error mssage has domain is domain=.api.openai.com
-        --         endpoint = "http://openai-proxy.agoda.is/v1",  
-        --         -- Plain environment variable name (string): if the value is the name of an environment variable that has already been set (e.g. "HOME" or "GEMINI_API_KEY"), the plugin will read the value.
-        --         -- https://github.com/olimorris/codecompanion.nvim/blob/ca87f13b/doc/configuration/adapters.md
-        --         api_key = "OPENAI_API_KEY"
-        --       },
-        --       schema = {  
-        --         model = {
-        --           default = "gpt-5.2",  
-        --           choices = {  
-        --             "gpt-4.1",  
-        --             "gpt-4.1-mini",   
-        --             "gpt-5-mini",  
-        --             "gpt-5.1",  
-        --             "gpt-5.2",  
-        --             "gemini-3-pro-preview",  
-        --           },  
-        --         },  
-        --       }
-        --     })
-        --   end
-        -- }
+      adapters = {
+        -- TODO FIX AUTH ERRORS
+        http = {
+          openai_agd = function()
+            return require("codecompanion.adapters").extend("openai", {
+              -- url = "http://openai-proxy.agoda.is/v1/completions",
+              env = {
+                api_key = "OPENAI_API_KEY",
+                url = "AG_OPENAIPROXY", -- Your base URL
+                chat_url = "/v1/chat/completions", -- For chat requests
+                models_endpoint = "/v1/models", -- For model listing in requrie("codecompanion.adapters.http.openai_compatible") logic
+              },
+              url = "${url}${chat_url}", -- endpoint will be /v1/chat/completions or /v1/completions based on chat or completion
+              schema = {
+                model = {
+                  default = "gpt-5.2",
+                  -- minimal
+                  choices = {
+                    "gpt-4.1",
+                    "gpt-4.1-mini",
+                    "gpt-5-mini",
+                    "gpt-5.1",
+                    "gpt-5.2-pro",
+                    "gpt-5.2-codex",
+                    --work in chat --
+                    "gpt-5.2",
+                    "deepseek-r1-0528-maas",
+                    --to test --
+                    "gemini-3-pro-preview",
+                    --not work below
+                    -- "deepseek"
+                    -- "qwq-32b", -- fallback haiku ??
+                    -- "claude-haiku-4-5",
+                    -- "claude-sonnet-4-5",
+                    -- "claude-opus-4-5",
+                  },
+                  -- choices = function(self, opts)
+                  --   -- This will call get_models() and return all 588 models
+                  --   return require("codecompanion.adapters.http.openai_compatible").schema.model.choices(self, opts)
+                  -- end,
+                },
+              },
+            })
+          end,
+        },
+        acp = { -- codex and claude_code works without extra settings jsut make sure acp cli is installed
+          -- claude_code = function()
+          --   return require("codecompanion.adapters").extend("claude_code", {
+          --     env = { -- seems like not required
+          --       -- CLAUDE_CODE_USE_BEDROCK = "1",
+          --       -- CLAUDE_CODE_SKIP_BEDROCK_AUTH = "1",
+          --       -- ANTHROPIC_BEDROCK_BASE_URL = "https://genai-gateway.agoda.is/claude",
+          --       -- CLAUDE_CODE_OAUTH_TOKEN = os.getenv("ANTHROPIC_AUTH_TOKEN"),
+          --       -- ANTHROPIC_AUTH_TOKEN = os.getenv("ANTHROPIC_AUTH_TOKEN"),
+          --     },
+          --   })
+          -- end,
+        },
       },
+      display = {
+        action_palette = {
+          provider = "snacks",
+        },
+      },
+
       strategies = {
         chat = {
           slash_commands = {
-            ["buffer"] = {
-              -- docs: initial snacks config wrong https://github.com/olimorris/codecompanion.nvim/blob/8ad65eef735b31bb47d76f59d878ee1bac4bdc85/lua/codecompanion/strategies/chat/slash_commands/init.lua#L100
-              callback = "strategies.chat.slash_commands.catalog.buffer",
-              -- description = "Insert open buffers",
-              opts = {
-                -- contains_code = true,
-                provider = "snacks", -- default|telescope|mini_pick|fzf_lua
-              },
-            },
-            ["file"] = {
-              callback = "strategies.chat.slash_commands.catalog.file",
-              description = "Insert a file",
-              opts = {
-                -- contains_code = true,
-                -- max_lines = 1000,
-                provider = "snacks", -- telescope|mini_pick|fzf_lua
-              },
-            },
+            ["buffer"] = { opts = { provider = "snacks" } },
+            ["file"] = { opts = { provider = "snacks" } },
+            ["fetch"] = { opts = { provider = "snacks" } },
+            ["help"] = { opts = { provider = "snacks" } },
+            ["image"] = { opts = { provider = "snacks" } },
+            ["symbols"] = { opts = { provider = "snacks" } },
+            ["quickfix"] = { opts = { provider = "snacks" } },
           },
         },
       },
@@ -260,37 +292,32 @@ return {
         },
       },
       prompt_library = {
+        -- https://deepwiki.com/search/check-the-settting-from-prompt_65b9cc4c-5ada-41a8-8b0d-49142cfdef65?mode=deep
         -- will work only when open new chat with the action cmd else not change model while there is prompt
         ["Model GPT mini 5 - G5"] = {
-          strategy = "chat",
+          interaction = "chat", -- ✅ Fixed: strategy → interaction
           opts = {
-            adapter = {
-              name = "copilot",
-              model = "gpt-5-mini",
-            },
+            adapter = "copilot", -- ✅ Fixed: simplified to string (model override via command params)
             is_slash_cmd = true,
-            short_name = "gpt5mini_g5m_gfree",
+            alias = "gpt5mini_g5m_gfree", -- ✅ Fixed: short_name → alias
             stop_context_insertion = true,
           },
           prompts = {
             {
               role = "user",
-              content = ""
-            }
+              content = "",
+            },
           },
         },
         ["Codecompanion Context"] = {
-          strategy = "chat",
+          interaction = "chat", -- ✅ Fixed: strategy → interaction
           description = "Write documentation for me",
           opts = {
             index = 11,
-            adapter = {
-              name = "copilot",
-              model = "gpt-5-mini",
-            },
+            adapter = "copilot", -- ✅ Fixed: simplified to string
             is_slash_cmd = true,
             auto_submit = false,
-            short_name = "codecompanion_nvim_context",
+            alias = "codecompanion_nvim_context", -- ✅ Fixed: short_name → alias
             stop_context_insertion = true,
           },
           context = {
@@ -298,7 +325,7 @@ return {
               type = "file",
               path = {
                 -- expand HOME
-                vim.fn.expand("$HOME/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua")
+                vim.fn.expand "$HOME/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua",
               },
             },
             {
@@ -327,17 +354,14 @@ Your instructions here
           },
         },
         ["Snacks Nvim Context"] = {
-          strategy = "chat",
+          interaction = "chat", -- ✅ Fixed: strategy → interaction
           description = "Write documentation for me",
           opts = {
             index = 11,
-            adapter = {
-              name = "copilot",
-              model = "gpt-5-mini",
-            },
+            adapter = "copilot", -- ✅ Fixed: simplified to string
             is_slash_cmd = true,
             auto_submit = false,
-            short_name = "snacks_nvim_context",
+            alias = "snacks_nvim_context", -- ✅ Fixed: short_name → alias
             stop_context_insertion = true,
           },
           context = {
@@ -345,7 +369,7 @@ Your instructions here
               type = "file",
               path = {
                 -- expand HOME
-                vim.fn.expand("$HOME/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua")
+                vim.fn.expand "$HOME/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua",
               },
             },
             {
@@ -379,17 +403,14 @@ Your instructions here
           },
         },
         ["FZF Context"] = {
-          strategy = "chat",
+          interaction = "chat", -- ✅ Fixed: strategy → interaction
           description = "Write documentation for me",
           opts = {
             index = 11,
-            adapter = {
-              name = "copilot",
-              model = "gpt-5-mini",
-            },
+            adapter = "copilot", -- ✅ Fixed: simplified to string
             is_slash_cmd = true,
             auto_submit = false,
-            short_name = "snacks_nvim_context",
+            alias = "fzf_context", -- ✅ Fixed: short_name → alias (also changed alias to match prompt name)
             stop_context_insertion = true,
           },
           context = {
@@ -432,13 +453,12 @@ Your instructions here
         },
         -- will still replace the chat !!
         ["📂 Attach File:Line Refs (t)"] = {
-          strategy = "chat",
+          interaction = "chat", -- ✅ Fixed: strategy → interaction
           opts = {
             is_slash_cmd = false,
             auto_submit = false,
             -- placement = "add", -- for inline or "replace"|"add"|"before"|"chat"
             stop_context_insertion = true,
-
           },
           description = "Attach references to the chat",
           -- # sample ref with selection
@@ -472,7 +492,7 @@ Your instructions here
                 start_col = start_col or 1
                 end_col = end_col or 999
 
-                local attachref=""
+                local attachref = ""
                 if start_line and end_line and (start_line ~= end_line or start_col ~= end_col) then
                   attachref =
                     string.format("> - file: @%s :L%d:C%d-L%d:C%d", relpath, start_line, start_col, end_line, end_col)
@@ -525,22 +545,19 @@ Documentation and Tracking:
   - Logs of commands executed, errors, and changes made with references.
   - Summarized reports linking daily actions and changes for better traceability.
 - Maintain an overarching summary file (`DATE-actions.md`), consolidating all changes and providing a single reference point for handover purposes.
-          ]]
-          }
+          ]],
+            },
           },
         },
         -- overrides the prompt frmo jellydn to
         ["Generate a Commit Message for Staged Short"] = {
-          strategy = "chat",
+          interaction = "chat",
           description = "Generate a commit message for staged change",
           opts = {
-            short_name = "short-staged-commit",
+            alias = "short-staged-commit",
             auto_submit = true,
             is_slash_cmd = true,
-            adapter = {
-              name = "copilot",
-              model = "gpt-5-mini", -- slower but more complete than gpt-4.1 ?
-            },
+            adapter = "copilot", -- ✅ Fixed: simplified to string
           },
           prompts = {
             {
@@ -556,8 +573,9 @@ feat(release): add slack msg and create release after deploy
 - include direct release link in Slack notifications for better traceability
 - expand clone repo section to include overview with folder structure, instructions, and IDE setup
 - provide clearer onboarding for new contributors
-                  ]] .. "\n\n```\n"
-                  .. vim.fn.system("git diff --staged")
+                  ]]
+                  .. "\n\n```\n"
+                  .. vim.fn.system "git diff --staged"
                   .. "\n```"
               end,
               opts = {
@@ -567,16 +585,13 @@ feat(release): add slack msg and create release after deploy
           },
         },
         ["Review a Staged Commit Message"] = {
-          strategy = "chat",
+          interaction = "chat", -- ✅ Fixed: strategy → interaction
           description = "Review a staged commit message",
           opts = {
-            short_name = "review-staged-commit",
+            alias = "review-staged-commit", -- ✅ Fixed: short_name → alias
             auto_submit = true,
             is_slash_cmd = true,
-            adapter = {
-              name = "copilot",
-              model = "gpt-5-mini", -- slower but more complete than gpt-4.1 ?
-            },
+            adapter = "copilot", -- ✅ Fixed: simplified to string
           },
           prompts = {
             {
@@ -605,8 +620,7 @@ For each section, provide:
 A short, concise numbered list of findings
 Specific examples or reworded alternatives
 A reference to the relevant file path when applicable
-                ]]
-                  .. [[Part 2: Final Commit Message (Strict Output Rules)
+                ]] .. [[Part 2: Final Commit Message (Strict Output Rules)
 After the review, compose a final commit message following Commitizen / Conventional Commits conventions.
 
 Rules for the final output:
@@ -630,9 +644,7 @@ Body with bullet points using -
 staged-commits
 ---
 
-                  ]] .. "\n\n```\n"
-                  .. vim.fn.system("git diff --staged")
-                  .. "\n```"
+                  ]] .. "\n\n```\n" .. vim.fn.system "git diff --staged" .. "\n```"
               end,
               opts = {
                 contains_code = true,
@@ -642,9 +654,9 @@ staged-commits
         },
         -- sample workflow: https://codecompanion.olimorris.dev/extending/workflows
         ["Setup Test Example"] = {
-          strategy = "workflow",
           description = "My workflow",
           opts = {
+            is_workflow = true, -- v18+ syntax (was: strategy = "workflow")
             --   adapter = "openai", -- Always use the OpenAI adapter for this workflow
             adapter = "copilot",
           },
@@ -737,7 +749,7 @@ Your instructions here
       -- provider = "openai_agd", -- You can then change this provider here
       web_search_engine = {
         -- provider = "tavily", -- tavily, serpapi, google, kagi, brave, or searxng
-        provider = "google", 
+        provider = "google",
       },
       -- Providers: base providers merged with Agoda-specific providers from utils
       -- See lua/utils/my_avante_utils.lua for Agoda provider configurations
@@ -752,8 +764,7 @@ Your instructions here
         -- },
         -- lua print(require('avante.config').provider)
         -- lua print(vim.inspect(require('avante.config').get_last_used_model(require('avante.config').providers)))
-      }, 
-      {}), -- default = no custom provider
+      }, {}), -- default = no custom provider
       -- avante_utils.get_agoda_providers()),
 
       -- Removed inline Agoda provider definitions (claude_agd, vertex_vclaude_2, vertex_claude_agd, openai_agd)
@@ -883,11 +894,11 @@ Your instructions here
     opts = {
       -- check on health groups
       -- options = {
-        -- groups = {
-          -- items = {
-          --   require('bufferline.groups').builtin.ungrouped,
-          -- }
-        -- }
+      -- groups = {
+      -- items = {
+      --   require('bufferline.groups').builtin.ungrouped,
+      -- }
+      -- }
       -- }
     },
     keys = editor_keymaps.keymaps.bufferline,
@@ -925,193 +936,49 @@ Your instructions here
         },
         ui_select = true, -- boolean set `vim.ui.select` to a snacks picker, might conflict with fzf
         -- Import pre-configured picker sources from editor_keymaps
-        sources = vim.tbl_deep_extend("force",
-          editor_keymaps.snacks_picker_keys_setting.sources,
-          {
-            -- Source-specific overrides (if needed)
-            files = {
-              hidden = true, -- files picker specific setting
-            },
-          }
-        ),
-        toggles = {  
-          -- Existing toggles...  
+        sources = vim.tbl_deep_extend("force", editor_keymaps.sources_n_keys.sources, {
+          -- Source-specific overrides (if needed)
+          files = {
+            hidden = true, -- files picker specific setting
+          },
+          -- https://deepwiki.com/search/how-can-i-customize-explorer-k_06a6e33a-6125-418e-bd05-d979f1420178?mode=fast
+          -- TODO: check does not realy work why ?
+        }),
+        toggles = {
+          -- Existing toggles...
           git_cwd = {
             icon = "",
-            value = true, -- Show when case_sensitive is true  
+            value = true, -- Show when case_sensitive is true
           },
-          case_sensitive_custom = {   
-            icon = "C",  -- Icon to show in title  
-            value = true -- Show when case_sensitive is true  
+          case_sensitive_custom = {
+            icon = "C", -- Icon to show in title
+            value = true, -- Show when case_sensitive is true
           },
-          case_nonsensitive_custom = {   
-            icon = "~",  -- Icon to show in title  
-            value = true -- Show when case_sensitive is true  
+          case_nonsensitive_custom = {
+            icon = "~", -- Icon to show in title
+            value = true, -- Show when case_sensitive is true
           },
-          custom_cwd = {   
-            icon = ".",  -- Icon to show in title  
-            value = true -- Show when case_sensitive is true  
+          custom_cwd = {
+            icon = ".", -- Icon to show in title
+            value = true, -- Show when case_sensitive is true
           },
         },
         -- Merge path copy actions from editor_keymaps with local actions
         actions = vim.tbl_extend("force", editor_keymaps.snacks_actions, {
+          gitdiff_toggle_group = function(picker, item)
+            require("utils.snacks_actions").gitdiff_toggle_group(picker, item)
+          end,
           toggle_case_sensitivity = function(picker, item)
-            local current_args = vim.deepcopy(picker.opts.args) or {}
-            local has_ignore_case = vim.tbl_contains(current_args, "-i") or vim.tbl_contains(current_args, "--ignore-case")
-            local has_casesens = vim.tbl_contains(current_args, "-s") or vim.tbl_contains(current_args, "--case-sensitive")
-            -- local current_search = picker.input.filter and picker.input.filter.search
-            local current_pattern = picker.input.filter and picker.input.filter.pattern
-            local currentmatchpattern = picker.matcher and picker.matcher.pattern
-            -- exists in file same as matcher
-            local current_search = picker.input.filter and picker.input.filter.search
-            local search_query_has_upper = current_search:match("%u")
-
-            -- Determine source type (fd for files, rg for grep)
-            local source = picker.opts.source
-
-
-            function remove_exist_flags(args, flags)
-              return vim.tbl_filter(function(arg)
-                return not vim.tbl_contains(flags, arg)
-              end, args)
-            end
-
-            local is_case_sensitive_perceived = has_casesens or (not has_ignore_case and search_query_has_upper)
-
-
-
-            local is_next_sensitive = nil
-            print([==[Toggle before args:]==], vim.inspect(picker.opts.args))
-            if has_ignore_case then
-              current_args = remove_exist_flags(current_args, {"-i", "--ignore-case"})
-              current_args = remove_exist_flags(current_args, {"-s", "--case-sensitive"})
-
-            elseif is_case_sensitive_perceived then
-              -- Add ignore case flag
-              current_args = remove_exist_flags(current_args, {"-i", "--ignore-case"})
-              current_args = remove_exist_flags(current_args, {"-s", "--case-sensitive"})
-              table.insert(current_args, "--ignore-case")
-              is_next_sensitive = false
-            else -- (search_query_has_both_case and not has_casesens and not has_ignore_case)
-              -- Remove ignore case flag
-              current_args = remove_exist_flags(current_args, {"-i", "--ignore-case"})
-              current_args = remove_exist_flags(current_args, {"-s", "--case-sensitive"})
-              table.insert(current_args, "--case-sensitive")
-              is_next_sensitive = true
-            end
-            picker.opts.args = current_args
-            if source == "files" or source == "buffers" or source == "smart" then
-              local smartcase = picker.opts.matcher.smartcase
-              local ignorecase = picker.opts.matcher.ignorecase
-              local init_smartcase = picker.init_opts.matcher and picker.init_opts.matcher.smartcase
-              local init_ignorecase = picker.init_opts.matcher and picker.init_opts.matcher.ignorecase
-              -- print all smart,init , ignore in table
-              print([==[snacks_opt_tgg#picker.opts.matcher:]==], vim.inspect({ 
-                smartcase = smartcase, ignorecase = ignorecase, init_smartcase = init_smartcase, init_ignorecase = init_ignorecase,
-              }))
-              if is_next_sensitive then
-                picker.opts.matcher.ignorecase = false
-                picker.opts.matcher.smartcase = false
-              elseif is_next_sensitive == false then
-                picker.opts.matcher.ignorecase = true
-                picker.opts.matcher.smartcase = false
-              else
-                picker.opts.matcher.ignorecase = false
-                picker.opts.matcher.smartcase = false
-              end
-              picker.matcher = require("snacks.picker.core.matcher").new(picker.opts.matcher)
-            end
-
-            picker.opts.case_sensitive_custom = is_next_sensitive
-            picker.opts.case_nonsensitive_custom = is_next_sensitive == false
-            -- picker:find()
-            picker:find()
+            require("utils.snacks_actions").toggle_case_sensitivity(picker, item)
           end,
           open_file_remote = function(picker, item)
-            local preview_source = picker.init_opts and picker.init_opts.source
-
-            local current_buf_path = editor_keymaps.helpers.get_current_buffer_path()
-            local last_bufferpath = vim.api.nvim_buf_get_name(vim.fn.bufnr("#"))
-
-            local chosen_path = item._path
-            if not chosen_path or chosen_path == "" then
-              if current_buf_path and current_buf_path ~= "" then
-                chosen_path = current_buf_path
-              else
-                chosen_path = last_bufferpath
-              end
-            end
-
-            local filepath = pathUtil.get_git_real_filepath(chosen_path)
-
-            local ref = item.branch or item.commit
-            if not ref then
-              if preview_source == "git_files" then
-                ref = gitUtil.get_current_git_branch()
-              elseif preview_source == "files" or preview_source == "buffers" then
-                ref = nil
-              else
-                vim.notify("No reference found for this item", vim.log.levels.WARN)
-              end
-            end
-
-            require('utils.git').open_remote(ref, "file", filepath)
+            require("utils.snacks_actions").open_file_remote(picker, item)
           end,
           open_mr = function(picker, item)
-            local branch = item.branch
-            if not branch then
-              vim.notify("No branch found for this item", vim.log.levels.WARN)
-              return
-            end
-            gitUtil.open_mr(branch)
+            require("utils.snacks_actions").open_mr(picker, item)
           end,
           remove_qf_item = function(picker, item)
-            if not item then
-              return
-            end
-
-            -- Get current quickfix list
-            local qflist = vim.fn.getqflist()
-
-            if #qflist == 0 then
-              vim.notify("Quickfix list is empty. Send items to quickfix with <A-q> first.", vim.log.levels.WARN)
-              return
-            end
-
-            -- For grep results, we need to match by file, line, and text
-            -- For qflist items, we can use the index
-            local idx = item.idx
-
-            if idx and idx > 0 and idx <= #qflist then
-              -- Direct index match (works for qflist picker)
-              table.remove(qflist, idx)
-              vim.fn.setqflist(qflist, "r")
-              picker:refresh()
-            else
-              -- Try to find by matching file, line, and column (works for grep picker)
-              local removed = false
-              for i = #qflist, 1, -1 do
-                local qf_item = qflist[i]
-                local qf_file = qf_item.filename or (qf_item.bufnr and vim.api.nvim_buf_get_name(qf_item.bufnr))
-                local item_file = item.file or item.filename
-
-                if qf_file == item_file and qf_item.lnum == item.lnum then
-                  -- Additional check for column if available
-                  if not item.col or qf_item.col == item.col then
-                    table.remove(qflist, i)
-                    removed = true
-                    break
-                  end
-                end
-              end
-
-              if removed then
-                vim.fn.setqflist(qflist, "r")
-                picker:refresh()
-              else
-                vim.notify("Could not find item in quickfix list", vim.log.levels.WARN)
-              end
-            end
+            require("utils.snacks_actions").remove_qf_item(picker, item)
           end,
           test_picker = function(picker, item)
             -- Debug action to inspect picker items
@@ -1120,74 +987,13 @@ Your instructions here
           end,
           toggle_diffpreview_alt = editor_keymaps.helpers.toggle_diffpreview_alt,
           my_diff_compare = function(picker, item, action)
-            -- Get the selected reference from the picker
-            local ref = item.branch or item.commit
-
-            if not ref then
-              local git_default = "master"
-              ref = git_default
-              vim.notify("No reference found, using default: " .. git_default, vim.log.levels.WARN)
-            end
-
-            picker:close() -- Close picker first
-
-            -- Use the helper function to open current buffer with diff
-            editor_keymaps.helpers.open_current_buffer_with_gitsigns_diff(ref)
+            require("utils.snacks_actions_wip").my_diff_compare(picker, item, action)
           end,
           toggle_cwd_files_grep = function(picker, item)
             require("utils.snacks_terminal").toggle_cwd_files_grep(picker, item)
           end,
           toggle_files_buffers = function(picker, item)
-            local preview_source = picker.init_opts and picker.init_opts.source
-            if not preview_source then
-              vim.notify("Error: picker.init_opts is nil", vim.log.levels.ERROR)
-              return
-            end
-
-            local current_search = picker.input.filter and picker.input.filter.pattern
-            ---@type snacks.picker.Config
-            local picker_params = {
-              pattern = current_search or "",
-            }
-
-            -- Helper to get toggle state (clean, no override logic)
-            local function get_toggle_state(name)
-              -- First check picker.opts (runtime state)
-              if picker.opts[name] ~= nil then
-                return picker.opts[name]
-              end
-              -- Fall back to init_opts (initial state)
-              if picker.init_opts and picker.init_opts[name] ~= nil then
-                return picker.init_opts[name]
-              end
-              return nil
-            end
-
-            if preview_source == "files" then
-              picker_params.hidden = false
-              Snacks.picker.buffers(picker_params)
-              vim.defer_fn(function()
-                if vim.api.nvim_get_mode().mode == "n" then
-                  vim.cmd "startinsert"
-                end
-              end, 50)
-            else
-              -- Switching from buffers to files
-              -- For files: persist both hidden and ignored states
-              local hidden_state = get_toggle_state("hidden")
-              local ignored_state = get_toggle_state("ignored")
-
-              if hidden_state ~= nil then
-                picker_params.hidden = hidden_state
-              end
-              if ignored_state ~= nil then
-                picker_params.ignored = ignored_state
-              end
-
-              Snacks.picker.files(picker_params)
-            end
-            -- Snacks.picker.actions.insert(picker) -- nothing
-            -- Snacks.picker.actions.toggle_focus(picker) -- not help sometimes still show
+            require("utils.snacks_actions").toggle_files_buffers(picker, item)
           end,
           increase_picker_depth = function(picker, item)
             require("utils.snacks_terminal").adjust_picker_depth(picker, item, 1)
@@ -1200,7 +1006,7 @@ Your instructions here
           end,
         }), -- Close vim.tbl_extend for actions
         -- Import common win settings from editor_keymaps
-        win = editor_keymaps.snacks_picker_keys_setting.common,
+        win = editor_keymaps.sources_n_keys.common,
       },
       -- https://github.com/folke/snacks.nvim/blob/main/docs/gitbrowse.md
       gitbrowse = {
@@ -1307,7 +1113,7 @@ Your instructions here
           "<leader>rS",
           desc = "pick Avante custom models",
           mode = { "n", "x", "v" },
-        }
+        },
       }, isSnackEnabled and {
         {
           "<leader>L",
@@ -1462,7 +1268,7 @@ Your instructions here
     },
   },
   --#endregion LSP and Formatting
-  --#region Code edition 
+  --#region Code edition
   -- handle conflict with surround
   {
     "folke/flash.nvim",

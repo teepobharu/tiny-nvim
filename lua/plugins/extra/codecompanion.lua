@@ -139,23 +139,23 @@ return {
           adapter = "copilot",
           roles = { llm = "  Copilot Chat", user = "IT Man" },
           slash_commands = {
-            ["buffer"] = {
-              callback = "strategies.chat.slash_commands.buffer",
-              description = "Insert open buffers",
-              opts = {
-                contains_code = true,
-                provider = "fzf_lua", -- default|telescope|mini_pick|fzf_lua
-              },
-            },
-            ["file"] = {
-              callback = "strategies.chat.slash_commands.file",
-              description = "Insert a file",
-              opts = {
-                contains_code = true,
-                max_lines = 1000,
-                provider = "fzf_lua", -- telescope|mini_pick|fzf_lua
-              },
-            },
+            -- ["buffer"] = {
+            --   callback = "strategies.chat.slash_commands.buffer",
+            --   description = "Insert open buffers",
+            --   opts = {
+            --     contains_code = true,
+            --     provider = "fzf_lua", -- default|telescope|mini_pick|fzf_lua
+            --   },
+            -- },
+            -- ["file"] = {
+            --   callback = "strategies.chat.slash_commands.file",
+            --   description = "Insert a file",
+            --   opts = {
+            --     contains_code = true,
+            --     max_lines = 1000,
+            --     provider = "fzf_lua", -- telescope|mini_pick|fzf_lua
+            --   },
+            -- },
           },
           keymaps = {
             send = {
