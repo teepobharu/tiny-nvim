@@ -11,7 +11,6 @@ References docs:
 > - <url>https://github.com/folke/snacks.nvim/blob/main/docs/picker.md</url>
 
 
-
 ## TODOs
 
 - bind check qflist WIP
@@ -91,6 +90,7 @@ commands :
 - mega ref git diff files - sort diff options, keybind
   - diff ref alias compare , open fix
   - feat: switch refs with c-space
+  - TOOD: preview diff not use against the correct ref (always used against HEAD should be selectedRef...HEAD../tests/myTest.lua)
 - ai: 
    - avante
       -  check gpt via oai 5.2 works when switch takes v long to load 
@@ -165,6 +165,11 @@ Understand each plugin more: https://www.youtube.com/watch?v=6pAG3BHurdM&ab_chan
 
 ## AI
 
+Use Models from others
+- goose OSS
+- agentic : support cursor cli agent
+
+
 ### Sidekick
 
 https://github.com/folke/sidekick.nvim
@@ -202,6 +207,11 @@ Actions
 
 Prompt actions
 - cannot be used together 
+
+ACP
+- claude-code works 
+  - [x] glean mcp works : `use atlassian jira tools check what I am working on`
+
 
 ### Copilot-Chat
 

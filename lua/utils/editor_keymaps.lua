@@ -29,15 +29,15 @@ local function fzfcompareref(selected)
     vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
     return
   end
-  
+
   local line = selected[1]
   local commit_hash
 
-  local remote_ref = line:match("^remotes/(.-)%s+")
+  local remote_ref = line:match "^remotes/(.-)%s+"
   if remote_ref then
     commit_hash = remote_ref
   else
-    commit_hash = line:match("^(%S+)")
+    commit_hash = line:match "^(%S+)"
   end
 
   local file_path = vim.fn.expand "%:p"
@@ -62,110 +62,18 @@ local function toggle_diffpreview_alt()
   end
 end
 
--- Helper function to open file diff with gitsigns
--- @param file_path string: File path (relative or absolute)
--- @param ref string: Git reference to compare with
+-- Git helper functions are now in utils/git.lua
+-- Delegate to the centralized implementations
 local function open_file_with_gitsigns_diff(file_path, ref)
-  if not pcall(require, "gitsigns") then
-    vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
-    return
-  end
-
-  local git_root = Snacks.git.get_root()
-
-  -- Convert to absolute path if needed
-  if vim.fn.filereadable(file_path) == 0 then
-    file_path = git_root .. "/" .. file_path
-  end
-
-  -- Open file in new tab
-  vim.cmd("tabnew " .. vim.fn.fnameescape(file_path))
-
-  -- Show diff with gitsigns
-  require("gitsigns").diffthis(ref, {
-    vertical = true,
-  })
+  gitUtil.open_file_with_gitsigns_diff(file_path, ref)
 end
 
--- Helper function to open current buffer in new tab with gitsigns diff
--- @param ref string: Git reference to compare with
 local function open_current_buffer_with_gitsigns_diff(ref)
-  if not pcall(require, "gitsigns") then
-    vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
-    return
-  end
-
-  local current_file = vim.api.nvim_buf_get_name(0)
-
-  if current_file == "" then
-    vim.notify("No file in current buffer", vim.log.levels.WARN)
-    return
-  end
-
-  -- Open in new tab
-  vim.cmd("tabnew " .. vim.fn.fnameescape(current_file))
-
-  -- Show diff with gitsigns
-  require("gitsigns").diffthis(ref, {
-    vertical = true,
-  })
+  gitUtil.open_current_buffer_with_gitsigns_diff(ref)
 end
 
--- Helper function to build remote URL for a file at a specific ref
--- @param file_path string: File path (relative or absolute)
--- @param ref string: Git reference (branch, tag, or commit)
--- @return string|nil: Remote URL or nil if error
-local function build_remote_url(file_path, ref)
-  local git_root = Snacks.git.get_root()
-  if not git_root then
-    return nil
-  end
-
-  -- Convert to absolute path if needed
-  if vim.fn.filereadable(file_path) == 0 then
-    file_path = git_root .. "/" .. file_path
-  end
-
-  -- Get relative path from git root
-  local rel_path = file_path:gsub("^" .. vim.pesc(git_root) .. "/?" , "")
-
-  -- Get remote path using gitUtil
-  local remote_path = gitUtil.get_remote_path("origin")
-
-  if not remote_path or remote_path == "" then
-    return nil
-  end
-
-  -- Build URL - detect GitLab vs GitHub
-  local url
-  if remote_path:match("gitlab") then
-    -- GitLab style: /-/blob/
-    url = string.format("https://%s/-/blob/%s/%s", remote_path, ref, rel_path)
-  else
-    -- GitHub style: /blob/
-    url = string.format("https://%s/blob/%s/%s", remote_path, ref, rel_path)
-  end
-
-  return url
-end
-
--- Helper function to open file in remote at specific ref
--- @param file_path string: File path (relative or absolute)
--- @param ref string: Git reference to open at
 local function open_file_in_remote(file_path, ref)
-  local url = build_remote_url(file_path, ref)
-
-  if not url then
-    vim.notify("Failed to build remote URL", vim.log.levels.ERROR)
-    return
-  end
-
-  -- Get filename for notification
-  local filename = vim.fn.fnamemodify(file_path, ":t")
-
-  -- Open in browser
-  vim.fn.jobstart({ "open", url }, { detach = true })
-  vim.notify(string.format("Opening %s @ %s in browser", filename, ref), vim.log.levels.INFO)
+  gitUtil.open_file_in_remote(file_path, ref)
 end
 
 -- Export helper functions that are used in opts
@@ -173,12 +81,8 @@ M.helpers = {
   get_current_buffer_path = get_current_buffer_path,
   toggle_diffpreview_alt = toggle_diffpreview_alt,
   open_current_buffer_with_gitsigns_diff = open_current_buffer_with_gitsigns_diff,
-  -- #region: local used
-  -- open_file_with_gitsigns_diff = open_file_with_gitsigns_diff,
-  -- fzfcompareref = fzfcompareref,
-  -- build_remote_url = build_remote_url,
-  -- open_file_in_remote = open_file_in_remote,
-  -- #endregion
+  open_file_with_gitsigns_diff = open_file_with_gitsigns_diff,
+  open_file_in_remote = open_file_in_remote,
 }
 
 -- Keymap configurations by plugin
@@ -433,13 +337,6 @@ M.keymaps = {
       end,
       desc = "Session FZF",
     },
-    {
-      "<leader>fs",
-      function()
-        require("config.telescope_pickers").fzf.pickers.session_picker()
-      end,
-      desc = "Session FZF",
-    },
   },
 
   -- Bufferline
@@ -592,6 +489,16 @@ M.keymaps = {
       desc = "Git Branches",
     },
     {
+      "<leader>gd",
+      function()
+        Snacks.picker.git_diff {
+          -- base = "main"
+          -- group = true
+        }
+      end,
+      desc = "Git Branches",
+    },
+    {
       "<leader>gO",
       function()
         Snacks.gitbrowse {
@@ -642,9 +549,7 @@ M.keymaps = {
         local defaultDir = vim.fn.expand "%:p:h"
         local curword = vim.fn.expand "<cfile>"
         local filepath = curword and pathUtil.getFullPathFromRelativePath(curword)
-        local notcurdir = (
-          curword == "" or (vim.fn.filereadable(filepath) == 0 and vim.fn.isdirectory(filepath) == 0)
-        )
+        local notcurdir = (curword == "" or (vim.fn.filereadable(filepath) == 0 and vim.fn.isdirectory(filepath) == 0))
         local cwddir = notcurdir and defaultDir or filepath
 
         if not notcurdir then
@@ -677,10 +582,17 @@ M.keymaps = {
       desc = "Neotree cursor/Snacks",
     },
     {
+      "<leader>fs",
+      function()
+        require("utils.snacks_pickers").session_picker()
+      end,
+      desc = "Session Snacks",
+    },
+    {
       "<C-e>",
       function()
-        local snacks_util = require("utils.snacks_terminal")
-        local picker_opts = snacks_util.get_initial_picker_state({
+        local snacks_util = require "utils.snacks_terminal"
+        local picker_opts = snacks_util.get_initial_picker_state {
           win = {
             input = {
               keys = {
@@ -688,7 +600,7 @@ M.keymaps = {
               },
             },
           },
-        })
+        }
         Snacks.picker.smart(picker_opts)
       end,
       desc = "Find Smart",
@@ -696,12 +608,30 @@ M.keymaps = {
     {
       "<leader><space>",
       function()
+        local snacks_actions = require "utils.snacks_actions"
         Snacks.picker.buffers {
-          win = {
-            input = {
-              keys = {},
-            },
-          },
+          -- win = {
+          --   input = {
+          --     keys = {
+          --       -- Buffer filtering actions (only for buffer picker)
+          --       ["<C-p><C-g>"] = {
+          --         snacks_actions.filter_buffers_outside_git_root,
+          --         mode = { "n", "i" },
+          --         desc = "Filter: buffers outside git root",
+          --       },
+          --       ["<C-b>"] = {
+          --         snacks_actions.filter_buffers_outside_git_root,
+          --         mode = { "n", "i" },
+          --         desc = "Filter: buffers outside git root",
+          --       },
+          --       ["<C-p><C-x>"] = {
+          --         snacks_actions.filter_buffers_nonexistent,
+          --         mode = { "n", "i" },
+          --         desc = "Filter: non-existent buffers",
+          --       },
+          --     },
+          --   },
+          -- },
         }
       end,
     },
@@ -787,8 +717,8 @@ M.keymaps = {
           -- live = true, -- didnot rellay filter (add hl)
         }
       end,
-        mode = "n",
-        desc = "Buffer Lines",
+      mode = "n",
+      desc = "Buffer Lines",
     },
     {
       "<leader>sb",
@@ -811,11 +741,9 @@ M.keymaps = {
       "<leader>sB",
       -- normal mode set in default snacks
       function()
-        Snacks.picker.grep_buffers(
-          require("utils.snacks_terminal").get_initial_picker_state({
-            search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines('visual_selection'),
-          })
-        )
+        Snacks.picker.grep_buffers(require("utils.snacks_terminal").get_initial_picker_state {
+          search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
+        })
       end,
       desc = "Grep Open Buffers Selected",
       mode = "x",
@@ -1023,22 +951,22 @@ M.snacks_action_factories = {
 }
 
 -- Snacks picker actions (stateless functions)
+-- Delegates to utils/snacks_actions.lua
 M.snacks_actions = {
-  -- Path copy actions (to be provided by snacks_terminal module)
   copy_path_relative_buffer = function(picker, item)
-    require("utils.snacks_terminal").copy_path_relative_buffer(picker, item)
+    require("utils.snacks_actions").copy_path_relative_buffer(picker, item)
   end,
   copy_path_relative_git = function(picker, item)
-    require("utils.snacks_terminal").copy_path_relative_git(picker, item)
+    require("utils.snacks_actions").copy_path_relative_git(picker, item)
   end,
   copy_path_relative_cwd = function(picker, item)
-    require("utils.snacks_terminal").copy_path_relative_cwd(picker, item)
+    require("utils.snacks_actions").copy_path_relative_cwd(picker, item)
   end,
   copy_path_absolute = function(picker, item)
-    require("utils.snacks_terminal").copy_path_absolute(picker, item)
+    require("utils.snacks_actions").copy_path_absolute(picker, item)
   end,
   copy_path_select = function(picker, item)
-    require("utils.snacks_terminal").copy_path_select(picker, item)
+    require("utils.snacks_actions").copy_path_select(picker, item)
   end,
 }
 
@@ -1077,7 +1005,8 @@ local snacks_picker_shared_keys = {
       ["Ye"] = { "copy_path_relative_git", mode = { "n" }, desc = "Copy Relative Path (Git)" },
       ["Yp"] = { "copy_path_relative_cwd", mode = { "n" }, desc = "Copy Relative Path (CWD)" },
       ["YP"] = { "copy_path_absolute", mode = { "n" }, desc = "Copy Absolute Path" },
-      ["YY"] = { "copy_path_select", mode = { "n" }, desc = "Copy Path (Select Format)" },
+      ["YY"] = { "copy_path_select", mode = { "n" }, desc = "Copy Path Select" },
+      ["<M-y>"] = { "copy_path_select", mode = { "n", "i" }, desc = "Copy Path Select" },
     },
   },
 }
@@ -1191,9 +1120,28 @@ local snacks_picker_group_keys = {
 -- MERGE PATTERN:
 --   Each picker merges keys in order: common_keys → copy_path_keys/files_keys/grep_keys → custom
 --   Later keys override earlier ones (vim.tbl_extend("force", ...))
-M.snacks_picker_keys_setting = {
+local source_n_snacks = {}
+M.sources_n_keys = {
   sources = {
     -- Files picker: common + copy path + file-specific actions
+    git_diff = {
+      win = {
+        input = {
+          keys = vim.tbl_extend("force", {}, {
+            ["<M-g>"] = { "gitdiff_toggle_group", mode = { "n", "i" }, desc = "Toggle group diff" },
+          }),
+        },
+      },
+    },
+    git_status = {
+      win = {
+        input = {
+          keys = vim.tbl_extend("force", {}, {
+            ["<M-g>"] = { "gitdiff_toggle_group", mode = { "n", "i" }, desc = "Toggle git diff" },
+          }),
+        },
+      },
+    },
     files = {
       win = {
         input = {
@@ -1201,16 +1149,49 @@ M.snacks_picker_keys_setting = {
         },
       },
     },
-
     -- Buffers picker: common + copy path + file-specific actions
     buffers = {
+      toggles = {
+        external = { icon = "🗑️", value = true },
+      },
+      -- https://deepwiki.com/search/suggest-way-to-achieve-the-act_13b29d19-06dc-4383-bc2b-5871786b2b2e?mode=deep
+      transform = function(item, ctx)
+        if not ctx.picker.opts.external then
+          return item
+        else
+          return not pathUtil.is_in_project_dir(item)
+        end
+      end,
+      actions = {
+        toggle_external = function(picker)
+          Snacks.debug("Toggling external buffers filter" .. tostring(not picker.opts.external))
+          picker.opts.external = not picker.opts.external
+          -- picker.list:set_target()
+          picker:find()
+          -- picker:refresh()
+        end,
+      },
       win = {
         input = {
-          keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.files_keys.input),
+          footer = "filter external A-e/b",
+          keys = vim.tbl_extend("force", snacks_picker_group_keys.files_keys.input, {
+            ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external buffers" },
+            ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external buffers" },
+          }),
         },
       },
     },
 
+    explorer = {
+      win = {
+        input = {
+          keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.files_keys.input),
+        },
+        list = {
+          keys = vim.tbl_extend("force", {}, snacks_picker_shared_keys.copy_path_keys.input),
+        },
+      },
+    },
     -- Git files picker: common + copy path keys
     git_files = {
       win = {
@@ -1274,13 +1255,17 @@ M.snacks_picker_keys_setting = {
     qflist = {
       win = {
         input = {
-          keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.grep_keys.input),
+          keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.grep_keys.input, {
+            ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove Quickfix Item" },
+          }),
         },
       },
     },
+    -- Common win settings used in opts.win in myEditor.lua
   },
 
-  -- Common win settings used in opts.win in myEditor.lua
+  -- ===================== common keymap sections ====================
+
   common = {
     list = {
       keys = {
@@ -1297,7 +1282,11 @@ M.snacks_picker_keys_setting = {
     },
     input = {
       keys = {
-        ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
+        ["<S-t>"] = { "trouble_open", mode = { "n" }, desc = "Smart open Touble" },
+        ["<C-t>"] = { "terminal", mode = { "i" }, desc = "Open terminal from picker" },
+        -- ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
+        ["<C-p>"] = false,
+        ["<C-n>"] = false,
         ["0"] = { "focus_preview", mode = { "n" }, desc = "Focus Preview" },
         ["<c-a>"] = { "sidekick_send", mode = { "n", "i" } },
         ["<a-a>"] = { "select_all", mode = { "n", "i" } },

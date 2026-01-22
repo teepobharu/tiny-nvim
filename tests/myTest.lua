@@ -308,6 +308,12 @@ function checkPyVenv()
   end
 end
 
+
+function checkEnv()
+  print(vim.env.EDITOR)
+  print(os.getenv("EDITOR"))
+end
+
 function getArrListConfig()
   local arrConfig = {
     { ssl = true,  proxy = "" },
@@ -940,7 +946,139 @@ function test_fold_method_debug()
   -- :setlocal foldexpr=nvim_treesitter#foldexpr()
 
   -- Sample fold plugin setup : https://github.com/kevinhwang91/nvim-ufo
+  
+  -- suggested to not auto close set high fold level
+-- set foldmethod=expr
+-- set foldexpr=nvim_treesitter#foldexpr()
+-- set foldlevel=99
+-- set foldlevelstart=99
+-- set foldclose=
+
 end
+
+
+function debug_fold_opts() local function getopt(name, scope)
+    local ok, val = pcall(vim.api.nvim_get_option_value, name, { scope = scope })
+    return ok and val or ("<unavailable: " .. name .. ">")
+  end
+
+  local function safe_require(mod)
+    local ok, modobj = pcall(require, mod)
+    if ok then return modobj end
+    return nil
+  end
+
+  local function get_recent_option_set(name, scope)
+    -- Emulate `:verbose set {name}?` by checking the current value and logging that we can't see the setter.
+    -- (Neovim doesn't expose the "last set by" programmatically.)
+    scope = "global"
+    scope = "local"
+    return {
+      value = vim.api.nvim_get_option_value(name, { scope = scope }),
+      note  = "Neovim API cannot show 'last set by' programmatically; use :verbose set " .. name .. "? in command-line for exact source."
+    }
+  end
+
+  local buf = vim.api.nvim_get_current_buf()
+  local win = vim.api.nvim_get_current_win()
+
+  -- Core fold/window options
+  local fold_opts = {
+    foldmethod      = getopt("foldmethod", "win"),
+    foldexpr        = getopt("foldexpr", "win"),
+    foldenable      = getopt("foldenable", "win"),
+    foldlevel       = getopt("foldlevel", "win"),
+    foldlevelstart  = getopt("foldlevelstart", "win"),
+    foldminlines    = getopt("foldminlines", "win"),
+    foldnestmax     = getopt("foldnestmax", "win"),
+    foldclose       = getopt("foldclose", "win"),
+    foldcolumn      = getopt("foldcolumn", "win"),
+    fillchars       = getopt("fillchars", "win"),
+  }
+
+  -- Global options that influence fold persistence
+  local persistence_opts = {
+    viewoptions     = getopt("viewoptions", "global"),
+    sessionoptions  = getopt("sessionoptions", "global"),
+  }
+
+  -- Treesitter signal
+  local ts_info = {}
+  do
+    local parsers = safe_require("nvim-treesitter.parsers")
+    if parsers then
+      local lang = parsers.get_buf_lang(buf)
+      local has_parser = pcall(parsers.has_parser, lang) and parsers.has_parser(lang)
+      ts_info = {
+        using_treesitter_foldexpr = fold_opts.foldexpr == "nvim_treesitter#foldexpr()",
+        buf_lang = lang,
+        has_parser = has_parser,
+      }
+    else
+      ts_info = {
+        using_treesitter_foldexpr = fold_opts.foldexpr == "nvim_treesitter#foldexpr()",
+        note = "nvim-treesitter not required/loaded",
+      }
+    end
+  end
+
+  -- Suspicious autocmds that often recalc/close folds
+  local suspicious_events = { "BufWritePost", "BufWinEnter", "TextChanged", "TextChangedI", "InsertLeave" }
+  local autocmds = {}
+  for _, evt in ipairs(suspicious_events) do
+    local list = vim.api.nvim_get_autocmds({ event = evt })
+    if #list > 0 then autocmds[evt] = list end
+  end
+
+  -- Check mappings that might affect folds (e.g., mapping zx/zX/zM/zR)
+  local function collect_maps(mode)
+    local maps = vim.api.nvim_get_keymap(mode)
+    local out = {}
+    for _, m in ipairs(maps or {}) do
+      if m.rhs and m.rhs:match("[zZ][xXMR]") then
+        table.insert(out, m)
+      end
+    end
+    return out
+  end
+  local maps = {
+    normal = collect_maps("n"),
+  }
+
+  -- Show what the user will want to eyeball with :verbose set ...?
+  local verbose_hints = {
+    foldmethod     = get_recent_option_set("foldmethod"),
+    foldexpr       = get_recent_option_set("foldexpr"),
+    foldlevel      = get_recent_option_set("foldlevel"),
+    foldlevelstart = get_recent_option_set("foldlevelstart"),
+    foldclose      = get_recent_option_set("foldclose"),
+    foldenable     = get_recent_option_set("foldenable"),
+  }
+
+
+  local report = {
+    buffer = buf,
+    window = win,
+    neovim_version = vim.version(),
+    fold_options = fold_opts,
+    persistence_options = persistence_opts,
+    treesitter = ts_info,
+    -- autocmds = autocmds,
+    mappings = maps,
+    verbose_hints = verbose_hints,
+    tips = {
+      "If folds collapse after edits, try: :set foldlevel=99 foldlevelstart=99 foldclose=",
+      "If using Treesitter folds: set foldmethod=expr | set foldexpr=nvim_treesitter#foldexpr()",
+      "Use :verbose set foldmethod? foldexpr? foldclose? foldlevel? foldlevelstart? to see who set them last.",
+    }
+  }
+
+  vim.notify(vim.inspect(report), vim.log.levels.INFO)
+
+end
+
+-- debug_fold_opts()
+-- test_fold_method_debug()
 
 function test_overseerbuilder()
   local choices = { "1. Build", "2. Test", "3. Deploy", "4. All", "5. " }
@@ -1103,39 +1241,173 @@ function codeCompanion_adapter_setup()
 
   -- echo "Testing OpenAI API access via Agoda proxy... $OPENAI_API_KEY"
   -- curl http://openai-proxy.agoda.is/v1/models -H "Authorization: Bearer $OPENAI_API_KEY" -- works fine
+  -- [Notes - do not remove] model issues
+  -- - model with claude litellm error
+  -- - model gemini-3-pro invalid model name
+  -- - model deepseek not work ,  deepseek-r1-* works 
+
+  -- require("codecompanion").inline({})
+  function fetch_model_helper(self, opts)
+    opts = opts or {}
+
+    -- Static fallback models (removed duplicate gpt-5.2)
+    local static_models = {
+      "gpt-5.2",
+      "gpt-4o",
+      "gpt-4o-mini",
+      "gpt-3.5-turbo",
+    }
+
+    -- Blacklist patterns (Lua pattern matching)
+    local blacklist = opts.blacklist or {
+      "agoda",      -- Contains "agoda"
+      "^claude%-",  -- Starts with "claude-"
+    }
+
+    -- Keyword filters (exclude models containing these substrings)
+    local keyword_filters = opts.keyword_filters or {
+      "ada:ft",
+      "4o",
+      "2024%-",
+      "image",
+      "audio",
+      "embedding",
+    }
+
+    -- Helper: Check if model matches any blacklist pattern
+    local function matches_blacklist(model_name)
+      for _, pattern in ipairs(blacklist) do
+        if model_name:match(pattern) then
+          return true
+        end
+      end
+      return false
+    end
+
+    -- Helper: Check if model contains any filtered keyword
+    local function contains_filtered_keyword(model_name)
+      for _, keyword in ipairs(keyword_filters) do
+        if model_name:find(keyword, 1, true) then
+          return true
+        end
+      end
+      return false
+    end
+
+    -- Helper: Filter models based on blacklist and keywords
+    local function filter_models(models)
+      local filtered = {}
+      for _, model in ipairs(models) do
+        if not matches_blacklist(model) and not contains_filtered_keyword(model) then
+          table.insert(filtered, model)
+        end
+      end
+      return filtered
+    end
+
+    -- For immediate display, return filtered static models
+    if opts.async ~= false then
+      print([==[choices#if opts.async:]==], vim.inspect(opts.async))
+      return filter_models(static_models)
+    end
+
+    -- For model selection UI, try to fetch dynamic models
+    local ok, openai_compatible = pcall(require, "codecompanion.adapters.http.openai_compatible")
+    print([==[choices openai_compatible:]==], vim.inspect(openai_compatible))
+
+    if ok then
+      local dynamic_models = openai_compatible.schema.model.choices(self, opts)
+      print([==[choices#if dynamic_models:]==], vim.inspect(dynamic_models))
+
+      if dynamic_models and #dynamic_models > 0 then
+        -- Create lookup set for dynamic models
+        local dynamic_set = {}
+        for _, model in ipairs(dynamic_models) do
+          dynamic_set[model] = true
+        end
+
+        -- Filter static models to only those present in dynamic models
+        local filtered_static = {}
+        for _, model in ipairs(static_models) do
+          if dynamic_set[model] then
+            table.insert(filtered_static, model)
+          end
+        end
+
+        -- Merge: prioritize filtered static models first, then remaining dynamic models
+        local merged = {}
+        local seen = {}
+
+        -- Add filtered static models first (for priority positioning)
+        for _, model in ipairs(filtered_static) do
+          merged[#merged + 1] = model
+          seen[model] = true
+        end
+
+        -- Add remaining dynamic models
+        for _, model in ipairs(dynamic_models) do
+          if not seen[model] then
+            merged[#merged + 1] = model
+            seen[model] = true
+          end
+        end
+
+        -- Apply blacklist and keyword filters to merged list
+        return filter_models(merged)
+      end
+    end
+
+    -- Fallback: return filtered static models
+    return filter_models(static_models)
+  end
 
   require("codecompanion").setup({  
   adapters = {  
+    opts = {  
+      proxy = "http://127.0.0.1:4141", -- mitmproxy  
+    },  
     http = {  
-      openai_agd = function()  
+      openai_agd2 = function()  
         return require("codecompanion.adapters").extend("openai", {  
           env = {  
             -- why error mssage has domain is domain=.api.openai.com
-            endpoint = "http://openai-proxy.agoda.is/v1",  
+            -- endpoint = "http://openai-proxy.agoda.is/v1/chat/completions",  
+                url = "AG_OPENAIPROXY",           -- Your base URL  
+                chat_url = "/v1/chat/completions", -- For chat requests  
+                models_endpoint = "/v1/models",    -- For model listing  
               -- Plain environment variable name (string): if the value is the name of an environment variable that has already been set (e.g. "HOME" or "GEMINI_API_KEY"), the plugin will read the value.
               -- https://github.com/olimorris/codecompanion.nvim/blob/ca87f13b/doc/configuration/adapters.md
             api_key = "OPENAI_API_KEY"
           },  
+          url = "${url}${chat_url}",  -- Full URL constructed from base and chat endpoint
+          -- url = "http://openai-proxy.agoda.is/v1/chat/completions",
+          -- url = "http://openai-proxy.agoda.is/v1/chat/completions",
           schema = {  
             model = {  
-              default = "gpt-5.2",  
-              choices = {  
-                "gpt-4.1",  
-                "gpt-4.1-mini",   
-                "gpt-5-mini",  
-                "gpt-5.1",  
-                "gpt-5.2",  
-                "gemini-3-pro-preview",  
-              },  
+              default = function(self, opts)
+                  return fetch_model_helper(self, opts)[1] or "gpt-5.2"
+              end,
+              -- default = "gpt-5.2",  
+              -- choices = {  
+              --   "gpt-4.1",  
+              --   "gpt-4.1-mini",   
+              --   "gpt-5-mini",  
+              --   "gpt-5.1",  
+              --   "gpt-5.2",  
+              --   "gemini-3-pro-preview",  
+              -- },  
+              choices = function(self, opts)
+                  return fetch_model_helper(self, opts)
+              end,  
             },  
-            temperature = {  
-              default = 0,  
-            },  
-            max_completion_tokens = {  
-              default = 4096,  
-            },  
+            -- temperature = {  
+            --   default = 0,  
+            -- },  
+            -- max_completion_tokens = {  
+            --   default = 4096,  
+            -- },  
           },  
-          timeout = 30000,  
+          timeout = 30000,
         })  
       end,  
     },  
@@ -1150,6 +1422,7 @@ function codeCompanion_adapter_setup()
   -- },  
 })
 end
+codeCompanion_adapter_setup()
 function codeCompanion_setup()
 
   require("codecompanion").setup({  
@@ -1205,7 +1478,7 @@ function PL_testPasteImage()
 end
 
 local function main()
-  pathsHelper()
+  -- pathsHelper()
   -- testGitrefFzfLua()
   -- snacks_qfgrep()
   -- snacks_qffiles()
