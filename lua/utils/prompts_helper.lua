@@ -239,13 +239,14 @@ function M.select_prompt(opts, callback)
   local function launch_snacks()
     Snacks.picker.pick {
       source = "select",
+      supports_live = true,
       title = "Select Prompt File (c-y copy)",
       items = items,
       format = function(item, picker)
         -- Use the pre-computed parent directory (last 2 parts)
         local parent = item.parent or ""
         return {
-          { "[" .. parent .. "] ", "Comment" },
+          { parent .. " ", "Comment" },
           { item.text or "", "SnacksPickerTitle" },
         }
       end,

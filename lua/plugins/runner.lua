@@ -107,6 +107,7 @@ return {
     ft = "hurl",
     dependencies = { "MunifTanjim/nui.nvim", "nvim-treesitter/nvim-treesitter" },
     opts = {
+      env_file = { 'vars.env' },
       mode = "split",
       auto_close = false,
       debug = false,

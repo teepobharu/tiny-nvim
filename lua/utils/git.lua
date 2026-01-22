@@ -62,6 +62,84 @@ function M.get_current_branch_or_hash()
   return branch
 end
 
+--- Get detailed metadata for a git reference
+--- Extracts branch name, full ref path, ref without prefix, and commit SHA
+--- @param ref_name string Reference name/alias (e.g., "origin/main", "HEAD~1", "abc123", "HEAD@{u}")
+--- @return GitRefMetadata|nil Metadata table or nil if invalid
+--- @class GitRefMetadata
+--- @field ref string Original reference input
+--- @field fullref string|nil Full reference path (e.g., "refs/heads/main", "refs/remotes/origin/main")
+--- @field branch string|nil Clean branch name without remote prefix (e.g., "main" from "refs/remotes/origin/main")
+--- @field sha string|nil Full commit SHA (40 characters)
+--- @field valid boolean Whether the ref exists
+--- @field resolved_ref string|nil The resolved reference (branch name or SHA, whichever is preferred)
+--- @field resolve_ref_type "branch"|"sha"|"unknown" Type of resolved reference
+function M.get_ref_metadata(ref_name)
+  if not ref_name or ref_name == "" then
+    return nil
+  end
+
+  local metadata = {
+    ref = ref_name,
+    fullref = nil,
+    branch = nil,
+    sha = nil,
+    valid = false,
+    resolved_ref = nil,
+    resolve_ref_type = "unknown",
+  }
+
+  -- Verify ref exists
+  vim.fn.systemlist({ "git", "rev-parse", "--verify", ref_name })
+  if vim.v.shell_error ~= 0 then
+    return metadata
+  end
+  metadata.valid = true
+
+  -- Get full ref name (e.g., refs/heads/main, refs/remotes/origin/main)
+  local full_ref = vim.fn.systemlist({ "git", "rev-parse", "--symbolic-full-name", ref_name })[1]
+  if full_ref and full_ref ~= "" then
+    metadata.fullref = full_ref
+
+    -- Extract clean branch name without refs/ prefix and remote name
+    local branch_name = ""
+    if full_ref:find("^refs/heads/") then
+      -- Local branch: refs/heads/main -> main
+      branch_name = full_ref:sub(12)
+    elseif full_ref:find("^refs/remotes/") then
+      -- Remote branch: refs/remotes/origin/main -> main
+      branch_name = full_ref:gsub("^refs/remotes/[^/]+/", "")
+    else
+      -- Other cases: detached HEAD, tags, etc.
+      -- Try using --abbrev-ref to get a readable name
+      local abbrev_ref = vim.fn.systemlist({ "git", "rev-parse", "--abbrev-ref", ref_name })[1]
+      if abbrev_ref and abbrev_ref ~= "" and vim.v.shell_error == 0 then
+        branch_name = abbrev_ref
+      end
+    end
+    metadata.branch = branch_name
+  end
+
+  -- Get commit SHA
+  local sha = vim.fn.systemlist({ "git", "rev-parse", ref_name })[1]
+  if sha and sha ~= "" and vim.v.shell_error == 0 then
+    metadata.sha = sha
+  end
+
+  -- Resolve ref: Prefer branch name if available, otherwise use SHA
+  if metadata.valid then
+    if metadata.branch and metadata.branch ~= "" then
+      metadata.resolved_ref = metadata.branch
+      metadata.resolve_ref_type = "branch"
+    elseif metadata.sha and metadata.sha ~= "" then
+      metadata.resolved_ref = metadata.sha
+      metadata.resolve_ref_type = "sha"
+    end
+  end
+
+  return metadata
+end
+
 ---@param ref string | nil -- If nil, use main branch
 ---@param mode "file" | "commit" | "branch"
 ---@param file string|nil
@@ -74,7 +152,12 @@ function M.get_branch_url(ref, mode, file)
   local line_number = vim.fn.line(".")
 
   local gitroot = pathUtil.get_git_root()
-  local remote_name = ref:match("([^/]+)")
+  if not gitroot then
+    vim.notify("Not in a git repository", vim.log.levels.WARN)
+    return ""
+  end
+
+  local remote_name = ref:match("([^/]+)") or "origin"
   local remote_path = M.get_remote_path(remote_name)
   local ref_no_remote = ref:gsub("^[^/]+/", "") -- remove remote
   local gitrootescape = vim.pesc(gitroot)
@@ -193,5 +276,111 @@ function M.open_mr(branch)
     vim.notify("Unsupported git hosting provider: " .. remote_path, vim.log.levels.WARN)
   end
 end
+
+--#region Git Helper Functions for Pickers
+
+--- Helper function to open file diff with gitsigns
+--- @param file_path string File path (relative or absolute)
+--- @param ref string Git reference to compare with
+function M.open_file_with_gitsigns_diff(file_path, ref)
+  if not pcall(require, "gitsigns") then
+    vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
+    return
+  end
+
+  local git_root = Snacks.git.get_root()
+
+  if vim.fn.filereadable(file_path) == 0 then
+    file_path = git_root .. "/" .. file_path
+  end
+
+  vim.cmd("tabnew " .. vim.fn.fnameescape(file_path))
+
+  require("gitsigns").diffthis(ref, {
+    vertical = true,
+  })
+end
+
+--- Helper function to open current buffer in new tab with gitsigns diff
+--- @param ref string Git reference to compare with
+function M.open_current_buffer_with_gitsigns_diff(ref)
+  if not pcall(require, "gitsigns") then
+    vim.notify("Gitsigns is not available", vim.log.levels.ERROR)
+    return
+  end
+
+  local current_file = vim.api.nvim_buf_get_name(0)
+
+  if current_file == "" then
+    vim.notify("No file in current buffer", vim.log.levels.WARN)
+    return
+  end
+
+  vim.cmd("tabnew " .. vim.fn.fnameescape(current_file))
+
+  require("gitsigns").diffthis(ref, {
+    vertical = true,
+  })
+end
+
+--- Helper function to build remote URL for a file at a specific ref
+--- @param file_path string File path (relative or absolute)
+--- @param ref string Git reference (branch, tag, or commit)
+--- @return string|nil Remote URL or nil if error
+function M.build_remote_url(file_path, ref)
+  local git_root = Snacks.git.get_root()
+  if not git_root then
+    return nil
+  end
+
+  if vim.fn.filereadable(file_path) == 0 then
+    file_path = git_root .. "/" .. file_path
+  end
+
+  local rel_path = file_path:gsub("^" .. vim.pesc(git_root) .. "/?", "")
+  local remote_path = M.get_remote_path "origin"
+
+  if not remote_path or remote_path == "" then
+    return nil
+  end
+
+  local url
+  if remote_path:match "gitlab" then
+    url = string.format("https://%s/-/blob/%s/%s", remote_path, ref, rel_path)
+  else
+    url = string.format("https://%s/blob/%s/%s", remote_path, ref, rel_path)
+  end
+
+  return url
+end
+
+--- Helper function to open file in remote at specific ref
+--- @param file_path string File path (relative or absolute)
+--- @param ref string Git reference to open at
+function M.open_file_in_remote(file_path, ref)
+  local url = M.build_remote_url(file_path, ref)
+
+  if not url then
+    vim.notify("Failed to build remote URL", vim.log.levels.ERROR)
+    return
+  end
+
+  local filename = vim.fn.fnamemodify(file_path, ":t")
+
+  vim.fn.jobstart({ "open", url }, { detach = true })
+  vim.notify(string.format("Opening %s @ %s in browser", filename, ref), vim.log.levels.INFO)
+end
+
+--- Get current git branch name
+--- @return string Branch name
+function M.get_current_git_branch()
+  local branch = vim.fn.system("git rev-parse --abbrev-ref HEAD"):gsub("\n", "")
+  if vim.v.shell_error ~= 0 or branch == "" then
+    return "HEAD"
+  end
+  return branch
+end
+
+--#endregion Git Helper Functions for Pickers
 
 return M
