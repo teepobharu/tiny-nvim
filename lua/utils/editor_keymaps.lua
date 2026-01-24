@@ -244,7 +244,7 @@ M.keymaps = {
       {
         companion_prefix .. "q",
         "<cmd>CodeCompanionChat<cr>",
-        desc = "Code Companion - Chat",
+        desc = "Code Companion - Ask New Add selected",
         mode = "v",
       },
       {
@@ -254,8 +254,15 @@ M.keymaps = {
       },
       {
         companion_prefix .. "Q",
+        ":CodeCompanion",
+        desc = "Code Companion - Type chat",
+        mode = "v",
+      },
+      {
+        companion_prefix .. "i",
         "<cmd>'<,'>CodeCompanion<cr>",
-        desc = "Code Companion - Quick chat",
+        ":CodeCompanion",
+        desc = "Code Companion - Quick inline ui",
         mode = "v",
       },
     }
@@ -968,6 +975,9 @@ M.snacks_actions = {
   copy_path_select = function(picker, item)
     require("utils.snacks_actions").copy_path_select(picker, item)
   end,
+  toggle_external = function(picker)
+    require("utils.snacks_actions").toggle_external(picker)
+  end,
 }
 
 -- Common keymap groups for snacks pickers
@@ -975,7 +985,7 @@ M.snacks_actions = {
 --
 -- KEY ORGANIZATION:
 -- - common_keys: Universal keys used across all/most pickers (e.g., <C-o> for open_file_remote)
--- - copy_path_keys: Path copy actions (Yy, Ye, YP, Yp, YY) for file/grep pickers
+-- - copy_path_keys: Path copy actions (Yy, Yg, YP, Yp, YY) for file/grep pickers
 -- - files_keys: File-specific actions (toggle, cycle cwd) for files/buffers
 -- - grep_keys: Grep-specific actions (<C-x>, <A-s>) for grep/qflist pickers
 -- - git_file_keys*: Git-specific actions for git pickers (not used in declarative sources)
@@ -996,13 +1006,15 @@ local snacks_picker_shared_keys = {
   common_keys = {
     input = {
       ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
+      ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
+      ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
     },
   },
   -- Copy path actions - applies to file/grep/explorer pickers
   copy_path_keys = {
     input = {
       ["Yy"] = { "copy_path_relative_buffer", mode = { "n" }, desc = "Copy Relative Path (Buffer)" },
-      ["Ye"] = { "copy_path_relative_git", mode = { "n" }, desc = "Copy Relative Path (Git)" },
+      ["Yg"] = { "copy_path_relative_git", mode = { "n" }, desc = "Copy Relative Path (Git)" },
       ["Yp"] = { "copy_path_relative_cwd", mode = { "n" }, desc = "Copy Relative Path (CWD)" },
       ["YP"] = { "copy_path_absolute", mode = { "n" }, desc = "Copy Absolute Path" },
       ["YY"] = { "copy_path_select", mode = { "n" }, desc = "Copy Path Select" },
@@ -1050,11 +1062,15 @@ local snacks_picker_group_keys = {
       ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at ref" },
       ["<C-O>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
+      ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+      ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
     },
     list = {
       ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at ref" },
       ["<C-O>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
+      ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+      ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
     },
   },
 
@@ -1064,11 +1080,15 @@ local snacks_picker_group_keys = {
       ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at upstream ref" },
       ["<C-2>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
+      ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+      ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
     },
     list = {
       ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open remote compared ref" },
       ["<C-1>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open remote at HEAD" },
+      ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+      ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
     },
   },
 
@@ -1089,6 +1109,8 @@ local snacks_picker_group_keys = {
         ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
         ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at selected ref" },
         ["<M-o>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
+        ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+        ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
       },
       list = {
         ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
@@ -1103,6 +1125,8 @@ local snacks_picker_group_keys = {
           mode = { "n", "i" },
           desc = "Back to ref selection",
         },
+        ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+        ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
       },
     }
   end,
@@ -1151,24 +1175,47 @@ M.sources_n_keys = {
     },
     -- Buffers picker: common + copy path + file-specific actions
     buffers = {
-      toggles = {
-        external = { icon = "🗑️", value = true },
-      },
       -- https://deepwiki.com/search/suggest-way-to-achieve-the-act_13b29d19-06dc-4383-bc2b-5871786b2b2e?mode=deep
       transform = function(item, ctx)
-        if not ctx.picker.opts.external then
-          return item
-        else
-          return not pathUtil.is_in_project_dir(item)
+        local show_external = ctx and ctx.picker and ctx.picker.opts.external
+        local missing = false
+        local path = nil
+        if show_external then
+          local ok, util = pcall(function()
+            return require("snacks").picker.util
+          end)
+          if ok and util then
+            path = util.path(item)
+          end
+          if path and path ~= "" then
+            missing = vim.fn.filereadable(path) == 0 and vim.fn.isdirectory(path) == 0
+          end
         end
+
+        if vim.g.snacks_debug_external_filter then
+          print(
+            string.format(
+              "external_filter[buffers]: show_external=%s missing=%s file=%s",
+              tostring(show_external),
+              tostring(missing),
+              tostring(item and (item.file or item.text) or "nil")
+            )
+          )
+        end
+
+        if not show_external then
+          return item
+        end
+
+        if missing then
+          return true
+        end
+
+        return not pathUtil.is_in_project_dir(item)
       end,
       actions = {
         toggle_external = function(picker)
-          Snacks.debug("Toggling external buffers filter" .. tostring(not picker.opts.external))
-          picker.opts.external = not picker.opts.external
-          -- picker.list:set_target()
-          picker:find()
-          -- picker:refresh()
+          require("utils.snacks_actions").toggle_external(picker)
         end,
       },
       win = {
@@ -1277,11 +1324,14 @@ M.sources_n_keys = {
         ["<c-q>"] = "cancel",
         -- ["<M-w>"] = default  is cycle_win but this will cycle back to input that can alreay be done with / or i
         ["<M-w>"] = "focus_preview",
+        ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
+        ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
         ["/"] = false, -- alow search to apply on list
       },
     },
     input = {
       keys = {
+        ["<C-y>"] = { "yank", mode = { "n", "i" } },
         ["<S-t>"] = { "trouble_open", mode = { "n" }, desc = "Smart open Touble" },
         ["<C-t>"] = { "terminal", mode = { "i" }, desc = "Open terminal from picker" },
         -- ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
@@ -1292,6 +1342,8 @@ M.sources_n_keys = {
         ["<a-a>"] = { "select_all", mode = { "n", "i" } },
         ["<a-q>"] = { "qflist", mode = { "n", "i" } },
         ["<c-q>"] = "cancel",
+        ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
+        ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
       },
     },
     preview = {
