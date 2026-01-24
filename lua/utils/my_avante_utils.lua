@@ -55,6 +55,7 @@ function M.get_agoda_providers()
       model_names = {
         "gpt-4.1",
         "gpt-4.1-mini",
+        "grok-code-fast-1",
         "gpt-5-mini",
         "gpt-5.1",
         "gpt-5.2",

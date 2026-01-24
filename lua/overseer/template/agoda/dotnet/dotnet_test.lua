@@ -157,7 +157,15 @@ return {
   name = "Run DotNet Test",
   description = "Run dotnet test on current C# test file",
   builder = function(params)
+    -- v2: Validation moved from condition callback
     local filepath = vim.fn.expand("%:p")
+    local filename = vim.fn.expand("%:t")
+    local is_test_file = filename:match("Tests?%.cs$")
+    local is_in_test_dir = filepath:match("UnitTests") or filepath:match("IntegrationTests") or filepath:match("Tests/")
+
+    if not (is_test_file or is_in_test_dir) then
+      error("This template only works for C# test files (ends with Test.cs/Tests.cs or in test directory). Current file: " .. filename)
+    end
     local content = get_file_content(filepath)
     local namespace = params.namespace or get_namespace(filepath, content)
     local class_name = params.class_name or get_class_name(filepath, content)
@@ -307,21 +315,8 @@ Options:
     { "on_complete_notify", system = "always" },
     "default",
   },
-  priority = 5,
   condition = {
-    filetypes = { "cs" },
-    callback = function(task)
-      -- Only activate for C# test files
-      local filepath = vim.fn.expand("%:p")
-      local filename = vim.fn.expand("%:t")
-
-      -- Check if file is a test file (ends with Test.cs or Tests.cs)
-      local isTestFile = filename:match("Tests?%.cs$")
-
-      -- Check if file is in a test project directory
-      local isInTestDir = filepath:match("UnitTests") or filepath:match("IntegrationTests") or filepath:match("Tests/")
-
-      return isTestFile or isInTestDir
-    end,
+    filetype = { "cs" },
+    -- Note: v2 removed condition callbacks - validation moved to builder
   },
 }

@@ -2,8 +2,8 @@
 
 ## TODO
 
-alias not work AM
-snacks provider broke ?
+Check default model change
+Inline model select and ask
 
 ## TRIED
 

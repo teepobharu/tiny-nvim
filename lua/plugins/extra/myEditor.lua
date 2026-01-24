@@ -1,11 +1,8 @@
 local pathUtil = require "utils.mypath"
-local gitUtil = require "utils.git"
 local keyutil = require "utils.keyutil"
 local editor_keymaps = require "utils.editor_keymaps"
-local avante_utils = require "utils.my_avante_utils"
 
 local isSnackEnabled = keyutil.isSnackEnabled
-local open_remote = gitUtil.open_remote
 
 ---Run the first available formatter followed by more formatters
 ---@param bufnr integer
@@ -49,57 +46,45 @@ return {
   },
   {
     "stevearc/overseer.nvim",
+    version = "^2.1.0",
     keys = editor_keymaps.keymaps.overseer,
     opts = {
       -- default config: https://github.com/stevearc/overseer.nvim/blob/a2734d90c514eea27c4759c9f502adbcdfbce485/lua/overseer/config.lua#L4
-      templates = {
-        "builtin",
-        "user.run_script",
-        "vscode_global.vscode_global",
-        "common_shell.grep_async",
-        "agoda.android_client.and_build",
-        "agoda.mmb.mmb_pick",
-        "agoda.mmb.mmb_tests",
-        "agoda.tripviewbff.tripviewbff_pick",
-        "agoda.dotnet.dotnet_test",
-        "agoda.android_client.and_test",
-        "agoda.android_client.and_pick",
+      -- seems like already included by default if put inside lua/overseer/template
+      template_dirs = { },
+      disable_template_modules = {
+        -- works
+        "overseer.template.common_shell.grep_async",           -- Exclude specific module  
+        -- not work
+        -- "common_shell.grep_async",           -- Exclude specific module  
       },
       strategy = {
         "terminal",
-        -- "toggleterm", -- https://github.com/stevearc/overseer.nvim/blob/master/doc/third_party.md#toggleterm
         use_shell = true,
       },
+      -- https://deepwiki.com/search/can-params-return-object-value_cf6755d4-5426-473d-9d19-226d55ef99b7?mode=fast
       task_list = {
-        bindings = {
-          ["<C-q>"] = ":q<CR>",
-          ["<C-s>"] = ":OverseerQuickAction<CR>",
-          ["S"] = ":OverseerSaveBundle<CR>",
-          ["T"] = ":OverseerTaskAction<CR>",
-          ["Q"] = ":OverseerDeleteBundle<CR>",
-          ["C"] = ":OverseerClearCache<CR>",
-          ["I"] = ":OverseerInfo<CR>",
-          ["B"] = ":OverseerLoadBundle<CR>",
-
-          ["<S-Up>"] = "ScrollOutputUp",
-          ["<S-Down>"] = "ScrollOutputDown",
-          ["<A-q>"] = "OpenQuickFix",
-          -- ["<C-l>"] = "",
-          -- ["<C-h>"] = "",
+        keymaps = {
+          ["<A-q>"] = { "keymap.run_action", opts = { action = "open output in quickfix" }, desc = "Open task output in the quickfix" },
+          ["<C-q>"] = { "<CMD>close<CR>", desc = "Close task list" },
+          ["a"] = { "keymap.run_action", opts = { action = "edit" }, desc = "Edit task" },
+          -- since ^ works no mapping not work ?
+          ["<C-s>"] = { "keymap.run_action", opts = { action = "stop" }, desc = "Stop task" },
+          ["<C-c>"] = { "keymap.run_action", opts = { action = "stop" }, desc = "Stop task" },
+          ["<C-r>"] = { "keymap.run_action", opts = { action = "restart" }, desc = "Restart task" },
+          ["<C-x>"] = { "keymap.run_action", opts = { action = "dispose" }, desc = "Dispose task" },
+          ["<S-Up>"] = "keymap.scroll_output_up",
+          ["<S-Down>"] = "keymap.scroll_output_down",
+          ["<C-w>"] = { "keymap.run_action", opts = { action = "watch" }, desc = "Watch file for changes" },
+          ["<C-p>"] = { "keymap.run_action", opts = { action = "unwatch" }, desc = "Stop watching file" },
+          -- H use to switch buffer ?
+          ["H"] = "keymap.prev_task",
+          ["J"] = "keymap.prev_task",
+          ["L"] = "keymap.next_task",
           ["<C-l>"] = false,
           ["<C-h>"] = false,
-          -- c-j and c-k remove bind
           ["<C-j>"] = false,
           ["<C-k>"] = false,
-          ["J"] = "DecreaseDetail",
-          ["L"] = "IncreaseDetail",
-          -- ["K"] = "IncreaseAllDetail",
-          -- ["L"] = "",
-          -- ["H"] = "",
-          -- ["zk"] = "DecreaseDetail",
-          -- ["zj"] = "IncreaseDetail",
-          -- ["zl"] = "IncreaseAllDetail",
-          -- ["zh"] = "DecreaseAllDetail",
         },
       },
     },
@@ -236,7 +221,9 @@ return {
                     "gemini-2.5-flash",
                     "gemini-2.5-pro",
                     --to test --
+                    "gemini-3-flash-preview",
                     --not work below
+                    -- "gemini-3-flash",
                     -- "deepseek"
                     -- "qwq-32b", -- fallback haiku ??
                     -- "claude-haiku-4-5",

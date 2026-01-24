@@ -22,17 +22,17 @@ return {
     return get_tasks_file(vim.fn.getcwd(), opts.dir)
   end,
   condition = {
-    callback = function(opts)
-      -- if not vs_util.get_tasks_file(vim.fn.getcwd(), opts.dir) then
-      if not get_tasks_file(vim.fn.getcwd(), opts.dir) then
-        return false, "No .vscode/tasks.json file found"
-      end
-      return true
-    end,
+    -- Note: v2 removed condition callbacks - validation moved to generator
   },
   generator = function(opts, cb)
     -- local tasks_file = vs_util.get_tasks_file(vim.fn.getcwd(), opts.dir)
     local tasks_file = get_tasks_file(vim.fn.getcwd(), opts.dir)
+
+    -- v2: Validation moved from condition callback to generator
+    if not tasks_file then
+      cb({})
+      return "No .vscode/tasks.json file found"
+    end
     local content = vs_util.load_tasks_file(assert(tasks_file))
     local global_defaults = {}
     for k, v in pairs(content) do

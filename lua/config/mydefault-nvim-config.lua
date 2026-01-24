@@ -13,7 +13,7 @@ vim.g.enable_extra_plugins = {
   "fold-preview",
   "myToggleterm",
   "myEditor",
-  "snacks",
+  "snacks", -- error when removed - error when no extra dir so create dummy {}
 }
 
 vim.g.lazydev_enabled = false -- uncomment this to load all lua dependencies (get access to vim object)

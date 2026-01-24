@@ -1,11 +1,23 @@
-# Pickers
+# TASKS
+## WIP
+2-codex
+- git picker base
+- git picker external
+
+- rm action from files/qflist picker (with key d in normal mode only same key with explorer - should support multiple files selected possible to use trash system ?)
+
+---
+cwd cronos dedup and get the 
+
+
+## Pickers
 
 - session items -> finder style so find will refresh item
 - buffer refresh toggle
   https://deepwiki.com/search/suggest-way-to-achieve-the-act_13b29d19-06dc-4383-bc2b-5871786b2b2e
   /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/utils/editor_keymaps.lua
 
-# Mini
+## Mini
 
 - copy path
 
@@ -37,11 +49,11 @@ preferences: not want double picker
 
 - currently after remove it not refresh record
 
-# Explorer item debug info 20260107
+## Explorer item debug info 20260107
 
-## TODO
+### TODO
 
-## DONE
+# DONE
 
 Enhanced path copy picker (20260120)
 
