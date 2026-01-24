@@ -7,6 +7,25 @@ local M = {}
 local pathUtil = require "utils.mypath"
 local gitUtil = require "utils.git"
 
+--- Toggle picker external filter flag and re-run finder
+--- @param picker table Snacks picker instance
+function M.toggle_external(picker)
+  if not picker then
+    return
+  end
+  if vim.g.snacks_debug_external_filter then
+    print(
+      string.format(
+        "toggle_external: source=%s -> %s",
+        picker.opts and picker.opts.source or "unknown",
+        tostring(not picker.opts.external)
+      )
+    )
+  end
+  picker.opts.external = not picker.opts.external
+  picker:find()
+end
+
 --#region Git Helper Functions for Pickers
 
 --- Helper function to open file diff with gitsigns

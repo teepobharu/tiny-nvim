@@ -19,6 +19,15 @@ debug_fold
 
 ## Code
 
+- gF goto file with git-style line references and smart path resolution
+  - Support git/IDE line references: `file#L2`, `file#L2-L3`, `file#L2C3`
+  - Path priority: no `./` or `../` → git root first; with prefix → buffer cwd first
+  - Refactored to `lua/utils/file_reference.lua` with reusable utilities:
+    - `parse_file_reference()` - Parse multiple file reference formats
+    - `resolve_file_path()` - Smart path resolution with priority logic
+    - `jump_to_anchor()` - Find and jump to markdown headings
+  - Simplified `goto_file_line()` in `lua/config/mykeymaps.lua` (now ~80 lines instead of ~250)
+
 - support run lua code and send snacks lines in clipboard when not in v mode and current line empty in local_leader+r/s
   - Implementation: `getSelectedLines()` utility function automatically uses clipboard when current line is empty (lua/utils/input.lua:73)
   - `<localleader>r`: Execute lua code (clipboard fallback when line empty) (lua/utils/editor_keymaps.lua:530)

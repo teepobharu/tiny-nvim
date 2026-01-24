@@ -779,9 +779,9 @@ local function execute_selected_lua(showOutput, lastselected, clipenable)
   end
 end
 
-keymap({'n', 'v'}, '<localleader>rl', function() execute_selected_lua(true) end, { desc = "Execute selected Lua code (show output)" })
-keymap({'n', 'v'}, '<localleader>rL', function() execute_selected_lua(false) end, { desc = "Execute selected Lua code (no output)" })
-keymap('n', '<localleader>rT', function() execute_selected_lua(false, true) end, { desc = "Execute last selected Lua code (show output)" })
+keymap({"n", "v"}, "<localleader>rl", function() execute_selected_lua(true) end, { desc = "Execute selected Lua code (show output)" })
+keymap({"n", "v"}, "<localleader>rL", function() execute_selected_lua(false) end, { desc = "Execute selected Lua code (no output)" })
+keymap("n", "<localleader>rT", function() execute_selected_lua(false, true) end, { desc = "Execute last selected Lua code (show output)" })
 
 
 keymap("n", "<localleader>rps", function()
@@ -992,7 +992,39 @@ keymap({ "n", "v" }, "gGd", function()
   end
 end, { desc = "Open NeoTree dir - select/cursor/file" })
 
+-- ============================================================================
+-- gF Test Samples (use gF on these paths to test)
+-- ============================================================================
+-- Priority: no ./ or ../ prefix → git root first, then buffer cwd
+--           with ./ or ../ prefix → buffer cwd first, then git root
+--
+-- IDE-style (colon separator):
+--   lua/config/mykeymaps.lua:100           (git root priority)
+--   ./lua/config/mykeymaps.lua:1000:5      (buffer cwd priority)
+--   ./lua/plugins/init.lua:1               (buffer cwd priority)
+--   snippets/global.json:1                 (git root priority)
+--
+-- Git-style (hash + L prefix):
+--   lua/config/mykeymaps.lua#L100
+--   lua/config/mykeymaps.lua#L100C5
+--   lua/config/mykeymaps.lua#L100-L110
+--   lua/config/mykeymaps.lua#L98C10-L110C10
+--
+-- README anchor style:
+--   docs/misc_nvim.md#done
+--   docs/misc_nvim.md#code
+--
+-- Relative paths (buffer cwd priority):
+--   ./snippets/global.json
+--   ../snippets/global.json
+--
+-- file:// URI scheme:
+--   file:///tmp/test.lua:10:5
+-- ============================================================================
+
 local function goto_file_line(open_in_previous_buffer)
+  local fileRef = require("utils.file_reference")
+
   -- Extract file path and line number
   local fileline = vim.fn.expand("<cfile>")
   local current_line = vim.api.nvim_get_current_line()
@@ -1011,98 +1043,30 @@ local function goto_file_line(open_in_previous_buffer)
   -- Use the extended version if found, otherwise use the basic fileline
   local target = fileline_incurrentline_untilspace or fileline
 
-  -- Initialize variables
-  local path, line, col
-
   -- Handle visual mode selection
   if inputUtil.is_visual_mode() then
     target = inputUtil.get_selected_or_cursor_word()
     -- Clean multiline selections to remove newlines and extra spaces
     target = clean_selected_text(target)
-    -- __AUTO_GENERATED_PRINT_VAR_START__
-    print([==[goto_file_line#if clean_selected_text(target):]==], vim.inspect(clean_selected_text(target))) -- __AUTO_GENERATED_PRINT_VAR_END__
   end
 
   -- Normalize target for common markdown link patterns like [text](file.md#anchor)
-  -- Attempt to extract a file:// URI or a markdown link target
   local md_link = target:match("%b()")
   if md_link then
-    -- remove surrounding parentheses
     local inner = md_link:sub(2, -2)
     if inner and inner ~= "" then
       target = inner
     end
   end
 
-  -- Handle file:// URI scheme
-  if target:match("^file://") then
-    -- Extract from file:// URI: file:///path/to/file:line:col
-    -- Remove the file:// prefix first
-    -- Note: file:/// means absolute path, file:// means relative path
-    local without_prefix = target:match("^file://(.+)$")
-
-    if without_prefix then
-      -- Now apply the same pattern matching as regular paths
-      -- First, try to match path:line:col pattern
-      local test_path, test_line, test_col = without_prefix:match("^(.+):(%d+):(%d+)$")
-      if test_path then
-        path, line, col = test_path, test_line, test_col
-      else
-        -- Try to match path:line pattern
-        test_path, test_line = without_prefix:match("^(.+):(%d+)$")
-        if test_path then
-          path, line, col = test_path, test_line, ""
-        else
-          -- No line/col info, just the path
-          path = without_prefix
-          line, col = "", ""
-        end
-      end
-    end
-  else
-    -- Regular file path with optional :line:col
-    -- Strategy: Find the last occurrence of :number or :number:number pattern
-    -- First, try to match path:line:col pattern
-    local test_path, test_line, test_col = target:match("^(.+):(%d+):(%d+)$")
-    if test_path then
-      path, line, col = test_path, test_line, test_col
-    else
-      -- Try to match path:line pattern
-      test_path, test_line = target:match("^(.+):(%d+)$")
-      if test_path then
-        path, line, col = test_path, test_line, ""
-      else
-        -- No line/col info, just the path
-        path = target
-        line, col = "", ""
-      end
-    end
-  end
-
-  -- Support simple README-style anchors: path.md#anchor
-  local anchor = nil
-  if path and path:match("#") then
-    local before, after = path:match("^(.-)#(.*)$")
-    if before and after then
-      path = before
-      anchor = after
-    end
-  end
+  -- Parse file reference (handles IDE style, git style, anchors, URIs)
+  local parsed = fileRef.parse_file_reference(target)
+  local path, line, col, anchor = parsed.path, parsed.line, parsed.col, parsed.anchor
 
   -- Validate and open the file
   if path and path ~= "" then
-    -- Resolve relative paths relative to the current buffer's directory or terminal cwd
-    local resolved_path = path
-    if not path:match("^[/~]") and not path:match("^%w+://") then
-      -- Path is relative (doesn't start with /, ~, or a URI scheme)
-      -- Get the appropriate base directory (handles both terminal and normal buffers)
-      local base_dir = myPathUtil.get_buffer_cwd()
-
-      -- Resolve the relative path
-      if base_dir then
-        resolved_path = vim.fn.fnamemodify(base_dir .. "/" .. path, ":p")
-      end
-    end
+    -- Resolve path with smart priority logic
+    local resolved_path = fileRef.resolve_file_path(path)
 
     -- Open the file
     if open_in_previous_buffer then
@@ -1114,64 +1078,27 @@ local function goto_file_line(open_in_previous_buffer)
       end
     end
 
-  -- Extra requirements Do not remove the notes:
-  -- ie. current file /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/config/mykeymaps.lua
-  -- when use gF on this text in above open files ../../snippets/global.json
-  -- will go to /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/snippets/global.json
-    -- check if dir exists
+    -- Open the file
     vim.cmd("edit " .. vim.fn.fnameescape(resolved_path))
 
     local is_file_readable = vim.fn.filereadable(resolved_path) == 1
     if not is_file_readable then
-      vim.notify("File not found use gf: " .. resolved_path, vim.log.levels.WARN)
+      vim.notify("File not found use gf: " .. resolved_path, vim.log.levels.INFO)
       vim.cmd("normal! gf")
-    end
-
-
-    -- If an anchor was provided (e.g. file.md#section-name), attempt a simple heading search
-    if anchor and anchor ~= "" then
-      -- Normalize anchor for loose matching
-      local norm_anchor = anchor:gsub("[-_]+", " "):gsub("^#", ""):lower()
-      -- Get all buffer lines and search for Markdown headings
-      local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
-      local found_line = nil
-      for i, l in ipairs(lines) do
-        -- Match Markdown heading like: # Heading, ## Subheading
-        local heading = l:match("^%s*#+%s*(.+)$")
-        if heading then
-          local norm_heading = heading:gsub("%s+", " "):lower()
-          -- Simple contains match (case-insensitive, normalized)
-          if norm_heading:find(norm_anchor, 1, true) or norm_anchor:find(norm_heading, 1, true) then
-            found_line = i
-            break
-          end
-        end
-      end
-
-      -- If we didn't find a heading, fallback to searching the file for the anchor substring
-      if not found_line then
-        for i, l in ipairs(lines) do
-          if l:lower():find(norm_anchor, 1, true) then
-            found_line = i
-            break
-          end
-        end
-      end
-
-      if found_line then
-        -- Move the cursor to the heading line
-        vim.api.nvim_win_set_cursor(0, { found_line, 0 })
-      end
     end
 
     -- Jump to line if provided
     if line and line ~= "" then
       vim.cmd(line)
-
       -- Jump to column if provided
       if col and col ~= "" then
         vim.cmd("normal! " .. col .. "|")
       end
+    end
+
+    -- Jump to anchor if provided (e.g. file.md#section-name)
+    if anchor and anchor ~= "" then
+      fileRef.jump_to_anchor(anchor)
     end
   else
     -- Fallback to default gf behavior
