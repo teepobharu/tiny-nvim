@@ -69,6 +69,8 @@ local actions = create_git_file_actions("HEAD~1", false)
 ## Actions 
 https://github.com/folke/snacks.nvim/blob/main/lua/snacks/picker/actions.lua
 
+ask in : https://deepwiki.com/search/is-there-copy-action-and-how-d_e0314aa4-42c3-4052-878a-ab59592d04ec?mode=fast
+
 ## Debugging Tips
 
 ### Picker Item Structure Issues

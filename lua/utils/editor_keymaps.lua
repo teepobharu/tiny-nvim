@@ -33,16 +33,36 @@ local function fzfcompareref(selected)
   local line = selected[1]
   local commit_hash
 
+  -- handle branch selectors
+  line = line:match "[^%w_]+(.*)$"
+
+  -- handle commits selectors
   local remote_ref = line:match "^remotes/(.-)%s+"
   if remote_ref then
     commit_hash = remote_ref
+    -- __AUTO_GENERATED_PRINT_VAR_START__
   else
     commit_hash = line:match "^(%S+)"
   end
+  vim.print([==[fzfcompareref ref]==], vim.inspect(commit_hash)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
+  -- DO NOT CARE gitsigns will handle it all
+  -- Gitsigns diffthis refs/remotes/origin/main
+  -- all of below works
+  -- require("gitsigns").diffthis("refs/remotes/origin/main")
+  -- require("gitsigns").diffthis("remotes/origin/main")
+  -- require("gitsigns").diffthis("main")
+  -- local remote_ref = line:match "^remotes/(.-)%s+"
   local file_path = vim.fn.expand "%:p"
+  local original_tab = vim.api.nvim_get_current_tabpage()
   vim.cmd("tabnew " .. file_path)
-  gitsigns.diffthis(commit_hash, { vertical = true })
+  -- require("gitsigns").diffthis("upstream/HEAD", { vertical = true })
+  gitsigns.diffthis(commit_hash, { vertical = true }, function(err)
+    if err then
+      vim.cmd("tabclose")
+      vim.api.nvim_set_current_tabpage(original_tab)
+    end
+  end)
 end
 
 -- Toggle delta side-by-side preview
@@ -105,10 +125,36 @@ M.keymaps = {
   -- Overseer task runner
   overseer = {
     {
+      "<leader>op",
+      function ()
+        require("overseer").run_task({name = "run script"})
+      end,
+      desc = "Overseer Run script",
+    },
+    {
+      "<leader>ox",
+      ":OverseerRun run script<CR>",
+      desc = "Run script",
+    },
+    {
+      "<leader>oP",
+            function ()
+        require("overseer").run_task({name = "run script"})  
+      end,
+      desc = "Overseer Run Deterministic",
+    },
+    {
+      "<leader>oi",
+      function()
+        vim.cmd("checkhealth overseer")
+      end,
+      desc = "Overseer check health",
+    },
+    {
       "<leader>ow",
       function()
         local overseer = require "overseer"
-        overseer.run_template({ name = "run script" }, function(task)
+        overseer.run_task({ name = "run script" }, function(task)
           if task then
             task:add_component { "restart_on_save", paths = { vim.fn.expand "%:p" } }
             local main_win = vim.api.nvim_get_current_win()
@@ -119,7 +165,7 @@ M.keymaps = {
           end
         end)
       end,
-      desc = "WatchRun overseer",
+      desc = "Overseer Run +Watch",
     },
     {
       "<leader>oR",
@@ -166,33 +212,8 @@ M.keymaps = {
       desc = "Select Rerun Task overseer",
     },
     {
-      "<leader>oT",
-      ":OverseerTaskAction<CR>",
-      desc = "Run Task Action overseer",
-    },
-    {
-      "<leader>oQ",
-      ":OverseerDeleteBundle<CR>",
-      desc = "Delete Bundle overseer",
-    },
-    {
-      "<leader>oC",
-      ":OverseerClearCache<CR>",
-      desc = "Clear Cache overseer",
-    },
-    {
-      "<leader>os",
-      ":OverseerSaveBundle<CR>",
-      desc = "Save Bundle overseer",
-    },
-    {
-      "<leader>ol",
-      ":OverseerLoadBundle<CR>",
-      desc = "Load Bundle overseer",
-    },
-    {
       "<leader>on",
-      ":OverseerBuild<CR>",
+      ":OverseerShell<CR>",
       desc = "New Task overseer",
     },
   },
@@ -254,7 +275,7 @@ M.keymaps = {
       },
       {
         companion_prefix .. "Q",
-        ":CodeCompanion",
+        ":CodeCompanion ",
         desc = "Code Companion - Type chat",
         mode = "v",
       },

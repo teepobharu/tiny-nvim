@@ -6,6 +6,87 @@ local M = {}
 
 local git_util = require "utils.git"
 local term_util = require "utils.term_util"
+local uv = vim.uv or vim.loop
+
+local function resolve_item_path(item, fallback_cwd)
+  local file = item and (item.file or item.text) or nil
+  if not file or file == "" then
+    return nil
+  end
+
+  if file:match "^%a:[/\\]" or file:sub(1, 1) == "/" then
+    return file
+  end
+
+  local cwd = item.cwd or fallback_cwd
+  if not cwd or cwd == "" then
+    return file
+  end
+
+  return cwd .. "/" .. file
+end
+
+local function is_missing_file(item, fallback_cwd)
+  local path = resolve_item_path(item, fallback_cwd)
+  if not path then
+    return false
+  end
+  return uv.fs_stat(path) == nil
+end
+
+local function should_keep_item(item, fallback_cwd, filter_missing, show_missing)
+  if filter_missing == false then
+    return true
+  end
+
+  if show_missing then
+    return true
+  end
+
+  return not is_missing_file(item, fallback_cwd)
+end
+
+local function with_external_actions(actions)
+  return vim.tbl_extend("force", actions or {}, {
+    toggle_external = function(picker)
+      require("utils.snacks_actions").toggle_external(picker)
+    end,
+  })
+end
+
+local function preview_git_diff_with_base(base_ref)
+  return function(ctx)
+    if not base_ref or base_ref == "" then
+      return require("snacks.picker.preview").git_diff(ctx)
+    end
+
+    if not ctx or not ctx.item or not ctx.item.file or ctx.item.file == "" then
+      return require("snacks.picker.preview").none(ctx)
+    end
+
+    local cmd = { "git", "--no-pager" }
+    local extra_args =
+      ctx.picker and ctx.picker.opts and ctx.picker.opts.previewers and ctx.picker.opts.previewers.git
+      and ctx.picker.opts.previewers.git.args
+    if extra_args then
+      vim.list_extend(cmd, extra_args)
+    end
+
+    vim.list_extend(cmd, { "diff", base_ref .. "..HEAD", "--x", ctx.item.file })
+    return require("snacks.picker.preview").cmd(cmd, ctx, { ft = "diff" })
+  end
+end
+
+local function debug_external_filter(ctx, item, info)
+  if not vim.g.snacks_debug_external_filter then
+    return
+  end
+  local source = ctx and ctx.picker and (ctx.picker.opts.source or ctx.picker.source) or "picker"
+  local file = item and item.file or item and item.text or "nil"
+  print(
+    string.format("external_filter[%s]: %s | file=%s", tostring(source), info or "", tostring(file))
+  )
+end
 
 --#region Session Picker (migrated from fzf-lua)
 
@@ -176,12 +257,29 @@ end
 local function pick_cmd_result(picker_opts)
   local git_root = Snacks.git.get_root()
   local function finder(opts, ctx)
+    local show_missing = opts.external == true
     local proc_opts = vim.tbl_extend("force", opts, {
       cmd = picker_opts.cmd,
       args = picker_opts.args,
       transform = function(item)
         item.cwd = picker_opts.cwd or git_root
         item.file = item.text
+        local missing = is_missing_file(item, item.cwd)
+        local keep = should_keep_item(item, item.cwd, picker_opts.filter_missing, show_missing)
+        debug_external_filter(
+          ctx,
+          item,
+          string.format(
+            "show_missing=%s missing=%s keep=%s",
+            tostring(show_missing),
+            tostring(missing),
+            tostring(keep)
+          )
+        )
+        if not keep then
+          return false
+        end
+        return item
       end,
     })
 
@@ -199,8 +297,14 @@ local function pick_cmd_result(picker_opts)
     pick_opts.preview = picker_opts.preview
   end
 
-  if picker_opts.actions then
-    pick_opts.actions = picker_opts.actions
+  pick_opts.actions = with_external_actions(picker_opts.actions)
+  if picker_opts.toggles then
+    pick_opts.toggles = picker_opts.toggles
+  end
+  if picker_opts.external == nil then
+    pick_opts.external = false
+  else
+    pick_opts.external = picker_opts.external
   end
 
   if picker_opts.win then
@@ -332,13 +436,15 @@ function M.custom_git_pickers.git_diff_upstream()
   local captured_ref = upstream_ref
   local actions = editor_keymaps.snacks_action_factories.create_git_file_actions(captured_ref, false)
   local git_keys = editor_keymaps.snacks_picker_group_keys.git_file_keys_upstream
+  local ref_metadata = git_util.get_ref_metadata(upstream_ref)
+  local base_ref = ref_metadata and ref_metadata.resolved_ref or upstream_ref
 
   pick_cmd_result {
     cmd = "git",
     args = { "diff-tree", "--no-commit-id", "--name-only", "--diff-filter=d", upstream_ref .. "..HEAD", "-r" },
     name = "git_diff_upstream",
     title = "Git Branch Changed Files (vs " .. upstream_ref .. ")",
-    preview = "git_diff",
+    preview = preview_git_diff_with_base(base_ref),
     actions = actions,
     win = {
       input = {
@@ -531,7 +637,9 @@ local function show_file_list_picker(selected_ref_stats, on_back)
   Snacks.picker.pick {
     source = "git_diff_files",
     title = "Changed Files vs " .. display_ref .. ref_type_label,
+    external = false,
     finder = function(opts, ctx)
+      local show_missing = opts.external == true
       local proc_opts = vim.tbl_extend("force", opts, {
         cmd = "git",
         args = { "diff", "--name-only", "--diff-filter=d", selected_ref_stats.refAlias .. "..HEAD" },
@@ -539,16 +647,32 @@ local function show_file_list_picker(selected_ref_stats, on_back)
         transform = function(item)
           item.cwd = git_root
           item.file = item.text
+          local missing = is_missing_file(item, git_root)
+          local keep = should_keep_item(item, git_root, true, show_missing)
+          debug_external_filter(
+            ctx,
+            item,
+            string.format(
+              "show_missing=%s missing=%s keep=%s",
+              tostring(show_missing),
+              tostring(missing),
+              tostring(keep)
+            )
+          )
+          if not keep then
+            return false
+          end
           return item
         end,
       })
       return require("snacks.picker.source.proc").proc(proc_opts, ctx)
     end,
     format = "file",
-    preview = "git_diff",
-    actions = actions,
+    preview = preview_git_diff_with_base(ref_metadata.resolved_ref or selected_ref_stats.refAlias),
+    actions = with_external_actions(actions),
     win = {
       input = {
+        footer = "<C-h> back to ref",
         keys = git_keys.input,
       },
       list = {

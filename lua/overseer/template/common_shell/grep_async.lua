@@ -1,6 +1,6 @@
 ---@return overseer.TemplateFileDefinition
 return {
-  name = "vimgrep_quicklist",
+  name = "zzvimgrep_quicklist",
   description = "Run vimgrep and output to quickfix",
   builder = function(params)
     -- grepprg seems to be rg
@@ -17,7 +17,7 @@ return {
     extra_args = params.extra_args ~= "" and params.extra_args or ""
 
     if num_subs == 0 then
-      cmd = cmd .. ' "' .. params.input .. '" ' .. dirpart .. extra_args
+      cmd = cmd .. ' "' .. params.input .. '" ' .. dirpart .. extra_args .. ' || "rg -h"'
     end
 
     ---@type overseer.TaskDefinition
@@ -74,6 +74,7 @@ return {
         order = 2, -- determines order of parameters in the UI
         validate = function(value)
           if vim.fn.isdirectory(value) == 0 then
+            print("Directory does not exist: " .. value)
             return false
           end
           return true

@@ -3,6 +3,13 @@ return {
   name = "Run TW Tripviewbff pick",
   description = "run android test on current file",
   builder = function(params)
+    -- v2: Validation moved from condition callback
+    local current_path = vim.fn.expand("%:p:h")
+    local is_in_proj = current_path:match("trip%-view%-bff") or current_path:match("trips%-web") or current_path:match("mmbweb")
+    if not is_in_proj then
+      error("This template only works in trip-view-bff, trips-web, or mmbweb projects. Current path: " .. current_path)
+    end
+
     local sel_command = params.command
     local base_command = "sh " .. vim.fn.expand("$HOME") .. "/Personal/mynotes/work/AgodaCoding/agodaSnip.sh mmba "
     local finalcmd = base_command .. " " .. (sel_command or "")
@@ -21,6 +28,11 @@ return {
     ---@type overseer.TaskDefinition
     return {
       cmd = finalcmd,
+        -- behavior: https://deepwiki.com/search/is-this-correct_41cc0f33-a7dd-48fb-92e4-05ecb8826107?mode=fast
+        -- does not really open auto why
+      components = {
+        { "open_output", direction = "float", on_start = "always" },
+      }
     }
   end,
   --- @type overseer.Params|fun():overseer.Params
@@ -56,16 +68,8 @@ return {
     { "on_complete_notify", system = "always" },
     "default",
   },
-  priority = 5,
   condition = {
-    filetypes = { "kt" },
-    callback = function(task)
-      local isInProj = vim.fn.expand("%:p:h"):match("trip%-view%-bff") or vim.fn.expand("%:p:h"):match("trips%-web") or vim.fn.expand("%:p:h"):match("mmbweb")
-      if isInProj then
-        return true
-      else
-        return false
-      end
-    end,
+    -- filetype = { "kotlin", "typescript" },
+    -- Note: v2 removed condition callbacks - validation moved to builder
   },
 }

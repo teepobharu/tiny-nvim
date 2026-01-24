@@ -1,6 +1,16 @@
 local FiletypeConfigurations = {
   lua = {
     {
+      name = "luafile",
+      -- cmd = { "nvim", "--headless", "+luafile $file", "+q" },
+      cmd = { "nvim", "--headless", "-c luafile $file", "+q" },
+      prerequisite = "Neovim must be installed and in PATH",
+      content_patterns = { "vim."}, -- Specific Bun patterns
+      is_match_with_content_only = false,
+      executable_check = "nvim",
+      comment_syntax = "--",
+    },
+    {
       name = "lua",
       cmd = { "lua", "$file" },
       prerequisite = "lua must be installed and in PATH",
@@ -215,7 +225,6 @@ return {
       cmd = cmd,
       components = {
         { "on_output_quickfix", set_diagnostics = true },
-        "on_result_diagnostics",
         "default",
       },
     }
@@ -306,7 +315,7 @@ return {
       }
     }
   end,
-  condition = {
+  -- condition = {
     -- filetype = { "sh", "python", "go", "lua" },
-  },
+  -- },
 }

@@ -3,6 +3,13 @@ return {
   name = "Run Mmb pick",
   description = "run android test on current file",
   builder = function(params)
+    -- v2: Validation moved from condition callback
+    local current_path = vim.fn.expand("%:p:h")
+    if not current_path:match("mmb") then
+      Snacks.debug("Cmd Fail only works on path mmb") 
+      error("This template only works in mmb projects. Current path: " .. current_path)
+    end
+
     local sel_command = params.command
     local base_command = "sh /Users/tharutaipree/Personal/mynotes/work/AgodaCoding/agodaSnip.sh mmb "
     local finalcmd = base_command .. sel_command
@@ -21,6 +28,12 @@ return {
     ---@type overseer.TaskDefinition
     return {
       cmd = finalcmd,
+      components = {
+        -- behavior: https://deepwiki.com/search/is-this-correct_41cc0f33-a7dd-48fb-92e4-05ecb8826107?mode=fast
+        -- does not really open ??
+        { "open_output", direction = "float", on_start = "always" },
+        "default",
+      },
     }
   end,
   --- @type overseer.Params|fun():overseer.Params
@@ -36,6 +49,16 @@ return {
       ["Server + Build and parallel def build"] = "-s",
       ["Server run only"] = "-s --nobuild",
     }
+
+    -- Initialize html_choices (commented out in builder, keep for future use)
+    local html_choices = {}
+    -- local handle = io.popen('find test/playwright -type f -path "*/test-results-*/**/index.html"')
+    -- if handle then
+    --   for file in handle:lines() do
+    --     table.insert(html_choices, file)
+    --   end
+    --   handle:close()
+    -- end
 
     return {
       command = {
@@ -71,16 +94,8 @@ return {
     { "on_complete_notify", system = "always" },
     "default",
   },
-  priority = 5,
   condition = {
-    filetypes = { "kt" },
-    callback = function(task)
-      local isInProj = vim.fn.expand("%:p:h"):match("mmb")
-      if isInProj then
-        return true
-      else
-        return false
-      end
-    end,
+    -- filetype = { "kotlin" },
+    -- Note: v2 removed condition callbacks - validation moved to builder
   },
 }

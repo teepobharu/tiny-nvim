@@ -3,6 +3,12 @@ return {
   name = "Build android",
   description = "Build run android",
   builder = function(params)
+    -- v2: Validation moved from condition callback
+    local current_path = vim.fn.expand("%:p:h")
+    if not current_path:match("client%-android") then
+      error("This template only works in client-android projects. Current path: " .. current_path)
+    end
+
     -- make sure to get the module path and the class package name to run in this command
     --
     local cmd = "sh /Users/tharutaipree/Personal/mynotes/work/AgodaCoding/agodaSnip.sh and"
@@ -46,17 +52,8 @@ return {
     "default",
   },
   condition = {
-    filetypes = { "kt" },
+    filetype = { "kotlin" },
     -- dir = "$HOME",
-    callback = function(task)
-      -- current file path include tests and kotlin file
-      -- get current dir
-      local isInClientAndroidProject = vim.fn.expand("%:p:h"):match("client%-android")
-      if isInClientAndroidProject then
-        return true
-      else
-        return false
-      end
-    end,
+    -- Note: v2 removed condition callbacks - validation moved to builder
   },
 }

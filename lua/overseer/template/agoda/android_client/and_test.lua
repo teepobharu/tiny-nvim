@@ -138,6 +138,12 @@ return {
   name = "Run Android test",
   description = "run android test on current file",
   builder = function(params)
+    local current_file = vim.fn.expand("%:p")
+    local match = current_file:match("src/test/");
+    if not match then
+      error("This template only works for test files in src/test/. Current file: " .. current_file)
+    end
+
     -- FIX: 20250402 20250402
     -- 02:43:36 msg_show E5108: Error executing lua: .../lua/overseer/template/agoda/android_client/and_test.lua:17: bad argument #1 to 'open' (string expected, got nil)
     -- stack traceback:
@@ -179,12 +185,14 @@ return {
   end,
   --- @type overseer.Params|fun():overseer.Params
   params = function()
+    Snacks.debug("params")
     local filepath = vim.fn.expand("%:p")
     local content = get_file_content(filepath)
     local module = get_module(filepath)
     local package_name = get_package_name(filepath, content)
     local class_name = get_class_name(filepath, content)
     local test_module = "testDebugUnitTest"
+    Snacks.debug(class_name)
     if module:find("legacy%-navigation") and test_module ~= "testBaidumapDebugUnitTest" then
       test_module = "testBaidumapDebugUnitTest"
     end
@@ -205,7 +213,7 @@ return {
     if classname_selection > 0 and classname_selection <= #classname_choices then
       class_name = classname_choices[classname_selection]
     end
-    print([==[choice, class_name:]==], choice, vim.inspect(class_name)) -- __AUTO_GENERATED_PRINT_VAR_END__
+    print([==[classname_selection, class_name:]==], classname_selection, vim.inspect(class_name)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
     local def_final_cmd = generate_test_command(module, test_module, package_name, class_name)
     return {
@@ -280,19 +288,8 @@ return {
     { "on_complete_notify", system = "always" },
     "default",
   },
-  priority = 5,
   condition = {
-    filetypes = { "kt" },
-    callback = function(task)
-      -- current file path include tests and kotlin file
-      local isKotlinBuffer = vim.fn.expand("%:e") == "kt"
-      -- __AUTO_GENERATED_PRINT_VAR_START__
-      print([==[condition isKotlinBuffer:]==], vim.inspect(isKotlinBuffer)) -- __AUTO_GENERATED_PRINT_VAR_END__
-      if vim.fn.expand("%:p"):match("src/test/") then
-        return true
-      else
-        return false
-      end
-    end,
+    filetype = { "kotlin" },
+    -- Note: v2 removed condition callbacks - validation moved to builder
   },
 }
