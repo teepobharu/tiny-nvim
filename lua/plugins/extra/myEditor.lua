@@ -232,8 +232,10 @@ return {
                     --work in chat --
                     "gpt-5.2",
                     "deepseek-r1-0528-maas",
+                    "gemini-3-pro-preview", -- works
+                    "gemini-2.5-flash",
+                    "gemini-2.5-pro",
                     --to test --
-                    "gemini-3-pro-preview",
                     --not work below
                     -- "deepseek"
                     -- "qwq-32b", -- fallback haiku ??
@@ -272,6 +274,8 @@ return {
 
       strategies = {
         chat = {
+          adapter = "copilot",
+          roles = { llm = "  Copilot Chat", user = "☀️ Brightza" },
           slash_commands = {
             ["buffer"] = { opts = { provider = "snacks" } },
             ["file"] = { opts = { provider = "snacks" } },
@@ -949,6 +953,10 @@ Your instructions here
           git_cwd = {
             icon = "",
             value = true, -- Show when case_sensitive is true
+          },
+          external = {
+            icon = "🗑️",
+            value = true,
           },
           case_sensitive_custom = {
             icon = "C", -- Icon to show in title
