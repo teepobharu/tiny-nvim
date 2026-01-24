@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Edit",
+      "View",
+      "Bash(rg:*)",
+      "Bash(ls:*)",
+      "Read(~/dotfiles/tasks/**)",
+      "Read(~/.local/share/nvim3_jelly_tinynvim/lazy/**)",
+      "Bash(git add:*)",
+      "Bash(git push:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "Bash(dotnet test:*)",
+      "Bash(git log:*)",
+      "WebFetch(domain:deepwiki.com)"
+    ],
+    "deny": []
+  }
+}
+

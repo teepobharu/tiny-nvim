@@ -3,6 +3,12 @@ return {
   name = "Run Android pick",
   description = "run android test on current file",
   builder = function(params)
+    -- v2: Validation moved from condition callback
+    local current_path = vim.fn.expand("%:p:h")
+    if not current_path:match("client%-android") then
+      error("This template only works in client-android projects. Current path: " .. current_path)
+    end
+
     local andcmd = params.andcmd
     -- __AUTO_GENERATED_PRINT_VAR_START__
     local base_command = "sh " .. os.getenv("HOME") .. "/Personal/mynotes/work/AgodaCoding/agodaSnip.sh and "
@@ -76,16 +82,8 @@ return {
     { "on_complete_notify", system = "always" },
     "default",
   },
-  priority = 5,
   condition = {
-    filetypes = { "kt" },
-    callback = function(task)
-      local isInClientAndroidProject = vim.fn.expand("%:p:h"):match("client%-android")
-      if isInClientAndroidProject then
-        return true
-      else
-        return false
-      end
-    end,
+    filetype = { "kotlin" },
+    -- Note: v2 removed condition callbacks - validation moved to builder
   },
 }

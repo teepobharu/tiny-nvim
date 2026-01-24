@@ -3,6 +3,13 @@ return {
   name = "yarn test current file (cov) watch + update snap",
   description = "Run yarn test (jest) on the current file with specified options",
   builder = function(params)
+    -- v2: Validation moved from condition callback
+    local current_file = vim.fn.expand("%:t")
+    local is_test_file = current_file:match("tests?%.tsx?$") or current_file:match("specs?%.tsx?$")
+    if not is_test_file then
+      error("This template only works for test files (*.test.tsx, *.spec.ts, etc.). Current file: " .. current_file)
+    end
+
     -- Detect package manager by searching for nearest package.json and reading its packageManager field.
     local file_name = vim.fn.expand("%")
     local start_dir = vim.fn.expand("%:p:h")
@@ -76,29 +83,85 @@ return {
     return {}
   end,
   components = {
-    -- {
-    -- "on_output_quickfix", -- will output to quickfix
-    -- errorformat = vim.o.grepformat,
-    -- open = true,
-    -- open = not params.bang,
-    -- open_height = 8,
-    -- items_only = true,
-    -- },
+    {  
+  "on_output_parse",  
+  parser = function(line)  
+    local file = line:match("^%s+FAIL%s+(.+)$")  
+    if file then  
+          print([==[parser file:]==], vim.inspect(file)) -- __AUTO_GENERATED_PRINT_VAR_END__
+      return {  
+        filename = file,  
+        lnum = 1,  
+        text = "Failed test file",  
+        type = "E"  
+      }  
+    end  
+    -- sample 
+  --       at Object.<anonymous> (src/common/textUtils.test.tsx:15:60)
+-- Regex explanation:
+-- ^%s*at Object%.<anonymous>%s*%((.-):(%d+):(%d+)%):
+--   ^%s*         : Start of line, optional whitespace
+--   at Object%.<anonymous> : Literal match for 'at Object.<anonymous>'
+--   %s*          : Optional whitespace
+--   %(           : Literal '('
+--   (.-)         : Non-greedy match for file path (captures file)
+--   :(%d+)       : Colon, then one or more digits (captures line number)
+--   :(%d+)       : Colon, then one or more digits (captures column)
+--   %)           : Literal ')'
+        -- local line ="      at Object.<anonymous> (src/common/textUtils.test.tsx:15:60)"
+        local file, lnum, col = line:match("^%s*at Object%.<anonymous>%s*%((.-):(%d+):(%d+)%)$")  -- fixed regex: allow optional spaces, non-greedy file match, correct colon
+        -- __AUTO_GENERATED_PRINT_VAR_START__
+        print([==[parser file:]==], vim.inspect(file)) -- __AUTO_GENERATED_PRINT_VAR_END__
+        print(file, lnum, col)
+
+    if file then  
+      return {  
+        filename = file,  
+        lnum = tonumber(lnum),  
+        col = tonumber(col),  
+        text = "Test failure location",  
+        type = "E"  
+      }  
+    end  
+  end  
+},
+
+    { 
+      "on_output_quickfix", -- Jest error format patterns
+      
+          errorformat = "%t%\\s%\\+%f:%l:%c",  
+      --     open = true,  
+      --     items_only = true,  
+      -- errorformat = table.concat({
+      --   -- Main Jest stack trace: "at Object.<anonymous> (file:line:col)"
+      --   "%E      at %m (%f:%l:%c)",  -- 6 spaces before "at"
+      --   -- Alternative: "at Object (file:line:col)"
+      --   "%E      at Object (%f:%l:%c)",  -- 6 spaces before "at"
+      --   -- Test failure header: "● test suite › test name"
+      --   "%E  ● %m",  -- 2 spaces before "●"
+      --   -- Error location with caret: "> 15 |"
+      --   "%Z      >%l |%m",  -- 6 spaces before ">"
+      --   -- Error context lines with pipe
+      --   "%C      %l |%m",  -- 6 spaces before line number
+      --   -- expect() error message (4 spaces indent)
+      --   "%C    %m",
+      --   -- Continuation lines
+      --   "%C%m",
+      --   -- Ignore separator lines
+      --   "%-G%.%#",
+      -- }, ","),
+      open = true,
+      open_height = 12,
+      tail = true, -- Auto-scroll on watch mode
+      items_only = false,
+    },
     -- We don't care to keep this around as long as most tasks
     -- { "on_complete_dispose", timeout = 30 },
     { "on_complete_notify", system = "always" },
     "default",
   },
-  priority = 5,
   condition = {
-    filetypes = { "typescriptreact" , "typescript" }, -- Include test filetypes
-    callback = function(task)
-      local isTestFile = vim.fn.expand("%:t"):match("tests?%.tsx?$") or vim.fn.expand("%:t"):match("specs?%.tsx?$")
-      if isTestFile then
-        return true
-      else
-        return false
-      end
-    end,
+    filetype = { "typescriptreact" , "typescript" }, -- Include test filetypes
+    -- Note: v2 removed condition callbacks - validation moved to builder
   },
 }

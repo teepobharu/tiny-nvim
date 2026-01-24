@@ -718,7 +718,7 @@ Cmd.create_cmd("StopAllLspClients", function()
     vim.lsp.stop_client(client.id)
   end
 
-  vim.notify("Stopped all LSP clients", vim.log.levels.INFO)
+  Snacks.debug("Stopped all LSP clients", vim.log.levels.INFO)
 end, { nargs = 0 })
 
 keymap("n", "<leader>Lr", ":RestartLspClients<CR>", { desc = "LSPRestart", noremap = true, silent = true })
