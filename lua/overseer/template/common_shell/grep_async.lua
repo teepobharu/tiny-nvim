@@ -1,11 +1,12 @@
 ---@return overseer.TemplateFileDefinition
 return {
   name = "zzvimgrep_quicklist",
+  tags = { require("overseer").TAG.RUN, "custom" },
   description = "Run vimgrep and output to quickfix",
   builder = function(params)
     -- grepprg seems to be rg
     local cmd, num_subs = vim.o.grepprg:gsub("%$%*", params.input)
-    local current_file_dir = vim.fn.expand("%:p:h")
+    local current_file_dir = vim.fn.expand "%:p:h"
     print([==[builder current_file_dir:]==], vim.inspect(current_file_dir)) -- __AUTO_GENERATED_PRINT_VAR_END__
     -- if eq dir do not apply dir filter
     if current_file_dir:gsub("/$", "") == params.dir:gsub("/$", "") then
@@ -80,7 +81,7 @@ return {
           return true
         end,
         optional = true,
-        default = vim.fn.expand("%:p:h"),
+        default = vim.fn.expand "%:p:h",
       },
       extra_args = {
         type = "string",

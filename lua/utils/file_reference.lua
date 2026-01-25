@@ -30,7 +30,9 @@ function M.parse_file_reference(target)
         if test_path then
           path, line, col = test_path, test_line, ""
         else
-          path, line, col = without_prefix, "", ""
+          -- No line number - strip trailing colons
+          path = without_prefix:gsub(":+$", "")
+          line, col = "", ""
         end
       end
     end
@@ -44,7 +46,9 @@ function M.parse_file_reference(target)
       if test_path then
         path, line, col = test_path, test_line, ""
       else
-        path, line, col = target, "", ""
+        -- No line number - use whole target, but strip trailing colons
+        path = target:gsub(":+$", "")  -- Remove trailing colons
+        line, col = "", ""
       end
     end
   end
