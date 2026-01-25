@@ -59,7 +59,7 @@ local function fzfcompareref(selected)
   -- require("gitsigns").diffthis("upstream/HEAD", { vertical = true })
   gitsigns.diffthis(commit_hash, { vertical = true }, function(err)
     if err then
-      vim.cmd("tabclose")
+      vim.cmd "tabclose"
       vim.api.nvim_set_current_tabpage(original_tab)
     end
   end)
@@ -105,7 +105,7 @@ M.helpers = {
   open_file_in_remote = open_file_in_remote,
 }
 
--- Keymap configurations by plugin
+--#region Keymap configurations by plugin
 M.keymaps = {
   -- Oil file explorer
   oil = {
@@ -126,8 +126,8 @@ M.keymaps = {
   overseer = {
     {
       "<leader>op",
-      function ()
-        require("overseer").run_task({name = "run script"})
+      function()
+        require("overseer").run_task { name = "run script" }
       end,
       desc = "Overseer Run script",
     },
@@ -138,15 +138,15 @@ M.keymaps = {
     },
     {
       "<leader>oP",
-            function ()
-        require("overseer").run_task({name = "run script"})  
+      function()
+        require("overseer").run_task { name = "run script" }
       end,
       desc = "Overseer Run Deterministic",
     },
     {
       "<leader>oi",
       function()
-        vim.cmd("checkhealth overseer")
+        vim.cmd "checkhealth overseer"
       end,
       desc = "Overseer check health",
     },
@@ -166,6 +166,36 @@ M.keymaps = {
         end)
       end,
       desc = "Overseer Run +Watch",
+    },
+    {
+      "<leader>ot",
+      function()
+        require("overseer").run_task {}
+      end,
+      desc = "Overseer run tasks",
+      -- TODO: create custom Snacks picker to filter by available tags custom and builtins
+      -- vim.print(require("overseer").list_tasks())
+    },
+    {
+      "<leader>oT",
+      function()
+        require("overseer").run_task {
+          first = false, -- required else it run the first match without show picker
+          tags = { "custom" }, -- Only show templates with "hybrid" tag
+          -- tags = { require("overseer").TAG.BUILD }, -- Only show templates with "hybrid" tag
+          -- local overseer = require "overseer"
+          -- BUILD / RUN / TEST / CLEAN ... can work with popuplated vscode tasks
+          -- require("overseer").run_task({tags = {require("overseer").TAG.CLEAN} , first=false})
+          -- require("overseer").run_task({tags = {require("overseer").TAG.RUN} , first=false})
+          -- require("overseer").run_task({tags = {require("overseer").TAG.TEST} , first=false})
+          -- require("overseer").run_task({tags = {require("overseer").TAG.RUN} , first=false})
+          -- require("overseer").run_task({tags = {require("overseer").TAG.BUILD} , first=false})
+
+          -- overseer.run_task({tags = {"custom"} , first=false})
+          -- vim.print(require("overseer").TAG)
+        }
+      end,
+      desc = "Overseer Run VS Code~,custom tasks",
     },
     {
       "<leader>oR",
@@ -738,6 +768,16 @@ M.keymaps = {
       mode = { "n", "v" },
     },
     {
+      "<leader>sh",
+      function()
+        Snacks.picker.help {
+          pattern = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
+        }
+      end,
+      desc = "Help Pages",
+      mode = { "n", "x" },
+    },
+    {
       "<leader>sb",
       function()
         Snacks.picker.lines {
@@ -878,6 +918,7 @@ M.keymaps = {
     },
   },
 }
+--#endregion
 
 -- FZF-lua actions that need to be returned as opts
 M.fzf_opts = {
@@ -934,6 +975,7 @@ M.fzf_opts = {
   },
 }
 
+--#region Snacks other maps
 -- Snacks picker action factories
 -- These create reusable actions for git operations, file operations, etc.
 M.snacks_action_factories = {
@@ -1374,7 +1416,7 @@ M.sources_n_keys = {
     },
   },
 }
-
 M.snacks_picker_group_keys = snacks_picker_group_keys
+--#endregion
 
 return M

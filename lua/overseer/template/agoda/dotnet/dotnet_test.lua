@@ -5,7 +5,7 @@ local function get_file_content(filepath)
   if not file then
     error("Could not open file: " .. filepath)
   end
-  local content = file:read("*all")
+  local content = file:read "*all"
   file:close()
   return content
 end
@@ -15,7 +15,7 @@ end
 ---@return string
 local function get_namespace(filepath, content)
   -- Extract the namespace from the file content
-  local namespace = content:match("namespace%s+([%w%.]+)")
+  local namespace = content:match "namespace%s+([%w%.]+)"
   if not namespace then
     error("Namespace not found in file: " .. filepath)
   end
@@ -27,10 +27,10 @@ end
 ---@return string
 local function get_class_name(filepath, content)
   -- Extract the class name from the file content
-  local class_name = content:match("class%s+([%w_]+)")
+  local class_name = content:match "class%s+([%w_]+)"
   if not class_name then
     -- Fall back to using the file name if class name is not found
-    class_name = filepath:match("([^/]+)%.cs$")
+    class_name = filepath:match "([^/]+)%.cs$"
   end
   return class_name
 end
@@ -50,8 +50,10 @@ local function find_test_project(filepath)
     if handle then
       while true do
         local name, type = vim.loop.fs_scandir_next(handle)
-        if not name then break end
-        if type == "file" and name:match("%.csproj$") then
+        if not name then
+          break
+        end
+        if type == "file" and name:match "%.csproj$" then
           return search_dir .. "/" .. name
         end
       end
@@ -71,15 +73,19 @@ local function find_test_project(filepath)
   if handle then
     while true do
       local name, type = vim.loop.fs_scandir_next(handle)
-      if not name then break end
+      if not name then
+        break
+      end
       if type == "directory" then
         local sibling_dir = parent_dir .. "/" .. name
         local sibling_handle = vim.loop.fs_scandir(sibling_dir)
         if sibling_handle then
           while true do
             local file_name, file_type = vim.loop.fs_scandir_next(sibling_handle)
-            if not file_name then break end
-            if file_type == "file" and file_name:match("%.csproj$") then
+            if not file_name then
+              break
+            end
+            if file_type == "file" and file_name:match "%.csproj$" then
               local full_path = sibling_dir .. "/" .. file_name
               table.insert(project_files, {
                 path = full_path,
@@ -101,15 +107,17 @@ local function find_test_project(filepath)
     -- First pass: Find test projects with matching base name
     for _, proj in ipairs(project_files) do
       -- Only consider projects with "Test" in the name
-      if (proj.name:match("Test") or proj.dir:match("Test")) and
-         (proj.name:find(test_base, 1, true) or proj.dir:find(test_base, 1, true)) then
+      if
+        (proj.name:match "Test" or proj.dir:match "Test")
+        and (proj.name:find(test_base, 1, true) or proj.dir:find(test_base, 1, true))
+      then
         return proj.path
       end
     end
 
     -- Second pass: Return any test project in sibling directories
     for _, proj in ipairs(project_files) do
-      if proj.name:match("Test") or proj.dir:match("Test") then
+      if proj.name:match "Test" or proj.dir:match "Test" then
         return proj.path
       end
     end
@@ -122,7 +130,7 @@ local function find_test_project(filepath)
   local find_cmd = string.format('find "%s" -maxdepth 2 -name "*.csproj" -type f | head -1', parent_dir)
   local io_handle = io.popen(find_cmd)
   if io_handle then
-    local result = io_handle:read("*a")
+    local result = io_handle:read "*a"
     io_handle:close()
     if result and result ~= "" then
       return vim.trim(result)
@@ -155,16 +163,20 @@ end
 ---@return overseer.TemplateDefinition
 return {
   name = "Run DotNet Test",
+  tags = { require("overseer").TAG.TEST, "agoda", "custom" },
   description = "Run dotnet test on current C# test file",
   builder = function(params)
     -- v2: Validation moved from condition callback
-    local filepath = vim.fn.expand("%:p")
-    local filename = vim.fn.expand("%:t")
-    local is_test_file = filename:match("Tests?%.cs$")
-    local is_in_test_dir = filepath:match("UnitTests") or filepath:match("IntegrationTests") or filepath:match("Tests/")
+    local filepath = vim.fn.expand "%:p"
+    local filename = vim.fn.expand "%:t"
+    local is_test_file = filename:match "Tests?%.cs$"
+    local is_in_test_dir = filepath:match "UnitTests" or filepath:match "IntegrationTests" or filepath:match "Tests/"
 
     if not (is_test_file or is_in_test_dir) then
-      error("This template only works for C# test files (ends with Test.cs/Tests.cs or in test directory). Current file: " .. filename)
+      error(
+        "This template only works for C# test files (ends with Test.cs/Tests.cs or in test directory). Current file: "
+          .. filename
+      )
     end
     local content = get_file_content(filepath)
     local namespace = params.namespace or get_namespace(filepath, content)
@@ -182,7 +194,8 @@ return {
       local suggested_dir = dir_name:gsub("%.Tests?$", "") .. "UnitTests"
 
       vim.notify(
-        string.format([[Could not find .csproj for: %s
+        string.format(
+          [[Could not find .csproj for: %s
 
 Directory: %s
 
@@ -195,7 +208,8 @@ Options:
           vim.fn.fnamemodify(filepath, ":h"),
           suggested_dir,
           dir_name,
-          vim.fn.fnamemodify(filepath, ":t")),
+          vim.fn.fnamemodify(filepath, ":t")
+        ),
         vim.log.levels.WARN
       )
       error("Could not find test project (.csproj) for file: " .. filepath)
@@ -206,10 +220,7 @@ Options:
     local cwd = vim.fn.fnamemodify(project_path, ":h")
 
     vim.notify(
-      string.format("Project: %s\nFilter: %s\nCWD: %s",
-        vim.fn.fnamemodify(project_path, ":t"),
-        filter,
-        cwd),
+      string.format("Project: %s\nFilter: %s\nCWD: %s", vim.fn.fnamemodify(project_path, ":t"), filter, cwd),
       vim.log.levels.INFO
     )
 
@@ -221,7 +232,7 @@ Options:
   end,
   --- @type overseer.Params|fun():overseer.Params
   params = function()
-    local filepath = vim.fn.expand("%:p")
+    local filepath = vim.fn.expand "%:p"
     local content = get_file_content(filepath)
     local namespace = get_namespace(filepath, content)
     local class_name = get_class_name(filepath, content)
@@ -230,7 +241,7 @@ Options:
     -- Show warning if project not found
     if not project_path or project_path == "" then
       vim.notify(
-        string.format("Warning: Could not find .csproj file.\nPlease enter the path manually in the 'Project Path' field."),
+        string.format "Warning: Could not find .csproj file.\nPlease enter the path manually in the 'Project Path' field.",
         vim.log.levels.WARN
       )
       project_path = ""
@@ -239,15 +250,15 @@ Options:
     -- Extract test method names from the file (improved patterns)
     local test_methods = {}
     -- NUnit [Test] or [TestCase]
-    for method in content:gmatch("%[Tests?%w*%].-public%s+%w+%s+(%w+)%s*%(") do
+    for method in content:gmatch "%[Tests?%w*%].-public%s+%w+%s+(%w+)%s*%(" do
       table.insert(test_methods, method)
     end
     -- xUnit [Fact]
-    for method in content:gmatch("%[Fact%].-public%s+%w+%s+(%w+)%s*%(") do
+    for method in content:gmatch "%[Fact%].-public%s+%w+%s+(%w+)%s*%(" do
       table.insert(test_methods, method)
     end
     -- xUnit [Theory]
-    for method in content:gmatch("%[Theory%].-public%s+%w+%s+(%w+)%s*%(") do
+    for method in content:gmatch "%[Theory%].-public%s+%w+%s+(%w+)%s*%(" do
       table.insert(test_methods, method)
     end
 
@@ -265,7 +276,8 @@ Options:
     table.insert(unique_methods, 1, "ALL")
 
     local def_filter = generate_dotnet_filter(namespace, class_name, "ALL")
-    local def_cmd = (project_path and project_path ~= "") and generate_dotnet_test_command(project_path, def_filter) or "No project file found"
+    local def_cmd = (project_path and project_path ~= "") and generate_dotnet_test_command(project_path, def_filter)
+      or "No project file found"
 
     return {
       namespace = {
@@ -299,7 +311,7 @@ Options:
         desc = "Path to the .csproj file (required - will search if empty)",
         order = 4,
         default = project_path or "",
-        optional = false,  -- Make it required so user must provide if not found
+        optional = false, -- Make it required so user must provide if not found
       },
       def_cmd = {
         type = "string",

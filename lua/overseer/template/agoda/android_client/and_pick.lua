@@ -2,16 +2,17 @@
 return {
   name = "Run Android pick",
   description = "run android test on current file",
+  tags = vim.list_extend({ "agoda", "custom" }, require("overseer").TAG.values),
   builder = function(params)
     -- v2: Validation moved from condition callback
-    local current_path = vim.fn.expand("%:p:h")
-    if not current_path:match("client%-android") then
+    local current_path = vim.fn.expand "%:p:h"
+    if not current_path:match "client%-android" then
       error("This template only works in client-android projects. Current path: " .. current_path)
     end
 
     local andcmd = params.andcmd
     -- __AUTO_GENERATED_PRINT_VAR_START__
-    local base_command = "sh " .. os.getenv("HOME") .. "/Personal/mynotes/work/AgodaCoding/agodaSnip.sh and "
+    local base_command = "sh " .. os.getenv "HOME" .. "/Personal/mynotes/work/AgodaCoding/agodaSnip.sh and "
     local finalcmd = base_command .. andcmd
     print([==[builderx finalcmd:]==], vim.inspect(finalcmd)) -- __AUTO_GENERATED_PRINT_VAR_END__
     ---@type overseer.TaskDefinition

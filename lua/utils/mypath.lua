@@ -520,4 +520,124 @@ function M.is_in_project_dir(item_or_path)
   return false
 end
 
+-- ============================================================================
+-- goto_file_line() - Enhanced file navigation with wrapper stripping & env var expansion
+-- Test samples and full documentation: tasks/done/goto_file_line_wrapper_stripping.md
+-- Supports: IDE-style (file:100), Git-style (file#L100), markdown anchors,
+--           wrapped paths (handles unbalanced/multiple wrappers: `'[file]`, `file`, etc.)
+--           env vars ($HOME/file, ${VAR}/file, ~/file)
+-- ============================================================================
+
+function M.goto_file_line(open_in_previous_buffer)
+  local fileRef = require "utils.file_reference"
+
+  -- Extract file path and line number
+  local fileline = vim.fn.expand "<cfile>"
+  local current_line = vim.api.nvim_get_current_line()
+
+  -- Get the whole fileline with extra info like :line and :col from current line
+  -- Strategy: Find the complete non-whitespace token that contains the cfile path
+  local fileline_incurrentline_untilspace = nil
+  local escaped_fileline = vim.pesc(fileline)
+  for token in current_line:gmatch "%S+" do
+    if token:match(escaped_fileline) then
+      fileline_incurrentline_untilspace = token
+      break
+    end
+  end
+
+  -- Use the extended version if found, otherwise use the basic fileline
+  local target = fileline_incurrentline_untilspace or fileline
+
+  -- Handle visual mode selection
+  local inputUtil = require "utils.input"
+  if inputUtil.is_visual_mode() then
+    target = inputUtil.get_selected_or_cursor_word()
+    -- Clean multiline selections to remove newlines and extra spaces
+    target = inputUtil.clean_selected_text(target)
+  end
+
+  -- Normalize target for common markdown link patterns like [text](file.md#anchor)
+  local md_link = target:match "%b()"
+  if md_link then
+    local inner = md_link:sub(2, -2)
+    if inner and inner ~= "" then
+      target = inner
+    end
+  end
+
+  -- Strip non-path characters from start and end (iteratively)
+  -- Handles: `file`, 'file', "file", [file], <file>, unbalanced/multiple wrappers
+  -- Non-path chars: backticks, quotes, brackets, angle brackets, whitespace
+  local prev
+  repeat
+    prev = target
+    target = target:gsub("^[`'\"<%[%]>%(%)%s]+", "") -- strip from start
+    target = target:gsub("[`'\"<%[%]>%(%)%s]+$", "") -- strip from end
+  until target == prev
+
+  -- Expand environment variables and tilde (like native gf)
+  -- Handles: $HOME/file, ${HOME}/file, ~/file, $ENV_VAR/path
+  -- Extract base path without line/col/anchor for expansion
+  local path_part = target:match "^([^:#]+)" or target
+
+  -- First, manually expand ${VAR} syntax (vim.fn.expand doesn't handle this)
+  local expanded_part = path_part:gsub("%${([^}]+)}", function(var)
+    return os.getenv(var) or ("${" .. var .. "}")
+  end)
+
+  -- Then use vim.fn.expand for $VAR and ~ (standard expansion)
+  expanded_part = vim.fn.expand(expanded_part)
+
+  if expanded_part ~= path_part then
+    -- If expansion happened, replace the path part in target
+    target = target:gsub("^" .. vim.pesc(path_part), expanded_part)
+  end
+  -- Parse file reference (handles IDE style, git style, anchors, URIs)
+  local parsed = fileRef.parse_file_reference(target)
+  local path, line, col, anchor = parsed.path, parsed.line, parsed.col, parsed.anchor
+
+  -- Validate and open the file
+  if path and path ~= "" then
+    -- Resolve path with smart priority logic
+    local resolved_path = fileRef.resolve_file_path(path)
+
+    -- Open the file
+    if open_in_previous_buffer then
+      local current_win = vim.api.nvim_get_current_win()
+      if current_win == vim.g.prev_win then
+        vim.cmd "vsplit"
+      elseif not (vim.g.prev_win and vim.api.nvim_win_is_valid(vim.g.prev_win)) then
+        vim.cmd "vsplit" -- in case window already closed ?
+      end
+    end
+
+    -- Open the file
+    vim.cmd("edit " .. vim.fn.fnameescape(resolved_path))
+
+    local is_file_readable = vim.fn.filereadable(resolved_path) == 1
+    if not is_file_readable then
+      vim.notify("File not found use gf: " .. resolved_path, vim.log.levels.INFO)
+      vim.cmd "normal! gf"
+    end
+
+    -- Jump to line if provided
+    if line and line ~= "" then
+      vim.cmd(line)
+      -- Jump to column if provided
+      if col and col ~= "" then
+        vim.cmd("normal! " .. col .. "|")
+      end
+    end
+
+    -- Jump to anchor if provided (e.g. file.md#section-name)
+    if anchor and anchor ~= "" then
+      fileRef.jump_to_anchor(anchor)
+    end
+  else
+    -- Fallback to default gf behavior
+    vim.cmd "normal! gf"
+  end
+end
+
 return M
