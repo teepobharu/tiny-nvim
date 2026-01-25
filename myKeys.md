@@ -4,12 +4,12 @@
   Old key info at [Old keys](../nvim2_jelly_lzmigrate/myREADME_leg.md)
 
 References docs:
-- Snacks
--> previewer: /Users/tharutaipree/.local/share/nvim3_jelly_tinynvim/lazy/snacks.nvim/lua/snacks/picker/init.lua
-> - /Users/tharutaipree/.local/share/nvim3_jelly_tinynvim/lazy/snacks.nvim/lua/snacks/picker/preview.lua
-> - <url>https://www.reddit.com/r/neovim/comments/1j4e7fq/share_your_custom_snackspicker_sources</url>
-> - <url>https://github.com/folke/snacks.nvim/blob/main/docs/picker.md</url>
 
+- Snacks
+  -> previewer: /Users/tharutaipree/.local/share/nvim3_jelly_tinynvim/lazy/snacks.nvim/lua/snacks/picker/init.lua
+  > - /Users/tharutaipree/.local/share/nvim3_jelly_tinynvim/lazy/snacks.nvim/lua/snacks/picker/preview.lua
+  > - <url>https://www.reddit.com/r/neovim/comments/1j4e7fq/share_your_custom_snackspicker_sources</url>
+  > - <url>https://github.com/folke/snacks.nvim/blob/main/docs/picker.md</url>
 
 ## TODOs
 
@@ -23,29 +23,23 @@ References docs:
   - WIP (https://github.com/nvim-neo-tree/neo-tree.nvim/blob/main/lua/neo-tree/defaults.lua)
     - try disable neotree cwd and move json lsp `root_markers` from .git to
 
-- terminal 
+- terminal
   snacks term
-  - [x] Send to active terminal in visible tab / screen  (current snacks key only send when there is term not open)
-  - [x] 
+  - [x] Send to active terminal in visible tab / screen (current snacks key only send when there is term not open)
+  - [x]
   - desired logic when count is sent always match with snacks id term else create new and send if no count send find best match term visible / first terminal (id=1) if > 1 visible or the next available id by ascending sorting
   - [ ] fix: count in visual mode not work
   - [ ] fix: count in n, v mode not force new term when id not match
-  search
+        search
   - [x] tmux win search
-    - [ ] support preview + delete 
-
+    - [ ] support preview + delete
 
 - LSP
- - [x] glab works strangely on some files 2025-12-10
-    - references,def: build,releases,rules,cache but not tests on tripsweb 
-    - custom ft works
-    - [ ] check if root matter (on git root currently)
-    - ./lsp/gitlablsp.lua
-Chore 
-- [x] handle selection gx Gf ignore space  / newline
+- [x] glab works strangely on some files 2025-12-10 - references,def: build,releases,rules,cache but not tests on tripsweb - custom ft works - [ ] check if root matter (on git root currently) - ./lsp/gitlablsp.lua
+      Chore
+- [x] handle selection gx Gf ignore space / newline
 - [x] gitsign hunks not support visual c-j,k
-
-Snacks
+      Snacks
 - snacks upstream diff
 - snacks upstream diff
 - mega ref git diff files - preview
@@ -55,67 +49,70 @@ Snacks
 - toggle persist
 
 Nav
+
 - [x] tab navigations
 
 Git
+
 - leader-g-O open git on default browser rename leader-g-o
 
-*Done*
+_Done_
 0 - files hidden by default and pass options between toggle - don
-  - caveat buffer hidden will also persist since it use current opts to persist state
-  - preview <leader-f-G> not show changes
-  - preview changes if not exist (show in preview)
- 5 - Avante slash cmd get deprioritize to be below folder cmp
- 1 - companion load prompt slash cmd*2
- 2 - search term (with fix needed)
- - [ ] keybind to switch back search not work
- 4 - global snippets not work again ...
+
+- caveat buffer hidden will also persist since it use current opts to persist state
+- preview <leader-f-G> not show changes
+- preview changes if not exist (show in preview)
+  5 - Avante slash cmd get deprioritize to be below folder cmp
+  1 - companion load prompt slash cmd\*2
+  2 - search term (with fix needed)
+- [ ] keybind to switch back search not work
+      4 - global snippets not work again ...
 - select new line fix gGx , gF - yes?
-commands :
+  commands :
 - oseer run dotnet test
-- feat wip: grep word scope changer - default, gitroot, monorepo root 
+- feat wip: grep word scope changer - default, gitroot, monorepo root
 - grep/files depth changer - a-/+
 - select fix relative path from current file gF ? works need to check other example why sometime not
 
-*current*
+_current_
+
 - subproject utility enhancement : support multiple matches (and condition) and mutliple results sort by nearest-gitroot
-  - ie.  matcher { name = { "Clientside/", "Serverside/" } , type = "path", project_type = "dotnet" },
+  - ie. matcher { name = { "Clientside/", "Serverside/" } , type = "path", project_type = "dotnet" },
   - ie result : { matcher[1], matcher[2],... }
 
-- avante models quick select switch between 4.1 mini and 5 mini and 5.2 codex 
+- avante models quick select switch between 4.1 mini and 5 mini and 5.2 codex
   - ./docs/avante_20260107_keys_model.md
-3 - codecompanion update try https://github.com/olimorris/codecompanion.nvim/blob/main/lua/codecompanion/config.lua
+    3 - codecompanion update try https://github.com/olimorris/codecompanion.nvim/blob/main/lua/codecompanion/config.lua
   - choose model in inline chat explore
 - fix: fg in terminal wrong path based
 - mega ref git diff files - sort diff options, keybind
   - diff ref alias compare , open fix
   - feat: switch refs with c-space
   - TOOD: preview diff not use against the correct ref (always used against HEAD should be selectedRef...HEAD../tests/myTest.lua)
-- ai: 
-   - avante
-      -  check gpt via oai 5.2 works when switch takes v long to load 
-      -  check claude via vertex/
-      -  check gemini via opai 
-        - answer done
-        - run tools ls / view error write tools ? :
-            - Unable to submit request because function call `default_api:grep` in the 15. content block is missing a `thought_signature` \n No fallback model group found for original model_group=vertex_ai-gemini-3-pro-preview
-            - https://docs.cloud.google.com/vertex-ai/generative-ai/docs/thought-signatures
+- ai:
+  - avante
+    - check gpt via oai 5.2 works when switch takes v long to load
+    - check claude via vertex/
+    - check gemini via opai
+    - answer done
+    - run tools ls / view error write tools ? :
+      - Unable to submit request because function call `default_api:grep` in the 15. content block is missing a `thought_signature` \n No fallback model group found for original model_group=vertex_ai-gemini-3-pro-preview
+      - https://docs.cloud.google.com/vertex-ai/generative-ai/docs/thought-signatures
 
-      -  check gemini via vert/gem
+    - check gemini via vert/gem
+
 - improve speed
   - preview file changes - seem like work on some files only (default preview)
-*To verify*
-1 - copilot prompt context check
-  - prompt preview 
+    _To verify_
+    1 - copilot prompt context check
+  - prompt preview
   - prompt additiona path of /Users/tharutaipree/AgodaGit/tools/trip-ai-tools/prompt/update_test_by_change.prompt.md
-3 - send text to terminal from visible screen first then trust vcount later
-  - trust vcount with id
-    - [ ] buffer to last buffer (currently can use snacks) is there better way ?
-To fix 
+    3 - send text to terminal from visible screen first then trust vcount later
+  - trust vcount with id - [ ] buffer to last buffer (currently can use snacks) is there better way ?
+    To fix
 
-- [] AI: 
+- [] AI:
   - [ ] 08/12/2025 - Code companion prompts context
-
 
 - [ ] fix toggle term keymap term cycle and other mappings - 20251201 wip
   - cycle C-E for all term type works
@@ -124,7 +121,7 @@ To fix
     - [x] toggleterm work no
     - [ ] snacks term no
   - [ ] c\_/ consistency to use snacks
-  - issues : 
+  - issues :
 - [x] Feat: luasnip add in /scripts needs package.json
   - add p.json still not work print get correct dir [file](lua/plugins/coding.lua:72)
   - works now make sure the package.json settings and path link to corret json dir (copilot change from lazyload -> load but when revert still works)
@@ -166,9 +163,9 @@ Understand each plugin more: https://www.youtube.com/watch?v=6pAG3BHurdM&ab_chan
 ## AI
 
 Use Models from others
+
 - goose OSS
 - agentic : support cursor cli agent
-
 
 ### Sidekick
 
@@ -206,12 +203,13 @@ Actions
 2025-12-11 Breaking changes warning : https://github.com/olimorris/codecompanion.nvim/pull/2439
 
 Prompt actions
-- cannot be used together 
+
+- cannot be used together
 
 ACP
-- claude-code works 
-  - [x] glean mcp works : `use atlassian jira tools check what I am working on`
 
+- claude-code works
+  - [x] glean mcp works : `use atlassian jira tools check what I am working on`
 
 ### Copilot-Chat
 
@@ -245,7 +243,8 @@ Cons
 - cursor alwasy move when response streaming
 
 Search providers support : https://github.com/yetone/avante.nvim?tab=readme-ov-file#web-search-engines
-- tavily 
+
+- tavily
 - google json: https://developers.google.com/custom-search/v1/introduction/?apix=true
   - create new search engine : https://programmablesearchengine.google.com/controlpanel/create
   - ie. https://cse.google.com/cse?cx=649b8d161c6074aca
@@ -367,21 +366,22 @@ Neo Tree
   - Tf/Tg => telescope
   - TC,Tc => telescope cd / cd
 
-
 ### Issues
 
 Keymap code terminal, tmux, vim
 
 Tmux non compatible
-- c_- and c-/ : is same code inside tmux
+
+- c\_- and c-/ : is same code inside tmux
 
 Terminal compatible (not tmux)
+
 - c-s-s : ghostty only
 - c-tab / c-s-tab : work in ghostty keymap only
 
-To check more 
-- [ ] https://apple.stackexchange.com/questions/24261/how-do-i-send-c-that-is-control-slash-to-the-terminal
+To check more
 
+- [ ] https://apple.stackexchange.com/questions/24261/how-do-i-send-c-that-is-control-slash-to-the-terminal
 
 ## Others
 
@@ -467,8 +467,9 @@ Action bind
   - binding smart to trigger files / buffers switches
 
 CAVEAT actions
+
 - function(picker,items) only works in action
-ie. `picker:refresh()` and items will be nil if put as inline function inside win.input.keys
+  ie. `picker:refresh()` and items will be nil if put as inline function inside win.input.keys
 
 #### Gitsign
 
@@ -608,17 +609,16 @@ Code companion
 | ---------- | --------------- |
 | <leader> A | toggle commands |
 
-
 ## Adapater AI notes
 
-Codecompanion 
+Codecompanion
+
 - support value as ENV name inject when not empty
-- support header env 
+- support header env
 
 more answer: https://deepwiki.com/search/how-to-bind-key-to-do-inline-c_1b187fa6-d9be-448a-be94-c77c3e2de23f?mode=fast
-default 
+default
 api_key = "OPENAI_API_KEY"
-
 
 ## Lua notes
 

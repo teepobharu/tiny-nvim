@@ -124,6 +124,11 @@ return {
   --
   --#region AI Assistants
   {
+    "github/copilot.vim",
+    -- v1.58.0 has issue errors 2026-01-26 02:58
+    version = "1.57.0",
+  },
+  {
     "greggh/claude-code.nvim", -- will soon be replaced with another claude code libs   - [claudecode.nvim](https://github.com/coder/claudecode.nvim
     opts = {
       keymaps = {
