@@ -1,9 +1,9 @@
 local opts = { noremap = true, silent = true }
-local myPathUtil = require("utils.mypath")
+local myPathUtil = require "utils.mypath"
 local keymap = vim.keymap.set
-local Cmd = require("utils.cmd")
+local Cmd = require "utils.cmd"
 local run_command = Cmd.run_command
-local inputUtil = require("utils.input")
+local inputUtil = require "utils.input"
 -- ===========================
 -- LAZY NVIM ====================
 -- =======================
@@ -12,13 +12,17 @@ local inputUtil = require("utils.input")
 local function diffoff_all_buffers()
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
     vim.api.nvim_buf_call(buf, function()
-      vim.cmd("diffoff")
+      vim.cmd "diffoff"
     end)
   end
 end
 
-keymap("n", "<leader>dX", diffoff_all_buffers,
-  { desc = "Turn off diff mode for all buffers", noremap = true, silent = true })
+keymap(
+  "n",
+  "<leader>dX",
+  diffoff_all_buffers,
+  { desc = "Turn off diff mode for all buffers", noremap = true, silent = true }
+)
 -- check using :letmapleader or :let maplocalleader
 -- -> need to put inside plugins mapping also to make it work on those mapping
 -- command completion in command line mode
@@ -29,11 +33,11 @@ keymap("n", "<leader>ll", "<cmd>Lazy<CR>", { desc = "Lazy" })
 -- EDITING
 -- ============================
 -- selection
-keymap('n', '<M-a>', function()
-  vim.cmd('normal! ggVG')
+keymap("n", "<M-a>", function()
+  vim.cmd "normal! ggVG"
 end, { noremap = true, silent = true })
 
-keymap('v', '<M-a>', ":'<,'>QuickCodeRunner<CR>", { noremap = true, silent = true })
+keymap("v", "<M-a>", ":'<,'>QuickCodeRunner<CR>", { noremap = true, silent = true })
 -- Move Lines (add silence original didnot have will blip in visual mode)
 keymap("n", "<A-j>", "<cmd>m .+1<cr>==", { desc = "Move Down", silent = true })
 keymap("n", "<A-k>", "<cmd>m .-2<cr>==", { desc = "Move Up", silent = true })
@@ -46,38 +50,38 @@ keymap("i", "<A-k>", "<esc><cmd>m .-2<cr>==gi", { desc = "Move Up", silent = tru
 keymap("v", "<A-j>", ":m '>+1<cr>gv=gv", { desc = "Move Down", silent = true })
 keymap("v", "<A-k>", ":m '<-2<cr>gv=gv", { desc = "Move Up", silent = true })
 
-vim.cmd([[
+vim.cmd [[
   cnoremap <expr> <C-j> wildmenumode() ? "\<C-N>" : "\<C-j>"
   cnoremap <expr> <C-k> wildmenumode() ? "\<C-P>" : "\<C-k>"
-]])
+]]
 
 local function handleMode(mode)
   return function()
     if vim.fn.mode() == mode then
-      vim.cmd("normal! y")
+      vim.cmd "normal! y"
     else
       -- do as normal trigger for visual mode / visual line modejgc
       if mode == "v" then
-        vim.cmd("normal! v")
+        vim.cmd "normal! v"
       elseif mode == "V" then
-        vim.cmd("normal! V")
+        vim.cmd "normal! V"
       else
         -- Handle unexpected mode by falling back to default key bindings
         vim.notify("Unexpected mode: " .. vim.fn.mode(), vim.log.levels.WARN)
-        vim.cmd("normal! gv")
+        vim.cmd "normal! gv"
       end
     end
   end
 end
 
 opts.desc = "Yank in visual"
-keymap("v", "v", handleMode("v"), opts)
-keymap("v", "V", handleMode("V"), opts)
+keymap("v", "v", handleMode "v", opts)
+keymap("v", "V", handleMode "V", opts)
 
 -- Duplicate line and preserve previous yank register
 --  support mode v as
 function duplicateselected()
-  local saved_unnamed = vim.fn.getreg('"')
+  local saved_unnamed = vim.fn.getreg '"'
 
   local current_selected_line = ""
   local current_mode = vim.fn.mode()
@@ -85,17 +89,17 @@ function duplicateselected()
     -- Get the selected lines
     current_selected_line = vim.fn.getline("`<", "`>")
   else
-    current_selected_line = vim.fn.getline(".")
+    current_selected_line = vim.fn.getline "."
   end
 
   -- Duplicate the current line or selected lines
   if current_mode == "v" or current_mode == "V" then
     -- In visual mode, use normal command to duplicate lines
-    vim.api.nvim_command("normal! y`>p`>")
+    vim.api.nvim_command "normal! y`>p`>"
     -- vim.api.nvim_command("normal! y`>$p`>") -- new line (will not work with v mode not new line)
   else
     -- In normal mode, duplicate the current line
-    vim.cmd("normal! yyp")
+    vim.cmd "normal! yyp"
   end
 
   -- Restore previous yank registers
@@ -134,11 +138,10 @@ keymap("v", "<A-l>", "$", {
   desc = "Go to end of line",
   silent = true,
 })
-keymap("i", "<A-h>", "<C-o>^", { desc = "Go to start of line", silent = true, })
-keymap("i", "<A-l>", "<C-o>$", { desc = "Go to end of line", silent = true, })
+keymap("i", "<A-h>", "<C-o>^", { desc = "Go to start of line", silent = true })
+keymap("i", "<A-l>", "<C-o>$", { desc = "Go to end of line", silent = true })
 keymap("i", "<C-M-l>", "<C-o>e", { desc = "Move Forward Word", silent = true })
 keymap("i", "<C-M-h>", "<C-o>b", { desc = "Move Backward Word", silent = true })
-
 
 -- v mode esc to exit visual modej
 keymap("v", "<C-q>", "<esc>", { desc = "exit" })
@@ -155,18 +158,17 @@ keymap("n", "<leader>wv", ":vs<CR>", { desc = "VSplit", silent = true })
 keymap("n", "<M-Tab>", ":tabnext<CR>", { noremap = true, silent = true })
 keymap("t", "<M-Tab>", "<cmd>tabnext<CR>", { noremap = true, silent = true })
 keymap("n", "<leader>wp", ":windo b#<CR>", { desc = "Previous Window", silent = true })
-keymap("n", "<C-M-l>", ":tabnext<CR>" ,  { desc = "Next Tab", silent = true })
-keymap("n", "<C-M-h>", ":tabprevious<CR>" ,  { desc = "Previous Tab", silent = true })
-keymap("n", "<C-M-h>", ":tabprevious<CR>" ,  { desc = "Previous Tab", silent = true })
+keymap("n", "<C-M-l>", ":tabnext<CR>", { desc = "Next Tab", silent = true })
+keymap("n", "<C-M-h>", ":tabprevious<CR>", { desc = "Previous Tab", silent = true })
+keymap("n", "<C-M-h>", ":tabprevious<CR>", { desc = "Previous Tab", silent = true })
 -- map("n", "<C-Up>", ":resize -3<CR>", opts)
 -- map("n", "<C-Down>", ":resize +3<CR>", opts)
 -- map("n", "<C-Left>", ":vertical resize -3<CR>", opts)
 -- map("n", "<C-Right>", ":vertical resize +3<CR>", opts)
 
-
 local function calculate_tab_target(direction)
   -- Use vcount if provided; otherwise move left (wrap to last when at first)
-  local total = vim.fn.tabpagenr('$')
+  local total = vim.fn.tabpagenr "$"
   local curr = vim.fn.tabpagenr()
   -- __AUTO_GENERATED_PRINT_VAR_START__
   -- print([==[calculate_tab_target curr:]==], vim.inspect(curr .. "/".. total)) -- __AUTO_GENERATED_PRINT_VAR_END__
@@ -186,7 +188,7 @@ local function calculate_tab_target(direction)
 end
 -- Prompt for target index (always prompt)
 keymap("n", "<leader><Tab>m", function()
-  local total = vim.fn.tabpagenr('$')
+  local total = vim.fn.tabpagenr "$"
   local count = vim.v.count
   local current = vim.fn.tabpagenr()
 
@@ -204,25 +206,25 @@ keymap("n", "<leader><Tab>m", function()
   end
 
   if count ~= 0 then
-    vim.cmd('tabmove' .. calculate_tab_pos(count))
+    vim.cmd("tabmove" .. calculate_tab_pos(count))
   else
-  vim.ui.input({ prompt = 'Move tab to index (1-' .. total .. ') ' }, function(input)
-    if not input or input == '' then return end
-    vim.cmd('tabmove ' .. calculate_tab_pos(tonumber(input)))
-  end)
-end
+    vim.ui.input({ prompt = "Move tab to index (1-" .. total .. ") " }, function(input)
+      if not input or input == "" then
+        return
+      end
+      vim.cmd("tabmove " .. calculate_tab_pos(tonumber(input)))
+    end)
+  end
+end, { desc = "Prompt for tab index and move current tab" })
+keymap("n", "<leader><Tab>H", function()
+  local target = calculate_tab_target "left"
+  vim.cmd("tabmove " .. target)
+end, { desc = "Move tab left (use vcount) or wrap to last" })
 
-
-end, { desc = 'Prompt for tab index and move current tab' })
-keymap('n', '<leader><Tab>H', function()
-  local target = calculate_tab_target("left")
-  vim.cmd('tabmove ' .. target)
-end, { desc = 'Move tab left (use vcount) or wrap to last' })
-
-keymap('n', '<leader><Tab>L', function()
-  local target = calculate_tab_target("right")
-  vim.cmd('tabmove ' .. target)
-end, { desc = 'Move tab right (use vcount) or wrap to first' })
+keymap("n", "<leader><Tab>L", function()
+  local target = calculate_tab_target "right"
+  vim.cmd("tabmove " .. target)
+end, { desc = "Move tab right (use vcount) or wrap to first" })
 
 -- Resize with ESC keys - up down use for auto cmpl
 keymap("n", "<Up>", ":resize -3<CR>", opts)
@@ -234,7 +236,7 @@ keymap("n", "<Right>", "<cmd>vertical resize +3<CR>", opts)
 local function smart_buffer_prev()
   local ok = pcall(vim.cmd, "BufferLineCyclePrev")
   if not ok then
-    vim.cmd("bprevious")
+    vim.cmd "bprevious"
   end
 end
 
@@ -244,7 +246,7 @@ local function smart_buffer_next()
     vim.notify("Error executing BufferLineCycleNext", vim.log.levels.ERROR)
   end
   if not ok then
-    vim.cmd("bnext")
+    vim.cmd "bnext"
   end
 end
 
@@ -259,10 +261,10 @@ keymap("n", "<leader>bd", ":b#|bd#<CR>", opts)
 -- map("n", "<leader>wX", ":bd!<CR>", { desc = "Force close buffer" })
 
 local function toggle_fold_or_clear_highlight()
-  if vim.fn.foldlevel(".") > 0 then
-    vim.api.nvim_input("za")
+  if vim.fn.foldlevel "." > 0 then
+    vim.api.nvim_input "za"
   else
-    vim.cmd("nohlsearch")
+    vim.cmd "nohlsearch"
   end
 end
 keymap("n", "<Esc>", toggle_fold_or_clear_highlight, { expr = true, silent = true, noremap = true })
@@ -284,11 +286,10 @@ local getTermBuffer = function(filter_ft)
     local is_toggleterm = ft == "toggleterm"
     local is_snacks = ft == "snacks_terminal"
     local is_sidekick = ft == "sidekick_terminal"
-    local is_lazygit = bufName:match("lazygit") ~= nil
+    local is_lazygit = bufName:match "lazygit" ~= nil
 
-
-    local is_term = (filter_ft and ft == filter_ft) or
-        (filter_ft == nil and (not is_lazygit and (is_toggleterm or is_snacks)))
+    local is_term = (filter_ft and ft == filter_ft)
+      or (filter_ft == nil and (not is_lazygit and (is_toggleterm or is_snacks)))
 
     print([==[getTermBuffer#for#if is_term:]==], vim.inspect(is_term)) -- __AUTO_GENERATED_PRINT_VAR_END__
     if is_term == true then
@@ -305,7 +306,7 @@ function _G.cycle_term_buffers(filter_ft)
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[_G.cycle_term_buffers term_buffers:]==], vim.inspect(term_buffers)) -- __AUTO_GENERATED_PRINT_VAR_END__
   if #term_buffers == 0 then
-    print("No terminal buffers found")
+    print "No terminal buffers found"
     return
   end
 
@@ -340,11 +341,11 @@ function _G.cycle_term_layout()
   else
     vim.g.mytoggtermlayout = "float"
   end
-  vim.cmd("ToggleTerm")
+  vim.cmd "ToggleTerm"
   termlayout = vim.g.mytoggtermlayout
   vim.cmd("ToggleTerm direction=" .. termlayout)
   -- enter normal mode again from insert terminal mode
-  vim.cmd("stopinsert")
+  vim.cmd "stopinsert"
 end
 
 function _G.create_new_term()
@@ -360,14 +361,14 @@ function _G.create_new_term()
     -- sample toggleterm terminal
     -- term://~/dotfiles//30640:/bin/bash;#toggleterm#1
 
-    local id = bufname:match("term://.*#(%d+)$")
+    local id = bufname:match "term://.*#(%d+)$"
     local ft = vim.bo[buf].filetype
     if ft == "toggleterm" then
-      id = bufname:match("term://.*#(%d+)$")
+      id = bufname:match "term://.*#(%d+)$"
     elseif ft == "snacks_terminal" then
-      id = bufname:match("term://.*//(%d+):")
+      id = bufname:match "term://.*//(%d+):"
     else
-      id = bufname:match("term://.*//(%d+):")
+      id = bufname:match "term://.*//(%d+):"
     end
 
     print([==[_G.create_new_term#for#if id:]==], vim.inspect(id)) -- __AUTO_GENERATED_PRINT_VAR_END__
@@ -375,7 +376,9 @@ function _G.create_new_term()
       table.insert(sorted_term_num, { id = tonumber(id), buf = buf })
     end
   end
-  table.sort(sorted_term_num, function(a, b) return a.id < b.id end)
+  table.sort(sorted_term_num, function(a, b)
+    return a.id < b.id
+  end)
 
   -- For toggle term to find next avail id
   for i, entry in ipairs(sorted_term_num) do
@@ -389,10 +392,10 @@ function _G.create_new_term()
 
   local current_ft = vim.bo.filetype
   local command = nil
-  if current_ft:match("toggleterm") then
+  if current_ft:match "toggleterm" then
     command = next_id .. "ToggleTerm"
     vim.cmd(command)
-  elseif current_ft:match("snacks_terminal") then
+  elseif current_ft:match "snacks_terminal" then
     print("Snacks terminal open id " .. next_id)
     command = "SnacksTerm " .. next_id
     require("snacks").open_terminal(next_id)
@@ -404,7 +407,7 @@ function _G.create_new_term()
 end
 
 local function toggleSnacks()
-  print("togglesnacks from map inner")
+  print "togglesnacks from map inner"
   Snacks.terminal()
 end
 
@@ -419,18 +422,18 @@ function _G.set_toggleterm_keymaps()
   local is_toggleterm = ft == "toggleterm"
   local is_snacks = ft == "snacks_terminal"
   local is_sidekick = ft == "sidekick_terminal"
-  local is_lazygit = bufName:match("lazygit") ~= nil
+  local is_lazygit = bufName:match "lazygit" ~= nil
   -- print([==[_G.set_toggleterm_keymaps bufName:]==], vim.inspect(bufName)) -- __AUTO_GENERATED_PRINT_VAR_END__
   -- print([==[_G.set_toggleterm_keymaps is_lazygit:]==], vim.inspect(is_lazygit)) -- __AUTO_GENERATED_PRINT_VAR_END__
   if is_lazygit then
-    print("Lazygit buffer")
+    print "Lazygit buffer"
   elseif is_sidekick then
-    print("Sidekick buffer")
+    print "Sidekick buffer"
   else
     opts.desc = "Enter normal mode"
     vim.keymap.set("t", "jk", [[<C-\><C-n>]], opts)
     -- vim.keymap.set("n", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
-      -- { desc = "Toggle term BF", noremap = true, silent = true })
+    -- { desc = "Toggle term BF", noremap = true, silent = true })
 
     -- TODO: still conflicting ?
     -- vim.keymap.set("n", "<C-/>", toggleSnacks, { silent = true, desc = "Toggle snacks BF" })
@@ -496,10 +499,10 @@ function _G.set_toggleterm_keymaps()
         -- },
         --
         print([==[_G.set_toggleterm_keymaps#if#if#(anon) info:]==] .. buf .. " >", vim.inspect(info)) -- __AUTO_GENERATED_PRINT_VAR_END__
-        print("Send current word to Snacks terminal")
+        print "Send current word to Snacks terminal"
         -- TODO: make it toggle correctly
         -- __AUTO_GENERATED_PRINT_VAR_START__
-        local newcmd = "echo " .. vim.fn.expand("<cword>")
+        local newcmd = "echo " .. vim.fn.expand "<cword>"
         newcmd = ""
         info.position = "bottom"
         if info then
@@ -520,8 +523,7 @@ function _G.set_toggleterm_keymaps()
       vim.keymap.set("n", "<C-n>", ":lua create_new_term()<CR>", opts)
       -- Make sure C-_ always use ToggleTerm
       opts.desc = "Toggle Term"
-      vim.keymap.set("t", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
-        opts)
+      vim.keymap.set("t", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], opts)
       -- cycle through all terminal buffers
       -- J and K to move between all buffers next and rpev
       opts.desc = "Toggle Term next toggle"
@@ -532,7 +534,6 @@ function _G.set_toggleterm_keymaps()
     -- direction=float|horizontal|vertical
     opts.desc = "Quit Current Term"
     vim.keymap.set("n", "Q", ":bd!<CR>", opts)
-
   end
   -- what about buffername ?
   -- if not lazygit then do mapping
@@ -549,7 +550,7 @@ end
 keymap("n", ";", ":", { desc = "CMD enter command mode" })
 
 vim.api.nvim_create_user_command("OpenTerminalInSplitWithCwd", function()
-  local cwd = vim.fn.expand("%:p:h")
+  local cwd = vim.fn.expand "%:p:h"
 
   vim.api.nvim_command("split | lcd " .. cwd .. " | terminal")
 end, {})
@@ -571,7 +572,7 @@ function gitsigns_jump_next_hunk()
     return "]c"
   end
   vim.schedule(function()
-    require("gitsigns").nav_hunk("next")
+    require("gitsigns").nav_hunk "next"
   end)
   return "<Ignore>"
 end
@@ -581,7 +582,7 @@ function gitsigns_jump_prev_hunk()
     return "[c"
   end
   vim.schedule(function()
-    require("gitsigns").nav_hunk("prev")
+    require("gitsigns").nav_hunk "prev"
   end)
   return "<Ignore>"
 end
@@ -652,13 +653,13 @@ vim.api.nvim_create_autocmd("OptionSet", {
       if vim.fn.mapcheck("<leader>dg", "v") ~= "" then
         vim.api.nvim_buf_del_keymap(bufnr, "v", "<leader>dg")
       end
-      print("Unbind ?")
+      print "Unbind ?"
     end
   end,
 })
 
 local function addNvimConfigInRoot()
-  local pathUtil = require("utils.path")
+  local pathUtil = require "utils.path"
   local git_dir = pathUtil.get_git_root() or vim.fn.getcwd()
   local nvim_config = git_dir .. "/.nvim-config.lua"
   if vim.fn.filereadable(nvim_config) == 1 then
@@ -681,7 +682,7 @@ local function addNvimConfigInRoot()
 --  ... Please edit the DEFAULT settings below ...
 ]]
   -- append nvim base config content to the file $DOTFILES/$NVIM_DIR/$NVIM_CONFIG
-  local nvim_base_config = vim.fn.stdpath("config") .. "/lua/config/mydefault-nvim-config.lua"
+  local nvim_base_config = vim.fn.stdpath "config" .. "/lua/config/mydefault-nvim-config.lua"
   if vim.fn.filereadable(nvim_base_config) == 1 then
     local base_config = vim.fn.readfile(nvim_base_config)
     for _, line in ipairs(base_config) do
@@ -703,12 +704,12 @@ end
 
 -- Restart LSP client by name
 Cmd.create_cmd("RestartLspClients", function()
-  require("utils.lsp_setup").processLspClients("restart")
+  require("utils.lsp_setup").processLspClients "restart"
 end, { nargs = 0 })
 
 -- Stop LSP clients by name
 Cmd.create_cmd("StopLspClients", function()
-  require("utils.lsp_setup").processLspClients("stop")
+  require("utils.lsp_setup").processLspClients "stop"
 end, { nargs = 0 })
 
 Cmd.create_cmd("StopAllLspClients", function()
@@ -759,9 +760,8 @@ local function execute_selected_lua(showOutput, lastselected, clipenable)
     code = inputUtil.getPreviousSelectedText()
   else
     -- if vim.api.nvim_get_mode().mode == 'v' or vim.api.nvim_get_mode().mode == 'V' then
-      code = inputUtil.getSelectedLines()
+    code = inputUtil.getSelectedLines()
     -- end
-
   end
   local f = code and load(code)
   if f then
@@ -770,7 +770,7 @@ local function execute_selected_lua(showOutput, lastselected, clipenable)
       local current_win = vim.api.nvim_get_current_win()
       -- some async delay then execute noice
       vim.defer_fn(function()
-        vim.cmd('NoiceAll')
+        vim.cmd "NoiceAll"
         if vim.api.nvim_get_current_win() ~= current_win then
           vim.api.nvim_set_current_win(current_win)
         end
@@ -779,24 +779,29 @@ local function execute_selected_lua(showOutput, lastselected, clipenable)
   end
 end
 
-keymap({"n", "v"}, "<localleader>rl", function() execute_selected_lua(true) end, { desc = "Execute selected Lua code (show output)" })
-keymap({"n", "v"}, "<localleader>rL", function() execute_selected_lua(false) end, { desc = "Execute selected Lua code (no output)" })
-keymap("n", "<localleader>rT", function() execute_selected_lua(false, true) end, { desc = "Execute last selected Lua code (show output)" })
-
+keymap({ "n", "v" }, "<localleader>rl", function()
+  execute_selected_lua(true)
+end, { desc = "Execute selected Lua code (show output)" })
+keymap({ "n", "v" }, "<localleader>rL", function()
+  execute_selected_lua(false)
+end, { desc = "Execute selected Lua code (no output)" })
+keymap("n", "<localleader>rT", function()
+  execute_selected_lua(false, true)
+end, { desc = "Execute last selected Lua code (show output)" })
 
 keymap("n", "<localleader>rps", function()
-  vim.cmd([[
+  vim.cmd [[
 		:profile start /tmp/nvim-profile.log
 		:profile func *
 		:profile file *
-	]])
+	]]
 end, { desc = "Profile Start" })
 
 keymap("n", "<localleader>rpe", function()
-  vim.cmd([[
+  vim.cmd [[
 		:profile stop
 		:e /tmp/nvim-profile.log
-	]])
+	]]
 end, { desc = "Profile End" })
 
 --profile
@@ -806,7 +811,7 @@ end, { desc = "Profile End" })
 -- =======================
 
 local function rename_buffer()
-  local old_name = vim.fn.expand("%")
+  local old_name = vim.fn.expand "%"
   local new_name = vim.fn.input("Enter new buffer name: ", old_name)
 
   -- If user provided a new name and it's different from the old name
@@ -815,7 +820,7 @@ local function rename_buffer()
     vim.api.nvim_buf_set_name(0, new_name)
     print("Buffer renamed to " .. new_name)
   else
-    print("Buffer not renamed.")
+    print "Buffer not renamed."
   end
 end
 
@@ -830,57 +835,11 @@ end
 keymap("n", "<leader>bR", rename_buffer, { desc = "Rename Buffer", noremap = true, silent = true })
 
 local open_command = "xdg-open"
-if vim.fn.has("mac") == 1 then
+if vim.fn.has "mac" == 1 then
   open_command = "open"
 end
 
-
 -- Clean input by removing newlines and normalizing whitespace
-local function _normalize_input_text(s)
-  if not s then return nil end
-  -- Replace any escaped sequences like \n or \t
-  s = s:gsub('\\n', '\n')
-  s = s:gsub('\\t', '\t')
-  -- Collapse multiple spaces into one and trim leading/trailing whitespace
-  s = s:gsub('%s+', ' ')
-  return vim.trim(s)
-end
-
-local function clean_selected_text(s)
-  -- Handle selected multi-line paths or general text gracefully.
-  -- /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua
-  local sampleDonotdelete=[[
-  /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra
-  /myEditor.lua
-  ]]
-  -- For path-like inputs (contain path separators or URI schemes), remove
-  -- newlines and any indentation introduced by wrapping so segments join
-  -- correctly (e.g. "di\n  st" -> "dist"). For ordinary text, replace
-  -- newlines with a single space and collapse repeated whitespace.
-  if not s then return s end
-
-  -- Normalize escaped sequences and trim/normalize whitespace first
-  s = _normalize_input_text(s) or ""
-
-  -- Heuristic: treat as a path if it contains a path separator, URI scheme,
-  -- or ends with a common file extension fragment
-  local path_like = (s:find("[/\\]") ~= nil) or (s:find("://") ~= nil) or (s:find("%.%w+%s*$") ~= nil)
-
-  if path_like then
-    -- Remove newlines and any following indentation/whitespace so wrapped
-    -- path segments are concatenated without accidental spaces.
-    s = s:gsub("[\r\n]+%s*", "")
-    -- Remove any remaining stray whitespace inside path-like strings
-    s = s:gsub("%s+", "")
-  else
-    -- For general text: convert newlines to spaces and collapse whitespace
-    s = s:gsub("[\r\n]+", " ")
-    s = s:gsub("%s+", " ")
-    s = vim.trim(s)
-  end
-
-  return s
-end
 
 local function url_repo(tryParseGit)
   local cursorword
@@ -889,12 +848,12 @@ local function url_repo(tryParseGit)
     -- use visual selection if available
     cursorword = inputUtil.get_selected_or_cursor_word()
   else
-    cursorword = vim.fn.expand("<cfile>")
+    cursorword = vim.fn.expand "<cfile>"
   end
-  
+
   -- Clean the text (remove newlines, trim whitespace)
-  cursorword = clean_selected_text(cursorword)
-  
+  cursorword = inputUtil.clean_selected_text(cursorword)
+
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[url_repo cursorword:]==], vim.inspect(cursorword)) -- __AUTO_GENERATED_PRINT_VAR_END__
   if tryParseGit and cursorword and string.find(cursorword, "^[a-zA-Z0-9-_.]*/[a-zA-Z0-9-_.]*$") then
@@ -904,47 +863,45 @@ local function url_repo(tryParseGit)
   return cursorword or ""
 end
 
-
 keymap({ "n", "v" }, "gx", function()
   local url_or_word = url_repo(true)
   -- copy to register + if not empty
-  run_command({ open_command, url_or_word })
+  run_command { open_command, url_or_word }
   --   vim.fn.jobstart({ open_command, url_or_word }, { detach = true }) -- not work in tmux
   if url_or_word ~= "" then
     vim.fn.setreg("+", url_or_word)
   end
 end, { silent = true, desc = "Copy word / Open url" })
 
-
 -- map key maps to open directory
 keymap({ "n", "v" }, "gGs", function()
   local text = inputUtil.get_selected_or_cursor_word()
-  text = clean_selected_text(text)
-  
+  text = inputUtil.clean_selected_text(text)
+
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[(anon) text:]==], vim.inspect(text)) -- __AUTO_GENERATED_PRINT_VAR_END__
   local escaped_text = text and text:gsub(" ", "%%20")
   if not escaped_text or escaped_text == "" then
-    print("No text to search")
+    print "No text to search"
     return
   end
   -- __AUTO_GENERATED_PRINT_VAR_
   print([==[(anon) escaped_text:]==], vim.inspect(escaped_text)) -- __AUTO_GENERATED_PRINT_VAR_END__
   local search_url = "https://www.google.com/search?q=" .. escaped_text
-  run_command({ open_command, search_url })
+  run_command { open_command, search_url }
 end, { silent = true, desc = "Google Search" })
 
 -- Common function to resolve directory path from cursor/selection
 local function resolve_directory_path()
   local selected_or_cursor_word = inputUtil.get_selected_or_cursor_word()
-  selected_or_cursor_word = clean_selected_text(selected_or_cursor_word)
-  
-  local curr_buffer_path = vim.fn.expand("%:p:h")
+  selected_or_cursor_word = inputUtil.clean_selected_text(selected_or_cursor_word)
+
+  local curr_buffer_path = vim.fn.expand "%:p:h"
   local paths_to_try = {
     selected_or_cursor_word,
-    vim.fn.expand("<cfile>"),
-    curr_buffer_path .. "/" .. vim.fn.expand("<cfile>"),
-    curr_buffer_path .. "/" .. selected_or_cursor_word
+    vim.fn.expand "<cfile>",
+    curr_buffer_path .. "/" .. vim.fn.expand "<cfile>",
+    curr_buffer_path .. "/" .. selected_or_cursor_word,
   }
 
   local dir_path = nil
@@ -975,7 +932,7 @@ keymap({ "n", "v" }, "gGo", function()
   local dir_path, selected_word = resolve_directory_path()
   if dir_path then
     -- Open the directory in finder
-    vim.fn.jobstart({ "open", dir_path })
+    vim.fn.jobstart { "open", dir_path }
   else
     vim.notify("Invalid directory: " .. (dir_path or selected_word or "<nil>"), vim.log.levels.WARN)
   end
@@ -992,126 +949,12 @@ keymap({ "n", "v" }, "gGd", function()
   end
 end, { desc = "Open NeoTree dir - select/cursor/file" })
 
--- ============================================================================
--- gF Test Samples (use gF on these paths to test)
--- ============================================================================
--- Priority: no ./ or ../ prefix → git root first, then buffer cwd
---           with ./ or ../ prefix → buffer cwd first, then git root
---
--- IDE-style (colon separator):
---   lua/config/mykeymaps.lua:100           (git root priority)
---   ./lua/config/mykeymaps.lua:1000:5      (buffer cwd priority)
---   ./lua/plugins/init.lua:1               (buffer cwd priority)
---   snippets/global.json:1                 (git root priority)
---
--- Git-style (hash + L prefix):
---   lua/config/mykeymaps.lua#L100
---   lua/config/mykeymaps.lua#L100C5
---   lua/config/mykeymaps.lua#L100-L110
---   lua/config/mykeymaps.lua#L98C10-L110C10
---
--- README anchor style:
---   docs/misc_nvim.md#done
---   docs/misc_nvim.md#code
---
--- Relative paths (buffer cwd priority):
---   ./snippets/global.json
---   ../snippets/global.json
---
--- file:// URI scheme:
---   file:///tmp/test.lua:10:5
--- ============================================================================
-
-local function goto_file_line(open_in_previous_buffer)
-  local fileRef = require("utils.file_reference")
-
-  -- Extract file path and line number
-  local fileline = vim.fn.expand("<cfile>")
-  local current_line = vim.api.nvim_get_current_line()
-
-  -- Get the whole fileline with extra info like :line and :col from current line
-  -- Strategy: Find the complete non-whitespace token that contains the cfile path
-  local fileline_incurrentline_untilspace = nil
-  local escaped_fileline = vim.pesc(fileline)
-  for token in current_line:gmatch("%S+") do
-    if token:match(escaped_fileline) then
-      fileline_incurrentline_untilspace = token
-      break
-    end
-  end
-
-  -- Use the extended version if found, otherwise use the basic fileline
-  local target = fileline_incurrentline_untilspace or fileline
-
-  -- Handle visual mode selection
-  if inputUtil.is_visual_mode() then
-    target = inputUtil.get_selected_or_cursor_word()
-    -- Clean multiline selections to remove newlines and extra spaces
-    target = clean_selected_text(target)
-  end
-
-  -- Normalize target for common markdown link patterns like [text](file.md#anchor)
-  local md_link = target:match("%b()")
-  if md_link then
-    local inner = md_link:sub(2, -2)
-    if inner and inner ~= "" then
-      target = inner
-    end
-  end
-
-  -- Parse file reference (handles IDE style, git style, anchors, URIs)
-  local parsed = fileRef.parse_file_reference(target)
-  local path, line, col, anchor = parsed.path, parsed.line, parsed.col, parsed.anchor
-
-  -- Validate and open the file
-  if path and path ~= "" then
-    -- Resolve path with smart priority logic
-    local resolved_path = fileRef.resolve_file_path(path)
-
-    -- Open the file
-    if open_in_previous_buffer then
-      local current_win = vim.api.nvim_get_current_win()
-      if current_win == vim.g.prev_win then
-        vim.cmd("vsplit")
-      elseif not (vim.g.prev_win and vim.api.nvim_win_is_valid(vim.g.prev_win)) then
-        vim.cmd("vsplit") -- in case window already closed ?
-      end
-    end
-
-    -- Open the file
-    vim.cmd("edit " .. vim.fn.fnameescape(resolved_path))
-
-    local is_file_readable = vim.fn.filereadable(resolved_path) == 1
-    if not is_file_readable then
-      vim.notify("File not found use gf: " .. resolved_path, vim.log.levels.INFO)
-      vim.cmd("normal! gf")
-    end
-
-    -- Jump to line if provided
-    if line and line ~= "" then
-      vim.cmd(line)
-      -- Jump to column if provided
-      if col and col ~= "" then
-        vim.cmd("normal! " .. col .. "|")
-      end
-    end
-
-    -- Jump to anchor if provided (e.g. file.md#section-name)
-    if anchor and anchor ~= "" then
-      fileRef.jump_to_anchor(anchor)
-    end
-  else
-    -- Fallback to default gf behavior
-    vim.cmd("normal! gf")
-  end
-end
-
 keymap({ "n", "v" }, "gF", function()
-  goto_file_line(false)
+  myPathUtil.goto_file_line(false)
 end, { desc = "Go to file+line" })
 
 keymap({ "n", "v" }, "gB", function()
-  goto_file_line(true)
+  myPathUtil.goto_file_line(true)
 end, { desc = "Go to file+line" })
 
 keymap({ "n", "v" }, "gX", function()
@@ -1133,7 +976,7 @@ keymap({ "n", "v" }, "gX", function()
         -- file:///pathnotexists X fail -> open notexist X fail
         -- file:///pathexists vscode ok
         print("onfail: retry with cmd: ", open_command)
-        run_command({ open_command, url_or_word })
+        run_command { open_command, url_or_word }
         -- vim.fn.jobstart({ open_command, url_or_word }, { detach = true })
       end,
     }
@@ -1158,7 +1001,7 @@ local function augroup(name)
 end
 -- local function set_mappings()
 -- Map J and K in quickfix window
-local quickfixAndTroubleGroup = augroup("QuickfixAndTroubleMappings")
+local quickfixAndTroubleGroup = augroup "QuickfixAndTroubleMappings"
 
 -- Define a base opts table with shared variables and descriptions
 
@@ -1182,19 +1025,17 @@ local function print_copy_output()
   --print the shell command
   -- print total files :
   print([==[ Total files:]==], #files)
-  local command_sh_add_line_check_exist =
-      "echo '" ..
-      table.concat(files, " ") ..
-      "' | xargs -I {} sh -c 'if [ -f {} ]; then echo \"\" >> \"{}\"; else echo \"File does not exist: {}\"; fi'"
+  local command_sh_add_line_check_exist = "echo '"
+    .. table.concat(files, " ")
+    .. '\' | xargs -I {} sh -c \'if [ -f {} ]; then echo "" >> "{}"; else echo "File does not exist: {}"; fi\''
 
-  print([==[ Add line ]==])              -- __AUTO_GENERATED_PRINT_VAR_END__
+  print [==[ Add line ]==] -- __AUTO_GENERATED_PRINT_VAR_END__
   print(command_sh_add_line_check_exist) -- __AUTO_GENERATED_PRINT_VAR_END__
   -- print remove_newline (revert )
-  local command_sh_remove_newline =
-      "echo '" ..
-      table.concat(files, " ") ..
-      "' | xargs -n 1 -I {} sh -c 'if [ -f {} ]; then sed -i \"\" \"\\$d\" \"{}\"; else echo \"File does not exist: {}\"; fi'"
-  print([==[ Remove line ]==])
+  local command_sh_remove_newline = "echo '"
+    .. table.concat(files, " ")
+    .. '\' | xargs -n 1 -I {} sh -c \'if [ -f {} ]; then sed -i "" "\\$d" "{}"; else echo "File does not exist: {}"; fi\''
+  print [==[ Remove line ]==]
   print(command_sh_remove_newline)
   -- print([==[ files:]==], vim.inspect(files)) -- __AUTO_GENERATED_PRINT_VAR_END__
   -- copy files into clipboard split by new line / if want same line can paste in spotlight
@@ -1205,18 +1046,17 @@ end
 local function open_qflist_in_vscode()
   local files = get_qf_files()
   if #files == 0 then
-    print("No files in quickfix list.")
+    print "No files in quickfix list."
     return
   end
   local cmd = "code " .. table.concat(files, " ")
-  print("~ Opening files in VSCode with cmd:")
+  print "~ Opening files in VSCode with cmd:"
   print(cmd)
   vim.fn.jobstart(cmd, { detach = true })
 end
 
-
-vim.api.nvim_create_autocmd('FileType', {
-  pattern = { 'AvanteInput', 'codecompanion' },
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "AvanteInput", "codecompanion" },
   callback = function()
     print("FILETYPE AUCMD: ", vim.bo.filetype)
     -- cmd shift p
@@ -1248,17 +1088,17 @@ vim.keymap.set({ "n", "v", "i" }, "<C-a><C-v>", function()
   local pasted_image = require("img-clip").paste_image()
   if pasted_image then
     -- "Update" saves only if the buffer has been modified since the last save
-    vim.cmd("update")
-    print("Image pasted and file saved")
+    vim.cmd "update"
+    print "Image pasted and file saved"
     -- Only if updated I'll refresh the images by clearing them first
     -- I'm using [[ ]] to escape the special characters in a command
-    vim.cmd([[lua require("image").clear()]])
+    vim.cmd [[lua require("image").clear()]]
     -- Reloads the file to reflect the changes
-    vim.cmd("edit!")
+    vim.cmd "edit!"
     -- Switch back to command mode
-    vim.cmd("stopinsert")
+    vim.cmd "stopinsert"
   else
-    print("No image pasted. File not updated.")
+    print "No image pasted. File not updated."
   end
 end, { desc = "Paste image from system clipboard" })
 
@@ -1276,7 +1116,7 @@ local function extract_image_path(line)
   print([==[extract_image_path image_pattern:]==], vim.inspect(image_pattern)) -- __AUTO_GENERATED_PRINT_VAR_END__
   if not image_path or image_path == "" then
     -- vim.notify("No valid image path found from [] template", vim.log.levels.WARN)
-    image_path = image_path or myPathUtil.getFullPathFromRelativePath(vim.fn.expand("<cfile>"))
+    image_path = image_path or myPathUtil.getFullPathFromRelativePath(vim.fn.expand "<cfile>")
   end
   return image_path
 end
@@ -1292,7 +1132,7 @@ vim.keymap.set("n", "<leader>io", function()
   if image_path then
     -- Check if the image path starts with "http" or "https"
     if string.sub(image_path, 1, 4) == "http" then
-      print("URL image, use 'gx' to open it in the default browser.")
+      print "URL image, use 'gx' to open it in the default browser."
     else
       -- Construct absolute image path
       -- local current_file_path = vim.fn.expand("%:p:h")
@@ -1311,7 +1151,7 @@ vim.keymap.set("n", "<leader>io", function()
       end
     end
   else
-    print("No image found under the cursor")
+    print "No image found under the cursor"
   end
 end, { desc = "(macOS) Open image under cursor in Preview" })
 
@@ -1333,7 +1173,7 @@ vim.keymap.set("n", "<leader>if", function()
   if image_path then
     -- Check if the image path starts with "http" or "https"
     if string.sub(image_path, 1, 4) == "http" then
-      print("URL image, use 'gx' to open it in the default browser.")
+      print "URL image, use 'gx' to open it in the default browser."
     else
       -- Construct absolute image path
       -- local absolute_image_path = myPathUtil.getFullPathFromRelativePath(vim.fn.expand("<cfile>"))
@@ -1352,7 +1192,7 @@ vim.keymap.set("n", "<leader>if", function()
       end
     end
   else
-    print("No image found under the cursor")
+    print "No image found under the cursor"
   end
 end, { desc = "(macOS) Open image under cursor in Finder" })
 
@@ -1380,10 +1220,10 @@ vim.keymap.set("n", "<leader>id", function()
       local absolute_image_path = image_path
 
       -- Check if trash utility is installed
-      if vim.fn.executable("trash") == 0 then
+      if vim.fn.executable "trash" == 0 then
         vim.api.nvim_echo({
           { "- Trash utility not installed. Make sure to install it first\n", "ErrorMsg" },
-          { "- In macOS run `brew install trash`\n",                          nil },
+          { "- In macOS run `brew install trash`\n", nil },
         }, false, {})
         return
       end
@@ -1395,23 +1235,23 @@ vim.keymap.set("n", "<leader>id", function()
         if input == "y" or input == "Y" then
           -- Delete the image file using trash app
           local success, _ = pcall(function()
-            vim.fn.system({ "trash", vim.fn.fnameescape(absolute_image_path) })
+            vim.fn.system { "trash", vim.fn.fnameescape(absolute_image_path) }
           end)
 
           if success then
             vim.api.nvim_echo({
               { "Image file deleted from disk:\n", "Normal" },
-              { absolute_image_path,               "Normal" },
+              { absolute_image_path, "Normal" },
             }, false, {})
             -- I'll refresh the images, but will clear them first
             -- I'm using [[ ]] to escape the special characters in a command
             -- vim.cmd([[lua require("image").clear()]]) -- no need since cause issue
             -- Reloads the file to reflect the changes
-            vim.cmd("edit!")
+            vim.cmd "edit!"
           else
             vim.api.nvim_echo({
               { "Failed to delete image file:\n", "ErrorMsg" },
-              { absolute_image_path,              "ErrorMsg" },
+              { absolute_image_path, "ErrorMsg" },
             }, false, {})
           end
         else
@@ -1454,7 +1294,6 @@ vim.api.nvim_create_user_command("FzfSession", function()
   require("config.telescope_pickers").fzf.pickers.session_picker()
 end, {})
 
-
 local function toggle_lsp_format_mode(norequire)
   if vim.g.lsp_format_mode == "prefer" then
     vim.g.lsp_format_mode = "fallback"
@@ -1471,7 +1310,7 @@ end
 ---@param formatter table|nil specify formatter(s) to use
 ---@param auto_expand_visual boolean|nil whether to expand visual selection
 local function confformat(timeout_ms, isasync, formatter, auto_expand_visual)
-  local conform = require("conform")
+  local conform = require "conform"
   local is_selected = false
   if auto_expand_visual ~= nil then
     is_selected = auto_expand_visual
@@ -1480,20 +1319,20 @@ local function confformat(timeout_ms, isasync, formatter, auto_expand_visual)
     is_selected = is_visual == "v" or is_visual == "V" or is_visual == "\22"
   end
   -- select down one more line else the last line will not be formatted ??
-  local start_pos = vim.fn.getpos("'<")
-  local end_pos = vim.fn.getpos("'>")
+  local start_pos = vim.fn.getpos "'<"
+  local end_pos = vim.fn.getpos "'>"
 
   if is_selected then
     -- vim.cmd("normal! gvg")
-    vim.cmd("normal! gv")
-    vim.cmd("normal! j")
+    vim.cmd "normal! gv"
+    vim.cmd "normal! j"
   end
   conform.format({ async = isasync or false, timeout_ms = timeout_ms or 5000, formatter = formatter }, function(err)
     if not err then
-      vim.cmd(":noautocmd w")
+      vim.cmd ":noautocmd w"
     end
     if vim.startswith(string.lower(vim.fn.mode()), "v") then
-      print("stop v mode")
+      print "stop v mode"
       vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "n", true)
       inputUtil.restore_visual_selection(start_pos, end_pos)
     end
@@ -1501,14 +1340,13 @@ local function confformat(timeout_ms, isasync, formatter, auto_expand_visual)
 end
 
 local function select_and_format()
-  local conform = require("conform")
+  local conform = require "conform"
   local bufnr = vim.api.nvim_get_current_buf()
   local formatters = conform.list_formatters(bufnr)
   if not formatters or #formatters == 0 then
     vim.notify("No formatters available", vim.log.levels.WARN)
     return
   end
-
 
   local items = {}
   for _, f in ipairs(formatters) do
@@ -1520,7 +1358,7 @@ local function select_and_format()
 
   vim.ui.select(items, { prompt = "Select formatter:" }, function(choice)
     if choice then
-      confformat(nil, false, {choice}, is_selected)
+      confformat(nil, false, { choice }, is_selected)
       -- conform.format({ formatters = { choice }, async = false, bufnr = bufnr })
       -- conform.format({ formatters = { choice }, async = false })
       -- save after format without triggering autocmd
@@ -1532,8 +1370,12 @@ end
 
 -- 3. Map shortcut
 --
-vim.keymap.set("n", "<localleader>Fe", vim.cmd("FormatEnable"), { desc = "Enable Auto Format"  })
-vim.keymap.set("n", "<localleader>Fd", vim.cmd("FormatDisable"), { desc = "Disable Auto Format"  })
+vim.keymap.set("n", "<localleader>Fd", function()
+  vim.cmd "FormatDisable"
+end, { desc = "Disable Auto Format" })
+vim.keymap.set("n", "<localleader>Fe", function()
+  vim.cmd "FormatEnable"
+end, { desc = "Enable Auto Format" })
 vim.keymap.set("n", "<leader>uFt", toggle_lsp_format_mode, { desc = "Toggle LSP Format Mode (prefer/fallback)" })
 vim.keymap.set("n", "<localleader>FT", toggle_lsp_format_mode, { desc = "Toggle LSP Format Mode (prefer/fallback)" })
 vim.keymap.set("n", "<localleader>FT", toggle_lsp_format_mode, { desc = "Toggle LSP Format Mode (prefer/fallback)" })
@@ -1542,11 +1384,15 @@ vim.keymap.set("n", "<leader>uFS", select_and_format, { desc = "Select Formatter
 vim.keymap.set("", "<localleader>FS", select_and_format, { desc = "Select Formatter to Run" })
 vim.keymap.set("n", "<leader>uFf", confformat, { desc = "Format" })
 vim.keymap.set("", "<localleader>Ff", confformat, { desc = "Format" })
-vim.keymap.set("n", "<leader>uFF", function() confformat(10000, true) end, { desc = "Async Format" })
-vim.keymap.set("", "<localleader>FF", function() confformat(10000, true) end, { desc = "Async Format" })
+vim.keymap.set("n", "<leader>uFF", function()
+  confformat(10000, true)
+end, { desc = "Async Format" })
+vim.keymap.set("", "<localleader>FF", function()
+  confformat(10000, true)
+end, { desc = "Async Format" })
 vim.keymap.set("n", "<leader>uFs", ":noautocmd w<CR>", { desc = "Save No Format / C-S-s" })
 vim.keymap.set("", "<localleader>Fs", ":noautocmd w<CR>", { desc = "Save No Format" })
-vim.keymap.set({"i", "n"}, "<C-S-s>", ":noautocmd w<CR>", { desc = "Save No Format" })
+vim.keymap.set({ "i", "n" }, "<C-S-s>", ":noautocmd w<CR>", { desc = "Save No Format" })
 
 -- From docs : https://github.com/stevearc/conform.nvim/blob/master/doc/recipes.md#leave-visual-mode-after-range-format
 vim.keymap.set("", "<localleader>ff", function()
@@ -1589,7 +1435,7 @@ end, { desc = "Format code" })
 -- disabled in keymaps.lua (original)
 -- if you only want these mappings for toggle term use term://*toggleterm#* instead
 if not vim.g.vscode then
-  vim.cmd("autocmd! TermOpen term://* lua set_toggleterm_keymaps()")
+  vim.cmd "autocmd! TermOpen term://* lua set_toggleterm_keymaps()"
   vim.api.nvim_del_keymap("i", "<A-j>")
   vim.api.nvim_del_keymap("i", "<A-k>")
   vim.api.nvim_del_keymap("n", "<C-c>")
@@ -1605,10 +1451,9 @@ keymap("n", "zk", "zk")
 -- ===============================================
 -- PROMPT HELPER - Load and paste custom prompts
 -- ===============================================
-local prompts_helper = require("utils.prompts_helper")
+local prompts_helper = require "utils.prompts_helper"
 
 -- Paste prompt at cursor position
 keymap("n", "<localleader>aP", function()
-  prompts_helper.select_and_paste_prompt({ paste_mode = 'cursor' })
+  prompts_helper.select_and_paste_prompt { paste_mode = "cursor" }
 end, { desc = "Paste prompt at cursor" })
-

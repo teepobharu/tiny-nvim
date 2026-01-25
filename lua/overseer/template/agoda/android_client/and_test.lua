@@ -3,7 +3,7 @@
 ---@return string
 local function get_package_name(filepath, content)
   -- Extract the package name from the file content
-  local package_name = content:match("package%s+([%w%.]+)")
+  local package_name = content:match "package%s+([%w%.]+)"
   if not package_name then
     error("Package name not found in file: " .. filepath)
   end
@@ -19,7 +19,7 @@ local function get_file_content(filepath)
   if not file then
     error("Could not open file: " .. filepath)
   end
-  local content = file:read("*all")
+  local content = file:read "*all"
   file:close()
   return content
 end
@@ -28,12 +28,12 @@ end
 ---@param content string
 ---@return string
 local function get_class_name(filepath, content)
-  local class_name = content:match("class%s+([%w_]+)")
+  local class_name = content:match "class%s+([%w_]+)"
   if not class_name then
     -- Fall back to using the file name if class name is not found
     -- presentation/legacy-navigation/src/test/kotlin/com/agoda/mobile/consumer/screens/home/BottomNavPageMapperImplTest.kt
     -- to get the class name BottomNavPageMapperImplTest
-    class_name = filepath:match("([^/]+)%.kt$")
+    class_name = filepath:match "([^/]+)%.kt$"
   end
   return class_name
 end
@@ -62,7 +62,7 @@ local function get_module(filepath)
   print([==[get_module relpath:]==], vim.inspect(relpath)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
   -- local module = relpath:match("([^/]+)/([^/]+)/src/test/")
-  local module = relpath:match("(.*)/src/test/")
+  local module = relpath:match "(.*)/src/test/"
   print([==[get_module module:]==], vim.inspect(module)) -- __AUTO_GENERATED_PRINT_VAR_END__
   if module then
     module = ":" .. module:gsub("/", ":")
@@ -79,18 +79,18 @@ local function generate_gradle_test_command(filepath)
   if not file then
     error("Could not open file: " .. filepath)
   end
-  local content = file:read("*all")
+  local content = file:read "*all"
   file:close()
 
   -- Extract the package name from the file content
-  local package_name = content:match("package%s+([%w%.]+)")
+  local package_name = content:match "package%s+([%w%.]+)"
   if not package_name then
     error("Package name not found in file: " .. filepath)
   end
 
   -- Extract the class name from the file content
   -- Extract the module from the path
-  local module = filepath:match("([^/]+)/([^/]+)/src/test/")
+  local module = filepath:match "([^/]+)/([^/]+)/src/test/"
   module = ":" .. module:gsub("/", ":")
   -- presentation/legacy-navigation/src/test/kotlin/com/agoda/mobile/consumer/screens/home/BottomNavPageMapperImplTest.kt
   -- kotlin
@@ -98,7 +98,7 @@ local function generate_gradle_test_command(filepath)
 
   -- Construct the command
   local gradle_command =
-      string.format("./gradlew %s:testBaidumapDebugUnitTest --tests %s.%s", module, package_name, class_name)
+    string.format("./gradlew %s:testBaidumapDebugUnitTest --tests %s.%s", module, package_name, class_name)
 
   -- Return the command
   return gradle_command
@@ -108,7 +108,7 @@ end
 local function generate_test_command(module, test_module, package_name, class_name)
   class_name = class_name == "ALL" and "" or class_name
   if class_name and class_name ~= "" then
-    return string.format("./gradlew %s:%s --tests \"%s.%s\"", module, test_module, package_name, class_name)
+    return string.format('./gradlew %s:%s --tests "%s.%s"', module, test_module, package_name, class_name)
   else
     return string.format("./gradlew %s:%s", module, test_module)
   end
@@ -137,9 +137,10 @@ end
 return {
   name = "Run Android test",
   description = "run android test on current file",
+  tags = { "agoda", "custom", require("overseer").TAG.TEST, require("overseer").TAG.RUN },
   builder = function(params)
-    local current_file = vim.fn.expand("%:p")
-    local match = current_file:match("src/test/");
+    local current_file = vim.fn.expand "%:p"
+    local match = current_file:match "src/test/"
     if not match then
       error("This template only works for test files in src/test/. Current file: " .. current_file)
     end
@@ -152,24 +153,21 @@ return {
     -- 	.../lua/overseer/template/agoda/android_client/and_test.lua:108: in function 'builder'
     -- 	...igrate/lazy/overseer.nvim/lua/overseer/template/init.lua:251: in function 'build_task_args'
 
-    local filepath = vim.fn.expand("%:p")
+    local filepath = vim.fn.expand "%:p"
     local content = get_file_content(filepath)
     local package_name = params.package_name or get_package_name(filepath, content)
     -- local class_name = params.class_name == "ALL" and "" or params.class_name
     local module = params.module or get_module(filepath)
 
     -- Construct the command
-    if module:find("legacy%-navigation") and params.test_module ~= "testBaidumapDebugUnitTest" then
+    if module:find "legacy%-navigation" and params.test_module ~= "testBaidumapDebugUnitTest" then
       vim.notify(
         string.format("Replacing params.test_module with '%s' for legacy-navigation module", params.test_module),
         vim.log.levels.WARN
       )
       params.test_module = "testBaidumapDebugUnitTest"
     end
-    vim.notify(
-      string.format("Using params.test_module: '%s'", params.test_module),
-      vim.log.levels.INFO
-    )
+    vim.notify(string.format("Using params.test_module: '%s'", params.test_module), vim.log.levels.INFO)
     local gradle_command = generate_test_command(module, params.test_module, package_name, params.class_name)
 
     print([==[builder gradle_command:]==], vim.inspect(gradle_command)) -- __AUTO_GENERATED_PRINT_VAR_END__
@@ -185,15 +183,15 @@ return {
   end,
   --- @type overseer.Params|fun():overseer.Params
   params = function()
-    Snacks.debug("params")
-    local filepath = vim.fn.expand("%:p")
+    Snacks.debug "params"
+    local filepath = vim.fn.expand "%:p"
     local content = get_file_content(filepath)
     local module = get_module(filepath)
     local package_name = get_package_name(filepath, content)
     local class_name = get_class_name(filepath, content)
     local test_module = "testDebugUnitTest"
     Snacks.debug(class_name)
-    if module:find("legacy%-navigation") and test_module ~= "testBaidumapDebugUnitTest" then
+    if module:find "legacy%-navigation" and test_module ~= "testBaidumapDebugUnitTest" then
       test_module = "testBaidumapDebugUnitTest"
     end
 

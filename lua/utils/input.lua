@@ -3,12 +3,12 @@ local M = {}
 local fn, api, opt = vim.fn, vim.api, vim.opt
 
 function region_to_text(region)
-  local text = ''
+  local text = ""
   local maxcol = vim.v.maxcol
   for line, cols in vim.spairs(region) do
     local endcol = cols[2] == maxcol and -1 or cols[2]
     local chunk = vim.api.nvim_buf_get_text(0, line, cols[1], line, endcol, {})[1]
-    text = ('%s%s\n'):format(text, chunk)
+    text = ("%s%s\n"):format(text, chunk)
   end
   return text
 end
@@ -24,25 +24,24 @@ function M.get_selected_or_cursor_word()
   local mode = vim.api.nvim_get_mode().mode
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[M.get_selected_or_cursor_word mode:]==], vim.inspect(mode)) -- __AUTO_GENERATED_PRINT_VAR_END__
-  print([==[expand]==], vim.fn.expand("<cword>"))
+  print([==[expand]==], vim.fn.expand "<cword>")
   local selection = ""
 
   local mode = vim.fn.mode()
   local text = ""
   if mode == "v" or mode == "V" or mode == "\22" then
     -- Visual mode: get selected text
-    vim.cmd('normal! "vy')
-    selection = vim.fn.getreg('v')
+    vim.cmd 'normal! "vy'
+    selection = vim.fn.getreg "v"
   else
     -- Normal mode: get current line
-    selection = vim.fn.expand("<cword>")
+    selection = vim.fn.expand "<cword>"
   end
 
   local finalText = selection:gsub("^%s*(.-)%s*$", "%1")
   print([==[finaltext]==], vim.inspect(finalText)) -- __AUTO_GENERATED_PRINT_VAR_END__
   return finalText
 end
-
 
 -- ================ TOGGLE TERM UTIL COPIED ===============
 -- Copy from toggleterm send lines utils
@@ -70,8 +69,8 @@ M.getSelectedLines = function(selection_type, trim_spaces, disable_n_clipboard)
     local current_line = fn.getline(start_line)
 
     -- If current line is empty and clipboard fallback is not disabled, use clipboard
-    if not disable_n_clipboard and current_line:match("^%s*$") then
-      local clipboard = vim.fn.getreg('+')
+    if not disable_n_clipboard and current_line:match "^%s*$" then
+      local clipboard = vim.fn.getreg "+"
       if clipboard and #clipboard > 0 then
         return clipboard
       end
@@ -82,10 +81,10 @@ M.getSelectedLines = function(selection_type, trim_spaces, disable_n_clipboard)
     local res = nil
     if string.match(selection_type, "visual") then
       -- This calls vim.fn.getpos, which uses 1-based indexing for columns
-      res = M.get_line_selection("visual")
+      res = M.get_line_selection "visual"
     else
       -- This calls vim.fn.getpos, which uses 1-based indexing for columns
-      res = M.get_line_selection("motion")
+      res = M.get_line_selection "motion"
     end
     start_line, start_col = unpack(res.start_pos)
     -- char, line and block are used for motion/operatorfunc. 'block' is ignored
@@ -96,7 +95,9 @@ M.getSelectedLines = function(selection_type, trim_spaces, disable_n_clipboard)
     end
   end
 
-  if not lines or not next(lines) then return end
+  if not lines or not next(lines) then
+    return
+  end
 
   return table.concat(lines, "\n")
   -- Skip Execute fn from term.exec
@@ -122,7 +123,7 @@ function M.get_line_selection(mode)
   -- When calling lua functions directly from a mapping, need to
   -- explicitly exit visual with the escape key to ensure those marks are
   -- accurate.
-  vim.cmd("normal! ")
+  vim.cmd "normal! "
 
   -- Get the start and the end of the selection
   local start_line, start_col = unpack(fn.getpos(start_char), 2, 3)
@@ -136,14 +137,17 @@ function M.get_line_selection(mode)
 end
 
 function M.get_visual_selection(res, motion)
-
   motion = motion or false
   local mode = fn.visualmode()
-  if motion then mode = "v" end
+  if motion then
+    mode = "v"
+  end
 
   -- line-visual
   -- return lines encompassed by the selection; already in res object
-  if mode == "V" then return res.selected_lines end
+  if mode == "V" then
+    return res.selected_lines
+  end
 
   if mode == "v" then
     -- regular-visual
@@ -151,7 +155,9 @@ function M.get_visual_selection(res, motion)
     local start_line, start_col = unpack(res.start_pos)
     local end_line, end_col = unpack(res.end_pos)
     -- exclude the last char in text if "selection" is set to "exclusive"
-    if opt.selection:get() == "exclusive" then end_col = end_col - 1 end
+    if opt.selection:get() == "exclusive" then
+      end_col = end_col - 1
+    end
     return api.nvim_buf_get_text(0, start_line - 1, start_col - 1, end_line - 1, end_col, {})
   end
 
@@ -161,14 +167,18 @@ function M.get_visual_selection(res, motion)
     local _, start_col = unpack(res.start_pos)
     local _, end_col = unpack(res.end_pos)
     -- exclude the last col of the block if "selection" is set to "exclusive"
-    if opt.selection:get() == "exclusive" then end_col = end_col - 1 end
+    if opt.selection:get() == "exclusive" then
+      end_col = end_col - 1
+    end
     -- exchange start and end columns for proper substring indexing if needed
     -- e.g. instead of str:sub(10, 5), do str:sub(5, 10)
     if start_col > end_col then
       start_col, end_col = end_col, start_col
     end
     -- iterate over lines, truncating each one
-    return vim.tbl_map(function(line) return line:sub(start_col, end_col) end, res.selected_lines)
+    return vim.tbl_map(function(line)
+      return line:sub(start_col, end_col)
+    end, res.selected_lines)
   end
 end
 
@@ -178,40 +188,50 @@ end
 ---@param option string
 ---@param value any
 function M.wo_setlocal(win, option, value)
-
   api.nvim_set_option_value(option, value, { scope = "local", win = win })
 end
 
 -- ================ TOGGLE TERM UTIL COPIED END ===============
 
 function M.restore_visual_selection(start_pos, end_pos, mode)
-  start_pos = start_pos or vim.fn.getpos("`<")
-  end_pos = end_pos or vim.fn.getpos("`>")
+  start_pos = start_pos or vim.fn.getpos "`<"
+  end_pos = end_pos or vim.fn.getpos "`>"
   mode = mode or vim.fn.visualmode()
 
   -- Move to start
-  vim.api.nvim_win_set_cursor(0, {start_pos[2], start_pos[3] - 1})
+  vim.api.nvim_win_set_cursor(0, { start_pos[2], start_pos[3] - 1 })
 
   -- Enter visual mode
-  if mode == 'v' then
-    vim.cmd('normal! v')
-  elseif mode == 'V' then
-    vim.cmd('normal! V')
-  elseif mode == '\22' then -- CTRL-V (visual block)
-    vim.cmd('normal! <C-v>')
+  if mode == "v" then
+    vim.cmd "normal! v"
+  elseif mode == "V" then
+    vim.cmd "normal! V"
+  elseif mode == "\22" then -- CTRL-V (visual block)
+    vim.cmd "normal! <C-v>"
   end
 
   -- Move to end
-  vim.api.nvim_win_set_cursor(0, {end_pos[2], end_pos[3] - 1})
+  vim.api.nvim_win_set_cursor(0, { end_pos[2], end_pos[3] - 1 })
 end
 
+local function _normalize_input_text(s)
+  if not s then
+    return nil
+  end
+  -- Replace any escaped sequences like \n or \t
+  s = s:gsub("\\n", "\n")
+  s = s:gsub("\\t", "\t")
+  -- Collapse multiple spaces into one and trim leading/trailing whitespace
+  s = s:gsub("%s+", " ")
+  return vim.trim(s)
+end
 --- Get the text from the previous visual selection
 --- Uses the '< and '> marks to retrieve the last selected text
 ---@return string|nil The previously selected text, or nil if no previous selection
 function M.getPreviousSelectedText()
   -- Get the start and end positions of the last visual selection
-  local start_pos = vim.fn.getpos("'<")
-  local end_pos = vim.fn.getpos("'>")
+  local start_pos = vim.fn.getpos "'<"
+  local end_pos = vim.fn.getpos "'>"
 
   -- Check if marks are valid (line number > 0)
   if start_pos[2] == 0 or end_pos[2] == 0 then
@@ -225,14 +245,7 @@ function M.getPreviousSelectedText()
 
   -- Get the text between the marks
   -- nvim_buf_get_text uses 0-based indexing for lines and columns
-  local lines = vim.api.nvim_buf_get_text(
-    0,
-    start_line - 1,
-    start_col - 1,
-    end_line - 1,
-    end_col,
-    {}
-  )
+  local lines = vim.api.nvim_buf_get_text(0, start_line - 1, start_col - 1, end_line - 1, end_col, {})
 
   -- Join the lines with newline character
   if lines and #lines > 0 then
@@ -240,6 +253,44 @@ function M.getPreviousSelectedText()
   end
 
   return nil
+end
+
+function M.clean_selected_text(s)
+  -- Handle selected multi-line paths or general text gracefully.
+  -- /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra/myEditor.lua
+  local sampleDonotdelete = [[
+  /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/lua/plugins/extra
+  /myEditor.lua
+  ]]
+  -- For path-like inputs (contain path separators or URI schemes), remove
+  -- newlines and any indentation introduced by wrapping so segments join
+  -- correctly (e.g. "di\n  st" -> "dist"). For ordinary text, replace
+  -- newlines with a single space and collapse repeated whitespace.
+  if not s then
+    return s
+  end
+
+  -- Normalize escaped sequences and trim/normalize whitespace first
+  s = _normalize_input_text(s) or ""
+
+  -- Heuristic: treat as a path if it contains a path separator, URI scheme,
+  -- or ends with a common file extension fragment
+  local path_like = (s:find "[/\\]" ~= nil) or (s:find "://" ~= nil) or (s:find "%.%w+%s*$" ~= nil)
+
+  if path_like then
+    -- Remove newlines and any following indentation/whitespace so wrapped
+    -- path segments are concatenated without accidental spaces.
+    s = s:gsub("[\r\n]+%s*", "")
+    -- Remove any remaining stray whitespace inside path-like strings
+    s = s:gsub("%s+", "")
+  else
+    -- For general text: convert newlines to spaces and collapse whitespace
+    s = s:gsub("[\r\n]+", " ")
+    s = s:gsub("%s+", " ")
+    s = vim.trim(s)
+  end
+
+  return s
 end
 
 return M

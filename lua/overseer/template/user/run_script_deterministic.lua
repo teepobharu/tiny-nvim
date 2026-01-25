@@ -5,7 +5,7 @@ local FiletypeConfigurations = {
       -- cmd = { "nvim", "--headless", "+luafile $file", "+q" },
       cmd = { "nvim", "--headless", "-c luafile $file", "+q" },
       prerequisite = "Neovim must be installed and in PATH",
-      content_patterns = { "vim."}, -- Specific Bun patterns
+      content_patterns = { "vim." }, -- Specific Bun patterns
       is_match_with_content_only = false,
       executable_check = "nvim",
       comment_syntax = "--",
@@ -146,7 +146,7 @@ local function get_best_runner(file, ft)
     local executable = runner_def.executable_check or runner_def.cmd[1]
     if vim.fn.executable(executable) == 1 then
       local content_patterns = runner_def.content_patterns or {}
-      local content_match_required = #content_patterns > 0 
+      local content_match_required = #content_patterns > 0
       local match_count = 0
       local matched_lines = {}
       local has_content_match = not content_match_required
@@ -173,12 +173,12 @@ local function get_best_runner(file, ft)
         has_content_match = match_count > 0
       end
 
-      print(vim.inspect({
+      print(vim.inspect {
         runner = runner_def.name,
         has_content_match = has_content_match,
         match_count = match_count,
         matched_lines = matched_lines,
-      }))
+      })
 
       local should_update_score = has_content_match or runner_def.is_match_with_content_only == false
       if should_update_score and match_count > best_score then
@@ -205,6 +205,7 @@ end
 
 return {
   name = "run script - deterministic",
+  tags = { require("overseer").TAG.RUN, "run", "custom" },
   builder = function(params)
     -- __AUTO_GENERATED_PRINT_VAR_START__
     dbg([==[builder params:]==], vim.inspect(params)) -- __AUTO_GENERATED_PRINT_VAR_END__
@@ -230,7 +231,7 @@ return {
     }
   end,
   params = function()
-      -- Notes: do not remove
+    -- Notes: do not remove
     -- Define configurations for each filetype, including ordered runners and their specific logic
     -- Helper to get the resolved command and info
     -- show alternatives runner in case want to change for that filetypes  from the config as string of the key name
@@ -240,12 +241,12 @@ return {
     -- params 4: current resolved runner file
     -- once enter  if user choose difference runner in params 1 from resolve params 2 then put warning text that commadn will be run with `newrunnercmd $actualfilepath`
     -- // TODO:
-    -- support json and configuration runner ie jq with added parameters 
+    -- support json and configuration runner ie jq with added parameters
     -- choices = {  { final_cmd = "" }}
     local file = vim.fn.expand "%:p"
     -- __AUTO_GENERATED_PRINT_VAR_START__
     local ft = vim.bo.filetype
-    print([==[params file:]==], vim.inspect({file, ft})) -- __AUTO_GENERATED_PRINT_VAR_END__
+    print([==[params file:]==], vim.inspect { file, ft }) -- __AUTO_GENERATED_PRINT_VAR_END__
     local choicesRunnerForFt = {}
     local candidates = FiletypeConfigurations[ft] or FiletypeConfigurations.default
     -- append (not executable in runner name if not executable as a label)
@@ -256,7 +257,7 @@ return {
         table.insert(choicesRunnerForFt, runner_def.name .. " (not executable)")
       end
     end
-   
+
     dbg([==[params#for#if choicesRunnerForFt:]==], vim.inspect(choicesRunnerForFt)) -- __AUTO_GENERATED_PRINT_VAR_END__
     -- sort by executable first
     -- todo : count mathces content and add score on the choicesRunnerForFt
@@ -299,7 +300,7 @@ return {
         desc = "command to run <readonly>",
         order = 2,
         default = commandString,
-        optional = true
+        optional = true,
       },
       file = {
         type = "string",
@@ -311,11 +312,11 @@ return {
       },
       meta = {
         optional = true,
-        default = { a=1, b=2}
-      }
+        default = { a = 1, b = 2 },
+      },
     }
   end,
   -- condition = {
-    -- filetype = { "sh", "python", "go", "lua" },
+  -- filetype = { "sh", "python", "go", "lua" },
   -- },
 }

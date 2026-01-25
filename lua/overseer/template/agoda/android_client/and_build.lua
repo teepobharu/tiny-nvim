@@ -2,10 +2,11 @@
 return {
   name = "Build android",
   description = "Build run android",
+  tags = { "agoda", "custom", require("overseer").TAG.BUILD, require("overseer").TAG.RUN },
   builder = function(params)
     -- v2: Validation moved from condition callback
-    local current_path = vim.fn.expand("%:p:h")
-    if not current_path:match("client%-android") then
+    local current_path = vim.fn.expand "%:p:h"
+    if not current_path:match "client%-android" then
       error("This template only works in client-android projects. Current path: " .. current_path)
     end
 
