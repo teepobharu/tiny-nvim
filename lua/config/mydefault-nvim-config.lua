@@ -26,5 +26,6 @@ vim.lsp.enable {
   "bashls",
   "gitlablsp",
   "markdown",
+  "yamlls",
   -- 'eslint'
 }

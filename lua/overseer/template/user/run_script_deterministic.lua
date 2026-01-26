@@ -135,7 +135,9 @@ FiletypeConfigurations.typescript = vim.list_extend(FiletypeConfigurations.javas
   },
 })
 
-local dbg = require("utils.user_debug").dbg
+local debg = require "utils.user_debug"
+local dbg = debg.dbg
+-- debg.on()
 
 local function get_best_runner(file, ft)
   local candidates = FiletypeConfigurations[ft] or FiletypeConfigurations.default
@@ -244,6 +246,8 @@ return {
     -- support json and configuration runner ie jq with added parameters
     -- choices = {  { final_cmd = "" }}
     local file = vim.fn.expand "%:p"
+    -- __AUTO_GENERATED_PRINT_VAR_START__
+    print([==[params file:]==], vim.inspect(file)) -- __AUTO_GENERATED_PRINT_VAR_END__
     -- __AUTO_GENERATED_PRINT_VAR_START__
     local ft = vim.bo.filetype
     print([==[params file:]==], vim.inspect { file, ft }) -- __AUTO_GENERATED_PRINT_VAR_END__

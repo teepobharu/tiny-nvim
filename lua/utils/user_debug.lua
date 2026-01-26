@@ -4,9 +4,15 @@
 local M = {}
 
 --- Set debug enabled flag (updates global so other modules can see it)
-function M.set_enabled(val)
-  vim.g.userdebug = val
+function M.on(val)
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  print([==[M.on val:]==], vim.inspect(val)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  vim.g.userdebug = val == nil and true or val or false
 end
+function M.toggle(val)
+  vim.g.userdebug = not vim.g.userdebug or false
+end
+_G.userdebugtoggle = M.toggle_debug -- global function for easy toggling from command line
 
 --- Return whether debug printing is enabled
 function M.is_enabled()
@@ -23,9 +29,9 @@ function M.dbg(...)
     return
   end
 
-  local n = select('#', ...)
+  local n = select("#", ...)
   if n == 0 then
-    print('dbg: (no args)')
+    print "dbg: (no args)"
     return
   end
 
@@ -33,7 +39,7 @@ function M.dbg(...)
   for i = 1, n do
     local v = select(i, ...)
     if v == nil then
-      table.insert(parts, 'nil')
+      table.insert(parts, "nil")
     else
       local ok, s = pcall(vim.inspect, v)
       if ok and s ~= nil then
@@ -50,4 +56,3 @@ function M.dbg(...)
 end
 
 return M
-

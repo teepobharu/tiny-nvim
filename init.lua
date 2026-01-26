@@ -27,8 +27,11 @@ if vim.g.vscode then
     local pattern = "NvimIdeKeymaps"
     vim.api.nvim_exec_autocmds("User", { pattern = pattern, modeline = false })
 else
-    -- Load the theme
-    require("kanagawa").load "wave"
+    -- Load the theme (skip if running with --noplugin)
+    local ok, kanagawa = pcall(require, "kanagawa")
+    if ok then
+        kanagawa.load "wave"
+    end
 
     local ts_server = vim.g.lsp_typescript_server or "ts_ls" -- "ts_ls" or "vtsls" for TypeScript
 
@@ -43,7 +46,11 @@ else
         -- "tailwindcss", -- Tailwind CSS
     }
 
-    require("config.mydefault-nvim-config")
+    -- My custom handler to watch for different startup modes
+    require("utils.startup.simple_startup")
+    -- Load additional config (skip if running with --noplugin)
+    ok = pcall(require, "config.mydefault-nvim-config")
+
     -- Load Lsp on-demand, e.g: eslint is disable by default
     -- e.g: We could enable eslint by set vim.g.lsp_on_demands = {"eslint"}
     if vim.g.lsp_on_demands then
