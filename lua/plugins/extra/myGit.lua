@@ -22,13 +22,13 @@ return {
         ":Gitsigns attach",
         desc = "Gitsigns Attach",
       },
+      -- {
+      --   "<leader>ghS",
+      --   "<cmd>!git add %<CR>:Gitsigns detach<CR>:Gitsigns attach<CR>",
+      --   desc = "$Git stage current",
+      -- },
       {
         "<leader>ghS",
-        "<cmd>!git add %<CR>:Gitsigns detach<CR>:Gitsigns attach<CR>",
-        desc = "$Git stage current",
-      },
-      {
-        "<leader>ghM",
         function()
           -- WARNING: LSP  cwd can cause error pwd (example .ts in lua git project)= ~/ of project git root: /Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim
           local simpleCmdResult
@@ -87,7 +87,7 @@ return {
             end
           end
         end,
-        desc = "$GitFN stage current",
+        desc = "$Git stage current",
       },
       -- normally do not needed if staged it wil has gitsign
       -- {

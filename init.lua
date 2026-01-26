@@ -51,6 +51,7 @@ else
     typescript = { ts_server, "biome" },
     typescriptreact = { ts_server, "biome" },
     markdown = { "marksman" },
+    yaml = { "yaml" },
     html = { "tailwindcss" },
     css = { "tailwindcss" },
     scss = { "tailwindcss" },
@@ -59,7 +60,10 @@ else
     postcss = { "tailwindcss" },
   }
 
-  require("config.mydefault-nvim-config")
+  -- My custom handler to watch for different startup modes
+  pcall(require, "utils.startup.simple_startup")
+  -- Load additional config (skip if running with --noplugin)
+  pcall(require, "config.mydefault-nvim-config")
 
   local enabled_lsp = {}
   local on_demands = vim.g.lsp_on_demands or {}
