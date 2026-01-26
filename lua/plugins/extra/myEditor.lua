@@ -51,12 +51,12 @@ return {
     opts = {
       -- default config: https://github.com/stevearc/overseer.nvim/blob/a2734d90c514eea27c4759c9f502adbcdfbce485/lua/overseer/config.lua#L4
       -- seems like already included by default if put inside lua/overseer/template
-      template_dirs = { },
+      template_dirs = {},
       disable_template_modules = {
         -- works
-        "overseer.template.common_shell.grep_async",           -- Exclude specific module  
+        "overseer.template.common_shell.grep_async", -- Exclude specific module
         -- not work
-        -- "common_shell.grep_async",           -- Exclude specific module  
+        -- "common_shell.grep_async",           -- Exclude specific module
       },
       strategy = {
         "terminal",
@@ -553,7 +553,11 @@ Documentation and Tracking:
             alias = "short-staged-commit",
             auto_submit = true,
             is_slash_cmd = true,
-            adapter = "copilot", -- ✅ Fixed: simplified to string
+            adapter = {
+              name = "copilot",
+              -- model = "grok-code-fast-1",
+              model = "gpt-5-mini",
+            },
           },
           prompts = {
             {

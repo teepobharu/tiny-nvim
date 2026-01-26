@@ -139,7 +139,7 @@ M.keymaps = {
     {
       "<leader>oP",
       function()
-        require("overseer").run_task { name = "run script" }
+        require("overseer").run_task { name = "run script - deterministic" }
       end,
       desc = "Overseer Run Deterministic",
     },

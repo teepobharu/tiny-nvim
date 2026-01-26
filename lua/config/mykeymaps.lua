@@ -429,6 +429,13 @@ function _G.set_toggleterm_keymaps()
     print "Lazygit buffer"
   elseif is_sidekick then
     print "Sidekick buffer"
+    -- try remove but still not work usable
+    -- vim.api.nvim_del_keymap("t", "<C-h>")
+    -- vim.api.nvim_del_keymap("t", "<C-p>")
+    -- vim.api.nvim_del_keymap("t", "<C-j>")
+    -- vim.api.nvim_del_keymap("t", "<C-h>")
+    -- remove_map_if_exists('<C-j>', 't')
+    -- remove_map_if_exists('<C-k>', 't')
   else
     opts.desc = "Enter normal mode"
     vim.keymap.set("t", "jk", [[<C-\><C-n>]], opts)
@@ -788,6 +795,9 @@ end, { desc = "Execute selected Lua code (no output)" })
 keymap("n", "<localleader>rT", function()
   execute_selected_lua(false, true)
 end, { desc = "Execute last selected Lua code (show output)" })
+
+keymap("n", "<localleader>rsv", "<cmd>so $MYVIMRC<CR>", { desc = "Source NVIM init" })
+keymap("n", "<localleader>rsV", "<cmd>so ~/.vimrc<CR>", { desc = "Source ~/.vimrc" })
 
 keymap("n", "<localleader>rps", function()
   vim.cmd [[
@@ -1370,14 +1380,44 @@ end
 
 -- 3. Map shortcut
 --
+-- Global format toggle
 vim.keymap.set("n", "<localleader>Fd", function()
   vim.cmd "FormatDisable"
-end, { desc = "Disable Auto Format" })
+end, { desc = "Disable Auto Format (Global)" })
 vim.keymap.set("n", "<localleader>Fe", function()
   vim.cmd "FormatEnable"
-end, { desc = "Enable Auto Format" })
+end, { desc = "Enable Auto Format (Global)" })
+-- override current command to make FormatEnable also work on buffer
+
+vim.keymap.set("n", "<localleader>FT", function()
+  -- Buffer-local autoformat toggle
+  vim.b.disable_autoformat = not vim.b.disable_autoformat
+  if vim.b.disable_autoformat then
+    vim.print "Autoformat disabled for this buffer"
+  else
+    vim.print "Autoformat enabled for this buffer"
+  end
+end, { desc = "Toggle Autoformat (Buffer)" })
+-- Buffer-local format toggle
+vim.keymap.set("n", "<localleader>FD", function()
+  vim.cmd "FormatDisable!"
+  vim.notify("Autoformat disabled for this buffer", vim.log.levels.INFO)
+end, { desc = "Disable Auto Format (Buffer)" })
+vim.keymap.set("n", "<localleader>FE", function()
+  vim.b.disable_autoformat = false
+  vim.notify("Autoformat enabled for this buffer", vim.log.levels.INFO)
+end, { desc = "Enable Auto Format (Buffer)" })
+vim.keymap.set("n", "<localleader>Ft", function()
+  local auto_format = vim.g.disable_autoformat ~= nil and not vim.g.disable_autoformat or false
+  if auto_format then
+    vim.cmd "FormatEnable"
+  else
+    vim.cmd "FormatDisable"
+  end
+  vim.notify("Auto format " .. (auto_format and "enabled" or "disabled"), vim.log.levels.INFO)
+end, { desc = "Toggle Autoformat (Global)" })
+
 vim.keymap.set("n", "<leader>uFt", toggle_lsp_format_mode, { desc = "Toggle LSP Format Mode (prefer/fallback)" })
-vim.keymap.set("n", "<localleader>FT", toggle_lsp_format_mode, { desc = "Toggle LSP Format Mode (prefer/fallback)" })
 vim.keymap.set("n", "<localleader>FT", toggle_lsp_format_mode, { desc = "Toggle LSP Format Mode (prefer/fallback)" })
 -- vim.keymap.set("n", "<leader>uFT", function() toggle_lsp_format_mode(true) end, { desc = "Toggle LSP Format Mode" })
 vim.keymap.set("n", "<leader>uFS", select_and_format, { desc = "Select Formatter to Run" })
@@ -1435,10 +1475,16 @@ end, { desc = "Format code" })
 -- disabled in keymaps.lua (original)
 -- if you only want these mappings for toggle term use term://*toggleterm#* instead
 if not vim.g.vscode then
-  vim.cmd "autocmd! TermOpen term://* lua set_toggleterm_keymaps()"
-  vim.api.nvim_del_keymap("i", "<A-j>")
-  vim.api.nvim_del_keymap("i", "<A-k>")
-  vim.api.nvim_del_keymap("n", "<C-c>")
+  local ok, err
+  ok, err = pcall(function()
+    vim.cmd "autocmd! TermOpen term://* lua set_toggleterm_keymaps()"
+    vim.api.nvim_del_keymap("i", "<A-j>")
+    vim.api.nvim_del_keymap("i", "<A-k>")
+    vim.api.nvim_del_keymap("n", "<C-c>")
+  end)
+  if not ok then
+    vim.notify("Error in toggleterm setup: " .. tostring(err), vim.log.levels.WARN)
+  end
   -- bufferline.nvim once sort need it's own fn's
   -- but this load after lazy ?
   -- vim.api.nvim_del_keymap("n", "<S-h>")
@@ -1451,9 +1497,9 @@ keymap("n", "zk", "zk")
 -- ===============================================
 -- PROMPT HELPER - Load and paste custom prompts
 -- ===============================================
-local prompts_helper = require "utils.prompts_helper"
 
 -- Paste prompt at cursor position
 keymap("n", "<localleader>aP", function()
+  local prompts_helper = require "utils.prompts_helper"
   prompts_helper.select_and_paste_prompt { paste_mode = "cursor" }
 end, { desc = "Paste prompt at cursor" })
