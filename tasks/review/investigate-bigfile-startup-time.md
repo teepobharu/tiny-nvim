@@ -3,11 +3,14 @@ title: "Investigate startup time for large lsp.log with bigfile handling"
 status: "review"
 assignee: "ai"
 created: 2026-01-25
-priority: "medium"
+priority: "low"
 related:
   - [snacks config](lua/plugins/snacks.lua)
   - [myEditor notes](lua/plugins/extra/myEditor.lua)
   - [init.lua](init.lua)
+notes: |
+  Deprioritized: Investigation complete. Bigfile adds ~700ms but handles large files gracefully.
+  No action required unless performance becomes critical issue.
 ---
 
 ## Objective

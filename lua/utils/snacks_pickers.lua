@@ -54,6 +54,60 @@ local function with_external_actions(actions)
   })
 end
 
+local function build_git_status_map(base_ref)
+  local file_status_map = {}
+  if not base_ref or base_ref == "" then
+    return file_status_map
+  end
+
+  local status_output = vim.fn.systemlist {
+    "git",
+    "diff",
+    "--name-status",
+    base_ref .. "..HEAD",
+  }
+
+  if vim.v.shell_error == 0 then
+    for _, line in ipairs(status_output) do
+      if line ~= "" then
+        -- Parse status format: "M\tfile.lua" or "A\tfile.lua" or "D\tfile.lua"
+        local status, file = line:match "^(%a)%s+(.+)$"
+        if status and file then
+          file_status_map[file] = status
+        end
+      end
+    end
+  end
+
+  return file_status_map
+end
+
+local function git_status_formatter(file_status_map)
+  return function(item)
+    local file = item.file or item.text or ""
+    if file == "" then
+      return "file"
+    end
+
+    local status = file_status_map[file] or "M"
+    local status_icons = {
+      A = { icon = "[A]", hl = "DiagnosticOk" },
+      M = { icon = "[M]", hl = "DiagnosticInfo" },
+      D = { icon = "[D]", hl = "DiagnosticError" },
+      R = { icon = "[R]", hl = "DiagnosticWarn" },
+      C = { icon = "[C]", hl = "DiagnosticWarn" },
+      T = { icon = "[T]", hl = "Comment" },
+    }
+
+    local status_info = status_icons[status] or { icon = "[?]", hl = "Comment" }
+
+    return {
+      { status_info.icon .. " ", status_info.hl },
+      { file, "SnacksPickerFile" },
+    }
+  end
+end
+
 local function preview_git_diff_with_base(base_ref)
   return function(ctx)
     if not base_ref or base_ref == "" then
@@ -72,7 +126,7 @@ local function preview_git_diff_with_base(base_ref)
       vim.list_extend(cmd, extra_args)
     end
 
-    vim.list_extend(cmd, { "diff", base_ref .. "..HEAD", "--x", ctx.item.file })
+    vim.list_extend(cmd, { "diff", base_ref .. "..HEAD", "--", ctx.item.file })
     return require("snacks.picker.preview").cmd(cmd, ctx, { ft = "diff" })
   end
 end
@@ -323,6 +377,7 @@ function M.custom_git_pickers.git_last_commit_show()
   local editor_keymaps = require "utils.editor_keymaps"
   local actions = editor_keymaps.snacks_action_factories.create_git_file_actions("HEAD~1", false)
   local git_keys = editor_keymaps.snacks_picker_group_keys.git_file_keys
+  local file_status_map = build_git_status_map "HEAD~1"
 
   pick_cmd_result {
     cmd = "git",
@@ -339,6 +394,7 @@ function M.custom_git_pickers.git_last_commit_show()
         keys = git_keys.list,
       },
     },
+    format = git_status_formatter(file_status_map),
   }
 end
 
@@ -438,6 +494,7 @@ function M.custom_git_pickers.git_diff_upstream()
   local git_keys = editor_keymaps.snacks_picker_group_keys.git_file_keys_upstream
   local ref_metadata = git_util.get_ref_metadata(upstream_ref)
   local base_ref = ref_metadata and ref_metadata.resolved_ref or upstream_ref
+  local file_status_map = build_git_status_map(base_ref)
 
   pick_cmd_result {
     cmd = "git",
@@ -454,6 +511,7 @@ function M.custom_git_pickers.git_diff_upstream()
         keys = git_keys.list,
       },
     },
+    format = git_status_formatter(file_status_map),
   }
 end
 
@@ -633,6 +691,7 @@ local function show_file_list_picker(selected_ref_stats, on_back)
   local display_ref = ref_metadata.resolved_ref or selected_ref_stats.refAlias
   local ref_type_label = ref_metadata.resolve_ref_type ~= "unknown" and " (" .. ref_metadata.resolve_ref_type .. ")"
     or ""
+  local file_status_map = build_git_status_map(display_ref)
 
   Snacks.picker.pick {
     source = "git_diff_files",
@@ -667,7 +726,7 @@ local function show_file_list_picker(selected_ref_stats, on_back)
       })
       return require("snacks.picker.source.proc").proc(proc_opts, ctx)
     end,
-    format = "file",
+    format = git_status_formatter(file_status_map),
     preview = preview_git_diff_with_base(ref_metadata.resolved_ref or selected_ref_stats.refAlias),
     actions = with_external_actions(actions),
     win = {
