@@ -32,6 +32,9 @@ return {
     dependencies = {
       { "github/copilot.vim" },
       { "nvim-lua/plenary.nvim", branch = "master" },
+      -- MCPHub integration - CopilotChat has native MCP support
+      -- See: lua/plugins/extra/myAi.lua for configuration
+      { "ravitemer/mcphub.nvim", optional = true },
     },
     build = "make tiktoken", -- Only on MacOS or Linux
     opts = {
