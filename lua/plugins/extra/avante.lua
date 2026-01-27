@@ -15,6 +15,10 @@ return {
     dependencies = {
       "nvim-lua/plenary.nvim",
       "MunifTanjim/nui.nvim",
+      -- MCPHub integration for MCP tools access
+      -- Usage: /mcp:* for prompts
+      -- See: lua/plugins/extra/myAi.lua for configuration
+      -- { "ravitemer/mcphub.nvim", optional = true },
     },
     config = function(_, options)
       require("avante").setup(options)

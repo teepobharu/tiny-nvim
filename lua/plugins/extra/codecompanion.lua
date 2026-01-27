@@ -132,6 +132,10 @@ return {
       "nvim-treesitter/nvim-treesitter",
       "ibhagwan/fzf-lua", -- For fzf provider, file or buffer picker
       "jellydn/spinner.nvim", -- Show loading spinner when request is started
+      -- MCPHub integration for MCP tools/resources access
+      -- Usage: @{mcp} for tools, #{mcp:resource} for resources, /mcp:* for prompts
+      -- See: lua/plugins/extra/myAi.lua for configuration
+      { "ravitemer/mcphub.nvim", optional = true },
     },
     opts = {
       strategies = {
@@ -626,4 +630,3 @@ return {
     },
   },
 }
-
