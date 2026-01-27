@@ -65,7 +65,11 @@ return {
       -- https://deepwiki.com/search/can-params-return-object-value_cf6755d4-5426-473d-9d19-226d55ef99b7?mode=fast
       task_list = {
         keymaps = {
-          ["<A-q>"] = { "keymap.run_action", opts = { action = "open output in quickfix" }, desc = "Open task output in the quickfix" },
+          ["<A-q>"] = {
+            "keymap.run_action",
+            opts = { action = "open output in quickfix" },
+            desc = "Open task output in the quickfix",
+          },
           ["<C-q>"] = { "<CMD>close<CR>", desc = "Close task list" },
           ["a"] = { "keymap.run_action", opts = { action = "edit" }, desc = "Edit task" },
           -- since ^ works no mapping not work ?
@@ -795,6 +799,7 @@ Your instructions here
           debug = "<leader>rd", -- discard to some random key
           selection = "<localleader>ax",
         },
+        select_history = "<leader>rh",
         focus = "<localleader>ax", -- discard to some random key
       },
     },
