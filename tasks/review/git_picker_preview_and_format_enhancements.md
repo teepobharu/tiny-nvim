@@ -1,6 +1,6 @@
 ---
 title: "Fix git pickers preview showing help text & enhance format with status indicators"
-status: "open"
+status: "review"
 assignee: "ai"
 created: 2026-01-25
 priority: "high"
@@ -9,9 +9,24 @@ related:
   - [Snacks picker memory](docs/memory/snacks_picker.md)
 ---
 
+## Implementation Status
+
+✅ **COMPLETED (2026-01-27)**
+
+### Changes Made
+
+1. **Fixed preview bug** (Line 75): Changed `--x` → `--`
+2. **Added status mapping**: `build_git_status_map()` function parses `git diff --name-status`
+3. **Added formatter**: `git_status_formatter()` creates colored status indicators [A]/[M]/[D]/[R]
+4. **Applied to all 3 git pickers**:
+   - `git_last_commit_show()` - Line 380, 397
+   - `git_diff_upstream()` - Line 497, 514
+   - `show_file_list_picker()` - Line 694, 729
+
 ## Objective
 
 Fix two critical issues with custom git pickers:
+
 1. **Bug**: Preview window shows `git diff` help text instead of actual diff
 2. **Enhancement**: Add formatted status indicators (A/D/M) before filenames similar to todo_comments picker
 
@@ -20,6 +35,7 @@ Fix two critical issues with custom git pickers:
 ### Issue 1: Preview Shows Git Help Instead of Diff
 
 Currently, the git diff preview shows:
+
 ```
 usage: git diff [<options>] [<commit>] [--] [<path>...]
    or: git diff [<options>] --cached [--merge-base] [<commit>] [--] [<path>...]
@@ -31,6 +47,7 @@ common diff options:
 ```
 
 **Root Cause**: [snacks_pickers.lua:75](lua/utils/snacks_pickers.lua:75) contains invalid git flag:
+
 ```lua
 vim.list_extend(cmd, { "diff", base_ref .. "..HEAD", "--x", ctx.item.file })
                                                       ^^^^
@@ -41,6 +58,7 @@ The `--x` flag is NOT a valid git diff option. This should be `--` (path separat
 ### Issue 2: Plain Filename Format
 
 Current format shows only plain filenames:
+
 ```
 lua/utils/snacks_actions.lua
 lua/plugins/snacks.lua
@@ -48,6 +66,7 @@ tests/myTest.lua
 ```
 
 **Desired format** (similar to todo_comments picker):
+
 ```
 [A] lua/utils/new_file.lua
 [M] lua/plugins/snacks.lua
@@ -55,6 +74,7 @@ tests/myTest.lua
 ```
 
 Where:
+
 - `[A]` = Added file (green)
 - `[M]` = Modified file (blue/yellow)
 - `[D]` = Deleted file (red)
@@ -64,13 +84,18 @@ Where:
 ### Part 1: Fix Preview Bug
 
 **File**: [lua/utils/snacks_pickers.lua:75](lua/utils/snacks_pickers.lua:75)
+7ac02481
 
 **Current Code**:
+
 ```lua
 vim.list_extend(cmd, { "diff", base_ref .. "..HEAD", "--x", ctx.item.file })
 ```
 
 **Fix**:
+
+[lua/utils/snacks_pickers.lua](lua/utils/snacks_pickers.lua:129)
+
 ```lua
 vim.list_extend(cmd, { "diff", base_ref .. "..HEAD", "--", ctx.item.file })
 ```
@@ -80,6 +105,7 @@ vim.list_extend(cmd, { "diff", base_ref .. "..HEAD", "--", ctx.item.file })
 ### Part 2: Add Status Indicators to File List
 
 **Affected Functions**:
+
 1. `git_last_commit_show()` - Line 322
 2. `git_diff_upstream()` - Line 348
 3. `show_file_list_picker()` (within custom_change_list_picker) - Line 626
@@ -87,6 +113,7 @@ vim.list_extend(cmd, { "diff", base_ref .. "..HEAD", "--", ctx.item.file })
 **Implementation Approach**:
 
 1. **Get file status** for each file using `git diff --name-status`:
+
    ```lua
    -- Returns format: "M\tfile.lua" or "A\tfile.lua" or "D\tfile.lua"
    local status_output = vim.fn.systemlist({
@@ -95,6 +122,7 @@ vim.list_extend(cmd, { "diff", base_ref .. "..HEAD", "--", ctx.item.file })
    ```
 
 2. **Parse status into lookup table**:
+
    ```lua
    local file_status_map = {}
    for _, line in ipairs(status_output) do
@@ -106,6 +134,7 @@ vim.list_extend(cmd, { "diff", base_ref .. "..HEAD", "--", ctx.item.file })
    ```
 
 3. **Create custom formatter**:
+
    ```lua
    format = function(item)
      local file = item.file or item.text
@@ -147,7 +176,8 @@ vim.list_extend(cmd, { "diff", base_ref .. "..HEAD", "--", ctx.item.file })
 
 ## Reference: How todo_comments Does It
 
-Check `~/.local/share/nvim/lazy/snacks.nvim/lua/snacks/picker/source/todo.lua` for reference on:
+Check `~/.local/share/..../lazy/snacks.nvim/lua/snacks/picker/source/todo.lua` for reference on:
+
 - How they format items with prefixes
 - How they use highlight groups
 - How they structure the format return value
@@ -155,12 +185,14 @@ Check `~/.local/share/nvim/lazy/snacks.nvim/lua/snacks/picker/source/todo.lua` f
 ## Success Criteria
 
 ### Part 1: Preview Fix
+
 - [ ] Preview shows actual git diff output
 - [ ] No git help/usage text appears
 - [ ] Diff is properly highlighted with delta or native viewer
 - [ ] Works for all three git pickers
 
 ### Part 2: Status Indicators
+
 - [ ] Files show `[A]` prefix for added files (green)
 - [ ] Files show `[M]` prefix for modified files (blue)
 - [ ] Files show `[D]` prefix for deleted files (red)
@@ -171,21 +203,25 @@ Check `~/.local/share/nvim/lazy/snacks.nvim/lua/snacks/picker/source/todo.lua` f
 ## Verification Checklist
 
 **Test git_last_commit_show (`:lua require("utils.snacks_pickers").custom_git_pickers.git_last_commit_show()`)**:
+
 - [ ] Preview shows actual diff (not git help)
 - [ ] Files have status indicators [A]/[M]/[D]
 - [ ] Status colors are correct
 
 **Test git_diff_upstream (bound to a keymap)**:
+
 - [ ] Preview shows actual diff (not git help)
 - [ ] Files have status indicators
 - [ ] Works with different upstream refs
 
 **Test custom_change_list_picker (two-stage picker)**:
+
 - [ ] First stage: Select ref works correctly
 - [ ] Second stage: File list has status indicators
 - [ ] Preview shows actual diff (not git help)
 
 **Edge Cases**:
+
 - [ ] Renamed files show [R] status
 - [ ] Deleted files show [D] and handle missing file gracefully
 - [ ] Files with spaces in names work correctly
@@ -196,6 +232,7 @@ Check `~/.local/share/nvim/lazy/snacks.nvim/lua/snacks/picker/source/todo.lua` f
 ### Git Status Codes
 
 From `git diff --name-status`:
+
 - `A` - Added
 - `M` - Modified
 - `D` - Deleted
@@ -206,12 +243,14 @@ From `git diff --name-status`:
 ### Highlight Groups to Use
 
 Standard Neovim diagnostic highlights:
+
 - `DiagnosticOk` - Green (for Added)
 - `DiagnosticInfo` - Blue (for Modified)
 - `DiagnosticError` - Red (for Deleted)
 - `DiagnosticWarn` - Yellow (for Renamed)
 
 Or use Snacks-specific:
+
 - `SnacksPickerTitle`
 - Custom highlight groups if needed
 
@@ -222,6 +261,7 @@ The `git diff --name-status` call should be made once per picker invocation and 
 ## Related Documentation
 
 After implementation, update:
+
 - [docs/memory/snacks_picker.md](docs/memory/snacks_picker.md) - Add notes about custom formatting and git status integration
 - Consider adding example screenshots or ASCII art of the new format
 
@@ -230,4 +270,3 @@ After implementation, update:
 **Priority**: HIGH - Preview bug breaks usability completely
 **Complexity**: MEDIUM - Bug fix is simple, formatter requires understanding snacks format API
 **Impact**: HIGH - Affects all custom git pickers
-
