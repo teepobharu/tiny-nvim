@@ -13,7 +13,7 @@ related:
 
 ✅ **COMPLETED (2026-01-27)**
 
-### Changes Made
+### Changes Made (Commit 1: fix preview bug + status indicators)
 
 1. **Fixed preview bug** (Line 75): Changed `--x` → `--`
 2. **Added status mapping**: `build_git_status_map()` function parses `git diff --name-status`
@@ -22,6 +22,20 @@ related:
    - `git_last_commit_show()` - Line 380, 397
    - `git_diff_upstream()` - Line 497, 514
    - `show_file_list_picker()` - Line 694, 729
+
+### Changes Made (Commit 2: ref type badges + `<C-s>` key)
+
+5. **Added ref_type to candidates**: `collect_candidate_refs()` now tags refs with types:
+   - `rebase-base` - for refs/rewritten/ (autosquash base)
+   - `upstream` - for HEAD@{u}
+   - `default` - for origin/main, main, etc.
+   - `local` - for nearby local branches
+   - `previous` - for HEAD~1
+6. **Added ref type badges in ref picker format**:
+   - `[rebase]` (yellow), `[upstream]` (blue), `[default]` (green), `[local]` (gray), `[prev]` (gray)
+7. **Added `<C-s>` key binding**:
+   - Ref picker (step 1): Opens Gitsigns diff with current buffer against selected ref
+   - File pickers (step 2): Opens Gitsigns diff for selected file (`<C-s>` = `<C-g>`)
 
 ## Objective
 
