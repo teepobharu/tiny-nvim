@@ -614,21 +614,22 @@ local function collect_candidate_refs()
   local candidates = {}
   local seen_refs = {}
 
-  local function add_candidate(refAlias, priority)
+  local function add_candidate(refAlias, priority, ref_type)
     if not seen_refs[refAlias] then
       local stats = get_ref_stats(refAlias)
       if stats.valid then
         stats.priority = priority
+        stats.ref_type = ref_type or "other"
         table.insert(candidates, stats)
         seen_refs[refAlias] = true
       end
     end
   end
 
-  -- 1. Update-ref furthest base
+  -- 1. Update-ref furthest base (rebase/autosquash base)
   local update_refs = vim.fn.systemlist { "git", "for-each-ref", "--format=%(refname:short)", "refs/rewritten/" }
   if vim.v.shell_error == 0 and #update_refs > 0 then
-    add_candidate(update_refs[#update_refs], 1)
+    add_candidate(update_refs[#update_refs], 1, "rebase-base")
   end
 
   -- 2. Other local branches
@@ -646,7 +647,7 @@ local function collect_candidate_refs()
           if vim.v.shell_error == 0 and commit_count_output[1] then
             local commit_distance = tonumber(commit_count_output[1])
             if commit_distance and commit_distance <= 20 then
-              add_candidate(branch, 2)
+              add_candidate(branch, 2, "local")
             end
           end
         end
@@ -654,24 +655,24 @@ local function collect_candidate_refs()
     end
   end
 
-  -- 3. HEAD@{u}
-  add_candidate("HEAD@{u}", 3)
+  -- 3. HEAD@{u} (upstream tracking branch)
+  add_candidate("HEAD@{u}", 3, "upstream")
 
   -- 4. Origin default local branch
   if origin_default_local then
-    add_candidate(origin_default_local, 4)
+    add_candidate(origin_default_local, 4, "default")
   end
 
-  -- 5. Origin default branch
+  -- 5. Origin default branch (remote)
   if origin_default then
-    add_candidate(origin_default, 5)
+    add_candidate(origin_default, 5, "default")
   else
-    add_candidate("origin/main", 5)
-    add_candidate("origin/master", 5)
+    add_candidate("origin/main", 5, "default")
+    add_candidate("origin/master", 5, "default")
   end
 
-  -- 6. HEAD~1
-  add_candidate("HEAD~1", 6)
+  -- 6. HEAD~1 (fallback)
+  add_candidate("HEAD~1", 6, "previous")
 
   table.sort(candidates, function(a, b)
     return a.priority < b.priority
@@ -762,6 +763,7 @@ function M.custom_change_list_picker()
       fullRef = candidate.fullRef,
       refSha = candidate.refSha,
       priority = candidate.priority,
+      ref_type = candidate.ref_type,
       fileChangesCount = candidate.fileChangesCount,
       fileAddedCount = candidate.fileAddedCount,
       fileDeletedCount = candidate.fileDeletedCount,
@@ -772,6 +774,16 @@ function M.custom_change_list_picker()
       commitsAheadCount = candidate.commitsAheadCount,
     })
   end
+
+  -- Ref type display badges with colors
+  local ref_type_badges = {
+    ["rebase-base"] = { label = "rebase", hl = "DiagnosticWarn" },
+    ["upstream"] = { label = "upstream", hl = "DiagnosticInfo" },
+    ["default"] = { label = "default", hl = "DiagnosticOk" },
+    ["local"] = { label = "local", hl = "Comment" },
+    ["previous"] = { label = "prev", hl = "Comment" },
+    ["other"] = { label = "", hl = "Comment" },
+  }
 
   local getMetaText = function(item)
     local meta = {}
@@ -813,11 +825,20 @@ function M.custom_change_list_picker()
         refShow = item.refAlias or item.ref or item.refSha
       end
 
-      return {
-        { refShow, "SnacksPickerTitle" },
-        { " ", "Comment" },
-        { meta_text, "Comment" },
-      }
+      -- Build formatted output with ref type badge
+      local badge = ref_type_badges[item.ref_type] or ref_type_badges["other"]
+      local result = {}
+
+      -- Add ref type badge if present
+      if badge.label and badge.label ~= "" then
+        table.insert(result, { "[" .. badge.label .. "] ", badge.hl })
+      end
+
+      table.insert(result, { refShow, "SnacksPickerTitle" })
+      table.insert(result, { " ", "Comment" })
+      table.insert(result, { meta_text, "Comment" })
+
+      return result
     end,
     preview = function(ctx)
       local item = ctx and ctx.item
@@ -903,6 +924,23 @@ function M.custom_change_list_picker()
 
       return nil
     end,
+    actions = {
+      open_gitsigns_diff = function(picker, item)
+        if not item or not item.refAlias then
+          vim.notify("No reference selected", vim.log.levels.WARN)
+          return
+        end
+        picker:close()
+        git_util.open_current_buffer_with_gitsigns_diff(item.refAlias)
+      end,
+    },
+    win = {
+      input = {
+        keys = {
+          ["<C-s>"] = { "open_gitsigns_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff with ref" },
+        },
+      },
+    },
     confirm = function(picker, item)
       picker:close()
       if item then

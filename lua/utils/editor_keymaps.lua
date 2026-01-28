@@ -1122,14 +1122,16 @@ local snacks_picker_group_keys = {
   -- Git diff & remote actions - for git file pickers
   git_file_keys = {
     input = {
-      ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
+      ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
+      ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at ref" },
       ["<C-O>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
       ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
       ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
     },
     list = {
-      ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
+      ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
+      ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at ref" },
       ["<C-O>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
       ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
@@ -1140,14 +1142,16 @@ local snacks_picker_group_keys = {
   -- Alternate git keys for upstream picker (using different keybinds)
   git_file_keys_upstream = {
     input = {
-      ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
+      ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
+      ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at upstream ref" },
       ["<C-2>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
       ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
       ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
     },
     list = {
-      ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
+      ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
+      ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open remote compared ref" },
       ["<C-1>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open remote at HEAD" },
       ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
@@ -1169,14 +1173,16 @@ local snacks_picker_group_keys = {
           mode = { "n", "i" },
           desc = "Back to ref selection",
         },
-        ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
+        ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
+        ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
         ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at selected ref" },
         ["<M-o>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
         ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
         ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
       },
       list = {
-        ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open file diff in new tab" },
+        ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
+        ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
         ["<M-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at selected ref" },
         ["<C-h>"] = {
           function(picker)
