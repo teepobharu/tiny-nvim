@@ -367,12 +367,14 @@ return {
             filtered_items = {
               always_show = { -- remains visible even if other settings would normally hide it
                 ".gitignored",
+                -- projects
                 ".gitlab",
                 ".gitlab-ci.yml",
                 ".vscode",
                 ".cursor",
                 ".claude",
                 -- dotfiles
+                ".config",
                 ".nvim-config.lua",
                 ".gitignore",
                 ".gitignore_global",
@@ -383,6 +385,8 @@ return {
                 ".tmux.conf",
                 ".vimrc",
                 ".zshrc",
+                "TODO.i.md", -- internal working files see : ~/dotfiles/.gitignore_global:91
+                "TASK.i.md",
               },
               always_show_by_pattern = { -- uses glob style patterns
                 ".bash*",

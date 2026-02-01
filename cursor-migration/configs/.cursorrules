@@ -1,0 +1,36 @@
+# Cursor Rules File
+# Place in project root or ~/.cursor/.cursorrules for global rules
+# Similar to CLAUDE.md but Cursor-specific
+
+## Code Style
+- Use TypeScript for all new files
+- Prefer functional components over class components
+- Use named exports over default exports
+- Maximum function length: 50 lines
+
+## Conventions
+- File naming: kebab-case for files, PascalCase for components
+- Use async/await over Promise.then()
+- Prefer const over let, never use var
+- Use template literals for string interpolation
+
+## Security
+- Never commit secrets or API keys
+- Validate all user inputs
+- Use parameterized queries for database operations
+
+## Testing
+- Write tests for all new functions
+- Minimum coverage: 80%
+- Use descriptive test names
+
+## Documentation
+- Add JSDoc comments for public APIs
+- Keep README up to date
+- Document breaking changes in CHANGELOG
+
+## AI Instructions
+- When generating code, match existing patterns
+- Prefer editing existing files over creating new ones
+- Keep changes minimal and focused
+- Run tests after making changes

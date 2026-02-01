@@ -1,0 +1,245 @@
+# Neovim AI Development Container Stack
+# =====================================
+#
+# Usage Examples:
+#   docker compose run --rm nvim              # Standard profile
+#   docker compose run --rm nvim-full         # All AI tools
+#   docker compose run --rm nvim-minimal      # Base config only
+#   docker compose --profile gpu up -d        # With GPU (Ollama)
+#
+# Build:
+#   docker compose build nvim
+#   docker compose build --build-arg NVIM_VERSION=v0.10.0 nvim
+
+x-nvim-base: &nvim-base
+  build:
+    context: .
+    dockerfile: Dockerfile
+    args:
+      NVIM_VERSION: stable
+  stdin_open: true
+  tty: true
+  working_dir: /workspace
+  # Host integration
+  volumes:
+    # Your existing Neovim config (read-only base)
+    - ../:/root/.config/nvim:ro
+    # Plugin overlay (additional plugins)
+    - ./sample-plugins:/nvim-overlay/lua/plugins:ro
+    # Persistent Neovim data
+    - nvim-data:/root/.local/share/nvim
+    - nvim-state:/root/.local/state/nvim
+    - nvim-cache:/root/.cache/nvim
+    # AI tool sessions
+    - goose-sessions:/root/.local/share/goose
+    - mcp-data:/root/.config/mcp
+    # MCP/Goose configs
+    - ./configs/goose-config.yaml:/root/.config/goose/config.yaml:ro
+    - ./configs/mcp-servers.json:/root/.config/mcp/servers.json:ro
+    # Host integrations
+    - ~/.gitconfig:/host-gitconfig:ro
+    - ~/.ssh:/root/.ssh:ro
+    # Project workspace
+    - ${PROJECT_DIR:-~/projects}:/workspace
+  environment:
+    # API Keys (from .env file)
+    - ANTHROPIC_API_KEY
+    - OPENAI_API_KEY
+    - GOOGLE_API_KEY
+    - GITHUB_TOKEN
+    # Clipboard over SSH/X11
+    - DISPLAY=${DISPLAY:-}
+    # Neovim settings
+    - NVIM_APPNAME=nvim3_jelly_tinynvim
+  # SSH agent forwarding
+  # Run with: docker compose run -e SSH_AUTH_SOCK=/ssh-agent -v $SSH_AUTH_SOCK:/ssh-agent nvim
+
+services:
+  # =============================================================================
+  # Neovim Profiles
+  # =============================================================================
+
+  # Standard: Base config + existing AI plugins (avante, codecompanion)
+  nvim:
+    <<: *nvim-base
+    container_name: nvim-ai
+    environment:
+      - NVIM_AI_PROFILE=standard
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+      - GITHUB_TOKEN
+
+  # Minimal: Base config only, no AI overlays
+  nvim-minimal:
+    <<: *nvim-base
+    container_name: nvim-minimal
+    environment:
+      - NVIM_AI_PROFILE=minimal
+
+  # Full: All AI tools (goose, agentic, cursor-agent, etc.)
+  nvim-full:
+    <<: *nvim-base
+    container_name: nvim-full
+    environment:
+      - NVIM_AI_PROFILE=full
+      - ENABLE_MCP_HUB=true
+      - MCP_PORT=5555
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+      - GOOGLE_API_KEY
+      - GITHUB_TOKEN
+    ports:
+      - "5555:5555"  # MCP Hub
+
+  # Cursor: Focus on Cursor CLI integration
+  nvim-cursor:
+    <<: *nvim-base
+    container_name: nvim-cursor
+    environment:
+      - NVIM_AI_PROFILE=cursor
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+    volumes:
+      # Include Cursor credentials from host
+      - ~/.cursor:/root/.cursor:ro
+      # Standard volumes
+      - ../:/root/.config/nvim:ro
+      - ./sample-plugins:/nvim-overlay/lua/plugins:ro
+      - nvim-data:/root/.local/share/nvim
+      - ${PROJECT_DIR:-~/projects}:/workspace
+
+  # =============================================================================
+  # Supporting Services
+  # =============================================================================
+
+  # Goose CLI (interactive session)
+  goose:
+    <<: *nvim-base
+    container_name: goose-cli
+    entrypoint: ["/bin/bash", "-c"]
+    command: ["goose"]
+    environment:
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+      - GOOSE_PROVIDER=${GOOSE_PROVIDER:-anthropic}
+
+  # MCP Hub Server (standalone)
+  mcp-hub:
+    image: node:20-slim
+    container_name: mcp-hub
+    ports:
+      - "5555:5555"
+    volumes:
+      - ./configs/mcp-servers.json:/app/servers.json:ro
+      - mcp-data:/app/data
+    environment:
+      - GITHUB_TOKEN
+    command: >
+      sh -c "npm install -g @anthropics/mcp-hub &&
+             mcp-hub --port 5555 --config /app/servers.json"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:5555/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # =============================================================================
+  # GPU Profile (for local LLMs)
+  # =============================================================================
+
+  # Ollama with GPU
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    profiles:
+      - gpu
+    restart: unless-stopped
+
+  # Nvim with Ollama integration
+  nvim-local:
+    <<: *nvim-base
+    container_name: nvim-local
+    depends_on:
+      - ollama
+    environment:
+      - NVIM_AI_PROFILE=full
+      - OLLAMA_HOST=http://ollama:11434
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+    profiles:
+      - gpu
+
+  # Open WebUI (optional web interface for Ollama)
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: open-webui
+    ports:
+      - "3000:8080"
+    volumes:
+      - webui-data:/app/backend/data
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+    depends_on:
+      - ollama
+    profiles:
+      - gpu
+    restart: unless-stopped
+
+  # =============================================================================
+  # Development Utilities
+  # =============================================================================
+
+  # Aider (AI pair programming)
+  aider:
+    <<: *nvim-base
+    container_name: aider
+    entrypoint: ["/bin/bash", "-c"]
+    command: ["aider"]
+    environment:
+      - ANTHROPIC_API_KEY
+      - OPENAI_API_KEY
+    profiles:
+      - dev
+
+# =============================================================================
+# Volumes (Persistent Storage)
+# =============================================================================
+volumes:
+  # Neovim
+  nvim-data:
+    name: nvim-ai-data
+  nvim-state:
+    name: nvim-ai-state
+  nvim-cache:
+    name: nvim-ai-cache
+  # AI Tools
+  goose-sessions:
+    name: goose-sessions
+  mcp-data:
+    name: mcp-hub-data
+  # Local LLM
+  ollama-models:
+    name: ollama-models
+  webui-data:
+    name: open-webui-data
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  default:
+    name: nvim-ai-network

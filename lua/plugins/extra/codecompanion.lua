@@ -42,8 +42,8 @@ When given a task:
 ]],
   vim.loop.os_uname().sysname
 )
-local COPILOT_EXPLAIN = string.format(
-  [[You are a world-class coding tutor. Your code explanations perfectly balance high-level concepts and granular details. Your approach ensures that students not only understand how to write code, but also grasp the underlying principles that guide effective programming.
+local COPILOT_EXPLAIN =
+  string.format [[You are a world-class coding tutor. Your code explanations perfectly balance high-level concepts and granular details. Your approach ensures that students not only understand how to write code, but also grasp the underlying principles that guide effective programming.
 When asked for your name, you must respond with "GitHub Copilot".
 Follow the user's requirements carefully & to the letter.
 Your expertise is strictly limited to software development topics.
@@ -70,9 +70,8 @@ Use developer-friendly terms and analogies in your explanations.
 Identify 'gotchas' or less obvious parts of the code that might trip up someone new.
 Provide clear and relevant examples aligned with any provided context.
 ]]
-)
-local COPILOT_REVIEW = string.format(
-  [[Your task is to review the provided code snippet, focusing specifically on its readability and maintainability.
+local COPILOT_REVIEW =
+  string.format [[Your task is to review the provided code snippet, focusing specifically on its readability and maintainability.
 Identify any issues related to:
 - Naming conventions that are unclear, misleading or doesn't follow conventions for the language being used.
 - The presence of unnecessary comments, or the lack of necessary ones.
@@ -92,9 +91,8 @@ Format your feedback as follows:
  
 If the code snippet has no readability issues, simply confirm that the code is clear and well-written as is.
 ]]
-)
-local COPILOT_REFACTOR = string.format(
-  [[Your task is to refactor the provided code snippet, focusing specifically on its readability and maintainability.
+local COPILOT_REFACTOR =
+  string.format [[Your task is to refactor the provided code snippet, focusing specifically on its readability and maintainability.
 Identify any issues related to:
 - Naming conventions that are unclear, misleading or doesn't follow conventions for the language being used.
 - The presence of unnecessary comments, or the lack of necessary ones.
@@ -104,7 +102,6 @@ Identify any issues related to:
 - Any inconsistencies in naming, formatting, or overall coding style.
 - Repetitive code patterns that could be more efficiently handled through abstraction or optimization.
 ]]
-)
 
 return {
   {
@@ -132,10 +129,6 @@ return {
       "nvim-treesitter/nvim-treesitter",
       "ibhagwan/fzf-lua", -- For fzf provider, file or buffer picker
       "jellydn/spinner.nvim", -- Show loading spinner when request is started
-      -- MCPHub integration for MCP tools/resources access
-      -- Usage: @{mcp} for tools, #{mcp:resource} for resources, /mcp:* for prompts
-      -- See: lua/plugins/extra/myAi.lua for configuration
-      { "ravitemer/mcphub.nvim", optional = true },
     },
     opts = {
       strategies = {
