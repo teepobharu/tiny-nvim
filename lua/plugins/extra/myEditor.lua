@@ -559,6 +559,7 @@ Documentation and Tracking:
             is_slash_cmd = true,
             adapter = {
               name = "copilot",
+              -- model = "gpt-4o",
               -- model = "grok-code-fast-1",
               model = "gpt-5-mini",
             },
@@ -712,7 +713,7 @@ Your instructions here
     enabled = true,
     keys = editor_keymaps.keymaps.copilot_chat,
     opts = {
-      -- model = "", -- override claude-sonnet model since not support on my copilot (get ereror)
+      model = "grok-code-fast-1", -- override claude-sonnet model since not support on my copilot (get ereror)
       -- debug = true, -- add to debug message by calling l-a-d and  see in file using <gf> or check :messages in the logfile name else see only error (not prompt and embedding used)
       -- mappings = {
       -- complete = { -- no difference copilot autocompl not see in chat anyway - 20250327
@@ -1237,7 +1238,7 @@ Your instructions here
         },
       },
       sources = {
-        -- default = {
+        -- default = { -- this is merged (append as set on default bhevior list extend in lazy merge behavior) in lua/plugins/coding.lua
         --     "avante_commands", "avante_mentions", "avante_files"
         --     -- ,"codecompanion"
         --   },
@@ -1247,6 +1248,13 @@ Your instructions here
           --   module = "blink.compat.source",
           --   score_offset = 1000, -- show at a higher priority than lsp
           -- },
+          --
+          avante_shortcuts = {
+            name = "avante_shortcuts",
+            module = "blink.compat.source",
+            score_offset = 1000, -- show at a higher priority than lsp
+            opts = {},
+          },
           avante_commands = {
             name = "avante_commands",
             module = "blink.compat.source",
@@ -1268,9 +1276,16 @@ Your instructions here
         },
         per_filetype = {
           -- check ft with set filetype
-          -- AvantePromptInput = { inherit_defaults = true },
-          -- AvanteInput = { inherit_defaults = true, "avante_commands", "avante_mentions", "avante_files" },
-          AvanteInput = { inherit_defaults = true, "avante_commands", "avante_mentions", "avante_files" },
+          -- already handle by Kaiser-Yang/blink-cmp-avante
+          AvanteInput = {
+            inherit_defaults = true,
+            "avante_commands",
+            "avante_mentions",
+            "avante_files",
+            "avante_shortcuts",
+          },
+          -- AvanteInput = { 'avante', 'lsp', 'path', 'snippets', 'buffer' },
+          -- AvanteInput = { inherit_defaults = true },
           -- lua = { inherit_defaults = true, 'lazydev' } } -- defaults https://github.com/Saghen/blink.cmp/blob/e7cdf1ac0be3acfce2a718bc921768ac747db5d9/doc/configuration/sources.md?plain=1#L23
         },
       },

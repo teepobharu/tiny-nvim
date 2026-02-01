@@ -8,11 +8,52 @@ Tasks are stored in markdown files under `tasks/` directory:
 
 ```
 tasks/
-└── drafts/      # Task ideas and planning
+├── projects/    # Long-running project tracking (with working dirs)
+├── drafts/      # Task ideas and planning
 ├── open/        # Approved by user and is ready to be worked on
 ├── wip/         # Work in progress
 ├── review/      # Completed, awaiting user verification
-├── done/        # Do not move to this unless told to/move by user
+└── done/        # Do not move to this unless told to/move by user
+```
+
+### Projects vs Tasks
+
+| Type | Location | Purpose |
+|------|----------|---------|
+| **Project** | `tasks/projects/` | Multi-session work with dedicated working directory |
+| **Task** | `tasks/open\|wip\|review/` | Single-session or short work items |
+
+Projects have their own working directories (e.g., `cursor-migration/`) and contain multiple related tasks.
+
+### Project File Format
+
+Projects track long-running work with dedicated directories:
+
+```markdown
+---
+title: "Project Name"
+status: "wip"
+assignee: "ai|user"
+created: 2026-01-28
+priority: "high|medium|low"
+category: "ai-tooling|refactor|feature"
+related:
+  - [Project Dir](project-name/)
+  - [Config File](project-name/config.yaml)
+---
+
+## Objective
+What this project accomplishes
+
+## Project Structure
+Directory layout and key files
+
+## Checklist
+- [x] Completed items
+- [ ] Pending items
+
+## Success Criteria
+How to know project is complete
 ```
 
 ### Task File Format
@@ -187,6 +228,8 @@ TaskList()  # Filter by status="completed"
 
 ## Example Workflow
 
+### Simple Task Workflow
+
 1. **Session Start**
 
    ```
@@ -217,3 +260,48 @@ TaskList()  # Filter by status="completed"
    → Follow verification checklist
    → Mark any new issues as pending tasks
    ```
+
+### Project Workflow (Multi-Session)
+
+For larger work spanning multiple sessions:
+
+1. **Project Creation**
+   ```
+   User: "Explore cursor migration options"
+   → Create working directory (e.g., cursor-migration/)
+   → Create project file: tasks/projects/cursor-migration.md
+   → Add related files, configs, samples to working dir
+   ```
+
+2. **Project Structure**
+   ```
+   project-name/
+   ├── README.md           # Project documentation
+   ├── configs/            # Configuration samples
+   ├── samples/            # Code samples/templates
+   └── [project files]     # Docker, Makefile, etc.
+   ```
+
+3. **Linking Tasks to Projects**
+   ```markdown
+   # In task file (tasks/open/cursor-testing.md)
+   ---
+   parent:
+     - [Cursor Migration Project](tasks/projects/cursor-migration.md)
+   related:
+     - [Project Dir](cursor-migration/)
+   ---
+   ```
+
+4. **Project Completion**
+   ```
+   → All checklist items complete
+   → User verification tasks created in tasks/open/
+   → Move project to tasks/done/ when fully verified
+   ```
+
+## Current Projects
+
+| Project | Status | Directory |
+|---------|--------|-----------|
+| [Cursor Migration](tasks/projects/cursor-migration.md) | wip | `cursor-migration/` |

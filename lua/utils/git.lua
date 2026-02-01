@@ -70,9 +70,11 @@ end
 --- @field ref string Original reference input
 --- @field fullref string|nil Full reference path (e.g., "refs/heads/main", "refs/remotes/origin/main")
 --- @field branch string|nil Clean branch name without remote prefix (e.g., "main" from "refs/remotes/origin/main")
+--- @field remote string|nil Remote name if ref is a remote branch (e.g., "origin"), nil for local branches/commits
 --- @field sha string|nil Full commit SHA (40 characters)
 --- @field valid boolean Whether the ref exists
 --- @field resolved_ref string|nil The resolved reference (branch name or SHA, whichever is preferred)
+--- @field resolved_with_remote string|nil Same as resolved_ref but includes remote prefix for remote branches (e.g., "origin/main")
 --- @field resolve_ref_type "branch"|"sha"|"unknown" Type of resolved reference
 function M.get_ref_metadata(ref_name)
   if not ref_name or ref_name == "" then
@@ -83,9 +85,11 @@ function M.get_ref_metadata(ref_name)
     ref = ref_name,
     fullref = nil,
     branch = nil,
+    remote = nil,
     sha = nil,
     valid = false,
     resolved_ref = nil,
+    resolved_with_remote = nil,
     resolve_ref_type = "unknown",
   }
 
@@ -106,9 +110,13 @@ function M.get_ref_metadata(ref_name)
     if full_ref:find("^refs/heads/") then
       -- Local branch: refs/heads/main -> main
       branch_name = full_ref:sub(12)
+      metadata.remote = nil
     elseif full_ref:find("^refs/remotes/") then
-      -- Remote branch: refs/remotes/origin/main -> main
-      branch_name = full_ref:gsub("^refs/remotes/[^/]+/", "")
+      -- Remote branch: refs/remotes/origin/main -> extract remote and branch
+      local remote_and_branch = full_ref:sub(14) -- Remove "refs/remotes/"
+      local remote_name = remote_and_branch:match("^([^/]+)/")
+      branch_name = remote_and_branch:gsub("^[^/]+/", "") -- Remove remote prefix
+      metadata.remote = remote_name
     else
       -- Other cases: detached HEAD, tags, etc.
       -- Try using --abbrev-ref to get a readable name
@@ -131,8 +139,15 @@ function M.get_ref_metadata(ref_name)
     if metadata.branch and metadata.branch ~= "" then
       metadata.resolved_ref = metadata.branch
       metadata.resolve_ref_type = "branch"
+      -- Build resolved_with_remote: include remote prefix for remote branches
+      if metadata.remote then
+        metadata.resolved_with_remote = metadata.remote .. "/" .. metadata.branch
+      else
+        metadata.resolved_with_remote = metadata.branch
+      end
     elseif metadata.sha and metadata.sha ~= "" then
       metadata.resolved_ref = metadata.sha
+      metadata.resolved_with_remote = metadata.sha
       metadata.resolve_ref_type = "sha"
     end
   end

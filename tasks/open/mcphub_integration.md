@@ -1,289 +1,253 @@
 # MCPHub Integration with AI Agents
 
 ## Metadata
+
 - **Created**: 2025-01-27
+- **Updated**: 2025-01-29
 - **Status**: open
 - **Priority**: medium
 - **Tags**: ai, mcp, codecompanion, avante, copilot
 
 ## Summary
 
-Integrate MCPHub.nvim with existing AI agents (CodeCompanion, Avante, CopilotChat) to enable MCP tool access directly from Neovim.
+Integrate MCPHub.nvim with Neovim AI agents and make the global MCP port available to CLI tools.
+
+## Documentation
+
+- [Main MCPHub Guide](docs/memory/mcphub.md) - Architecture, port persistence, CLI integration
+- [Neovim Integrations](docs/memory/mcphub-nvim-integrations.md) - CodeCompanion, Avante, CopilotChat
+
+---
 
 ## Current State
 
+### Config Location
+
+All MCPHub and CodeCompanion MCP extension config consolidated in: [lua/plugins/extra/myAi.lua](lua/plugins/extra/myAi.lua)
+
 ### MCPHub Setup
-- **Config Location**: `~/dotfiles/claude/mcp-proxy/mcphub.json`
+
+- **Config**: `~/dotfiles/claude/mcp-proxy/mcphub.json`
+- **Port**: 37373 (fixed, workspace mode should be disabled)
 - **14 MCP Servers** configured (12 ready, 2 need tokens)
-- **MCPHub Port**: 37373 (internal mcp-hub process)
-- **Management**: `~/dotfiles/claude/mcp-proxy/start-mcphub.sh` (optional, MCPHub manages its own process)
 
-### Current AI Plugins
-| Plugin | Status | Provider | File |
-|--------|--------|----------|------|
-| CodeCompanion | Primary | Copilot | [lua/plugins/extra/codecompanion.lua](lua/plugins/extra/codecompanion.lua) |
-| Avante | Enabled | Copilot | [lua/plugins/extra/avante.lua](lua/plugins/extra/avante.lua) |
-| CopilotChat | Enabled | Copilot | [lua/plugins/extra/copilot-chat.lua](lua/plugins/extra/copilot-chat.lua) |
-| MCPHub | Basic | N/A | [lua/plugins/extra/myAi.lua](lua/plugins/extra/myAi.lua) |
+### Port Persistence Model
 
-### Current MCPHub Config (Basic)
+```
+mcphub.nvim starts mcp-hub → port 37373 available
+Multiple nvim instances share same port
+CLI agents (Claude, OpenCode, etc.) connect to same port
+All clients disconnect → shutdown_delay timer
+Timer expires → mcp-hub stops
+```
+
+**Key:** CLI agents work as long as mcp-hub is running (started by Neovim or standalone).
+
+---
+
+## Investigation Results (2025-01-29)
+
+### Issue: Port 5555 not reachable, wrong port being used
+
+**Symptoms:**
+- MCPHub UI showed two hubs: `tharutaipree` (port 40927) and `mcp-proxy` (port 5555)
+- Port 5555 not responding to curl
+- Port 37373 not being used despite config
+
+**Root Cause:**
+- **Workspace mode** was enabled (default), creating per-directory hubs
+- Dynamic port assignment from `port_range` (40000-41000) overrode configured port
+- Stale hub entry for port 5555 (process already dead, just UI artifact)
+
+**Fix Required:**
+Add `workspace = { enabled = false }` to mcphub opts in myAi.lua:
+
 ```lua
--- lua/plugins/extra/myAi.lua (MCPHub section)
-{
-    "ravitemer/mcphub.nvim",
-    dependencies = { "nvim-lua/plenary.nvim" },
-    cmd = "MCPHub",
-    build = "bundled_build.lua",
-    opts = {
-        use_bundled_binary = true,
-        config = vim.fn.expand "~/dotfiles/claude/mcp-proxy/mcphub.json",
-        port = 37373,
-    }
+opts = {
+  port = 37373,
+  workspace = {
+    enabled = false,  -- Disable per-directory hubs for consistent CLI access
+  },
+  -- ...
 }
 ```
+
+**Verification after nvim restart:**
+```bash
+curl http://localhost:37373/health
+```
+
+### Port Collision Behavior
+
+mcphub.nvim handles port conflicts gracefully:
+
+| Port Status | Action |
+|-------------|--------|
+| Free | Starts new mcp-hub |
+| Used by mcp-hub (same version) | Connects to existing (multi-instance) |
+| Used by mcp-hub (different version) | Restarts hub |
+| Used by other service | Error: "Port in use by non-MCP Hub server" |
+
+**For CLI agents:** If mcp-hub isn't running, they get connection refused. Start Neovim first or run mcp-hub standalone.
+
+### Server Customization Options (2025-01-29)
+
+**Investigated:** How to customize tools, resources, and instructions per MCP server.
+
+**MCPHub-specific config fields:**
+```json
+{
+  "disabled": false,
+  "disabled_tools": ["tool-name"],
+  "disabled_resources": ["resource-name"],
+  "autoApprove": true | ["tool1", "tool2"],
+  "custom_instructions": {
+    "disabled": false,
+    "text": "Instructions for this server"
+  }
+}
+```
+
+**Key Findings:**
+- **Custom instructions**: No default. Set via UI (persists to config) or directly in `mcphub.json`
+- **UI persistence**: Yes - changes made in `:MCPHub` UI write back to config file
+- **External agents**: Receive custom instructions via system prompt (`get_active_servers_prompt()`)
+- **LLM control**: `toggle_mcp_server` tool on native `mcphub` server (controlled by `auto_toggle_mcp_servers`)
+
+**Documentation:** See [Server Customization](docs/memory/mcphub.md#server-customization) section.
 
 ---
 
 ## Implementation Plan
 
-### Phase 1: Update MCPHub Configuration
-- [x] **1.1** Update MCPHub config in `myAi.lua` to use existing `~/dotfiles/claude/mcp-proxy/mcphub.json`
-- [x] **1.2** Add extension configurations for all AI plugins
-- [x] **1.3** Configure auto_approve settings (start with false for security)
-- [x] **1.4** Add keymaps for MCPHub commands
+### Phase 1: MCPHub Core Setup ✅
 
-### Phase 2: CodeCompanion Integration (Primary)
-- [x] **2.1** Add MCPHub as dependency in codecompanion.lua
-- [ ] **2.2** Add MCPHub extension config in codecompanion.lua (see Important Note below)
-- [ ] **2.3** Test tool invocation with calculon, gitlab, glean
+- [x] **1.1** Add config myAi.lua
+- [x] **1.2** Point to `~/dotfiles/claude/mcp-proxy/mcphub.json`
+- [x] **1.3** Add `<leader>ah` keymap for `:MCPHub`
+- [x] **1.4** Disable workspace mode for consistent port (37373)
+
+### Phase 2: CodeCompanion Integration ✅
+
+- [x] **2.1** Add config myAi.lua
+- [x] **2.2** Add MCPHub extension config
+- [ ] **2.3** Test `@{mcp}`, `@{server}`, `@{server__tool}` syntax
+- [ ] **2.4** Test `#{mcp:resource}` variables
+- [ ] **2.5** Test `/mcp:prompt_name` slash commands
 
 ### Phase 3: Avante Integration
-- [x] **3.1** Add MCPHub as dependency in avante.lua (commented out - optional)
-- [ ] **3.2** Add system_prompt and custom_tools config in avante.lua
-- [ ] **3.3** Test MCP tool usage in Avante chat
 
-### Phase 4: CopilotChat Integration
-- [x] **4.1** Add MCPHub as dependency in copilot-chat.lua (native MCP support)
-- [ ] **4.2** Add copilotchat extension config in mcphub setup
-- [ ] **4.3** Test integration with MCP servers
+- [x] **3.1** Enable avante extension in mcphub.setup()
+- [ ] **3.2** Add `system_prompt` function in [avante.lua](lua/plugins/extra/avante.lua)
+- [ ] **3.3** Add `custom_tools` function
+- [ ] **3.4** Test MCP tool usage
 
-### Phase 5: Documentation & Polish
-- [x] **5.1** Add memory doc at `docs/memory/mcphub.md`
-- [x] **5.2** Update keymaps documentation
-- [x] **5.3** Create quick reference for MCP commands
+### Phase 4: CopilotChat Integration ✅
+
+- [x] **4.1** Enable copilotchat extension in mcphub.setup()
+- [ ] **4.2** Test `@server__tool` functions
+
+### Phase 5: CLI Agent Integration
+
+- [x] **5.1** Document CLI agent configs in [mcphub.md](docs/memory/mcphub.md)
+- [ ] **5.2** Verify Claude Code can connect to :37373
+- [ ] **5.3** Verify OpenCode can connect
+- [ ] **5.4** Test persistence when Neovim closes
+
+### Phase 6: Documentation ✅
+
+- [x] **6.1** Create main guide: [docs/memory/mcphub.md](docs/memory/mcphub.md)
+- [x] **6.2** Create integration guide: [docs/memory/mcphub-nvim-integrations.md](docs/memory/mcphub-nvim-integrations.md)
+- [x] **6.3** Update [MCP-HUB-GUIDE.md](~/dotfiles/claude/mcp-proxy/MCP-HUB-GUIDE.md)
+- [x] **6.4** Document server customization options
+
+### Phase 7: Server Customization ✅ (Documented)
+
+- [x] **7.1** Investigate custom_instructions persistence
+- [x] **7.2** Investigate disabled_tools/resources
+- [x] **7.3** Investigate autoApprove options
+- [x] **7.4** Document how external agents access configs
+- [ ] **7.5** Test custom instructions in UI
+- [ ] **7.6** Test autoApprove behavior
 
 ---
 
-## Important: How Integration Actually Works
+## MCPHub UI Reference
 
-### MCPHub Only Has ONE Command
+### Command
 
 ```vim
-:MCPHub              " The ONLY command - opens/toggles the UI
+:MCPHub              " Only command - opens UI
 ```
 
-All other functionality is accessed via:
-1. **UI Keymaps** (inside MCPHub window)
-2. **Chat Plugin Integration** (via extensions)
+### Navigation Keys (Inside UI)
 
-### CodeCompanion Integration (Requires Config in BOTH Places)
+| Key | View        |
+| --- | ----------- |
+| `H` | Home/Main   |
+| `M` | Marketplace |
+| `C` | Config      |
+| `L` | Logs        |
+| `?` | Help        |
+| `q` | Close       |
+| `r` | Refresh     |
+| `R` | Restart     |
 
-**1. In mcphub.setup() - already done:**
-```lua
--- This enables MCPHub to provide tools to CodeCompanion
-extensions = {
-  avante = { make_slash_commands = true },
-  -- Note: codecompanion extension is configured IN codecompanion.setup()
-}
-```
+### Main View Keys
 
-**2. In codecompanion.setup() - NEEDS TO BE ADDED:**
-```lua
-require("codecompanion").setup({
-  extensions = {
-    mcphub = {
-      callback = "mcphub.extensions.codecompanion",
-      opts = {
-        make_tools = true,              -- @{server__tool} syntax
-        show_server_tools_in_chat = true,
-        make_vars = true,               -- #{mcp:resource} syntax
-        make_slash_commands = true,     -- /mcp:prompt_name
-        show_result_in_chat = true,
-      }
-    }
-  }
-})
-```
-
-### Avante Integration (Requires Config in BOTH Places)
-
-**1. In mcphub.setup():**
-```lua
-extensions = {
-  avante = { make_slash_commands = true },
-}
-```
-
-**2. In avante.setup():**
-```lua
-require("avante").setup({
-  system_prompt = function()
-    local hub = require("mcphub").get_hub_instance()
-    return hub and hub:get_active_servers_prompt() or ""
-  end,
-  custom_tools = function()
-    return { require("mcphub.extensions.avante").mcp_tool() }
-  end,
-})
-```
-
-### CopilotChat Integration (Config in mcphub.setup())
-
-```lua
-require("mcphub").setup({
-  extensions = {
-    copilotchat = {
-      enabled = true,
-      convert_tools_to_functions = true,
-      convert_resources_to_functions = true,
-    }
-  }
-})
-```
-
----
-
-## MCPHub UI Keymaps Reference
-
-### Global Navigation (All Views)
-| Key | Action | Description |
-|-----|--------|-------------|
-| `H` | Switch view | Go to Home/Main view |
-| `M` | Switch view | Go to Marketplace |
-| `C` | Switch view | Go to Config view |
-| `L` | Switch view | Go to Logs view |
-| `?` | Switch view | Go to Help view |
-| `q` | Close | Close MCPHub window |
-| `r` | Refresh | Refresh server capabilities |
-| `R` | Restart | Restart mcp-hub process |
-
-### Main View (Server Management)
-| Key | Action | Description |
-|-----|--------|-------------|
-| `l` / `<CR>` / `o` | Expand | Expand server to see tools/resources |
-| `h` / `<Esc>` | Collapse | Collapse expanded server |
-| `t` | Toggle | Enable/disable server |
-| `a` | Auto-approve | Toggle auto-approve for server/tool |
-| `ga` | Global auto-approve | Toggle `vim.g.mcphub_auto_approve` |
-| `A` | Add server | Add new MCP server |
-| `e` | Edit | Edit server configuration |
-| `d` | Delete | Delete server (or kill workspace) |
-| `gd` | Preview | Show system prompts preview |
-| `gc` | Change directory | Change to workspace directory |
-
-### Help View
-| Key | Action |
-|-----|--------|
-| `<Tab>` | Next tab (Welcome, Troubleshooting, Native Servers, Changelog) |
-| `<S-Tab>` | Previous tab |
-
----
-
-## MCP Tool Usage in Chat Plugins
-
-### CodeCompanion (when extension configured)
-```
-@{mcp}                    -- Universal: All MCP tools via use_mcp_tool
-@{gitlab}                 -- Server group: All tools from gitlab server
-@{gitlab__get_issue}      -- Individual tool: Specific tool
-@{neovim__read_file}      -- Builtin neovim server tool
-#{mcp:neovim://buffer}    -- Resource as variable
-/mcp:code_review          -- MCP prompt as slash command
-```
-
-### Avante (when custom_tools configured)
-```
-/mcp:server_name:prompt_name    -- MCP prompt as slash command
-```
-Avante uses `use_mcp_tool` and `access_mcp_resource` internally.
-
-### CopilotChat (when extension configured)
-```
-@server__tool              -- Type @ to see available MCP functions
-#server__resource          -- Access resources
-```
-
----
-
-## MCP Servers Available
-
-| Server | Type | Status | Use Case |
-|--------|------|--------|----------|
-| calculon-mcp | SSE | Ready | A/B experiment data |
-| gitlab | SSE | Ready | GitLab operations |
-| glean | stdio | Ready | Enterprise search |
-| sourcegraph | SSE | Ready | Code search |
-| atlassian-agoda | SSE | Ready | Jira/Confluence |
-| devportal | SSE | Ready | Developer Portal |
-| grafana | SSE | Ready | Monitoring metrics |
-| drone | SSE | Ready | CI/CD pipelines |
-| figma | SSE | Ready | Design system |
-| superset | SSE | Ready | Analytics |
-| playwright | stdio | Ready | Browser automation |
-| playwright-mobile | stdio | Ready | Mobile testing |
-| devstack | SSE | Needs Token | DevStack integration |
-| mmb | stdio | Needs Token | MMB development |
-
-### Builtin Native Servers (Always Available)
-| Server | Tools |
-|--------|-------|
-| `@neovim` | read_file, write_file, edit_file, list_files, search_files, bash, diagnostics |
-| `@mcphub` | server management, documentation access |
+| Key          | Action              |
+| ------------ | ------------------- |
+| `l` / `<CR>` | Expand server       |
+| `h`          | Collapse            |
+| `t`          | Toggle on/off       |
+| `a`          | Auto-approve        |
+| `ga`         | Global auto-approve |
 
 ---
 
 ## Testing Checklist
 
 ### MCPHub Basic
+
 - [ ] `:MCPHub` opens UI
-- [ ] Press `H` to go to main view, servers are listed
-- [ ] Press `l` on a server to expand tools/resources
-- [ ] Press `t` to toggle server on/off
-- [ ] Press `L` to view logs
+- [ ] Servers listed in main view (`H`)
+- [ ] Can expand server with `l`
+- [ ] Can toggle server with `t`
+- [ ] Logs viewable with `L`
 
 ### CodeCompanion + MCP
-- [ ] Type `@{mcp}` in chat - should list tools
-- [ ] Type `@{neovim}` - should show neovim server tools
-- [ ] Type `/mcp:` - should show slash commands from MCP prompts
-- [ ] Tool results appear in chat
 
-### Avante + MCP
-- [ ] `/mcp:` slash commands available
-- [ ] Tool execution works via use_mcp_tool
+- [ ] `@{mcp}` lists tools in chat
+- [ ] `@{neovim}` shows neovim server tools
+- [ ] `@{neovim__read_file}` works
+- [ ] `/mcp:` shows slash commands
 
-### CopilotChat + MCP
-- [ ] Type `@` to see MCP functions
-- [ ] Tool calls work
+### CLI Agents
 
----
+- [ ] `curl http://localhost:37373/health` works
+- [ ] Claude Code can use MCP tools
+- [ ] mcp-hub persists after Neovim closes (for `shutdown_delay`)
 
-## References
+### Server Customization
 
-- [MCPHub.nvim GitHub](https://github.com/ravitemer/mcphub.nvim)
-- [MCPHub Documentation](https://ravitemer.github.io/mcphub.nvim/)
-- [CodeCompanion Extension Docs](https://ravitemer.github.io/mcphub.nvim/extensions/codecompanion)
-- [Avante Extension Docs](https://ravitemer.github.io/mcphub.nvim/extensions/avante)
-- [CopilotChat Extension Docs](https://ravitemer.github.io/mcphub.nvim/extensions/copilotchat)
-- [Configuration Guide](https://ravitemer.github.io/mcphub.nvim/configuration)
-- [Memory Doc](docs/memory/mcphub.md)
+- [ ] Edit custom instructions in UI
+- [ ] Verify instructions persist to config file
+- [ ] Test `autoApprove: true` skips confirmation
+- [ ] Test `autoApprove: ["tool"]` for specific tools
+- [ ] Test `disabled_tools` hides tools from LLMs
+- [ ] Test `auto_toggle_mcp_servers` allows LLM to start servers
 
 ---
 
 ## Notes
 
-- MCPHub uses bundled binary, no global Node.js needed
-- Port 37373 is the default MCPHub port (not 5555/3000 - those are standalone MCPHUB server)
-- Start with `auto_approve = false` for security
-- MCPHub manages its own mcp-hub process, no need to start externally
-- Extension configs go in DIFFERENT places depending on the plugin
-- The `:MCPHub` command is the ONLY command - everything else is in the UI
+- All config consolidated in [myAi.lua](lua/plugins/extra/myAi.lua)
+- mcphub.nvim manages its own mcp-hub process (bundled binary)
+- Port 37373 is fixed when workspace mode is disabled
+- Must disable workspace mode for CLI agents to use consistent port
+- `shutdown_delay` keeps mcp-hub running after last client
+- For always-on access, run mcp-hub standalone or increase `shutdown_delay`
+- Custom instructions persist to config file (UI changes are saved)
+- External agents get custom instructions via system prompt injection
+- `autoApprove` can be `true`, array of tool names, or omitted
+- LLMs can toggle servers via `toggle_mcp_server` tool (controlled by `auto_toggle_mcp_servers`)

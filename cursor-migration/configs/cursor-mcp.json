@@ -1,0 +1,39 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/model-context-protocol/main/schema/mcp.schema.json",
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-filesystem", "/workspace"],
+      "description": "File system access for workspace"
+    },
+    "git": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-git"],
+      "description": "Git operations"
+    },
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-github"],
+      "env": {
+        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "description": "GitHub API access"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-playwright"],
+      "description": "Browser automation"
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-memory"],
+      "description": "Persistent memory for context"
+    },
+    "sequential-thinking": {
+      "command": "npx",
+      "args": ["-y", "@anthropic/mcp-server-sequential-thinking"],
+      "description": "Step-by-step reasoning"
+    }
+  },
+  "globalShortcut": "Ctrl+Shift+M"
+}

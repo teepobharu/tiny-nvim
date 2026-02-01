@@ -1,0 +1,64 @@
+# Goose AI Agent Configuration
+# https://github.com/block/goose
+
+# Provider settings
+provider: anthropic  # Options: anthropic, openai, ollama
+
+# Model selection by provider
+models:
+  anthropic:
+    model: claude-sonnet-4-20250514
+    # model: claude-opus-4-20250514  # For complex tasks
+  openai:
+    model: gpt-4o
+  ollama:
+    model: codellama:13b
+    base_url: http://localhost:11434
+
+# Toolkits to enable
+toolkits:
+  - developer       # File operations, shell commands
+  - git            # Git operations
+  - github         # GitHub API (requires GITHUB_TOKEN)
+  - web_search     # Web search capabilities
+  - memory         # Persistent context
+
+# Session settings
+session:
+  # Auto-save sessions
+  auto_save: true
+  # Session history location
+  history_dir: ~/.local/share/goose/sessions
+  # Maximum context tokens
+  max_context_tokens: 128000
+
+# Safety settings
+safety:
+  # Require confirmation for destructive operations
+  confirm_destructive: true
+  # Sandbox file operations to workspace
+  sandbox_mode: false
+  # Allowed paths (empty = all paths allowed)
+  allowed_paths: []
+  # Blocked paths
+  blocked_paths:
+    - ~/.ssh
+    - ~/.gnupg
+    - ~/.aws/credentials
+
+# Output settings
+output:
+  # Show thinking process
+  show_thinking: false
+  # Colorize output
+  colorize: true
+  # Verbose mode
+  verbose: false
+
+# Custom instructions (like Cursor rules)
+instructions: |
+  You are a helpful coding assistant.
+  - Follow existing code patterns and conventions
+  - Write clean, maintainable code
+  - Include appropriate error handling
+  - Add comments for complex logic only

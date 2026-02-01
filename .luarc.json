@@ -8,8 +8,5 @@
     "vim",
     "Snacks"
   ],
-  "workspace.checkThirdParty": false,
-  "workspace.library": [
-    "$VIMRUNTIME"
-  ]
+  "workspace.checkThirdParty": false
 }

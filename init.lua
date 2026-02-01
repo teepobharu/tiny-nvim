@@ -49,7 +49,6 @@ else
     -- My custom handler to watch for different startup modes
     require("utils.startup.simple_startup")
     -- Load additional config (skip if running with --noplugin)
-    ok = pcall(require, "config.mydefault-nvim-config")
 
     -- Load Lsp on-demand, e.g: eslint is disable by default
     -- e.g: We could enable eslint by set vim.g.lsp_on_demands = {"eslint"}

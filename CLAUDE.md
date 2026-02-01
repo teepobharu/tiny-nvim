@@ -2,9 +2,10 @@ Editing / Coding Guidelines
 
 - Do not remove any code comments unless instructed to do or required as the implementation make the comment obsolete.
 - Avoid adding in existing ./lua/plugins/\*.lua unless required to
-- myEditor currently contains most overridden user config for the plugins, but ideally the plugins should be inside plugins/extra/my<plugin_name>.lua we can slowly migrate this - not urgent, for new overridden that has not been specified in my\*.lua prefix can start putting on that
-- For plugin configuration overrides, use files named plugins/extra/my<plugin_name>.lua. This helps separate personal changes from upstream configurations.
+- myEditor currently contains most overridden user config for the plugins, but ideally the plugins should be inside plugins/extra/my<plugin_groups/plugin_name>.lua we can slowly migrate this - not urgent, for new overridden that has not been specified in my\*.lua prefix can start putting on that
+- For plugin configuration overrides, use files named plugins/extra/my<group_name/plugin_name>.lua. This helps separate personal changes from upstream configurations.
 - When adding new overrides, prefer creating a my\*.lua file with the "my" prefix to avoid conflicts with updates from the original plugin author.
+- For pocs or temporary changes for tasks that user might want to test can be inside, use plugins/extra/tmp_<description>.lua and clean them up later.
 - Only modify plugins/\*.lua directly if necessary (e.g., when deep merging config is not possible (e.g functions and not table). In such cases, move custom code to lua/plugins/extras/ or lua/utils/ as appropriate. If placed in /extras, ensure it is imported in the relevant entry point.
 - when asked to work on spec on docs/\*.md update the detail of and short description in shortlist with code References hyperlink made
 - when ask to DIGDEEP one of the reliable source for installed plugins source code can be found in ~/.local/share/$NVIM_APPNAME/lazy/<plugin_name> (ie. ~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/)
