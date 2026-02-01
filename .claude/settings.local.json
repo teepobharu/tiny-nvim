@@ -10,7 +10,13 @@
       "WebFetch(domain:github.com)",
       "Bash(dotnet test:*)",
       "Bash(git log:*)",
-      "WebFetch(domain:deepwiki.com)"
+      "WebFetch(domain:deepwiki.com)",
+      "WebFetch(domain:www.google.com)",
+      "WebFetch(domain:www.reddit.com)",
+      "WebFetch(domain:docs.cursor.com)",
+      "WebFetch(domain:cursor.com)",
+      "Bash(gemini:*)",
+      "Bash(tree:*)"
     ],
     "deny": []
   }

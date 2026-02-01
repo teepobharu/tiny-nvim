@@ -68,6 +68,7 @@ M.config = {
     vim.fn.expand("$HOME/AgodaGit/tools/trip-ai-tools/instruction/"),
     -- per-dir override: match any markdown in these folders
     { dir = vim.fn.expand("$HOME/dotfiles/claude/commands/"), patterns = { "*.md" } },
+    { dir = vim.fn.expand("$HOME/dotfiles/claude/docs/"), patterns = { "*.md" } },
     { dir = vim.fn.expand("$HOME/dotfiles/claude/agents/"), patterns = { "*.md" } },
   },
   patterns = { "*.prompt.md", "*.instructions.md" },

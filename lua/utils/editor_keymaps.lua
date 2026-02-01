@@ -31,7 +31,7 @@ local function fzfcompareref(selected)
   end
 
   local line = selected[1]
-  local commit_hash
+  local commit_hash = line
 
   -- handle branch selectors
   line = line:match "[^%w_]+(.*)$"
@@ -408,11 +408,12 @@ M.keymaps = {
     { "<leader>bse", ":BufferLineSortByExtension<CR>", desc = "Buffer Sort By Extension" },
     { "<leader>bsr", ":BufferLineSortByRelativeDirectory<CR>", desc = "Buffer Sort By Relative Directory" },
     { "<leader>bst", ":BufferLineSortByTabs<CR>", desc = "Buffer Sort By Tabs" },
-    { "<leader>bg", ":BufferLinePick<CR>", desc = "Buffer Group Toggle Pin" },
-    { "<leader>bup", ":BufferLineGroupToggle ungrouped<CR>", desc = "Buffer Group Toggle ungroup" },
-    { "<leader>bup", ":BufferLineGroupToggle pinned<CR>", desc = "Buffer Group Toggle ungroup" },
-    { "<leader>bcP", ":BufferLineGroupClose pinned<CR>", desc = "Buffer Close pin" },
-    { "<leader>bcp", ":BufferLineGroupClose ungrouped<CR>", desc = "Buffer Close ungroup" },
+    { "<leader>bg", ":BufferLinePick<CR>", desc = "Buffer Go Pick" },
+    { "<leader>bcp", ":BufferLineGroupClose ungrouped<CR>", desc = "Buffer Close Ungroup" },
+    { "<leader>bup", ":BufferLineGroupToggle pinned<CR>", desc = "Buffer Group Pin" },
+    { "<leader>bu", ":BufferLineGroupToggle ", desc = "Buffer Toggle.." },
+    { "<leader>buP", ":BufferLineGroupToggle ungrouped<CR>", desc = "Buffer Group Ungroup" },
+    { "<leader>bcP", ":BufferLineGroupClose pinned<CR>", desc = "Buffer Close Pin" },
   },
 
   -- Persistence (session management)
@@ -931,7 +932,7 @@ M.fzf_opts = {
           open_remote(ref, "file")
           open_remote(ref, "branch")
         end,
-        ["ctrl-s"] = fzfcompareref,
+        ["ctrl-s"] = fzfcompareref, -- <c-s>
         ["ctrl-g"] = function(selected)
           local ref = selected[1]:match "[^%w_]+(.*)$"
           ref = ref:match "^(%S+)"
