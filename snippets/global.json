@@ -14,17 +14,102 @@
     "description": "Date in (YYYY-MM-DD) format"
   },
   "dateYYYYMMDD": {
-    "prefix": ["YMD", "dateYYYYMMDD"],
+    "prefix": [
+      "YMD",
+      "dateYYYYMMDD"
+    ],
     "body": [
       "${CURRENT_YEAR}${CURRENT_MONTH}${CURRENT_DATE}"
     ],
     "description": "Date in (YYYYMMDD) format"
   },
   "datetimeYYYYMMDD_HMS": {
-    "prefix": ["datetimeYYYYMMDD_HMS"],
+    "prefix": [
+      "datetimeYYYYMMDD_HMS"
+    ],
     "body": [
       "${CURRENT_YEAR}${CURRENT_MONTH}${CURRENT_DATE}_${CURRENT_HOUR}:${CURRENT_MINUTE}:${CURRENT_SECOND}"
     ],
     "description": "Date in (YYYYMMDD) format"
+  },
+  "CodeRefColon": {
+    "prefix": [
+      "coderef",
+      "refline"
+    ],
+    "body": [
+      "${RELATIVE_FILEPATH:${TM_FILENAME}}:${TM_LINE_NUMBER}:${1:1}"
+    ],
+    "description": "file:LINE:COL reference using current buffer path"
+  },
+  "CodeRefSpace": {
+    "prefix": [
+      "coderefs",
+      "refspace"
+    ],
+    "body": [
+      "${RELATIVE_FILEPATH:${TM_FILENAME}} :L${TM_LINE_NUMBER}:C${1:1}"
+    ],
+    "description": "file LINE:COL reference with space separator"
+  },
+  "CodeRefAt": {
+    "prefix": [
+      "coderefa",
+      "refat"
+    ],
+    "body": [
+      "@${RELATIVE_FILEPATH:${TM_FILENAME}} ${TM_LINE_NUMBER}:${1:1}"
+    ],
+    "description": "@file LINE:COL reference"
+  },
+  "CodeRefHash": {
+    "prefix": [
+      "coderefh",
+      "refhash"
+    ],
+    "body": [
+      "${RELATIVE_FILEPATH:${TM_FILENAME}}#L${TM_LINE_NUMBER}"
+    ],
+    "description": "file#Lline reference"
+  },
+  "CodeRefColonAbs": {
+    "prefix": [
+      "coderefabs",
+      "reflineabs"
+    ],
+    "body": [
+      "${TM_FILEPATH}:${TM_LINE_NUMBER}:${1:1}"
+    ],
+    "description": "ABS file:LINE:COL reference using current buffer absolute path"
+  },
+  "CodeRefSpaceAbs": {
+    "prefix": [
+      "coderefsabs",
+      "refspaceabs"
+    ],
+    "body": [
+      "${TM_FILEPATH} :L${TM_LINE_NUMBER}:C${1:1}"
+    ],
+    "description": "ABS file LINE:COL reference with space separator"
+  },
+  "CodeRefAtAbs": {
+    "prefix": [
+      "codrefaat",
+      "refatabs"
+    ],
+    "body": [
+      "@${TM_FILEPATH} ${TM_LINE_NUMBER}:${1:1}"
+    ],
+    "description": "@ABS file LINE:COL reference"
+  },
+  "CodeRefHashAbs": {
+    "prefix": [
+      "coderefhashabs",
+      "refhashabs"
+    ],
+    "body": [
+      "${TM_FILEPATH}#L${TM_LINE_NUMBER}"
+    ],
+    "description": "ABS file#Lline reference"
   }
 }

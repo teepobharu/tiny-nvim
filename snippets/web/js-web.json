@@ -1,0 +1,26 @@
+{
+  "divDebugBlock": {
+    "prefix": "divdb",
+    "body": [
+      "wrapper.append(",
+      "    Object.assign(document.createElement('button'), {",
+      "        textContent: new Date().toLocaleDateString() + ' BTN',",
+      "        onclick: () => AppHooks?.openPrevNavStack?.(),",
+      "    }),",
+      "    Object.assign(document.createElement('span'), {",
+      "        textContent: 'testtext ' + (arg?.onNullTripHandler ?? ''),",
+      "        style: 'margin-left:8px;',",
+      "    }),",
+      ");",
+      "document.body.prepend(",
+      "    wrapper,",
+      "    'test',",
+      "    Object.assign(document.createElement('${1:div}'), {",
+      "        textContent: '${2:debug div}',",
+      "        style: 'color:#000;',",
+      "    }),",
+      ");"
+    ],
+    "description": "Append debug UI elements and prepend a configurable final element"
+  }
+}
