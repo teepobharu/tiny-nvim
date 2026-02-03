@@ -32,11 +32,13 @@ return {
         },
         -- work around for issues docs/memory/sidekick_env_propagation.md
         tools = {
-          -- opencode = {
-          --   env = {
-          --     GLEAN_API_TOKEN = vim.env.GLEAN_API_TOKEN,
-          --   },
-          -- },
+          opencode = {
+            -- Use <M-p> for the command palette instead of the default <C-p>
+            keys = { prompt = { "<m-p>", "prompt" } },
+            -- env = {
+            --   GLEAN_API_TOKEN = vim.env.GLEAN_API_TOKEN,
+            -- },
+          },
           -- crush = {
           --   env = {
           --     GLEAN_API_TOKEN = vim.env.GLEAN_API_TOKEN,
@@ -102,6 +104,8 @@ return {
   },
 
   {
+    "ravitemer/mcphub.nvim",
+    -- MCPHub.nvim - MCP client and tool bridge for AI chat plugins
     --     require("mcphub")
     --     Do more investigation on integration and amed the documentation of dependencies check to reflect the investigations on these sites:
     -- @{fetch_webpage}
@@ -111,8 +115,6 @@ return {
     -- https://ravitemer.github.io/mcphub.nvim/extensions/avante.html
     -- https://ravitemer.github.io/mcphub.nvim/extensions/codecompanion
     -- https://ravitemer.github.io/mcphub.nvim/extensions/copilotchat.html
-
-    "ravitemer/mcphub.nvim",
     dependencies = {
       "nvim-lua/plenary.nvim",
     },

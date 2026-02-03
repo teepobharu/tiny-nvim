@@ -15,6 +15,7 @@ vim.g.enable_extra_plugins = {
   "fold-preview",
   "myToggleterm",
   "myEditor",
+  "myCoding",
   "myGit",
   "myAi",
   "snacks", -- error when removed - error when no extra dir so create dummy {}
