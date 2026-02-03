@@ -13,6 +13,16 @@
       },
       {
         "language": [
+          "javascript",
+          "javascriptreact",
+          "typescript",
+          "typescriptreact",
+          "html"
+        ],
+        "path": "./web/js-web.json"
+      },
+      {
+        "language": [
           "license"
         ],
         "path": "./license.json"

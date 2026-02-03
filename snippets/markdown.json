@@ -5,5 +5,31 @@
       "<img src=\"${1:path}\" alt=\"${2:alt text}\" width=\"${3:width}\" height=\"${4:height}\"> ${0}"
     ],
     "description": "Add images with size"
+  },
+  "WrapCodeBlock": {
+    "prefix": [
+      "cb",
+      "wcb",
+      "wrabcodeblock"
+    ],
+    "body": [
+      "``` ${1:lang}",
+      "${TM_SELECTED_TEXT:code}",
+      "```",
+      "$0"
+    ],
+    "description": "Wrap selection in a fenced code block (uses TM_SELECTED_TEXT)"
+  },
+  "LinkFromSelection": {
+    "prefix": [
+      "mdlink",
+      "linksel",
+      "linkw",
+      "wlink"
+    ],
+    "body": [
+      "[${1:text}](${TM_SELECTED_TEXT:https://example.com})$0"
+    ],
+    "description": "Create a markdown link using the selected URL"
   }
 }
