@@ -4,6 +4,24 @@ local keymap = vim.keymap.set
 local Cmd = require "utils.cmd"
 local run_command = Cmd.run_command
 local inputUtil = require "utils.input"
+local codeRef = require "utils.code_ref"
+local clipboardUtil = require "utils.myinput"
+
+local function copy_code_ref(format, absolute, copy_mode)
+  return codeRef.copy_current { format = format, absolute = absolute, copy_mode = copy_mode or "plus" }
+end
+
+vim.api.nvim_create_user_command("CopyCodeRef", function(cmd)
+  local format = cmd.args ~= "" and cmd.args or "colon"
+  local absolute = cmd.bang or false
+  copy_code_ref(format, absolute)
+end, {
+  nargs = "?",
+  bang = true,
+  complete = function()
+    return { "colon", "space", "at", "at_caps", "hash" }
+  end,
+})
 -- ===========================
 -- LAZY NVIM ====================
 -- =======================
@@ -121,9 +139,57 @@ keymap("v", "<A-d>", duplicateselected, { desc = "Duplicate line and preserve ya
 -- copy to nvim only not system clipboard
 vim.opt.clipboard = ""
 
-keymap("n", "YY", '"+yy', { desc = "Copy to system clipboard" })
-keymap("v", "Y", '"+y', { desc = "Copy to system clipboard" })
-keymap("v", "<C-c>", '"+y', { desc = "Copy to system clipboard" })
+-- Copy to system clipboard (+ register) using simple vim.cmd
+keymap("n", "YY", function()
+  vim.cmd('normal! "+yy')
+  vim.notify("Copied line to system clipboard", vim.log.levels.INFO)
+end, { desc = "Copy line to system clipboard" })
+
+keymap("v", "Y", function()
+  vim.cmd('normal! "+y')
+  vim.notify("Copied selection to system clipboard", vim.log.levels.INFO)
+end, { desc = "Copy selection to system clipboard" })
+
+keymap("v", "<C-c>", function()
+  vim.cmd('normal! "+y')
+  vim.notify("Copied selection to system clipboard", vim.log.levels.INFO)
+end, { desc = "Copy selection to system clipboard" })
+
+keymap("n", "<localleader>cc", function()
+  vim.cmd "let @* = @0" -- Transfer last yank ("0 register) to system clipboard ("* register)
+end, { desc = "Copy yank to system clipboard" })
+--
+-- Code reference copies (copy to system clipboard only)
+-- Code reference keymaps with visual mode support
+local function create_code_ref_keymap(modes, key, format, absolute, desc)
+  keymap(modes, key, function()
+    copy_code_ref(format, absolute, "plus")
+  end, { desc = desc })
+end
+
+-- Relative paths (lowercase suffix)
+create_code_ref_keymap({"n", "v"}, "<localleader>crr", "colon", false, "CodeRef rel path:line:col")
+create_code_ref_keymap({"n", "v"}, "<localleader>crs", "space", false, "CodeRef rel path line:col")
+create_code_ref_keymap({"n", "v"}, "<localleader>cra", "at_caps", false, "CodeRef rel @path Lline:Ccol")
+create_code_ref_keymap({"n", "v"}, "<localleader>crb", "at", false, "CodeRef rel @path line:col")
+create_code_ref_keymap({"n", "v"}, "<localleader>crh", "hash", false, "CodeRef rel path#LlineCcol")
+
+-- Absolute paths (uppercase suffix)
+create_code_ref_keymap({"n", "v"}, "<localleader>crR", "colon", true, "CodeRef ABS path:line:col")
+create_code_ref_keymap({"n", "v"}, "<localleader>crS", "space", true, "CodeRef ABS path line:col")
+create_code_ref_keymap({"n", "v"}, "<localleader>crA", "at_caps", true, "CodeRef ABS @path Lline:Ccol")
+create_code_ref_keymap({"n", "v"}, "<localleader>crB", "at", true, "CodeRef ABS @path line:col")
+create_code_ref_keymap({"n", "v"}, "<localleader>crH", "hash", true, "CodeRef ABS path#LlineCcol")
+
+-- Picker
+keymap({"n", "v"}, "<localleader>crp", function()
+  require("utils.snacks_pickers").code_ref_picker()
+end, { desc = "CodeRef picker (copy to clipboard)" })
+
+-- Toggle char range in references
+keymap("n", "<localleader>crT", function()
+  require("utils.code_ref").toggle_char_range()
+end, { desc = "Toggle char range in code refs" })
 
 -- ============================
 --  Navigations

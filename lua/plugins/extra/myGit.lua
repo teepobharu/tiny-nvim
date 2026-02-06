@@ -81,11 +81,12 @@ return {
                 "[ERROR] git add cmd " .. table.concat(cmd, " ") .. "also failed: " .. cmdresult,
                 vim.log.levels.ERROR
               )
+              return
             else
-              require("gitsigns").attach()
               Snacks.debug "git add : fallback succeeded"
             end
           end
+          require("gitsigns").attach()
         end,
         desc = "$Git stage current",
       },
