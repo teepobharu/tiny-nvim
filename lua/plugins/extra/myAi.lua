@@ -1,5 +1,14 @@
 -- Only contains modifications to default configs
 -- put all related ai agents additional plugins options and configs here
+
+-- caveat : might not updated when something changed until restart nvim ?
+local common_agent_env = {
+  OPENAI_API_KEY = vim.env.GENAIAG,
+  OPENAI_BASE_URL = vim.env.AG_OPENAIPROXY,
+  ANTHROPIC_AUTH_TOKEN = vim.env.ANTHROPIC_AUTH_TOKEN,
+  GLEAN_API_TOKEN = vim.env.GLEAN_API_TOKEN,
+  GITLAB_TOKEN = vim.env.GITLAB_TOKEN,
+}
 return {
   {
     -- https://deepwiki.com/search/explain-if-luarcjson-file-can_a16e3ee5-0d51-46cf-9c7d-6b6a96e5ad8c?mode=fast
@@ -35,6 +44,7 @@ return {
           opencode = {
             -- Use <M-p> for the command palette instead of the default <C-p>
             keys = { prompt = { "<m-p>", "prompt" } },
+            env = common_agent_env,
             -- env = {
             --   GLEAN_API_TOKEN = vim.env.GLEAN_API_TOKEN,
             -- },
@@ -44,21 +54,16 @@ return {
           --     GLEAN_API_TOKEN = vim.env.GLEAN_API_TOKEN,
           --   },
           -- },
-          -- codex = {
-          --   env = {
-          --     OPENAI_BASE_URL = vim.env.AG_OPENAIPROXY,
-          --     OPENAI_API_KEY = vim.env.GENAIAG,
-          --     GLEAN_API_TOKEN = vim.env.GLEAN_API_TOKEN,
-          --     GITLAB_TOKEN = vim.env.GITLAB_TOKEN,
-          --   },
-          -- },
-          -- claude = {
-          --   env = {
-          --     GLEAN_API_TOKEN = vim.env.GLEAN_API_TOKEN,
-          --     ANTHROPIC_AUTH_TOKEN = vim.env.ANTHROPIC_AUTH_TOKEN,
-          --   },
-          -- },
+          codex = {
+            env = common_agent_env,
+          },
+          claude = {
+            env = common_agent_env,
+          },
           debug_me = { -- https://github.com/folke/sidekick.nvim/issues/62
+            env = vim.tbl_extend("force", common_agent_env, {
+              FOO = "bar",
+            }),
             -- require to use absolute (no ~) else failed - try chmod +x also
             cmd = { "/Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim/tests/debug_me.sh" },
             -- cmd = { "bash", "-c", "~/dotfiles/.config/nvim3_jelly_tinynvim/tests/debug_me.sh", "&&", "read" },
@@ -92,7 +97,6 @@ return {
       },
     },
   },
-  -- MCPHub.nvim - MCP client and tool bridge for AI chat plugins
   {
     "folke/which-key.nvim",
     optional = true,

@@ -1080,7 +1080,15 @@ Your instructions here
           desc = "Add text sidekick",
         },
         -- end overides key desc
-        { "<localleader>a", group = "ai" },
+        { "<localleader>a", group = "ai", mode = { "n", "v" } },
+        { "<leader>S", group = "terminal", mode = { "n", "v" } },
+        { "<leader>r", group = "avante/code", mode = { "n" } },
+        { "<leader>r", group = "avante/code", mode = { "v" } },
+        { "<leader>d", group = "diff/debug", mode = { "n" } },
+        { "<leader>d", group = "debug", mode = { "v" } },
+        { "<localleader>S", group = "terminal snacks" },
+        { "<localleader>T", group = "terminal toggleterm" },
+        { "<localleader>F", group = "Format", mode = { "n", "v" } },
         {
           "gG",
           group = "web",
@@ -1101,14 +1109,14 @@ Your instructions here
         },
         {
           "<localleader>f",
-          group = "file/find",
-          mode = { "n" },
+          group = "quick format",
+          mode = { "n", "v" },
           icon = { icon = "📂", color = "black" },
         },
         {
           "<localleader>r",
           group = "code/lsp/lua",
-          mode = { "n" },
+          mode = { "n", "v" },
           icon = { icon = "💻", color = "black" },
         },
         -- Avante model selection groups

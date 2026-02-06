@@ -1112,6 +1112,7 @@ function snacks_git_browse()
   }
 end
 function git()
+  -- Snacks.picker.git_log_file { current_file = false } -- no specific files / dir available
   -- Snacks.picker.git_diff {}
   -- Want to do buffer_lines style in git diff
 

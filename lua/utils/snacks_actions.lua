@@ -314,7 +314,7 @@ function M.copy_path_relative_buffer(picker, item)
     return
   end
 
-  local prev_buf = vim.api.nvim_buf_get_name(vim.fn.bufnr("#"))
+  local prev_buf = vim.api.nvim_buf_get_name(vim.fn.bufnr "#")
   local current_buf = vim.api.nvim_buf_get_name(0)
   local ref_buf_path = (prev_buf ~= "" and prev_buf) or current_buf
 
@@ -376,7 +376,7 @@ end
 local function insert_at_cursor(text, parent_picker, format_picker)
   format_picker:close()
   parent_picker:close()
-  vim.api.nvim_put({ text }, 'c', true, true)
+  vim.api.nvim_put({ text }, "c", true, true)
   vim.notify("Inserted: " .. text, vim.log.levels.INFO)
 end
 
@@ -391,7 +391,7 @@ local function insert_markdown_link(path, parent_picker, format_picker)
   end
 
   local markdown_link = string.format("[%s](%s)", name, path)
-  vim.api.nvim_put({ markdown_link }, 'c', true, true)
+  vim.api.nvim_put({ markdown_link }, "c", true, true)
   vim.notify("Inserted markdown link: " .. markdown_link, vim.log.levels.INFO)
 end
 
@@ -505,8 +505,8 @@ function M.copy_path_select(picker, item)
         keys = {
           ["<C-q>"] = {
             "quit_all",
-            mode = {"n", "i"},
-            desc = "Exit Quit all"
+            mode = { "n", "i" },
+            desc = "Exit Quit all",
           },
           ["<Esc>"] = {
             "cancel",
@@ -1127,8 +1127,8 @@ function M.toggle_files_buffers(picker, item)
   else
     -- Switching from buffers to files
     -- For files: persist both hidden and ignored states
-    local hidden_state = get_toggle_state("hidden")
-    local ignored_state = get_toggle_state("ignored")
+    local hidden_state = get_toggle_state "hidden"
+    local ignored_state = get_toggle_state "ignored"
 
     if hidden_state ~= nil then
       picker_params.hidden = hidden_state
@@ -1233,7 +1233,7 @@ function M.open_file_remote(picker, item)
   local preview_source = picker.init_opts and picker.init_opts.source
 
   local current_buf_path = editor_keymaps.helpers.get_current_buffer_path()
-  local last_bufferpath = vim.api.nvim_buf_get_name(vim.fn.bufnr("#"))
+  local last_bufferpath = vim.api.nvim_buf_get_name(vim.fn.bufnr "#")
 
   local chosen_path = item._path
   if not chosen_path or chosen_path == "" then
@@ -1287,7 +1287,7 @@ function M.toggle_case_sensitivity(picker, item)
   local has_ignore_case = vim.tbl_contains(current_args, "-i") or vim.tbl_contains(current_args, "--ignore-case")
   local has_casesens = vim.tbl_contains(current_args, "-s") or vim.tbl_contains(current_args, "--case-sensitive")
   local current_search = picker.input.filter and picker.input.filter.search
-  local search_query_has_upper = current_search and current_search:match("%u")
+  local search_query_has_upper = current_search and current_search:match "%u"
 
   local source = picker.opts.source
 
@@ -1303,18 +1303,18 @@ function M.toggle_case_sensitivity(picker, item)
   print([==[Toggle before args:]==], vim.inspect(picker.opts.args))
 
   if has_ignore_case then
-    current_args = remove_exist_flags(current_args, {"-i", "--ignore-case"})
-    current_args = remove_exist_flags(current_args, {"-s", "--case-sensitive"})
+    current_args = remove_exist_flags(current_args, { "-i", "--ignore-case" })
+    current_args = remove_exist_flags(current_args, { "-s", "--case-sensitive" })
   elseif is_case_sensitive_perceived then
     -- Add ignore case flag
-    current_args = remove_exist_flags(current_args, {"-i", "--ignore-case"})
-    current_args = remove_exist_flags(current_args, {"-s", "--case-sensitive"})
+    current_args = remove_exist_flags(current_args, { "-i", "--ignore-case" })
+    current_args = remove_exist_flags(current_args, { "-s", "--case-sensitive" })
     table.insert(current_args, "--ignore-case")
     is_next_sensitive = false
   else
     -- Add case sensitive flag
-    current_args = remove_exist_flags(current_args, {"-i", "--ignore-case"})
-    current_args = remove_exist_flags(current_args, {"-s", "--case-sensitive"})
+    current_args = remove_exist_flags(current_args, { "-i", "--ignore-case" })
+    current_args = remove_exist_flags(current_args, { "-s", "--case-sensitive" })
     table.insert(current_args, "--case-sensitive")
     is_next_sensitive = true
   end
@@ -1328,12 +1328,15 @@ function M.toggle_case_sensitivity(picker, item)
     local init_smartcase = picker.init_opts.matcher and picker.init_opts.matcher.smartcase
     local init_ignorecase = picker.init_opts.matcher and picker.init_opts.matcher.ignorecase
 
-    print([==[snacks_opt_tgg#picker.opts.matcher:]==], vim.inspect({
-      smartcase = smartcase,
-      ignorecase = ignorecase,
-      init_smartcase = init_smartcase,
-      init_ignorecase = init_ignorecase,
-    }))
+    print(
+      [==[snacks_opt_tgg#picker.opts.matcher:]==],
+      vim.inspect {
+        smartcase = smartcase,
+        ignorecase = ignorecase,
+        init_smartcase = init_smartcase,
+        init_ignorecase = init_ignorecase,
+      }
+    )
 
     if is_next_sensitive then
       picker.opts.matcher.ignorecase = false
