@@ -1,16 +1,12 @@
 ---@return overseer.TemplateDefinition
 return {
   name = "Run Mmb pick",
-  tags = vim.tbl_extend(
-    "force",
-    {
-      require("overseer").TAG.BUILD,
-      require("overseer").TAG.RUN,
-      require("overseer").TAG.TEST,
-      require("overseer").TAG.CLEAN,
-    },
-    { "agoda", "custom" }
-  ),
+  tags = vim.tbl_extend("force", {
+    require("overseer").TAG.BUILD,
+    require("overseer").TAG.RUN,
+    require("overseer").TAG.TEST,
+    require("overseer").TAG.CLEAN,
+  }, { "agoda", "custom" }),
   description = "run android test on current file",
   builder = function(params)
     -- v2: Validation moved from condition callback
@@ -106,6 +102,5 @@ return {
   },
   condition = {
     -- filetype = { "kotlin" },
-    -- Note: v2 removed condition callbacks - validation moved to builder
   },
 }

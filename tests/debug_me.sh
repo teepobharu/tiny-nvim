@@ -16,6 +16,13 @@ interactive_read() {
   echo " ============================= "
 }
 
+end_and_enterbashmode() {
+  interactive_read -r -n 1 -s -p "Press any key to enter bash mode..."
+  printf "$ "
+  bash
+  # bash --login
+}
+
 # all vars from .bash.local,  ~/.bash_exports
 vars=(
   FOO
@@ -50,7 +57,7 @@ vars_mask=(
   ANTHROPIC_AUTH_TOKEN
   AVANTE_OPENAI_API_KEY
   OPENCODE_SERVER_PASSWORD
-  AVANTE_ANTHROPIC_API_KEY
+  ANTHROPIC_API_KEY
   OPENAI_API_KEY
   GOOGLE_SEARCH_API_KEY
   DEEPSEEKAPIKEY
@@ -161,9 +168,7 @@ tmux show-environment -g | grep -v -E "$(
 
 echo "----TMUX_ session specific ----"
 tmux show-environment -s
-interactive_read -p "Ending" _
 
-interactive_read -r -n 1 -s -p "Press any key to exit..."
 # # CONFIG SCRIPT CHANGE START
 #  MMB_FORKWEBHOOK=
 #  TRIPVIEW_BFF_SLACK_WEBHOOK_URL=
@@ -209,3 +214,4 @@ interactive_read -r -n 1 -s -p "Press any key to exit..."
 # "ANTHROPIC_BEDROCK_BASE_URL": "https://genai-gateway.agoda.is/claude",
 #  ANTHROPIC_AUTH_TOKEN=
 # CONFIG SCRIPT CHANGE END
+end_and_enterbashmode

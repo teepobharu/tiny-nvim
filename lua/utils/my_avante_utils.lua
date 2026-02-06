@@ -28,7 +28,7 @@ function M.get_agoda_providers()
     --     "claude-haiku-4-5",
     --     "claude-opus-4-5",
     --   },
-    --   api_key_name = "OPENAI_API_KEY",
+    --   api_key = "OPENAI_API_KEY",
     -- },
     -- vertex_claude_agd = {
     --   __inherited_from = "vertex",
@@ -45,14 +45,18 @@ function M.get_agoda_providers()
     --     "claude-haiku-4-5",
     --     "claude-opus-4-5",
     --   },
-    --   api_key_name = "OPENAI_API_KEY",
+    --   api_key = "OPENAI_API_KEY",
     -- },
     openai_agd = {
       __inherited_from = "openai",
+      -- api_key = "OPENAI_API_KEY",
+      -- endpoint = "https://genai-gateway.agoda.is/v1",
       endpoint = "http://openai-proxy.agoda.is/v1",
+      -- http://openai-proxy.agoda.is/v1
       model = "gpt-5.2",
       timeout = 30000,
       model_names = {
+        -- can cross check codecompanion with lua/plugins/extra/myEditor.lua:228:1
         "gpt-4.1",
         "gpt-4.1-mini",
         "grok-code-fast-1",
@@ -60,6 +64,8 @@ function M.get_agoda_providers()
         "gpt-5.1",
         "gpt-5.2",
         "gemini-3-pro-preview",
+        "gemini-2.5-flash",
+        "deepseek-r1-0528-maas",
       },
       extra_request_body = {
         temperature = 0,
