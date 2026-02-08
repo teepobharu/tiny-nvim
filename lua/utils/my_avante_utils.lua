@@ -2,7 +2,7 @@
 local M = {}
 
 local DEFAULT_PROVIDER = "copilot"
-local DEFAULT_MODEL = "gpt-5-mini"
+local DEFAULT_MODEL = vim.env.DEFAULT_MODEL_COPILOT or "gpt-5-mini"
 -- Get Agoda-specific provider configurations
 -- These providers use internal Agoda endpoints and are separated from the main config
 -- for easier maintenance and to optionally exclude them from model selection
@@ -165,8 +165,8 @@ function M.get_lean_providers()
   local agd_providers = M.get_agoda_providers()
   for name, value in ipairs(agd_providers) do
     lean[name] = {
-      -- DOES NOT REALLY WORK WILL NOT OVERRIDE / THROW ERRORS 
-      -- __inherited_from = value["__inherited_from"], 
+      -- DOES NOT REALLY WORK WILL NOT OVERRIDE / THROW ERRORS
+      -- __inherited_from = value["__inherited_from"],
       -- endpoint = false,
       -- model = false,
       -- model_names = {},
@@ -275,6 +275,8 @@ function M.get_copilot_models_config()
   return {
     f = { model = "gpt-4.1-mini", desc = "GPT-4.1-mini (fast)" },
     F = { model = "gpt-5-mini", desc = "GPT-5-mini (fast-2)" },
+    g = { model = "grok-code-fast-1", desc = "Grok code (fast)" },
+    G = { model = "claude-haiku-4-5", desc = "Claude Haiku 4.5" },
     h = { model = "claude-sonnet-4-5", desc = "Claude Sonnet 4.5 (heavy)" },
     H = { model = "claude-opus-4-5", desc = "Claude Opus 4.5" },
     c = { model = "gpt-5.1-codex-max", desc = "GPT-5.1-codex-max" },
@@ -287,6 +289,8 @@ function M.get_openai_agd_models_config()
   return {
     f = { model = "gpt-4.1-mini", desc = "GPT-4.1-mini" },
     F = { model = "gpt-5-mini", desc = "GPT-5-mini" },
+    g = { model = "grok-code-fast-1", desc = "Grok code (fast)" },
+    G = { model = "claude-haiku-4-5", desc = "Claude Haiku 4.5" },
     c = { model = "gpt-5.2", desc = "GPT-5.2" },
   }
 end
