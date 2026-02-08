@@ -212,9 +212,9 @@ function M.get_sub_project_dir(fromdir, return_metadata, return_all)
     { name = "build.gradle", type = "path", project_type = "gradle" },
     { name = "%.sln$", type = "pattern", project_type = "dotnet" },
     { name = { "Clientside/", "Serverside/" }, type = "path", project_type = "cronos" },
-    { name = ".gitlab-ci.yml", type = "path", project_type = "gitlab" },
+    -- { name = ".gitlab-ci.yml", type = "path", project_type = "gitlab" },
     -- does it support parent relative marker ?
-    { name = "../.gitlab", type = "path", project_type = "gitlab" },
+    -- { name = "../.gitlab", type = "path", project_type = ".glab" }, -- relative backwards not working
     { name = ".git", type = "path", project_type = "git" },
   }
 

@@ -7,8 +7,14 @@ local inputUtil = require "utils.input"
 local codeRef = require "utils.code_ref"
 local clipboardUtil = require "utils.myinput"
 
-local function copy_code_ref(format, absolute, copy_mode)
-  return codeRef.copy_current { format = format, absolute = absolute, copy_mode = copy_mode or "plus" }
+local function copy_code_ref(format, absolute, copy_mode, visual)
+  return codeRef.copy_current {
+    format = format,
+    absolute = absolute,
+    copy_mode = copy_mode or "plus",
+    show_char_range = vim.g.code_ref_show_char_range,
+    visual = visual or false,
+  }
 end
 
 vim.api.nvim_create_user_command("CopyCodeRef", function(cmd)
@@ -161,35 +167,47 @@ end, { desc = "Copy yank to system clipboard" })
 --
 -- Code reference copies (copy to system clipboard only)
 -- Code reference keymaps with visual mode support
-local function create_code_ref_keymap(modes, key, format, absolute, desc)
-  keymap(modes, key, function()
-    copy_code_ref(format, absolute, "plus")
+-- Separate n/v keymaps so the visual flag is known at registration time
+local function create_code_ref_keymap(key, format, absolute, desc)
+  keymap("n", key, function()
+    copy_code_ref(format, absolute, "plus", false)
+  end, { desc = desc })
+  keymap("v", key, function()
+    copy_code_ref(format, absolute, "plus", true)
   end, { desc = desc })
 end
 
 -- Relative paths (lowercase suffix)
-create_code_ref_keymap({"n", "v"}, "<localleader>crr", "colon", false, "CodeRef rel path:line:col")
-create_code_ref_keymap({"n", "v"}, "<localleader>crs", "space", false, "CodeRef rel path line:col")
-create_code_ref_keymap({"n", "v"}, "<localleader>cra", "at_caps", false, "CodeRef rel @path Lline:Ccol")
-create_code_ref_keymap({"n", "v"}, "<localleader>crb", "at", false, "CodeRef rel @path line:col")
-create_code_ref_keymap({"n", "v"}, "<localleader>crh", "hash", false, "CodeRef rel path#LlineCcol")
+create_code_ref_keymap("<localleader>crr", "colon", false, "CodeRef rel path:line:col")
+create_code_ref_keymap("<localleader>crs", "space", false, "CodeRef rel path line:col")
+create_code_ref_keymap("<localleader>cra", "at_caps", false, "CodeRef rel @path Lline:Ccol")
+create_code_ref_keymap("<localleader>crb", "at", false, "CodeRef rel @path line:col")
+create_code_ref_keymap("<localleader>crh", "hash", false, "CodeRef rel path#LlineCcol")
 
 -- Absolute paths (uppercase suffix)
-create_code_ref_keymap({"n", "v"}, "<localleader>crR", "colon", true, "CodeRef ABS path:line:col")
-create_code_ref_keymap({"n", "v"}, "<localleader>crS", "space", true, "CodeRef ABS path line:col")
-create_code_ref_keymap({"n", "v"}, "<localleader>crA", "at_caps", true, "CodeRef ABS @path Lline:Ccol")
-create_code_ref_keymap({"n", "v"}, "<localleader>crB", "at", true, "CodeRef ABS @path line:col")
-create_code_ref_keymap({"n", "v"}, "<localleader>crH", "hash", true, "CodeRef ABS path#LlineCcol")
+create_code_ref_keymap("<localleader>crR", "colon", true, "CodeRef ABS path:line:col")
+create_code_ref_keymap("<localleader>crS", "space", true, "CodeRef ABS path line:col")
+create_code_ref_keymap("<localleader>crA", "at_caps", true, "CodeRef ABS @path Lline:Ccol")
+create_code_ref_keymap("<localleader>crB", "at", true, "CodeRef ABS @path line:col")
+create_code_ref_keymap("<localleader>crH", "hash", true, "CodeRef ABS path#LlineCcol")
 
--- Picker
-keymap({"n", "v"}, "<localleader>crp", function()
-  require("utils.snacks_pickers").code_ref_picker()
+-- Picker (visual: capture flag before picker opens)
+keymap("n", "<localleader>crp", function()
+  require("utils.snacks_pickers").code_ref_picker({ visual = false })
+end, { desc = "CodeRef picker (copy to clipboard)" })
+keymap("v", "<localleader>crp", function()
+  require("utils.snacks_pickers").code_ref_picker({ visual = true })
 end, { desc = "CodeRef picker (copy to clipboard)" })
 
 -- Toggle char range in references
 keymap("n", "<localleader>crT", function()
   require("utils.code_ref").toggle_char_range()
 end, { desc = "Toggle char range in code refs" })
+
+-- Toggle hide column entirely
+keymap("n", "<localleader>crt", function()
+  require("utils.code_ref").toggle_hide_col()
+end, { desc = "Toggle hide column in code refs" })
 
 -- ============================
 --  Navigations
@@ -1569,3 +1587,18 @@ keymap("n", "<localleader>aP", function()
   local prompts_helper = require "utils.prompts_helper"
   prompts_helper.select_and_paste_prompt { paste_mode = "cursor" }
 end, { desc = "Paste prompt at cursor" })
+
+-- ===============================================
+-- STARTUP / WORKSPACE COMMANDS
+-- ===============================================
+
+vim.api.nvim_create_user_command("DotfilesWorkspace", function()
+  local dotfiles = vim.fn.expand "~/dotfiles"
+  vim.cmd("edit " .. dotfiles .. "/.bash_exports")
+  vim.cmd("vsplit " .. "~/.bash.local")
+  vim.cmd "wincmd h"
+  vim.cmd("split " .. dotfiles .. "/.bash_aliases")
+  vim.cmd "wincmd l"
+  vim.cmd("split " .. dotfiles .. "/ai/AI-docs.md")
+  vim.cmd "wincmd t"
+end, { desc = "Open dotfiles workspace layout" })

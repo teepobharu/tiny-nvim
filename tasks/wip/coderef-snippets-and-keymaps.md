@@ -2,26 +2,43 @@
 
 ## Status Summary
 
-- **Completed:** 3/11
+- **Completed:** 10/11
 - **In Progress:** 0/11
-- **Pending:** 8/11
+- **Pending:** 1/11
 
-TODO
+## User Review Checkboxes ✨
 
-- [x] Support visual-selection ranges in code ref outputs [`lua/utils/code_ref.lua#L59`]
-- [x] Support additional format and replace the a / A suffix mapping , move existing a / A to b / B mapping
-      <localleader>cra - @ format with (@path Lline:Ccol)
-      <localleader>crb - @ format (@path Lline:col)
-- [x] Add support for visual mode to add line range (no need for col when there's range) - it has to support on all existing mapping + in picker (visual mode)
+Latest changes (Session 2):
+
+- [ ] Check number line revert, copy not work picker
+- [ ] char toggle toggle changes reflect in line range select correctly on all format except the hash # variant, it does not toggle the single mode 
+- [ ] some faulty range identification
+- [ ] TO ADD : relative from cwd , subprojand relative from git
+
+- [ ] **Review:** Visual mode now correctly uses visual marks for range detection [`lua/utils/code_ref.lua:98-127`]
+- [ ] **Review:** Single-line selections don't show char info when `show_char_range=false`
+- [ ] **Review:** `<A-c>` in picker now correctly toggles and refreshes items [`lua/utils/snacks_pickers.lua:1473-1492`]
+- [ ] **Review:** New `<localleader>crt` keymap to completely hide column [`lua/config/mykeymaps.lua:199-202`]
+
+Latest changes (Session 3 - backward range fix):
+
+- [ ] **Review:** Fixed backward line ranges (e.g. `L19-L18` -> `L18-L19`) by switching from `vim.fn.getpos` to `vim.api.nvim_buf_get_mark` [`lua/utils/code_ref.lua:98-140`]
+- [ ] **Verify:** Select lines upward (V + k) then `<localleader>cra` - range should be ascending
+- [ ] **Verify:** Select lines downward (V + j) then `<localleader>cra` - range should be ascending
+- [ ] **Verify:** Picker in visual mode shows correct ascending ranges
 
 ## Completed ✅
 
-- [x] Add code-ref picker for all relative/absolute variants (Snacks picker) [`lua/utils/snacks_pickers.lua:1233`]
-- [x] Map picker to `<localleader>crp` (now supports visual mode) [`lua/config/mykeymaps.lua:185`]
-- [x] Support visual-selection ranges in code ref outputs [`lua/utils/code_ref.lua#L29-L62`]
-- [x] Add new `at_caps` format (`@path Lline:Ccol`) [`lua/utils/code_ref.lua#L43,L50,L58`]
-- [x] Remap code ref keymaps: move `a/A` to `b/B`, use `a/A` for new format [`lua/config/mykeymaps.lua:163-187`]
-- [x] Add visual mode support to all code ref keymaps and picker [`lua/config/mykeymaps.lua:163-187`]
+- [x] Add code-ref picker for all relative/absolute variants (Snacks picker) [`lua/utils/snacks_pickers.lua#1436-1512`]
+- [x] Map picker to `<localleader>crp` (now supports visual mode) [`lua/config/mykeymaps.lua:190-192`]
+- [x] Support visual-selection ranges in code ref outputs [`lua/utils/code_ref.lua#L98-L155`]
+- [x] Add new `at_caps` format (`@path Lline:Ccol`) [`lua/utils/code_ref.lua#L47-L94`]
+- [x] Remap code ref keymaps: move `a/A` to `b/B`, use `a/A` for new format [`lua/config/mykeymaps.lua:176-187`]
+- [x] Add visual mode support to all code ref keymaps and picker [`lua/config/mykeymaps.lua:176-192`]
+- [x] Add char range toggle: `<localleader>crT` toggles ranges with/without char info [`lua/config/mykeymaps.lua:194-197`]
+- [x] Add column toggle: `<localleader>crt` to completely hide column [`lua/config/mykeymaps.lua:199-202`]
+- [x] Fix visual range detection to handle recent selections (after picker closes) [`lua/utils/code_ref.lua:98-155`]
+- [x] Fix picker Alt-c keymap error and implement proper item refresh [`lua/utils/snacks_pickers.lua:1473-1492`]
 
 ## Pending Tasks ⏳
 
@@ -131,13 +148,158 @@ TODO
 <localleader>crp - picker (all variants) ✨ visual mode support
 ```
 
-**Visual mode support:**
-- All keymaps above now work in visual mode (`v` and `V`)
-- In visual mode, automatically includes line range in output
-- Example: selecting lines 5-10 with `<localleader>cra` produces: `@path L5:C1-L10:C1`
+**Toggle keymaps (normal mode only):**
 
-### Configuration
+```
+<localleader>crT - Toggle char range in multi-line selections
+                  OFF (default):  path:5-10  or  @path L5-L10
+                  ON:             path:5:1-10:25  or  @path L5:C1-L10:C25
+
+<localleader>crt - Toggle hide column entirely
+                  OFF (default):  path:17:5  or  @path L17:C5
+                  ON:             path:17  or  @path L17
+```
+
+**Picker keyboard shortcut:**
+
+```
+<A-c> (in picker) - Toggle char range in multi-line selections and refresh items
+                    Shows current state in title: " [char: on]" or " [char: off]"
+```
+
+**Visual mode support:**
+
+- All code ref keymaps (`crr`, `crs`, `cra`, `crb`, `crh`, etc.) work in visual mode (`v` and `V`)
+- All toggles (`crT`, `crt`) affect visual mode output (use global variables)
+- Multi-line visual selections automatically detected using visual marks
+- Single-line selections use normal formatting rules
+- Example: selecting lines 5-10 in visual mode with `<localleader>cra`:
+  - With all toggles OFF: `@path L5-L10`
+  - With `crT` ON: `@path L5:C1-L10:C25`
+  - With `crt` ON: `@path L5` (single line format, column hidden)
+
+### Configuration & Global Variables
 
 - `vim.opt.clipboard = ""` - Clipboard disabled (manual control only)
+- `vim.g.code_ref_show_char_range` - Show char positions in ranges (default: `false`)
+- `vim.g.code_ref_hide_col` - Hide column entirely (default: `false`)
 - All copy operations use `copy_mode="plus"` by default
 - No auto-sync with system clipboard
+
+---
+
+## Session 2 Changes Detailed
+
+### Problem Fixes:
+
+1. **Visual mode keymaps not respecting toggles**
+   - **Root cause:** Keymaps didn't pass `show_char_range` parameter to code_ref functions
+   - **Fix:** Updated `copy_code_ref()` helper to read `vim.g.code_ref_show_char_range` and pass it
+
+2. **Single-line visual selection showing char info**
+   - **Root cause:** Visual range detection treated all selections as ranges
+   - **Fix:** `get_visual_range()` correctly returns `nil` for same-line selections; single positions follow normal formatting
+   - **Result:** Single line now shows `L17:C1` (with char) or `L17` (with `crt` toggle)
+
+3. **Picker Alt-c keymap error (E5108)**
+   - **Root cause:** Used non-existent `picker:set_items()` method
+   - **Fix:** Changed to use `Snacks.picker.get()`, manually update `picker.items`, then call `picker:refresh()`
+   - **Result:** Picker now properly refreshes when toggling char range
+
+### New Features:
+
+1. **Column Hide Toggle (`<localleader>crt`)**
+   - **Function:** `M.toggle_hide_col()` in `code_ref.lua`
+   - **Global variable:** `vim.g.code_ref_hide_col`
+   - **Behavior:** When ON, removes `:Ccol` from all formats
+   - **Formats:**
+     - Colon: `path:17` (was `path:17:5`)
+     - At caps: `@path L17` (was `@path L17:C5`)
+     - Space: `path 17` (was `path 17:5`)
+
+2. **Char Range Toggle (`<localleader>crT`)**
+   - **Function:** `M.toggle_char_range()` in `code_ref.lua`
+   - **Global variable:** `vim.g.code_ref_show_char_range`
+   - **Behavior:** For multi-line selections, toggle between:
+     - OFF (default): `path:5-10` (line range only)
+     - ON: `path:5:1-10:25` (full char range)
+
+3. **Picker Alt-c Toggle**
+   - **Keymap:** `<A-c>` (Alt+C) in picker input mode
+   - **Behavior:** Toggle `show_char_range` and refresh items dynamically
+   - **Visual feedback:** Title updates to show `[char: on]` or `[char: off]`
+
+### Files Modified:
+
+- **`lua/utils/code_ref.lua`** (lines 29-265)
+  - Updated `format_ref()` with `hide_col` logic
+  - Fixed `get_visual_range()` to detect visual marks
+  - Added `M.toggle_hide_col()` function
+  - Updated function signatures to support new parameters
+
+- **`lua/config/mykeymaps.lua`** (lines 10-12, 176-202)
+  - Updated `copy_code_ref()` to pass `show_char_range`
+  - Added `<localleader>crT` keymap
+  - Added `<localleader>crt` keymap
+
+- **`lua/utils/snacks_pickers.lua`** (lines 1436-1512)
+  - Fixed Alt-c keymap error handling
+  - Implemented proper picker item refresh using `Snacks.picker.get()`
+  - Added `vim.schedule()` wrapper for UI updates
+
+### Testing Recommendations:
+
+1. **Normal mode keymaps:**
+
+   ```
+   - Position cursor on line 17, column 5
+   - <localleader>cra → should copy: @path L17:C5
+   - <localleader>crT (toggle)
+   - <localleader>cra → should copy: @path L17:C5 (same, single position)
+   - <localleader>crt (toggle)
+   - <localleader>cra → should copy: @path L17 (column hidden)
+   ```
+
+2. **Visual mode (lines 5-10):**
+
+   ```
+   - V to select lines 5-10
+   - <localleader>cra → copy: @path L5-L10
+   - <localleader>crT (toggle)
+   - <localleader>cra → copy: @path L5:C1-L10:C25 (or end of line)
+   - <localleader>crt (toggle)
+   - <localleader>cra → copy: @path L5-L10 (column hidden in range)
+   ```
+
+3. **Picker Alt-c toggle:**
+   ```
+   - <localleader>crp (open picker)
+   - See "[char: off]" in title
+   - <A-c> (toggle)
+   - Items refresh, title shows "[char: on]"
+   - <A-c> again
+   - Title shows "[char: off]", items refresh back
+   ```
+
+---
+
+## Quick Reference Card 🎯
+
+| Task                  | Keymap              | Result                               |
+| --------------------- | ------------------- | ------------------------------------ |
+| Copy current line     | `<localleader>crr`  | `path:17:5`                          |
+| Copy with @format     | `<localleader>cra`  | `@path L17:C5`                       |
+| Toggle char in ranges | `<localleader>crT`  | Toggle: `:5:1-10:25` ↔ `:5-10`      |
+| Hide column entirely  | `<localleader>crt`  | `:17` instead of `:17:5`             |
+| Open picker           | `<localleader>crp`  | Shows all formats with toggle status |
+| Toggle in picker      | `<A-c>` (in picker) | Refresh items, update title          |
+| **Visual mode**       | **Same keymaps**    | **Auto-detects line ranges**         |
+
+**Format Legend:**
+
+- `crr`, `crR` = colon format: `path:line:col` or `path:line-line`
+- `crs`, `crS` = space format: `path line:col` or `path line-line`
+- `cra`, `crA` = at_caps format: `@path Lline:Ccol` or `@path Lline-Lline`
+- `crb`, `crB` = at format: `@path line:col` (moved from old 'a'/'A')
+- `crh`, `crH` = hash format: `path#LlineCcol`
+- Lowercase suffix = relative paths, Uppercase = absolute paths

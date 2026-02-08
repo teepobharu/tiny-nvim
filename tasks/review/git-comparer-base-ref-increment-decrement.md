@@ -18,6 +18,16 @@ related:
 
 Enable increment/decrement navigation of the base reference in git comparer picker. Users should be able to move through the commit history relative to the current branch/HEAD, with constraints to prevent going to the current commit or beyond the base reference (master/origin).
 
+## USER Checklsit
+
+- [ ] c-s not work but c-g (check why)
+- [ ] picker last commit works what about other / and custom ref picker ?
+
+Enhancement
+
+- [ ] better score matcher searchable in git status M/D/A
+- [ ] slight lag when change base fast / scroll list fast is debounce available ?
+
 ## Checklist
 
 - [x] Implement base ref increment/decrement logic in `snacks_pickers.lua`

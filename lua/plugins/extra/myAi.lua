@@ -8,6 +8,7 @@ local common_agent_env = {
   ANTHROPIC_AUTH_TOKEN = vim.env.ANTHROPIC_AUTH_TOKEN,
   GLEAN_API_TOKEN = vim.env.GLEAN_API_TOKEN,
   GITLAB_TOKEN = vim.env.GITLAB_TOKEN,
+  GEMINI_API_KEY = vim.env.GEMINI_API_KEY,
 }
 return {
   {
@@ -131,6 +132,7 @@ return {
     --   @{server__tool}  - Specific tool
     --   #{mcp:resource}  - Resource as variable
     --   /mcp:prompt      - MCP prompt as slash command
+    --
     opts = {
       use_bundled_binary = true,
       config = vim.fn.expand "~/dotfiles/claude/mcp-proxy/mcphub.json",

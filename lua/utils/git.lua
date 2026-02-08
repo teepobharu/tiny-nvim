@@ -396,6 +396,93 @@ function M.get_current_git_branch()
   return branch
 end
 
+--- Get commits between two refs
+--- @param from_ref string Starting reference (inclusive)
+--- @param to_ref string Ending reference (exclusive, typically HEAD)
+--- @return table List of commit hashes (short format)
+function M.get_commits_between(from_ref, to_ref)
+  if not from_ref or not to_ref then
+    return {}
+  end
+
+  -- Get commits in range from_ref..to_ref
+  local commits = vim.fn.systemlist({
+    "git",
+    "log",
+    "--oneline",
+    "--pretty=format:%H",
+    from_ref .. ".." .. to_ref,
+  })
+
+  if vim.v.shell_error ~= 0 then
+    return {}
+  end
+
+  return commits
+end
+
+--- Get short commit hash (7 chars)
+--- @param ref string Git reference (commit hash, branch name, etc.)
+--- @return string Short commit hash or empty string if invalid
+function M.get_short_hash(ref)
+  if not ref or ref == "" then
+    return ""
+  end
+
+  local short_hash = vim.fn.system("git rev-parse --short " .. ref):gsub("\n", "")
+  if vim.v.shell_error ~= 0 then
+    return ""
+  end
+
+  return short_hash
+end
+
+--- Get ref branch name
+--- @param ref string Git reference
+--- @return string Branch name or empty string if it's a detached HEAD/commit
+function M.get_ref_branch_name(ref)
+  if not ref or ref == "" then
+    return ""
+  end
+
+  -- Try symbolic-ref first (for branch refs)
+  local branch = vim.fn.system("git symbolic-ref --short " .. ref):gsub("\n", "")
+  if vim.v.shell_error == 0 and branch ~= "" then
+    return branch
+  end
+
+  -- For refs/remotes/origin/main -> origin/main
+  local fullref = vim.fn.system("git rev-parse --symbolic-full-name " .. ref):gsub("\n", "")
+  if fullref:find("^refs/remotes/") then
+    return fullref:sub(14) -- Remove "refs/remotes/"
+  elseif fullref:find("^refs/heads/") then
+    return fullref:sub(12) -- Remove "refs/heads/"
+  end
+
+  return ""
+end
+
+--- Format a git ref for display (shows branch or short hash)
+--- @param ref string Git reference
+--- @return string Formatted display string
+function M.format_ref_display(ref)
+  if not ref or ref == "" then
+    return "unknown"
+  end
+
+  local branch = M.get_ref_branch_name(ref)
+  if branch ~= "" then
+    return branch
+  end
+
+  local short_hash = M.get_short_hash(ref)
+  if short_hash ~= "" then
+    return short_hash
+  end
+
+  return ref
+end
+
 --#endregion Git Helper Functions for Pickers
 
 return M
