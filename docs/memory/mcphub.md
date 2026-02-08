@@ -4,14 +4,14 @@
 
 **Two separate projects** exist with confusingly similar names:
 
-| Aspect | **mcp-hub** (ravitemer) | MCPHub (samanhappy) |
-|--------|-------------------------|---------------------|
-| GitHub | [ravitemer/mcp-hub](https://github.com/ravitemer/mcp-hub) | [samanhappy/mcphub](https://github.com/samanhappy/mcphub) |
-| Type | npm CLI / Node.js | Docker container |
-| Web UI | No | Yes |
-| Default Port | 37373 (nvim) / 5555 (standalone) | 3000 |
-| Config Format | `mcphub.json` / `servers.json` | `mcp_settings.json` |
-| Neovim Plugin | [mcphub.nvim](https://github.com/ravitemer/mcphub.nvim) | None |
+| Aspect        | **mcp-hub** (ravitemer)                                   | MCPHub (samanhappy)                                       |
+| ------------- | --------------------------------------------------------- | --------------------------------------------------------- |
+| GitHub        | [ravitemer/mcp-hub](https://github.com/ravitemer/mcp-hub) | [samanhappy/mcphub](https://github.com/samanhappy/mcphub) |
+| Type          | npm CLI / Node.js                                         | Docker container                                          |
+| Web UI        | No                                                        | Yes                                                       |
+| Default Port  | 37373 (nvim) / 5555 (standalone)                          | 3000                                                      |
+| Config Format | `mcphub.json` / `servers.json`                            | `mcp_settings.json`                                       |
+| Neovim Plugin | [mcphub.nvim](https://github.com/ravitemer/mcphub.nvim)   | None                                                      |
 
 **This guide focuses on:** `ravitemer/mcp-hub` and `mcphub.nvim`
 
@@ -98,16 +98,17 @@ require("mcphub").setup({
 })
 ```
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `port` | 37373 | Port mcp-hub listens on |
-| `workspace.enabled` | true | **Disable for CLI agents** - creates per-directory hubs on random ports |
-| `shutdown_delay` | 5 minutes | Time to wait after last client disconnects |
-| `server_url` | nil | Override endpoint (for remote mcp-hub) |
+| Option              | Default   | Description                                                             |
+| ------------------- | --------- | ----------------------------------------------------------------------- |
+| `port`              | 37373     | Port mcp-hub listens on                                                 |
+| `workspace.enabled` | true      | **Disable for CLI agents** - creates per-directory hubs on random ports |
+| `shutdown_delay`    | 5 minutes | Time to wait after last client disconnects                              |
+| `server_url`        | nil       | Override endpoint (for remote mcp-hub)                                  |
 
 ### Workspace Mode Warning
 
 **If CLI agents can't connect to port 37373:**
+
 - Workspace mode (enabled by default) creates per-directory hubs on ports 40000-41000
 - Add `workspace = { enabled = false }` to use consistent port 37373
 
@@ -115,19 +116,21 @@ require("mcphub").setup({
 
 **When mcphub.nvim starts, it checks port 37373:**
 
-| Scenario | Behavior |
-|----------|----------|
-| **Port free** | Starts new mcp-hub server |
-| **Port in use by mcp-hub (same version)** | Connects to existing server (multi-instance) |
-| **Port in use by mcp-hub (different version)** | Shows "version mismatch", restarts hub |
-| **Port in use by other service** | Shows "Port in use by non-MCP Hub server" error |
+| Scenario                                       | Behavior                                        |
+| ---------------------------------------------- | ----------------------------------------------- |
+| **Port free**                                  | Starts new mcp-hub server                       |
+| **Port in use by mcp-hub (same version)**      | Connects to existing server (multi-instance)    |
+| **Port in use by mcp-hub (different version)** | Shows "version mismatch", restarts hub          |
+| **Port in use by other service**               | Shows "Port in use by non-MCP Hub server" error |
 
 **For CLI agents:**
+
 - If mcp-hub running: Connect successfully
 - If mcp-hub not running: Connection refused error
 - Recommended: Start Neovim first, or run mcp-hub standalone
 
 **EADDRINUSE handling:**
+
 - If another Neovim instance starts mcp-hub first (race condition)
 - mcphub.nvim detects EADDRINUSE and connects to existing server instead
 
@@ -172,6 +175,7 @@ Timer expires → mcp-hub process exits
 ### Endpoint
 
 All CLI agents should connect to:
+
 ```
 http://localhost:37373/mcp
 ```
@@ -179,6 +183,7 @@ http://localhost:37373/mcp
 ### Configuration Examples
 
 #### Claude Code (`~/.mcp.json`)
+
 ```json
 {
   "mcpServers": {
@@ -191,6 +196,7 @@ http://localhost:37373/mcp
 ```
 
 #### OpenCode (`opencode.jsonc`)
+
 ```jsonc
 {
   "mcp": {
@@ -198,19 +204,21 @@ http://localhost:37373/mcp
       "type": "remote",
       "url": "http://localhost:37373/mcp",
       "enabled": true,
-      "timeout": 10000
-    }
-  }
+      "timeout": 10000,
+    },
+  },
 }
 ```
 
 #### Codex (`config.toml`)
+
 ```toml
 [mcp_servers.mcp-hub]
 url = "http://localhost:37373/mcp"
 ```
 
 #### Crush (`crush.json`)
+
 ```json
 {
   "mcp": {
@@ -226,12 +234,12 @@ url = "http://localhost:37373/mcp"
 
 ### CLI Agent Behavior
 
-| Question | Answer |
-|----------|--------|
-| Can CLI agents use mcp-hub without Neovim? | **Yes**, if mcp-hub is already running |
-| Do CLI agents keep mcp-hub alive? | **Yes**, they are clients like Neovim |
-| What if Neovim started mcp-hub then closed? | mcp-hub runs until `shutdown_delay` expires |
-| Can I run mcp-hub independently? | **Yes**, see "Running mcp-hub Standalone" below |
+| Question                                    | Answer                                          |
+| ------------------------------------------- | ----------------------------------------------- |
+| Can CLI agents use mcp-hub without Neovim?  | **Yes**, if mcp-hub is already running          |
+| Do CLI agents keep mcp-hub alive?           | **Yes**, they are clients like Neovim           |
+| What if Neovim started mcp-hub then closed? | mcp-hub runs until `shutdown_delay` expires     |
+| Can I run mcp-hub independently?            | **Yes**, see "Running mcp-hub Standalone" below |
 
 ---
 
@@ -312,40 +320,40 @@ require("mcphub").setup({
 
 ### UI Navigation (Inside MCPHub Window)
 
-| Key | View |
-|-----|------|
-| `H` | Home/Main view |
-| `M` | Marketplace |
-| `C` | Config |
-| `L` | Logs |
-| `?` | Help |
-| `q` | Close |
-| `r` | Refresh |
+| Key | View            |
+| --- | --------------- |
+| `H` | Home/Main view  |
+| `M` | Marketplace     |
+| `C` | Config          |
+| `L` | Logs            |
+| `?` | Help            |
+| `q` | Close           |
+| `r` | Refresh         |
 | `R` | Restart mcp-hub |
 
 ### Main View Keys
 
-| Key | Action |
-|-----|--------|
-| `l` / `<CR>` | Expand server |
-| `h` / `<Esc>` | Collapse |
-| `t` | Toggle server on/off |
-| `a` | Toggle auto-approve |
-| `ga` | Toggle global auto-approve |
-| `A` | Add server |
-| `e` | Edit server |
-| `d` | Delete server |
+| Key           | Action                     |
+| ------------- | -------------------------- |
+| `l` / `<CR>`  | Expand server              |
+| `h` / `<Esc>` | Collapse                   |
+| `t`           | Toggle server on/off       |
+| `a`           | Toggle auto-approve        |
+| `ga`          | Toggle global auto-approve |
+| `A`           | Add server                 |
+| `e`           | Edit server                |
+| `d`           | Delete server              |
 
 ---
 
 ## Configuration Files
 
-| File | Purpose |
-|------|---------|
-| `~/dotfiles/claude/mcp-proxy/mcphub.json` | MCP server definitions |
-| `~/dotfiles/claude/mcp-proxy/.env` | Environment variables |
-| `~/dotfiles/claude/mcp-proxy/start-mcphub.sh` | Management script |
-| `lua/plugins/extra/myAi.lua` | MCPHub + CodeCompanion MCP extension config |
+| File                                          | Purpose                                     |
+| --------------------------------------------- | ------------------------------------------- |
+| `~/dotfiles/claude/mcp-proxy/mcphub.json`     | MCP server definitions                      |
+| `~/dotfiles/claude/mcp-proxy/.env`            | Environment variables                       |
+| `~/dotfiles/claude/mcp-proxy/start-mcphub.sh` | Management script                           |
+| `lua/plugins/extra/myAi.lua`                  | MCPHub + CodeCompanion MCP extension config |
 
 ### mcphub.json Format
 
@@ -401,14 +409,14 @@ MCPHub supports per-server customization for tools, resources, and custom instru
 
 ### Field Reference
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `disabled` | boolean | Disable server entirely |
-| `disabled_tools` | string[] | Tools to hide from LLMs |
-| `disabled_resources` | string[] | Resources to hide |
-| `disabled_resourceTemplates` | string[] | Resource templates to hide |
-| `autoApprove` | boolean \| string[] | Auto-approve tools without confirmation |
-| `custom_instructions` | object | Per-server instructions for LLMs |
+| Field                        | Type                | Description                             |
+| ---------------------------- | ------------------- | --------------------------------------- |
+| `disabled`                   | boolean             | Disable server entirely                 |
+| `disabled_tools`             | string[]            | Tools to hide from LLMs                 |
+| `disabled_resources`         | string[]            | Resources to hide                       |
+| `disabled_resourceTemplates` | string[]            | Resource templates to hide              |
+| `autoApprove`                | boolean \| string[] | Auto-approve tools without confirmation |
+| `custom_instructions`        | object              | Per-server instructions for LLMs        |
 
 ### Auto-Approve Options
 
@@ -430,12 +438,14 @@ Custom instructions are injected into the system prompt for LLMs. They guide how
 **Default:** No custom instructions (empty)
 
 **Setting via UI:**
+
 1. Open `:MCPHub`
 2. Navigate to server → expand with `l`
 3. Edit custom instructions
 4. Changes persist to config file automatically
 
 **Setting via Config:**
+
 ```json
 "custom_instructions": {
   "disabled": false,
@@ -444,6 +454,7 @@ Custom instructions are injected into the system prompt for LLMs. They guide how
 ```
 
 **Disabling:**
+
 ```json
 "custom_instructions": {
   "disabled": true,
@@ -474,6 +485,7 @@ External agents (Claude Code, OpenCode, etc.) receive configurations via the **s
 ```
 
 **What's included:**
+
 - Active servers and their capabilities
 - Tool/resource schemas (excluding disabled ones)
 - Custom instructions per server
@@ -491,12 +503,14 @@ require("mcphub").setup({
 ```
 
 **How it works:**
+
 1. LLM requests to use a disabled server's tool
 2. MCPHub's `toggle_mcp_server` tool activates the server
 3. Server starts and becomes available
 4. Original tool request proceeds
 
 **Disable LLM control:**
+
 ```lua
 require("mcphub").setup({
     auto_toggle_mcp_servers = false,  -- Prevent LLM from toggling
@@ -529,15 +543,22 @@ kill -9 $(lsof -t -i :37373)
 ### mcp-hub stops too quickly
 
 Increase `shutdown_delay`:
+
 ```lua
 require("mcphub").setup({
     shutdown_delay = 30 * 60 * 1000,  -- 30 minutes
 })
 ```
 
+## Issues
+
+1. Connect fail SSE
+   try kill the port and restart mcphub (in this case 37373)
+
 ### Environment variables not loaded
 
 Use `global_env` in mcphub.nvim config:
+
 ```lua
 require("mcphub").setup({
     global_env = {
