@@ -33,12 +33,18 @@ M.models = {
   -- Gemini models
   gemini = {
     GEMINI_3_PRO_PREVIEW = "gemini-3-pro-preview",
+    GEMINI_2_5_FLASH = "gemini-2.5-flash",
+    GEMINI_2_5_PRO = "gemini-2.5-pro",
   },
 
   -- DeepSeek models
   deepseek = {
     DEEPSEEK_R1 = "deepseek-r1",
     DEEPSEEK_R1_DISTILL = "deepseek-r1-distill",
+  },
+
+  others = {
+    GROK_FAST_1 = "grok-code-fast-1",
   },
 }
 
@@ -121,8 +127,10 @@ M.static_models = {
   },
 
   -- Default priority order for CodeCompanion
-  codecompanion_default = {
+  agd_default = {
     M.models.gpt.GPT_5_2,
+    M.models.gpt.GPT_5_1,
+    M.models.gpt.GPT_5_MINI,
     M.models.gpt.GPT_4O,
     M.models.gpt.GPT_4O_MINI,
     M.models.gpt.GPT_3_5_TURBO,
@@ -218,12 +226,17 @@ function M.filter_models(models, opts)
   local filtered = {}
 
   for _, model in ipairs(models) do
-    if not M.matches_blacklist(model, opts.additional_blacklist) and not M.contains_filtered_keyword(model, opts.additional_keywords) then
+    if
+      not M.matches_blacklist(model, opts.additional_blacklist)
+      and not M.contains_filtered_keyword(model, opts.additional_keywords)
+    then
       table.insert(filtered, model)
     end
   end
 
   return filtered
 end
+
+M.DEFAULT_COPILOT_MODEL = M.models.others.GROK_FAST_1
 
 return M

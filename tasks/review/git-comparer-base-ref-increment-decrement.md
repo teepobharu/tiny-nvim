@@ -22,11 +22,65 @@ Enable increment/decrement navigation of the base reference in git comparer pick
 
 - [ ] c-s not work but c-g (check why)
 - [ ] picker last commit works what about other / and custom ref picker ?
+- [ ] verify custom ref picker keymap works with git_last_commit_show + custom git ref picker
+  - [ ] when c-k it should start from the current ref base (not from head) fix this behavior better to make it scalable by accepting base and current ref (left/right ref) so it can be reused and trigger opt update each picker can use new value to reflect on the new ref
+
+- [ ] Test new `git_diff_merge_base()` picker with increment/decrement
 
 Enhancement
 
+- [ ] Unify this picker and allow input initial ref and base
+  - [ ] then some key to toggle the variant
+- [ ] Dont limit the ref on to base or HEAD just alert that it go beyond head+/-1 and allow to
+- [x] merge-base - done show commit range count + ref +warn
+- [ ] custom ref - not yet
+- [ ] last commit - work but not show commit range count + ref + warn when reach merge-refs / head
+- [ ] Remap the key to switch they c-j/k to have the correct mnemonic for left (specific commit) and right (HEAD)
 - [ ] better score matcher searchable in git status M/D/A
 - [ ] slight lag when change base fast / scroll list fast is debounce available ?
+
+## New: Merge-Base Picker Details
+
+### `git_diff_merge_base()` Function
+
+**Purpose**: Compare current branch against origin's default branch using merge-base as the reference point. Allows navigating through history with increment/decrement controls.
+
+**Primary Keymap**: `<leader>fu` (Git diff merge-base)
+
+**How it works**:
+
+1. Detects origin default branch (origin/main, origin/master, or configured default)
+2. Calculates merge-base between current branch and origin default
+3. Shows files changed between merge-base and HEAD
+4. Supports navigation through merge-base history
+
+**Navigation**:
+
+- `<C-j>`: Move closer to merge-base (earlier in history)
+- `<C-k>`: Move further from merge-base (later in history)
+- Updates file list and counts dynamically
+- Prevents going before merge-base commit
+
+**Features**:
+
+- [x] Dynamic base ref tracking with state management
+- [x] File status indicators (Added/Modified/Deleted)
+- [x] Git diff preview with syntax highlighting
+- [x] Commit count display in notifications
+- [x] Changed file count tracking
+- [x] Bounds checking (can't go before merge-base)
+
+**Keymaps available**:
+
+- `<leader>fu`: Open merge-base picker
+- Custom actions in picker: open_file_diff, open_remote_at_ref
+- Navigation: `<C-j>` forward, `<C-k>` backward
+
+**Files modified**:
+
+- `[snacks_pickers.lua:L686-L817](lua/utils/snacks_pickers.lua#L686)` - New `git_diff_merge_base()` function
+- `[snacks_terminal.lua:L207](lua/utils/snacks_terminal.lua#L207)` - Wrapper function
+- `[mykeymaps.lua:L213-215](lua/config/mykeymaps.lua#L213)` - Keymap binding
 
 ## Checklist
 
@@ -46,6 +100,7 @@ Enhancement
 - [x] Add debug output showing commit navigation and file counts
 - [x] Extend functionality to `git_last_commit_show()` for commit navigation
 - [ ] Manual testing in actual Neovim session to verify list updates properly
+- [ ] Add verification checklist to prompt user confirmation for keymap behavior
 
 ## Implementation Summary
 
@@ -84,6 +139,22 @@ Enhancement
 - [ ] the preview toggle does not seems to work
 - [ ] Research on how to optimized once scroll down the list quickly through the list the process start delaying and wait observed that might related to png / large file diffs , understand how list and preview is generated and what can cause it
 - [ ]
+
+### Verification Checklist (User)
+
+- [ ] Confirm custom git keymap works in `git_last_commit_show()`
+- [ ] Confirm custom git keymap works in custom git ref picker
+- [ ] Confirm keymap still works for `show_file_list_picker()` base ref navigation
+
+### Follow-up Todo
+
+- [x] Add custom git ref picker option to set base ref via merge-base with default origin remote
+  - [x] Implemented: `git_diff_merge_base()` picker function
+  - [x] Compares current branch with origin default using merge-base
+  - [x] Supports increment/decrement navigation via `<C-j>`/`<C-k>` keys
+  - [x] Displays range: `[merge-base]:hash..HEAD:hash (N commits)`
+  - [x] Includes file status indicators and diff preview
+  - Reference: `[snacks_pickers.lua:L683-L817](lua/utils/snacks_pickers.lua#L683)`
 
 ### Testing Checklist
 

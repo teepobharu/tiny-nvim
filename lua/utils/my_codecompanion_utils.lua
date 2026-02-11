@@ -1,84 +1,88 @@
 -- CodeCompanion utility functions for Agoda-specific adapter configurations
 -- Similar pattern to my_avante_utils.lua for consistency
--- TODO: extract common model name, url, env keys to be in common place to be reused in both avante, codecomponion, others 
+-- TODO: extract common model name, url, env keys to be in common place to be reused in both avante, codecomponion, others
 local M = {}
+
+-- `CodeCompanionChat adapter=<adapter> model=<model>` - Open a chat buffer with a specific http adapter and model
+local MODELS = require("utils.my_ai_constants").models
 
 -- Get Agoda-specific adapter configurations
 -- These adapters use internal Agoda endpoints and are separated from the main config
 -- for easier maintenance and to optionally exclude them from adapter selection
 function M.get_agoda_adapters()
   return {
+    -- not used
     -- Claude via Agoda GenAI Gateway
-    claude_agd = function()
-      return require("codecompanion.adapters").extend("anthropic", {
-        env = {
-          api_key = "ANTHROPIC_API_KEY",
-        },
-        url = "https://genai-gateway.agoda.is/claude",
-        schema = {
-          model = {
-            default = "claude-3-7-sonnet",
-            choices = {
-              "claude-3-5-haiku",
-              "claude-3-7-sonnet",
-              "claude-haiku-4-5",
-              "claude-opus-4-5",
-            },
-          },
-        },
-      })
-    end,
-
-    -- Vertex Claude via Agoda OpenAI Proxy (OpenAI-compatible endpoint)
-    vertex_claude_agd = function()
-      return require("codecompanion.adapters").extend("openai", {
-        env = {
-          api_key = "OPENAI_API_KEY",
-        },
-        url = "http://openai-proxy.agoda.is/v1",
-        schema = {
-          model = {
-            default = "claude-3-7-sonnet",
-            choices = {
-              "claude-3-5-haiku",
-              "claude-3-7-sonnet",
-              "claude-haiku-4-5",
-              "claude-opus-4-5",
-            },
-          },
-          temperature = {
-            default = 0.75,
-          },
-          max_tokens = {
-            default = 20480,
-          },
-        },
-      })
-    end,
+    -- claude_agd = function()
+    --   return require("codecompanion.adapters").extend("anthropic", {
+    --     env = {
+    --       api_key = "ANTHROPIC_API_KEY",
+    --     },
+    --     url = "https://genai-gateway.agoda.is/claude",
+    --     schema = {
+    --       model = {
+    --         default = "claude-3-7-sonnet",
+    --         choices = {
+    --           "claude-3-5-haiku",
+    --           "claude-3-7-sonnet",
+    --           "claude-haiku-4-5",
+    --           "claude-opus-4-5",
+    --         },
+    --       },
+    --     },
+    --   })
+    -- end,
+    --
+    -- -- Vertex Claude via Agoda OpenAI Proxy (OpenAI-compatible endpoint)
+    -- vertex_claude_agd = function()
+    --   return require("codecompanion.adapters").extend("openai", {
+    --     env = {
+    --       api_key = "OPENAI_API_KEY",
+    --     },
+    --     url = "http://openai-proxy.agoda.is/v1",
+    --     schema = {
+    --       model = {
+    --         default = "claude-3-7-sonnet",
+    --         choices = {
+    --           "claude-3-5-haiku",
+    --           "claude-3-7-sonnet",
+    --           "claude-haiku-4-5",
+    --           "claude-opus-4-5",
+    --         },
+    --       },
+    --       temperature = {
+    --         default = 0.75,
+    --       },
+    --       max_tokens = {
+    --         default = 20480,
+    --       },
+    --     },
+    --   })
+    -- end,
 
     -- OpenAI/GPT via Agoda OpenAI Proxy
+    -- Uses env-based URL templating: AG_OPENAIPROXY provides base URL (e.g. http://openai-proxy.agoda.is)
+    -- Uses dynamic model fetching via fetch_model_helper from my_codecompanion_actions
     openai_agd = function()
       return require("codecompanion.adapters").extend("openai", {
         env = {
           api_key = "OPENAI_API_KEY",
+          url = "AG_OPENAIPROXY", -- Base URL from env var
+          chat_url = "/v1/chat/completions", -- Chat endpoint path
+          models_endpoint = "/v1/models", -- Models listing endpoint
         },
-        url = "http://openai-proxy.agoda.is/v1",
+        url = "${url}${chat_url}",
         schema = {
           model = {
-            default = "gpt-5.2",
-            choices = {
-              "gpt-4.1",
-              "gpt-4.1-mini",
-              "gpt-5-mini",
-              "gpt-5.1",
-              "gpt-5.2",
-              "gemini-3-pro-preview",
-            },
+            default = MODELS.gpt.GPT_5_2,
+            choices = function(self, opts)
+              return require("utils.my_codecompanion_actions").fetch_model_helper(self, opts)
+            end,
           },
-          temperature = {
-            default = 0,
-          },
-          max_tokens = {
+          -- temperature = {
+          --   default = 0,
+          -- },
+          max_completion_tokens = {
             default = 4096,
           },
         },
@@ -132,7 +136,10 @@ end
 function M.merge_agoda_adapters(base_adapters)
   base_adapters = base_adapters or {}
   local agoda_adapters = M.get_agoda_adapters()
-  return vim.tbl_extend("force", base_adapters, agoda_adapters)
+  local result = vim.tbl_extend("force", base_adapters, agoda_adapters)
+  -- print([==[M.merge_agoda_adapters result:]==], vim.inspect(result)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  return result
+  -- __AUTO_GENERATED_PRINT_VAR_START__
 end
 
 return M

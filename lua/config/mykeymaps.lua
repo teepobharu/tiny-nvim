@@ -209,6 +209,11 @@ keymap("n", "<localleader>crt", function()
   require("utils.code_ref").toggle_hide_col()
 end, { desc = "Toggle hide column in code refs" })
 
+-- Git Pickers
+keymap("n", "<leader>fu", function()
+  require("utils.snacks_pickers").custom_git_pickers.git_diff_merge_base()
+end, { desc = "Git diff merge-base (increment/decrement)" })
+
 -- ============================
 --  Navigations
 -- ============================

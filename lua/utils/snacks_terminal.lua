@@ -198,12 +198,15 @@ end
 
 --- Git last commit files picker (delegates to snacks_pickers)
 M.custom_git_pickers = {
-  git_last_commit_show = function()
-    require("utils.snacks_pickers").custom_git_pickers.git_last_commit_show()
-  end,
-  git_diff_upstream = function()
-    require("utils.snacks_pickers").custom_git_pickers.git_diff_upstream()
-  end,
+   git_last_commit_show = function()
+     require("utils.snacks_pickers").custom_git_pickers.git_last_commit_show()
+   end,
+   git_diff_upstream = function()
+     require("utils.snacks_pickers").custom_git_pickers.git_diff_upstream()
+   end,
+   git_diff_merge_base = function()
+     require("utils.snacks_pickers").custom_git_pickers.git_diff_merge_base()
+   end,
 }
 
 --- Custom change list picker (delegates to snacks_pickers)
