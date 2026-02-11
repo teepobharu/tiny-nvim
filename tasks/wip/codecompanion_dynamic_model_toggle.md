@@ -1,8 +1,8 @@
 ---
 title: CodeCompanion Dynamic Model Toggle & Inline Adapter Support
 created: 2026-01-25
-updated: 2026-01-25
-status: draft
+updated: 2026-02-09
+status: wip
 priority: medium
 tags: [codecompanion, feature, model-selection, inline-chat]
 related:
@@ -343,19 +343,32 @@ end
 
 ## Implementation Plan
 
+### Phase 0: Consolidation (Prerequisite)
+- [x] Move CodeCompanion plugin spec from [lua/plugins/extra/myEditor.lua](lua/plugins/extra/myEditor.lua) to [lua/plugins/extra/myAi.lua](lua/plugins/extra/myAi.lua)
+- [x] Replace inline `openai_agd` with `merge_agoda_adapters()` from [lua/utils/my_codecompanion_utils.lua](lua/utils/my_codecompanion_utils.lua)
+- [x] Remove debug print in `inline_with_adapter`
+
 ### Phase 1: Local Wrappers (Quick Win)
-- [ ] Add `toggle_inline_with_picker()` to [lua/utils/my_codecompanion_actions.lua](lua/utils/my_codecompanion_actions.lua)
-- [ ] Add `toggle_chat_with_picker()` to [lua/utils/my_codecompanion_actions.lua](lua/utils/my_codecompanion_actions.lua)
-- [ ] Add keymaps to [lua/utils/editor_keymaps.lua](lua/utils/editor_keymaps.lua):
+- [x] Add `toggle_inline_with_picker()` to [lua/utils/my_codecompanion_actions.lua](lua/utils/my_codecompanion_actions.lua)
+- [x] Add `toggle_chat_with_picker()` to [lua/utils/my_codecompanion_actions.lua](lua/utils/my_codecompanion_actions.lua)
+- [x] Add keymaps in `generate_codecompanion_keymaps()`:
   - `<leader>ASmm` - Inline with picker (visual mode)
   - `<leader>ASM` - Chat toggle with picker (normal mode)
 
 ### Phase 2: Dynamic Model Fetching
-- [ ] Verify `fetch_model_helper` exists in [lua/utils/my_codecompanion_actions.lua](lua/utils/my_codecompanion_actions.lua)
-- [ ] If not, implement dynamic model fetching with cache
-- [ ] Update `openai_agd` adapter in [lua/utils/my_codecompanion_utils.lua](lua/utils/my_codecompanion_utils.lua)
-- [ ] Use `AI.filter_models()` from [lua/utils/my_ai_constants.lua](lua/utils/my_ai_constants.lua)
-- [ ] Test with actual AGD endpoint
+- [x] Verify `fetch_model_helper` exists in [lua/utils/my_codecompanion_actions.lua](lua/utils/my_codecompanion_actions.lua)
+- [x] Wire `fetch_model_helper` as `choices` function in `openai_agd` adapter schema
+- [x] Dual fetch mode: Static (default) vs Dynamic (requires VPN)
+  - Static mode: Uses `my_ai_constants` models only (no network dependency)
+  - Dynamic mode: Fetches from AGD proxy `/v1/models` endpoint (produces error notifications when offline)
+  - Added `use_dynamic_fetch` parameter to `fetch_model_helper` and `get_adapter_models`
+  - Added dynamic variants: `toggle_inline_with_picker_dynamic()` and `toggle_chat_with_picker_dynamic()`
+  - New keymaps for dynamic fetch:
+    - `<leader>ASSMM` - Inline with dynamic picker (visual mode)
+    - `<leader>ASSM` - Chat toggle with dynamic picker (normal mode)
+  - Original keymaps use static fetch:
+    - `<leader>ASmm` - Inline with static picker (visual mode)
+    - `<leader>ASM` - Chat toggle with static picker (normal mode)
 
 ### Phase 3: Upstream Contribution (Optional)
 - [ ] Submit PR to codecompanion.nvim to support `model=` in inline commands
@@ -364,21 +377,32 @@ end
 
 ## Testing Checklist
 
-### Toggle Inline with Picker
+### Toggle Inline with Picker (Static)
 - [ ] Visual select code → `<leader>ASmm` → Select adapter → Select model → Inline edit works
 - [ ] Model override persists for that inline session
 - [ ] Falls back to default if picker cancelled
+- [ ] Uses static models from `my_ai_constants` (no network dependency)
 
-### Toggle Chat with Picker
+### Toggle Chat with Picker (Static)
 - [ ] No chat exists → `<leader>ASM` → Creates chat with selected adapter+model
 - [ ] Chat exists → `<leader>ASM` → Changes adapter+model in existing chat
 - [ ] Model persists across chat toggle
+- [ ] Uses static models from `my_ai_constants` (no network dependency)
 
-### Dynamic Model Fetching
-- [ ] First call fetches from API (may be slow)
-- [ ] Subsequent calls use cache (fast)
-- [ ] Cache expires after 30min
+### Toggle Inline with Picker (Dynamic) - Requires VPN
+- [ ] Visual select code → `<leader>ASSMM` → Select adapter → Select model → Inline edit works
+- [ ] Shows models fetched from AGD proxy `/v1/models` endpoint
+- [ ] Produces error notification when proxy unreachable (no VPN) - expected behavior
 - [ ] Falls back to static list on API error
+
+### Toggle Chat with Picker (Dynamic) - Requires VPN
+- [ ] No chat exists → `<leader>ASSM` → Creates chat with selected adapter+model
+- [ ] Chat exists → `<leader>ASSM` → Changes adapter+model in existing chat
+- [ ] Shows models fetched from AGD proxy `/v1/models` endpoint
+- [ ] Produces error notification when proxy unreachable (no VPN) - expected behavior
+- [ ] Falls back to static list on API error
+
+### Model Filtering (Both Modes)
 - [ ] Filters apply (blacklist/keywords from [lua/utils/my_ai_constants.lua](lua/utils/my_ai_constants.lua))
 - [ ] Works with both `openai_agd` and potential future adapters
 

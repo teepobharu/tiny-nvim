@@ -393,7 +393,7 @@ function M.custom_git_pickers.git_last_commit_show()
     local base_ref = get_base_ref()
     local base_short = git_util.get_short_hash(base_ref)
     local base_branch = git_util.get_ref_branch_name(base_ref)
-    local head_short = git_util.get_short_hash("HEAD")
+    local head_short = git_util.get_short_hash "HEAD"
 
     -- Build base display: branch:hash or just hash
     local base_display = base_branch ~= "" and (base_branch .. ":" .. base_short) or base_short
@@ -422,7 +422,7 @@ function M.custom_git_pickers.git_last_commit_show()
     vim.notify("Range: " .. display .. " (" .. file_count .. " changed files)", vim.log.levels.INFO)
 
     -- Get the real picker using Snacks.picker.get() since key callbacks receive snacks.win, not picker
-    local pickers = Snacks.picker.get({ source = "git_show" })
+    local pickers = Snacks.picker.get { source = "git_show" }
     local picker = pickers[1]
     if picker then
       vim.schedule(function()
@@ -454,7 +454,7 @@ function M.custom_git_pickers.git_last_commit_show()
     vim.notify("Range: " .. display .. " (" .. file_count .. " changed files)", vim.log.levels.INFO)
 
     -- Get the real picker using Snacks.picker.get() since key callbacks receive snacks.win, not picker
-    local pickers = Snacks.picker.get({ source = "git_show" })
+    local pickers = Snacks.picker.get { source = "git_show" }
     local picker = pickers[1]
     if picker then
       vim.schedule(function()
@@ -564,119 +564,388 @@ end
 --- Shows files changed between upstream and HEAD
 --- Automatically detects upstream reference
 function M.custom_git_pickers.git_diff_upstream()
-  local editor_keymaps = require "utils.editor_keymaps"
-  local upstream_ref = nil
+   local editor_keymaps = require "utils.editor_keymaps"
+   local upstream_ref = nil
 
-  -- Step 1: Check if branch has an upstream (HEAD@{u})
-  vim.fn.systemlist { "git", "rev-parse", "--verify", "HEAD@{u}" }
-  local has_upstream = (vim.v.shell_error == 0)
+   -- Step 1: Check if branch has an upstream (HEAD@{u})
+   vim.fn.systemlist { "git", "rev-parse", "--verify", "HEAD@{u}" }
+   local has_upstream = (vim.v.shell_error == 0)
 
-  if has_upstream then
-    -- git diff-tree --no-commit-id --name-only --diff-filter=d HEAD@{u}..HEAD -r
-    -- git diff --no-commit-id --diff-filter=d HEAD@{u}..HEAD -r
-    local diff_output = vim.fn.systemlist {
-      "git",
-      "diff-tree",
-      "--no-commit-id",
-      "--name-only",
-      "--diff-filter=d",
-      "HEAD@{u}..HEAD",
-      "-r",
-    }
-    local has_changes = (vim.v.shell_error == 0 and #diff_output > 0 and diff_output[1] ~= "")
+   if has_upstream then
+     -- git diff-tree --no-commit-id --name-only --diff-filter=d HEAD@{u}..HEAD -r
+     -- git diff --no-commit-id --diff-filter=d HEAD@{u}..HEAD -r
+     local diff_output = vim.fn.systemlist {
+       "git",
+       "diff-tree",
+       "--no-commit-id",
+       "--name-only",
+       "--diff-filter=d",
+       "HEAD@{u}..HEAD",
+       "-r",
+     }
+     local has_changes = (vim.v.shell_error == 0 and #diff_output > 0 and diff_output[1] ~= "")
 
-    if has_changes then
-      upstream_ref = "HEAD@{u}"
-    end
-  end
+     if has_changes then
+       upstream_ref = "HEAD@{u}"
+     end
+   end
 
-  -- Step 2: If no upstream or no changes, try update-refs or local branches
-  if not upstream_ref then
-    local origin_default = nil
-    local default_branch_cmd = vim.fn.systemlist { "git", "symbolic-ref", "refs/remotes/origin/HEAD", "--short" }
-    if vim.v.shell_error == 0 and default_branch_cmd[1] and default_branch_cmd[1] ~= "" then
-      origin_default = default_branch_cmd[1]
-    end
+   -- Step 2: If no upstream or no changes, try update-refs or local branches
+   if not upstream_ref then
+     local origin_default = nil
+     local default_branch_cmd = vim.fn.systemlist { "git", "symbolic-ref", "refs/remotes/origin/HEAD", "--short" }
+     if vim.v.shell_error == 0 and default_branch_cmd[1] and default_branch_cmd[1] ~= "" then
+       origin_default = default_branch_cmd[1]
+     end
 
-    -- Check for update-refs
-    local update_refs = vim.fn.systemlist { "git", "for-each-ref", "--format=%(refname:short)", "refs/rewritten/" }
-    if vim.v.shell_error == 0 and #update_refs > 0 then
-      upstream_ref = update_refs[#update_refs]
-    end
+     -- Check for update-refs
+     local update_refs = vim.fn.systemlist { "git", "for-each-ref", "--format=%(refname:short)", "refs/rewritten/" }
+     if vim.v.shell_error == 0 and #update_refs > 0 then
+       upstream_ref = update_refs[#update_refs]
+     end
 
-    -- Check if any local branch tip matches origin default
-    if not upstream_ref and origin_default then
-      local origin_sha = vim.fn.systemlist({ "git", "rev-parse", origin_default })[1]
-      if vim.v.shell_error == 0 and origin_sha then
-        local local_branches =
-          vim.fn.systemlist { "git", "for-each-ref", "--format=%(refname:short) %(objectname)", "refs/heads/" }
-        for _, branch_line in ipairs(local_branches) do
-          local branch_name, branch_sha = branch_line:match "^(%S+)%s+(%S+)$"
-          if branch_sha == origin_sha then
-            upstream_ref = branch_name
-            break
-          end
-        end
-      end
-    end
+     -- Check if any local branch tip matches origin default
+     if not upstream_ref and origin_default then
+       local origin_sha = vim.fn.systemlist({ "git", "rev-parse", origin_default })[1]
+       if vim.v.shell_error == 0 and origin_sha then
+         local local_branches =
+           vim.fn.systemlist { "git", "for-each-ref", "--format=%(refname:short) %(objectname)", "refs/heads/" }
+         for _, branch_line in ipairs(local_branches) do
+           local branch_name, branch_sha = branch_line:match "^(%S+)%s+(%S+)$"
+           if branch_sha == origin_sha then
+             upstream_ref = branch_name
+             break
+           end
+         end
+       end
+     end
 
-    -- Try local branch with same name as origin default
-    if not upstream_ref and origin_default then
-      local local_branch_name = origin_default:match "^origin/(.+)$"
-      if local_branch_name then
-        vim.fn.systemlist { "git", "rev-parse", "--verify", local_branch_name }
-        if vim.v.shell_error == 0 then
-          upstream_ref = local_branch_name
-        end
-      end
-    end
-  end
+     -- Try local branch with same name as origin default
+     if not upstream_ref and origin_default then
+       local local_branch_name = origin_default:match "^origin/(.+)$"
+       if local_branch_name then
+         vim.fn.systemlist { "git", "rev-parse", "--verify", local_branch_name }
+         if vim.v.shell_error == 0 then
+           upstream_ref = local_branch_name
+         end
+       end
+     end
+   end
 
-  -- Step 3: Final fallback
-  if not upstream_ref then
-    local default_branch_cmd = vim.fn.systemlist { "git", "symbolic-ref", "refs/remotes/origin/HEAD", "--short" }
-    if vim.v.shell_error == 0 and default_branch_cmd[1] and default_branch_cmd[1] ~= "" then
-      upstream_ref = default_branch_cmd[1]
-    else
-      vim.fn.systemlist { "git", "rev-parse", "--verify", "origin/main" }
-      if vim.v.shell_error == 0 then
-        upstream_ref = "origin/main"
-      else
-        vim.fn.systemlist { "git", "rev-parse", "--verify", "origin/master" }
-        if vim.v.shell_error == 0 then
-          upstream_ref = "origin/master"
-        else
-          upstream_ref = "HEAD~1"
-          vim.notify("No upstream or origin default branch found, comparing with HEAD~1", vim.log.levels.WARN)
-        end
-      end
-    end
-  end
+   -- Step 3: Final fallback
+   if not upstream_ref then
+     local default_branch_cmd = vim.fn.systemlist { "git", "symbolic-ref", "refs/remotes/origin/HEAD", "--short" }
+     if vim.v.shell_error == 0 and default_branch_cmd[1] and default_branch_cmd[1] ~= "" then
+       upstream_ref = default_branch_cmd[1]
+     else
+       vim.fn.systemlist { "git", "rev-parse", "--verify", "origin/main" }
+       if vim.v.shell_error == 0 then
+         upstream_ref = "origin/main"
+       else
+         vim.fn.systemlist { "git", "rev-parse", "--verify", "origin/master" }
+         if vim.v.shell_error == 0 then
+           upstream_ref = "origin/master"
+         else
+           upstream_ref = "HEAD~1"
+           vim.notify("No upstream or origin default branch found, comparing with HEAD~1", vim.log.levels.WARN)
+         end
+       end
+     end
+   end
 
-  local captured_ref = upstream_ref
-  local actions = editor_keymaps.snacks_action_factories.create_git_file_actions(captured_ref, false)
-  local git_keys = editor_keymaps.snacks_picker_group_keys.git_file_keys_upstream
-  local ref_metadata = git_util.get_ref_metadata(upstream_ref)
-  local base_ref = ref_metadata and ref_metadata.resolved_with_remote or upstream_ref
-  local file_status_map = build_git_status_map(base_ref)
+   local captured_ref = upstream_ref
+   local actions = editor_keymaps.snacks_action_factories.create_git_file_actions(captured_ref, false)
+   local git_keys = editor_keymaps.snacks_picker_group_keys.git_file_keys_upstream
+   local ref_metadata = git_util.get_ref_metadata(upstream_ref)
+   local base_ref = ref_metadata and ref_metadata.resolved_with_remote or upstream_ref
+   local file_status_map = build_git_status_map(base_ref)
 
-  pick_cmd_result {
-    cmd = "git",
-    args = { "diff-tree", "--no-commit-id", "--name-only", "--diff-filter=d", base_ref .. "..HEAD", "-r" },
-    name = "git_diff_upstream",
-    title = "Git Branch Changed Files (vs " .. base_ref .. ")",
-    preview = preview_git_diff_with_base(base_ref),
-    actions = actions,
-    win = {
-      input = {
-        keys = git_keys.input,
-      },
-      list = {
-        keys = git_keys.list,
-      },
-    },
-    format = git_status_formatter(file_status_map),
-  }
+   pick_cmd_result {
+     cmd = "git",
+     args = { "diff-tree", "--no-commit-id", "--name-only", "--diff-filter=d", base_ref .. "..HEAD", "-r" },
+     name = "git_diff_upstream",
+     title = "Git Branch Changed Files (vs " .. base_ref .. ")",
+     preview = preview_git_diff_with_base(base_ref),
+     actions = actions,
+     win = {
+       input = {
+         keys = git_keys.input,
+       },
+       list = {
+         keys = git_keys.list,
+       },
+     },
+     format = git_status_formatter(file_status_map),
+   }
+end
+
+--- Git diff merge-base picker
+--- Shows files changed between merge-base and HEAD
+--- Compares current branch with origin default using merge-base as the reference
+--- Supports increment/decrement navigation through the merge-base history
+function M.custom_git_pickers.git_diff_merge_base()
+   local editor_keymaps = require "utils.editor_keymaps"
+   local git_root = Snacks.git.get_root()
+
+   -- Determine the target branch for merge-base
+   local current_branch = vim.fn.systemlist({ "git", "branch", "--show-current" })[1] or "HEAD"
+   local merge_base_target = nil
+   local origin_default = vim.fn.systemlist({ "git", "symbolic-ref", "refs/remotes/origin/HEAD", "--short" })[1]
+
+   if not merge_base_target or merge_base_target == "" then
+     if origin_default then
+       merge_base_target = origin_default
+     else
+       vim.fn.systemlist { "git", "rev-parse", "--verify", "origin/main" }
+       if vim.v.shell_error == 0 then
+         merge_base_target = "origin/main"
+       else
+         vim.fn.systemlist { "git", "rev-parse", "--verify", "origin/master" }
+         if vim.v.shell_error == 0 then
+           merge_base_target = "origin/master"
+         else
+           vim.notify("No origin branch found for merge-base comparison", vim.log.levels.WARN)
+           return
+         end
+       end
+     end
+   end
+
+   -- State management for base ref navigation with merge-base
+   local state = {
+     base_offset = 0, -- Index in the merge-base history
+     max_offset = 50, -- Maximum history depth from merge-base
+     merge_base_target = merge_base_target,
+     commits_history = nil,
+   }
+
+   -- Get the initial merge-base
+   local function get_merge_base()
+     local merge_base_sha = vim.fn.systemlist({ "git", "merge-base", current_branch, state.merge_base_target })[1]
+     if vim.v.shell_error == 0 and merge_base_sha and merge_base_sha ~= "" then
+       return merge_base_sha
+     end
+     return nil
+   end
+
+   -- Get the base ref at current offset (walk history from merge-base)
+   local function get_current_base_ref()
+     local merge_base = get_merge_base()
+     if not merge_base then
+       return nil
+     end
+
+     if state.base_offset == 0 then
+       return merge_base
+     end
+
+     -- Walk history from merge-base forward
+     local ref = merge_base .. "~" .. state.base_offset
+     vim.fn.systemlist { "git", "rev-parse", "--verify", ref }
+     if vim.v.shell_error == 0 then
+       return ref
+     end
+     return merge_base
+   end
+
+   -- Get formatted display for merge-base
+   local function get_base_ref_display()
+     local base_ref = get_current_base_ref()
+     if not base_ref then
+       return "merge-base (invalid)"
+     end
+
+     local short_hash = git_util.get_short_hash(base_ref)
+     local branch = git_util.get_ref_branch_name(base_ref)
+
+     if branch and branch ~= "" then
+       return branch .. " (" .. short_hash .. ")"
+     else
+       return short_hash
+     end
+   end
+
+   -- Get range display
+   local function get_range_display()
+     local base_ref = get_current_base_ref()
+     if not base_ref then
+       return "merge-base..HEAD"
+     end
+
+     local base_short = git_util.get_short_hash(base_ref)
+     local head_short = git_util.get_short_hash "HEAD"
+
+     local commit_count = vim.fn.system("git rev-list --count " .. base_ref .. "..HEAD"):gsub("\n", "")
+     commit_count = tonumber(commit_count) or 0
+
+     return "[merge-base]:" .. base_short .. "..HEAD:" .. head_short .. " (" .. commit_count .. " commits)"
+   end
+
+   -- Navigate forward (closer to merge-base)
+   local function move_base_ref_forward()
+     if state.base_offset <= 0 then
+       vim.notify("Already at merge-base", vim.log.levels.WARN)
+       return
+     end
+
+     state.base_offset = state.base_offset - 1
+     local display = get_base_ref_display()
+     local base_ref = get_current_base_ref()
+     local file_count = base_ref and vim.fn.system("git diff --name-only --diff-filter=d " .. base_ref .. "..HEAD | wc -l"):gsub("\n", "") or "0"
+     vim.notify("Ref: " .. display .. " (" .. file_count .. " changed files)", vim.log.levels.INFO)
+
+     local pickers = Snacks.picker.get { source = "git_diff_merge_base" }
+     local picker = pickers[1]
+     if picker then
+       vim.schedule(function()
+         picker.title = "Changed files (" .. get_range_display() .. ")"
+         picker:update_titles()
+         picker:refresh()
+       end)
+     end
+   end
+
+   -- Navigate backward (further from merge-base)
+   local function move_base_ref_backward()
+     if state.base_offset >= state.max_offset then
+       vim.notify("Already at maximum history depth", vim.log.levels.WARN)
+       return
+     end
+
+     -- Verify the commit exists
+     local next_ref = get_merge_base() .. "~" .. (state.base_offset + 1)
+     vim.fn.systemlist { "git", "rev-parse", "--verify", next_ref }
+     if vim.v.shell_error ~= 0 then
+       vim.notify("No more commits in history", vim.log.levels.WARN)
+       return
+     end
+
+     state.base_offset = state.base_offset + 1
+     local display = get_base_ref_display()
+     local base_ref = get_current_base_ref()
+     local file_count = base_ref and vim.fn.system("git diff --name-only --diff-filter=d " .. base_ref .. "..HEAD | wc -l"):gsub("\n", "") or "0"
+     vim.notify("Ref: " .. display .. " (" .. file_count .. " changed files)", vim.log.levels.INFO)
+
+     local pickers = Snacks.picker.get { source = "git_diff_merge_base" }
+     local picker = pickers[1]
+     if picker then
+       vim.schedule(function()
+         picker.title = "Changed files (" .. get_range_display() .. ")"
+         picker:update_titles()
+         picker:refresh()
+       end)
+     end
+   end
+
+   local custom_actions = {
+     open_file_diff = function(picker, item)
+       if not item or not item.file then
+         vim.notify("No file selected", vim.log.levels.WARN)
+         return
+       end
+       local base_ref = get_current_base_ref()
+       if not base_ref then
+         vim.notify("Invalid merge-base reference", vim.log.levels.WARN)
+         return
+       end
+       picker:close()
+       git_util.open_file_with_gitsigns_diff(item.file, base_ref)
+     end,
+     open_remote_at_ref = function(picker, item)
+       if not item or not item.file then
+         vim.notify("No file selected", vim.log.levels.WARN)
+         return
+       end
+       git_util.open_file_in_remote(item.file, "HEAD")
+     end,
+   }
+
+   local git_keys = editor_keymaps.snacks_picker_group_keys.git_file_keys
+
+   Snacks.picker.pick {
+     source = "git_diff_merge_base",
+     title = "Changed files (" .. get_range_display() .. ")",
+     finder = function(opts, ctx)
+       local show_missing = opts.external == true
+       local base_ref = get_current_base_ref()
+       if not base_ref then
+         vim.notify("Invalid merge-base reference", vim.log.levels.WARN)
+         return {}
+       end
+
+       local file_status_map = build_git_status_map(base_ref)
+       local proc_opts = vim.tbl_extend("force", opts, {
+         cmd = "git",
+         args = { "diff", "--name-only", "--diff-filter=d", base_ref .. "..HEAD" },
+         cwd = git_root,
+         transform = function(item)
+           item.cwd = git_root
+           item.file = item.text
+           local missing = is_missing_file(item, git_root)
+           local keep = should_keep_item(item, git_root, true, show_missing)
+           debug_external_filter(
+             ctx,
+             item,
+             string.format("show_missing=%s missing=%s keep=%s", tostring(show_missing), tostring(missing), tostring(keep))
+           )
+           if not keep then
+             return false
+           end
+           return item
+         end,
+       })
+       return require("snacks.picker.source.proc").proc(proc_opts, ctx)
+     end,
+     format = function(item)
+       local base_ref = get_current_base_ref()
+       local file_status_map = build_git_status_map(base_ref or "")
+       return git_status_formatter(file_status_map)(item)
+     end,
+     preview = function(ctx)
+       local base_ref = get_current_base_ref()
+       return preview_git_diff_with_base(base_ref or "")(ctx)
+     end,
+     actions = with_external_actions(custom_actions),
+     win = {
+       input = {
+         footer = "<C-j> closer to merge-base • <C-k> further from merge-base",
+         keys = vim.tbl_extend("force", git_keys.input, {
+           ["<C-j>"] = {
+             function()
+               move_base_ref_forward()
+             end,
+             mode = { "n", "i" },
+             desc = "Closer to merge-base",
+           },
+           ["<C-k>"] = {
+             function()
+               move_base_ref_backward()
+             end,
+             mode = { "n", "i" },
+             desc = "Further from merge-base",
+           },
+         }),
+       },
+       list = {
+         keys = vim.tbl_extend("force", git_keys.list, {
+           ["<C-j>"] = {
+             function()
+               move_base_ref_forward()
+             end,
+             mode = { "n", "i" },
+             desc = "Closer to merge-base",
+           },
+           ["<C-k>"] = {
+             function()
+               move_base_ref_backward()
+             end,
+             mode = { "n", "i" },
+             desc = "Further from merge-base",
+           },
+         }),
+       },
+     },
+   }
 end
 
 --#endregion Git Pickers
@@ -684,9 +953,10 @@ end
 --#region Custom Change List Picker (Two-stage ref comparison)
 
 -- Helper function to get stats for a ref comparison
-local function get_ref_stats(ref)
+local function get_ref_stats(refAlias, refActual)
+  local ref = refActual or refAlias
   local stats = {
-    refAlias = ref,
+    refAlias = refAlias,
     ref = ref,
     fullRef = nil,
     branch = nil,
@@ -778,9 +1048,9 @@ local function collect_candidate_refs()
   local candidates = {}
   local seen_refs = {}
 
-  local function add_candidate(refAlias, priority, ref_type)
+  local function add_candidate(refAlias, priority, ref_type, refActual)
     if not seen_refs[refAlias] then
-      local stats = get_ref_stats(refAlias)
+      local stats = get_ref_stats(refAlias, refActual)
       if stats.valid then
         stats.priority = priority
         stats.ref_type = ref_type or "other"
@@ -822,6 +1092,29 @@ local function collect_candidate_refs()
   -- 3. HEAD@{u} (upstream tracking branch)
   add_candidate("HEAD@{u}", 3, "upstream")
 
+  -- 3.5 Merge-base between current branch and origin default
+  local merge_base_target = origin_default
+  if not merge_base_target or merge_base_target == "" then
+    vim.fn.systemlist { "git", "rev-parse", "--verify", "origin/main" }
+    if vim.v.shell_error == 0 then
+      merge_base_target = "origin/main"
+    else
+      vim.fn.systemlist { "git", "rev-parse", "--verify", "origin/master" }
+      if vim.v.shell_error == 0 then
+        merge_base_target = "origin/master"
+      end
+    end
+  end
+
+  if merge_base_target and merge_base_target ~= "" then
+    local branch_ref = current_branch and current_branch ~= "" and current_branch or "HEAD"
+    local merge_base = vim.fn.systemlist({ "git", "merge-base", branch_ref, merge_base_target })[1]
+    if vim.v.shell_error == 0 and merge_base and merge_base ~= "" then
+      local alias = "merge-base(" .. branch_ref .. "," .. merge_base_target .. ")"
+      add_candidate(alias, 3.5, "merge-base", merge_base)
+    end
+  end
+
   -- 4. Origin default local branch
   if origin_default_local then
     add_candidate(origin_default_local, 4, "default")
@@ -838,6 +1131,26 @@ local function collect_candidate_refs()
   -- 6. HEAD~1 (fallback)
   add_candidate("HEAD~1", 6, "previous")
 
+  -- 7. Recent tags reachable from HEAD (first 2 with distinct commits)
+  local tag_list = vim.fn.systemlist { "git", "tag", "--merged", "HEAD", "--sort=-creatordate" }
+  if vim.v.shell_error == 0 and tag_list and #tag_list > 0 then
+    local seen_tag_shas = {}
+    local added_tags = 0
+    for _, tag in ipairs(tag_list) do
+      if tag ~= "" then
+        local tag_sha = vim.fn.systemlist({ "git", "rev-parse", tag })[1]
+        if vim.v.shell_error == 0 and tag_sha and tag_sha ~= "" and not seen_tag_shas[tag_sha] then
+          add_candidate(tag, 6.5, "tag")
+          seen_tag_shas[tag_sha] = true
+          added_tags = added_tags + 1
+          if added_tags >= 2 then
+            break
+          end
+        end
+      end
+    end
+  end
+
   table.sort(candidates, function(a, b)
     return a.priority < b.priority
   end)
@@ -849,8 +1162,8 @@ end
 local function show_file_list_picker(selected_ref_stats, on_back)
   local editor_keymaps = require "utils.editor_keymaps"
   local git_root = Snacks.git.get_root()
-  local ref_metadata = git_util.get_ref_metadata(selected_ref_stats.refAlias)
-  local initial_base_ref = ref_metadata and ref_metadata.resolved_with_remote or selected_ref_stats.refAlias
+  local ref_metadata = git_util.get_ref_metadata(selected_ref_stats.ref)
+  local initial_base_ref = ref_metadata and ref_metadata.resolved_with_remote or selected_ref_stats.ref
 
   -- State management for base_ref navigation
   local state = {
@@ -883,7 +1196,7 @@ local function show_file_list_picker(selected_ref_stats, on_back)
   local function get_range_display(from_ref)
     local from_short = git_util.get_short_hash(from_ref)
     local from_branch = git_util.get_ref_branch_name(from_ref)
-    local head_short = git_util.get_short_hash("HEAD")
+    local head_short = git_util.get_short_hash "HEAD"
 
     -- Build from_display: [branch]:hash or just hash
     local from_display = from_branch ~= "" and ("[" .. from_branch .. "]:" .. from_short) or from_short
@@ -933,7 +1246,7 @@ local function show_file_list_picker(selected_ref_stats, on_back)
       local file_count = vim.fn.system(cmd .. " | wc -l"):gsub("\n", "")
       vim.notify("Ref: " .. new_display .. " (" .. file_count .. " changed files)", vim.log.levels.INFO)
       -- Get the real picker using Snacks.picker.get() since key callbacks receive snacks.win, not picker
-      local pickers = Snacks.picker.get({ source = "git_diff_files" })
+      local pickers = Snacks.picker.get { source = "git_diff_files" }
       local picker = pickers[1]
       if picker then
         vim.schedule(function()
@@ -983,7 +1296,7 @@ local function show_file_list_picker(selected_ref_stats, on_back)
       local file_count = vim.fn.system(cmd .. " | wc -l"):gsub("\n", "")
       vim.notify("Ref: " .. new_display .. " (" .. file_count .. " changed files)", vim.log.levels.INFO)
       -- Get the real picker using Snacks.picker.get() since key callbacks receive snacks.win, not picker
-      local pickers = Snacks.picker.get({ source = "git_diff_files" })
+      local pickers = Snacks.picker.get { source = "git_diff_files" }
       local picker = pickers[1]
       if picker then
         vim.schedule(function()
@@ -1026,13 +1339,17 @@ local function show_file_list_picker(selected_ref_stats, on_back)
   local git_keys = editor_keymaps.snacks_picker_group_keys.git_file_keys_with_back(on_back)
 
   local range_display = get_range_display(initial_base_ref)
-  local ref_type_label = ref_metadata and ref_metadata.resolve_ref_type ~= "unknown"
+  local ref_type_label = ref_metadata
+      and ref_metadata.resolve_ref_type ~= "unknown"
       and " (" .. ref_metadata.resolve_ref_type .. ")"
+    or ""
+  local ref_alias_label = selected_ref_stats.refAlias ~= selected_ref_stats.ref
+      and " [" .. selected_ref_stats.refAlias .. "]"
     or ""
 
   Snacks.picker.pick {
     source = "git_diff_files",
-    title = "Changed files (" .. range_display .. ")" .. ref_type_label,
+    title = "Changed files (" .. range_display .. ")" .. ref_type_label .. ref_alias_label,
     external = false,
     finder = function(opts, ctx)
       local show_missing = opts.external == true
@@ -1153,6 +1470,8 @@ function M.custom_change_list_picker()
     ["upstream"] = { label = "upstream", hl = "DiagnosticInfo" },
     ["default"] = { label = "default", hl = "DiagnosticOk" },
     ["local"] = { label = "local", hl = "Comment" },
+    ["merge-base"] = { label = "merge-base", hl = "DiagnosticHint" },
+    ["tag"] = { label = "tag", hl = "DiagnosticInfo" },
     ["previous"] = { label = "prev", hl = "Comment" },
     ["other"] = { label = "", hl = "Comment" },
   }
@@ -1218,7 +1537,7 @@ function M.custom_change_list_picker()
         return nil
       end
 
-      local ref = item.refAlias
+      local ref = item.ref
       local preview_lines = {}
 
       vim.list_extend(preview_lines, { "=== Commits ===", "" })
@@ -1236,7 +1555,7 @@ function M.custom_change_list_picker()
       local commit_count = tonumber(commit_count_output[1]) or 0
 
       if commit_count == 0 then
-        vim.list_extend(preview_lines, { "No commit changes between " .. ref .. " and HEAD", "" })
+        vim.list_extend(preview_lines, { "No commit changes between " .. item.refAlias .. " and HEAD", "" })
       else
         local log_limit = 50
         local log_output = vim.fn.systemlist {
@@ -1267,7 +1586,8 @@ function M.custom_change_list_picker()
       else
         local stat_output
         if file_count > 100 then
-          local cmd = string.format("git --no-pager diff --stat %s..HEAD | head -n 101", vim.fn.shellescape(ref))
+          local cmd =
+            string.format("git --no-pager diff --stat %s..HEAD | head -n 101", vim.fn.shellescape(ref))
           stat_output = vim.fn.systemlist(cmd)
           vim.list_extend(preview_lines, stat_output or {})
           vim.list_extend(preview_lines, {
@@ -1298,18 +1618,25 @@ function M.custom_change_list_picker()
     end,
     actions = {
       open_gitsigns_diff = function(picker, item)
-        if not item or not item.refAlias then
+        if not item or not item.ref then
           vim.notify("No reference selected", vim.log.levels.WARN)
           return
         end
         picker:close()
-        git_util.open_current_buffer_with_gitsigns_diff(item.refAlias)
+        git_util.open_current_buffer_with_gitsigns_diff(item.ref)
       end,
     },
     win = {
       input = {
         keys = {
           ["<C-s>"] = { "open_gitsigns_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff with ref" },
+          ["<C-g>"] = { "open_gitsigns_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff with ref" },
+        },
+      },
+      list = {
+        keys = {
+          ["<C-s>"] = { "open_gitsigns_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff with ref" },
+          ["<C-g>"] = { "open_gitsigns_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff with ref" },
         },
       },
     },
@@ -1466,7 +1793,7 @@ end
 --- Picker for current buffer code references (relative/absolute)
 function M.code_ref_picker(opts)
   opts = opts or {}
-  local code_ref = require("utils.code_ref")
+  local code_ref = require "utils.code_ref"
   local use_visual = opts.visual or false
   local show_char = vim.g.code_ref_show_char_range or false
 
@@ -1507,13 +1834,16 @@ function M.code_ref_picker(opts)
               -- In range mode: toggle char range; in non-range mode: toggle hide col
               if use_visual then
                 vim.g.code_ref_show_char_range = not (vim.g.code_ref_show_char_range or false)
-                vim.notify("Char range: " .. (vim.g.code_ref_show_char_range and "enabled" or "disabled"), vim.log.levels.INFO)
+                vim.notify(
+                  "Char range: " .. (vim.g.code_ref_show_char_range and "enabled" or "disabled"),
+                  vim.log.levels.INFO
+                )
               else
                 vim.g.code_ref_hide_col = not (vim.g.code_ref_hide_col or false)
                 vim.notify("Column: " .. (vim.g.code_ref_hide_col and "hidden" or "shown"), vim.log.levels.INFO)
               end
 
-              local pickers = Snacks.picker.get({ source = "code_ref" })
+              local pickers = Snacks.picker.get { source = "code_ref" }
               local cur_picker = pickers and pickers[1]
               if cur_picker then
                 cur_picker:close()
@@ -1521,7 +1851,7 @@ function M.code_ref_picker(opts)
 
               -- Reopen with updated items (reads fresh global state)
               vim.schedule(function()
-                M.code_ref_picker({ visual = use_visual, title = opts.title })
+                M.code_ref_picker { visual = use_visual, title = opts.title }
               end)
             end,
             mode = { "n", "i" },
@@ -1532,21 +1862,163 @@ function M.code_ref_picker(opts)
     },
     confirm = function(picker, item)
       if not item then
+        Snacks.notify("No code reference selected", vim.log.levels.WARN)
         return
       end
-      code_ref.copy_current {
-        format = item.format,
-        absolute = item.absolute,
-        copy_mode = "plus",
-        show_char_range = vim.g.code_ref_show_char_range or false,
-        visual = use_visual,
-      }
+      clipboardUtil.copy_and_notify(item.text, "plus", "copied: " .. item.text)
       picker:close()
     end,
   }
 end
 
 --#endregion Code Ref Picker
+
+--#region Dotfiles Config Picker
+
+--- Picker for dotfiles configuration files
+--- Searches ~/dotfiles/ directory with configurable include/exclude patterns
+function M.dotfiles_picker()
+  -- Configuration table - easily editable for adding/removing patterns
+  local CONFIG = {
+    base_dir = "~/dotfiles",
+    include_patterns = { "*bash*", "*.lua", "*.vim", "*.json", "*.yaml", "*.yml", "*.toml", "*.conf", "*.config" },
+    -- Exclude patterns: can be simple names or relative paths from base_dir
+    exclude_dirs = {
+      -- Simple directory names
+      "fork",
+      "nvim*",
+      ".git",
+      "node_modules",
+      ".DS_Store",
+      ".continue",
+      "backup",
+      -- Nested paths (relative to ~/dotfiles/)
+      ".config/gcloud",
+      ".config/alacritty/themes",
+      ".config/glab-cli",
+      ".config/raycast/script-commands",
+      ".config/raycast/extensions",
+      ".config/raycast/exports",
+    },
+    extra_files = { "~/.bash.local" },
+  }
+
+  -- Expand paths
+  local base_dir = vim.fn.expand(CONFIG.base_dir)
+
+  -- Check if base directory exists
+  if vim.fn.isdirectory(base_dir) == 0 then
+    vim.notify("Dotfiles directory does not exist: " .. base_dir, vim.log.levels.WARN)
+    return
+  end
+
+  -- Helper to check if path matches any pattern
+  local function matches_pattern(str, patterns)
+    for _, pattern in ipairs(patterns) do
+      -- Convert glob pattern to lua pattern
+      local lua_pattern = pattern:gsub("%*", ".*"):gsub("%-", "%%-")
+      if str:match(lua_pattern) then
+        return true
+      end
+    end
+    return false
+  end
+
+  -- Helper to check if directory should be excluded
+  local function is_excluded_dir(path)
+    -- Check both the basename and the relative path
+    local dirname = vim.fn.fnamemodify(path, ":t")
+    local rel_path = path:sub(#base_dir + 2) -- +2 to remove leading slash
+
+    -- Match against basename patterns
+    if matches_pattern(dirname, CONFIG.exclude_dirs) then
+      return true
+    end
+
+    -- Match against relative path patterns (for nested directories)
+    for _, exclude_pattern in ipairs(CONFIG.exclude_dirs) do
+      -- Check if the relative path starts with the exclude pattern
+      if rel_path:match("^" .. exclude_pattern:gsub("%*", ".*"):gsub("%-", "%%-")) then
+        return true
+      end
+    end
+
+    return false
+  end
+
+  -- Helper to scan files recursively
+  local function scan_files(dir, files, rel_base)
+    files = files or {}
+    rel_base = rel_base or base_dir
+
+    local handle = vim.loop.fs_scandir(dir)
+    if not handle then
+      return files
+    end
+
+    while true do
+      local name, type = vim.loop.fs_scandir_next(handle)
+      if not name then
+        break
+      end
+
+      local full_path = dir .. "/" .. name
+
+      if type == "directory" then
+        -- Recursively scan subdirectories unless excluded
+        if not is_excluded_dir(full_path) then
+          scan_files(full_path, files, rel_base)
+        end
+      elseif type == "file" then
+        -- Check if file matches include patterns
+        if matches_pattern(name, CONFIG.include_patterns) then
+          local rel_path = full_path:sub(#rel_base + 2) -- +2 to remove leading slash
+          table.insert(files, {
+            text = rel_path,
+            file = full_path,
+          })
+        end
+      end
+    end
+
+    return files
+  end
+
+  -- Add extra files if they exist
+  local function add_extra_files(files)
+    for _, extra_file in ipairs(CONFIG.extra_files) do
+      local expanded_path = vim.fn.expand(extra_file)
+      if vim.fn.filereadable(expanded_path) == 1 then
+        table.insert(files, {
+          text = extra_file, -- Keep tilde notation for display
+          file = expanded_path,
+        })
+      end
+    end
+    return files
+  end
+
+  Snacks.picker.pick {
+    source = "dotfiles",
+    title = "Dotfiles Config",
+    finder = function(_opts, _ctx)
+      local files = add_extra_files({})
+      vim.list_extend(files, scan_files(base_dir))
+      return files
+    end,
+    format = "text",
+    preview = "file",
+    confirm = function(picker, item)
+      if not item or not item.file then
+        return
+      end
+      picker:close()
+      vim.cmd("edit " .. vim.fn.fnameescape(item.file))
+    end,
+  }
+end
+
+--#endregion Dotfiles Config Picker
 
 -- Export pick_cmd_result for use in other modules
 M.pick_cmd_result = pick_cmd_result
