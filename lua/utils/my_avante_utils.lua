@@ -66,6 +66,9 @@ function M.get_agoda_providers()
         "gemini-3-pro-preview",
         "gemini-2.5-flash",
         "deepseek-r1-0528-maas",
+        "claude-haiku-4-5",
+        "claude-opus-4-5",
+        "claude-sonnet-4-5",
       },
       extra_request_body = {
         temperature = 0,
@@ -291,7 +294,10 @@ function M.get_openai_agd_models_config()
     F = { model = "gpt-5-mini", desc = "GPT-5-mini" },
     g = { model = "grok-code-fast-1", desc = "Grok code (fast)" },
     G = { model = "claude-haiku-4-5", desc = "Claude Haiku 4.5" },
+    h = { model = "claude-sonnet-4-5", desc = "Claude Sonnet 4.5 (heavy)" },
+    H = { model = "claude-opus-4-5", desc = "Claude Opus 4.5" },
     c = { model = "gpt-5.2", desc = "GPT-5.2" },
+    C = { model = "gpt-5.1-codex-mini", desc = "GPT-5.1-codex-mini" },
   }
 end
 

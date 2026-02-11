@@ -203,7 +203,9 @@ function M.get_sub_project_dir(fromdir, return_metadata, return_all)
 
   -- Marker configuration with project type metadata
   -- name can be a string or array of strings (AND condition for arrays)
+  -- match_from_within: if true, only matches when current_dir is inside this directory
   local markers = {
+    { name = ".nvim-config.lua", type = "path", project_type = ".nv" },
     { name = "package.json", type = "path", project_type = "yarn" },
     { name = "pyproject.toml", type = "path", project_type = "python" },
     { name = "Cargo.toml", type = "path", project_type = "rust" },
@@ -213,8 +215,8 @@ function M.get_sub_project_dir(fromdir, return_metadata, return_all)
     { name = "%.sln$", type = "pattern", project_type = "dotnet" },
     { name = { "Clientside/", "Serverside/" }, type = "path", project_type = "cronos" },
     -- { name = ".gitlab-ci.yml", type = "path", project_type = "gitlab" },
-    -- does it support parent relative marker ?
-    -- { name = "../.gitlab", type = "path", project_type = ".glab" }, -- relative backwards not working
+    -- Special marker: only matches when browsing INSIDE .gitlab directory
+    { name = ".gitlab", type = "path", project_type = ".glab", match_from_within = true },
     { name = ".git", type = "path", project_type = "git" },
   }
 
@@ -234,6 +236,30 @@ function M.get_sub_project_dir(fromdir, return_metadata, return_all)
       temp_dir = parent
     end
     return depth
+  end
+
+  -- Helper function to extract mono label from .nvim-config.lua
+  -- Searches for pattern "-- mono:<label>" and returns the label
+  -- Falls back to ".nv" if not found
+  local function extract_mono_label(file_path)
+    local default_label = ".nv"
+    
+    -- Try to read the file
+    local ok, content = pcall(vim.fn.readfile, file_path)
+    if not ok or not content then
+      return default_label
+    end
+    
+    -- Search for "-- mono:<label>" pattern in file content
+    for _, line in ipairs(content) do
+      -- Match "-- mono:" followed by any non-whitespace characters
+      local label = line:match("^%s*%-%-%s*mono:(%S+)")
+      if label then
+        return label
+      end
+    end
+    
+    return default_label
   end
 
   -- Helper function to check if marker matches (handles both string and array names)
@@ -268,12 +294,33 @@ function M.get_sub_project_dir(fromdir, return_metadata, return_all)
         return nil
       end
     end
+    
+    -- Check match_from_within option: only match if current_dir is inside this directory
+    if marker.match_from_within and #matched_files > 0 then
+      local marker_dir = dir .. "/" .. matched_files[1]
+      -- Check if current_dir is inside marker_dir
+      local is_inside = current_dir:match("^" .. vim.pesc(marker_dir) .. "/") 
+                     or current_dir == marker_dir
+      if not is_inside then
+        return nil  -- Skip this marker if not browsing inside the directory
+      end
+    end
+
+    -- All names matched, determine project_type
+    local project_type = marker.project_type
+    
+    -- Special handling for .nvim-config.lua: extract mono label
+    if marker.name == ".nvim-config.lua" and #matched_files > 0 then
+      local config_file_path = dir .. "/" .. matched_files[1]
+      local mono_label = extract_mono_label(config_file_path)
+      project_type = mono_label
+    end
 
     -- All names matched, return result
     return {
       dir = dir,
       matched_file = table.concat(matched_files, ", "),
-      project_type = marker.project_type,
+      project_type = project_type,
       marker_type = marker.type,
       depth = calculate_depth_from_ref(dir, root_dir), -- depth from git root
       depth_from_start = calculate_depth_from_ref(dir, current_dir), -- depth from fromdir

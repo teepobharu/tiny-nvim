@@ -328,6 +328,13 @@ return {
         desc = "Find Config File",
       },
       {
+        "<leader>fD",
+        function()
+          require("utils.snacks_pickers").dotfiles_picker()
+        end,
+        desc = "Dotfiles Config",
+      },
+      {
         "<leader>ff",
         function()
           Snacks.picker.files()
