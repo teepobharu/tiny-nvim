@@ -9,6 +9,22 @@ local CopyMode = {
   BOTH = "both", -- Copy to both + and unnamed registers
 }
 
+---Copy current line to system clipboard
+---@param warn boolean Whether to show a notification
+function M.copy_yank_to_system(warn)
+  vim.cmd "let @* = @0" -- Transfer last yank ("0 register) to system clipboard ("* register)
+  -- vim.cmd 'normal! "+yy'
+  if warn then
+    local textLength = vim.fn.strlen(vim.fn.getreg "*")
+    local truncCenterText = textLength > 20 and "..." or ""
+    local reg = vim.fn.getreg "*"
+    local centerText = vim.fn.strpart(reg, 0, 10)
+    local endText = vim.fn.strpart(reg, #reg - 10, 10)
+    local result = centerText .. truncCenterText .. endText
+    vim.notify("Copied text to system clipboard: " .. result, vim.log.levels.INFO)
+  end
+end
+
 ---Copy text to system clipboard using specified mode
 ---@param text string The text to copy
 ---@param mode? "plus"|"unnamed"|"both" Copy mode (default: "plus")

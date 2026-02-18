@@ -371,6 +371,7 @@ return {
       },
       behavior = {
         -- auto_set_keymaps = false,
+        allow_access_to_git_ignored_files = true, -- still not allow outside repo / root how ?
       },
       mappings = { -- https://github.com/yetone/avante.nvim/blob/5df39b480d438a46afa1571db6480210bccea21b/lua/avante/config.lua#L641
         -- edit = "<leader>rE", -- does not overwrite why ?
@@ -561,47 +562,7 @@ return {
           },
         },
         -- Merge path copy actions from editor_keymaps with local actions
-        actions = vim.tbl_extend("force", editor_keymaps.snacks_actions, {
-          gitdiff_toggle_group = function(picker, item)
-            require("utils.snacks_actions").gitdiff_toggle_group(picker, item)
-          end,
-          toggle_case_sensitivity = function(picker, item)
-            require("utils.snacks_actions").toggle_case_sensitivity(picker, item)
-          end,
-          open_file_remote = function(picker, item)
-            require("utils.snacks_actions").open_file_remote(picker, item)
-          end,
-          open_mr = function(picker, item)
-            require("utils.snacks_actions").open_mr(picker, item)
-          end,
-          remove_qf_item = function(picker, item)
-            require("utils.snacks_actions").remove_qf_item(picker, item)
-          end,
-          test_picker = function(picker, item)
-            -- Debug action to inspect picker items
-            vim.notify("Item: " .. vim.inspect(item), vim.log.levels.INFO)
-            picker:close()
-          end,
-          toggle_diffpreview_alt = editor_keymaps.helpers.toggle_diffpreview_alt,
-          my_diff_compare = function(picker, item, action)
-            require("utils.snacks_actions_wip").my_diff_compare(picker, item, action)
-          end,
-          toggle_cwd_files_grep = function(picker, item)
-            require("utils.snacks_terminal").toggle_cwd_files_grep(picker, item)
-          end,
-          toggle_files_buffers = function(picker, item)
-            require("utils.snacks_actions").toggle_files_buffers(picker, item)
-          end,
-          increase_picker_depth = function(picker, item)
-            require("utils.snacks_terminal").adjust_picker_depth(picker, item, 1)
-          end,
-          decrease_picker_depth = function(picker, item)
-            require("utils.snacks_terminal").adjust_picker_depth(picker, item, -1)
-          end,
-          reset_picker_depth = function(picker, item)
-            require("utils.snacks_terminal").adjust_picker_depth(picker, item, 0)
-          end,
-        }), -- Close vim.tbl_extend for actions
+        actions = vim.tbl_extend("force", editor_keymaps.snacks_common_actions, {}), -- Close vim.tbl_extend for actions
         -- Import common win settings from editor_keymaps
         win = editor_keymaps.sources_n_keys.common,
       },

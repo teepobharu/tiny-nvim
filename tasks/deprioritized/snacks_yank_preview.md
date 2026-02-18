@@ -13,9 +13,15 @@ related:
 ---
 
 ## Objective
+
 Add an action key binding to snacks picker that allows yanking (copying) the preview content to system clipboard. Prefer using builtin functionality if available.
 
+## Ans
+
+- default yank yank the selection area in file the whole path to non system clipboard since set unsync by user opt
+
 ## Checklist
+
 - [ ] Research snacks builtin copy/yank actions (check actions.lua reference)
 - [ ] Identify picker contexts where preview yank would be useful (git diff, file preview, etc.)
 - [ ] Implement yank_preview action in lua/utils/snacks_actions.lua
@@ -30,6 +36,7 @@ Add an action key binding to snacks picker that allows yanking (copying) the pre
 ## Implementation Notes
 
 ### Potential Approaches
+
 1. **Builtin action**: Check if snacks has built-in `yank_preview` or similar action
 2. **Custom action**: Create action that:
    - Gets preview buffer content
@@ -37,11 +44,13 @@ Add an action key binding to snacks picker that allows yanking (copying) the pre
    - Shows notification feedback
 
 ### Code References
+
 - Existing actions pattern: lua/utils/snacks_actions.lua:10-27 (toggle_external example)
 - Preview utilities: Check snacks.picker.preview module
 - Clipboard interaction: Use `vim.fn.setreg('+', content)`
 
 ### Suggested Keybinding
+
 ```lua
 actions = {
   yank_preview = function(picker)
@@ -51,12 +60,14 @@ actions = {
 ```
 
 ## Questions to Resolve
+
 - Does snacks provide builtin preview yank action?
 - Which key binding is most intuitive? (`<C-y>`, `y`, `gy`?)
 - Should it support yanking selection or full preview?
 - Should it handle different preview formats (raw, formatted, etc.)?
 
 ## Success Criteria
+
 - Can yank preview content with single key press
 - Works across different picker types
 - Provides user feedback (notification)
