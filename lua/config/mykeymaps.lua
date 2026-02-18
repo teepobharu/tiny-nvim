@@ -147,22 +147,22 @@ vim.opt.clipboard = ""
 
 -- Copy to system clipboard (+ register) using simple vim.cmd
 keymap("n", "YY", function()
-  vim.cmd('normal! "+yy')
+  vim.cmd 'normal! "+yy'
   vim.notify("Copied line to system clipboard", vim.log.levels.INFO)
 end, { desc = "Copy line to system clipboard" })
 
 keymap("v", "Y", function()
-  vim.cmd('normal! "+y')
+  vim.cmd 'normal! "+y'
   vim.notify("Copied selection to system clipboard", vim.log.levels.INFO)
 end, { desc = "Copy selection to system clipboard" })
 
 keymap("v", "<C-c>", function()
-  vim.cmd('normal! "+y')
+  vim.cmd 'normal! "+y'
   vim.notify("Copied selection to system clipboard", vim.log.levels.INFO)
 end, { desc = "Copy selection to system clipboard" })
 
 keymap("n", "<localleader>cc", function()
-  vim.cmd "let @* = @0" -- Transfer last yank ("0 register) to system clipboard ("* register)
+  require("utils.myinput").copy_yank_to_system(true)
 end, { desc = "Copy yank to system clipboard" })
 --
 -- Code reference copies (copy to system clipboard only)
@@ -193,10 +193,10 @@ create_code_ref_keymap("<localleader>crH", "hash", true, "CodeRef ABS path#Lline
 
 -- Picker (visual: capture flag before picker opens)
 keymap("n", "<localleader>crp", function()
-  require("utils.snacks_pickers").code_ref_picker({ visual = false })
+  require("utils.snacks_pickers").code_ref_picker { visual = false }
 end, { desc = "CodeRef picker (copy to clipboard)" })
 keymap("v", "<localleader>crp", function()
-  require("utils.snacks_pickers").code_ref_picker({ visual = true })
+  require("utils.snacks_pickers").code_ref_picker { visual = true }
 end, { desc = "CodeRef picker (copy to clipboard)" })
 
 -- Toggle char range in references

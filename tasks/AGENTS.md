@@ -1,10 +1,10 @@
 # AGENTS.md - Neovim Configuration Repository Guide
 
-Welcome! This guide documents everything you need to know to work effectively in this Neovim configuration repository.
-
 ## Project Overview
 
-**tiny-nvim**: A lightweight Neovim configuration for Neovim 0.11+ emphasizing:
+A lightweight Neovim configuration for Neovim 0.11+ emphasizing:
+
+- fork from github `jellydn/tiny-nvim`
 - Minimal, essential plugins only
 - Leveraging Neovim's built-in LSP (no lspconfig dependency)
 - Fast startup times
@@ -70,6 +70,7 @@ Welcome! This guide documents everything you need to know to work effectively in
    - Example: `myAi.lua`, `myCoding.lua`
 3. **Temporary POCs**: `lua/plugins/extra/tmp_*.lua` - Clean up after testing
 4. **Config imports**: Added to relevant entry point (e.g., `config/mykeymaps.lua` imports `plugins/extra/mykeymaps.lua`)
+5. **myEditor migration**: `myEditor.lua` currently contains most overridden user config for plugins. Ideally these should be migrated to individual `plugins/extra/my<plugin_group/plugin_name>.lua` files over time — not urgent, but new overrides that don't already have a `my*.lua` file should go in a new one.
 
 ### File Naming Conventions
 
@@ -87,6 +88,7 @@ Welcome! This guide documents everything you need to know to work effectively in
 - **Formatter**: Use `stylua` (installed by `scripts/install-tools.sh`)
 
 Example formatting:
+
 ```lua
 -- Good
 return {
@@ -123,6 +125,7 @@ tasks/
    - ✗ Wrong: `[File](../../lua/utils/snacks_actions.lua)`
 
 2. **File Frontmatter**: Required for task and project files
+
    ```markdown
    ---
    title: "Task description"
@@ -139,30 +142,32 @@ tasks/
    - Move to `tasks/review/` when completed for verification
    - User moves to `tasks/done/` after verification (never do this yourself)
 
-4. **Documentation**: See `docs/task_tracking.md` for full details
+4. **User verification**: Keep user in the loop to verify changes work with checkboxes, then iterate to fix if needed on failed cases
+
+5. **Documentation**: See `docs/task_tracking.md` for full details
 
 ## Essential Commands
 
 ### Running & Development
 
-| Task | Command | Notes |
-|------|---------|-------|
-| Start Neovim | `NVIM_APPNAME=nvim3_jelly_tinynvim nvim` | Custom app name uses separate config |
-| Install tools | `./scripts/install-tools.sh` | Run after cloning |
-| Install plugins | `NVIM_APPNAME=nvim3_jelly_tinynvim nvim --headless -c "Lazy install" -c "qa"` | Lazy plugin manager |
-| Update plugins | `NVIM_APPNAME=nvim3_jelly_tinynvim nvim --headless -c "Lazy update" -c "qa"` | Check updates |
-| Format Lua | `stylua lua/` | Use stylua (120 col, 2 space indent) |
-| Check LSP | `:LspInfo` | View active LSP servers |
-| Plugin info | `:Lazy` | See installed plugins and their status |
+| Task            | Command                                                                       | Notes                                  |
+| --------------- | ----------------------------------------------------------------------------- | -------------------------------------- |
+| Start Neovim    | `NVIM_APPNAME=nvim3_jelly_tinynvim nvim`                                      | Custom app name uses separate config   |
+| Install tools   | `./scripts/install-tools.sh`                                                  | Run after cloning                      |
+| Install plugins | `NVIM_APPNAME=nvim3_jelly_tinynvim nvim --headless -c "Lazy install" -c "qa"` | Lazy plugin manager                    |
+| Update plugins  | `NVIM_APPNAME=nvim3_jelly_tinynvim nvim --headless -c "Lazy update" -c "qa"`  | Check updates                          |
+| Format Lua      | `stylua lua/`                                                                 | Use stylua (120 col, 2 space indent)   |
+| Check LSP       | `:LspInfo`                                                                    | View active LSP servers                |
+| Plugin info     | `:Lazy`                                                                       | See installed plugins and their status |
 
 ### Key Keybinds (Work Context)
 
-| Keymap | Action | File |
-|--------|--------|------|
-| `<leader>ah` | MCPHub UI | `lua/plugins/extra/myAi.lua` |
-| `<leader>ca` | CodeCompanion chat | `lua/plugins/extra/codecompanion.lua` |
-| `:MCPHub` | MCP server management | MCPHub UI command |
-| `:CCToggle` | Toggle CodeCompanion | CodeCompanion command |
+| Keymap       | Action                | File                                  |
+| ------------ | --------------------- | ------------------------------------- |
+| `<leader>ah` | MCPHub UI             | `lua/plugins/extra/myAi.lua`          |
+| `<leader>ca` | CodeCompanion chat    | `lua/plugins/extra/codecompanion.lua` |
+| `:MCPHub`    | MCP server management | MCPHub UI command                     |
+| `:CCToggle`  | Toggle CodeCompanion  | CodeCompanion command                 |
 
 ## Code Patterns & Conventions
 
@@ -191,6 +196,7 @@ return {
 ### LSP Setup Pattern
 
 Built-in LSP (Neovim 0.11+). See `init.lua:35-45`:
+
 ```lua
 vim.lsp.enable {
   "ts_ls",     -- TypeScript/JavaScript
@@ -214,6 +220,7 @@ vim.lsp.enable {
 
 **Issue**: MCPHub's workspace mode creates per-directory hubs with dynamic ports.
 **Solution**: Disable workspace mode in `lua/plugins/extra/myAi.lua`:
+
 ```lua
 opts = {
   port = 37373,
@@ -222,11 +229,13 @@ opts = {
   },
 }
 ```
+
 **Reason**: CLI agents (Claude Code, etc.) need a fixed port.
 
 ### Plugin Config Merging
 
 Lazy.nvim deep-merges Lua tables, but **functions don't merge** - the last one wins.
+
 - For function-heavy customization: Create separate `my*.lua` file
 - For table overrides: Can nest in `lua/plugins/extra/`
 - Reference: `docs/memory/lazy-nvim-config-merging.md`
@@ -234,6 +243,7 @@ Lazy.nvim deep-merges Lua tables, but **functions don't merge** - the last one w
 ### Project-Specific Config
 
 Neovim loads `.nvim-config.lua` from the working directory (if present).
+
 - Useful for project-specific LSP settings
 - Not tracked by git (add to `.gitignore`)
 - Loaded with `pcall` to prevent startup errors
@@ -241,11 +251,13 @@ Neovim loads `.nvim-config.lua` from the working directory (if present).
 ### AI Tool Integration
 
 Three main AI interfaces:
+
 1. **CodeCompanion** (`lua/plugins/extra/codecompanion.lua`) - Local models + API adapters
 2. **Avante** (`lua/plugins/extra/avante.lua`) - Chat interface
 3. **CopilotChat** (`lua/plugins/extra/copilot-chat.lua`) - GitHub Copilot
 
 **MCPHub** (`lua/plugins/extra/myAi.lua`) - MCP server orchestration for all three
+
 - Reference: `docs/memory/mcphub.md`
 
 ## Editing Guidelines (from CLAUDE.md)
@@ -255,7 +267,8 @@ Three main AI interfaces:
 3. **Config merging**: If deep merging isn't possible (e.g., with functions), move custom code to `lua/plugins/extra/` or `lua/utils/`
 4. **When working with plugins**: Watch for common issues and document solutions in `docs/memory/<plugin>.md`
 5. **Task file links**: Always use relative paths from git root without `../`
-6. **Keep CLAUDE.md updated**: Regularly add new patterns, gotchas, and solutions discovered
+6. **Spec docs workflow**: When asked to work on a spec in `docs/*.md`, update the detail and short description in the shortlist with code reference hyperlinks
+7. **DIGDEEP**: When asked to dig deep into a plugin, the reliable source for installed plugin source code is `~/.local/share/$NVIM_APPNAME/lazy/<plugin_name>` (e.g., `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/`)
 
 ## Documentation (Living Memory)
 
@@ -277,11 +290,13 @@ The `docs/memory/` directory contains plugin-specific documentation:
 ### Manual Testing
 
 1. **Start fresh**:
+
    ```bash
    NVIM_APPNAME=nvim3_jelly_tinynvim nvim
    ```
 
 2. **Check plugin status**:
+
    ```vim
    :Lazy        " See all plugins and their load status
    :LspInfo      " View active LSP servers
@@ -295,6 +310,7 @@ The `docs/memory/` directory contains plugin-specific documentation:
 ### Headless Testing
 
 Useful for scripted verification:
+
 ```bash
 NVIM_APPNAME=nvim3_jelly_tinynvim nvim --headless \
   -c "Lazy install" \
@@ -307,6 +323,7 @@ NVIM_APPNAME=nvim3_jelly_tinynvim nvim --headless \
 ### Adding a New Personal Plugin Override
 
 1. Create `lua/plugins/extra/my<plugin>.lua`:
+
 ```lua
 return {
   {
@@ -326,11 +343,13 @@ return {
    - Autocommands → `config/myautocmds.lua`
 
 3. Test:
+
 ```bash
 NVIM_APPNAME=nvim3_jelly_tinynvim nvim
 ```
 
 4. Format:
+
 ```bash
 stylua lua/plugins/extra/my<plugin>.lua
 ```
@@ -361,6 +380,7 @@ Config: `~/dotfiles/claude/mcp-proxy/mcphub.json`
 Neovim UI: `:MCPHub`
 
 14 MCP servers configured:
+
 - neovim (Neovim integration)
 - filesystem (File operations)
 - git (Git operations)
@@ -397,15 +417,15 @@ Installed via `scripts/install-tools.sh`:
 
 ## Quick Reference
 
-| Need | Where | Action |
-|------|-------|--------|
-| Add plugin override | `lua/plugins/extra/my*.lua` | Create new file or edit existing |
-| Add keymap | `config/mykeymaps.lua` | Edit or create `my` variant |
-| Add autocommand | `config/myautocmds.lua` | Edit or create |
-| Document pattern | `docs/memory/<plugin>.md` | Create or update |
-| Report issue | Create task in `tasks/open/` | File with clear steps |
-| Test changes | `NVIM_APPNAME=nvim3_jelly_tinynvim nvim` | Run and verify |
-| Format code | `stylua lua/` | Run before committing |
+| Need                | Where                                    | Action                           |
+| ------------------- | ---------------------------------------- | -------------------------------- |
+| Add plugin override | `lua/plugins/extra/my*.lua`              | Create new file or edit existing |
+| Add keymap          | `config/mykeymaps.lua`                   | Edit or create `my` variant      |
+| Add autocommand     | `config/myautocmds.lua`                  | Edit or create                   |
+| Document pattern    | `docs/memory/<plugin>.md`                | Create or update                 |
+| Report issue        | Create task in `tasks/open/`             | File with clear steps            |
+| Test changes        | `NVIM_APPNAME=nvim3_jelly_tinynvim nvim` | Run and verify                   |
+| Format code         | `stylua lua/`                            | Run before committing            |
 
 ## Key Contacts & Resources
 
@@ -416,5 +436,5 @@ Installed via `scripts/install-tools.sh`:
 
 ---
 
-**Last Updated**: 2026-02-05
+**Last Updated**: 2026-02-18
 **For questions or improvements**: Check `docs/memory/` first, then review task files in `tasks/`

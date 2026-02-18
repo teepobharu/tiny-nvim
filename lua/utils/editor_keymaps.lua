@@ -266,9 +266,10 @@ M.keymaps = {
   },
 
   -- Code Companion AI
+  -- Base keymaps + model selection keymaps from my_codecompanion_actions
   codecompanion = function()
     local companion_prefix = vim.g.ai_prefix_key or "<leader>A"
-    return {
+    local base_keymaps = {
       {
         companion_prefix .. "a",
         "<cmd>CodeCompanionAction<cr>",
@@ -317,6 +318,8 @@ M.keymaps = {
         mode = "v",
       },
     }
+    -- Merge model selection keymaps (inline picker, chat picker, adapter/model shortcuts)
+    return require("utils.my_codecompanion_actions").generate_codecompanion_keymaps(base_keymaps)
   end,
 
   -- Copilot Chat
@@ -515,21 +518,21 @@ M.keymaps = {
     {
       "<leader>fG",
       function()
-        require("utils.snacks_terminal").custom_git_pickers.git_diff_upstream()
+        require("utils.snacks_pickers").custom_git_pickers.git_diff_upstream()
       end,
       desc = "Git File Upstream",
     },
     {
       "<leader>fL",
       function()
-        require("utils.snacks_terminal").custom_git_pickers.git_last_commit_show()
+        require("utils.snacks_pickers").custom_git_pickers.git_last_commit_show()
       end,
       desc = "Last commit files",
     },
     {
       "<leader>fZ",
       function()
-        require("utils.snacks_terminal").custom_change_list_picker()
+        require("utils.snacks_pickers").custom_change_list_picker()
       end,
       desc = "Git files by custom ref",
     },
@@ -566,6 +569,26 @@ M.keymaps = {
         }
       end,
       desc = "Git open remote main",
+      mode = { "n", "x" },
+    },
+    {
+      "<leader>/",
+      function()
+        local search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection" or nil
+        local snacks_util = require "utils.snacks_terminal"
+        local picker_opts = snacks_util.get_initial_picker_state {
+          show_empty = true,
+          smartcase = false,
+          ignorecase = true,
+          hidden = true,
+          search = search,
+          live = not (search and search:match "%S" ~= nil), -- force in live mode only when search has non-whitespace content
+          -- args = { "--ignore-case" },
+        }
+
+        Snacks.picker.grep(picker_opts)
+      end,
+      desc = "Grep",
       mode = { "n", "x" },
     },
     {
@@ -1023,7 +1046,7 @@ M.snacks_action_factories = {
 
 -- Snacks picker actions (stateless functions)
 -- Delegates to utils/snacks_actions.lua
-M.snacks_actions = {
+M.snacks_common_actions = {
   copy_path_relative_buffer = function(picker, item)
     require("utils.snacks_actions").copy_path_relative_buffer(picker, item)
   end,
@@ -1041,6 +1064,54 @@ M.snacks_actions = {
   end,
   toggle_external = function(picker)
     require("utils.snacks_actions").toggle_external(picker)
+  end,
+  yank_sys = function(picker, item)
+    require("utils.snacks_actions").yank_sys(picker, item)
+  end,
+  -- https://deepwiki.com/search/trigger-yank-action-in-another_8bb3e790-7ce9-4165-b316-978a705364c3?mode=fast
+  -- use opts.field else item.data / item.text
+  -- yank_sys_og = { action = "yank", reg = "+" }, -- field = "<item field to use to copy>"
+  gitdiff_toggle_group = function(picker, item)
+    require("utils.snacks_actions").gitdiff_toggle_group(picker, item)
+  end,
+  toggle_case_sensitivity = function(picker, item)
+    require("utils.snacks_actions").toggle_case_sensitivity(picker, item)
+  end,
+  open_file_remote = function(picker, item)
+    require("utils.snacks_actions").open_file_remote(picker, item)
+  end,
+  open_mr = function(picker, item)
+    require("utils.snacks_actions").open_mr(picker, item)
+  end,
+  remove_qf_item = function(picker, item)
+    require("utils.snacks_actions").remove_qf_item(picker, item)
+  end,
+  test_picker = function(picker, item)
+    -- Debug action to inspect picker items
+    vim.notify("Item: " .. vim.inspect(item), vim.log.levels.INFO)
+    picker:close()
+  end,
+  toggle_diffpreview_alt = toggle_diffpreview_alt,
+  my_diff_compare = function(picker, item, action)
+    require("utils.snacks_actions_wip").my_diff_compare(picker, item, action)
+  end,
+  toggle_cwd_files_grep = function(picker, item)
+    require("utils.snacks_actions").toggle_cwd_files_grep(picker, item)
+  end,
+  select_subproject_cwd = function(picker, item)
+    require("utils.snacks_actions").select_subproject_cwd(picker, item)
+  end,
+  toggle_files_buffers = function(picker, item)
+    require("utils.snacks_actions").toggle_files_buffers(picker, item)
+  end,
+  increase_picker_depth = function(picker, item)
+    require("utils.snacks_actions").adjust_picker_depth(picker, item, 1)
+  end,
+  decrease_picker_depth = function(picker, item)
+    require("utils.snacks_actions").adjust_picker_depth(picker, item, -1)
+  end,
+  reset_picker_depth = function(picker, item)
+    require("utils.snacks_actions").adjust_picker_depth(picker, item, 0)
   end,
 }
 
@@ -1103,6 +1174,7 @@ local snacks_picker_group_keys = {
       {
         ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
         ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
+        ["<M-S>"] = { "select_subproject_cwd", mode = { "n", "i" }, desc = "Pick Subproject CWD" },
       }
     ),
   },
@@ -1116,6 +1188,7 @@ local snacks_picker_group_keys = {
       {
         ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove QF Item" },
         ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
+        ["<M-S>"] = { "select_subproject_cwd", mode = { "n", "i" }, desc = "Pick Subproject CWD" },
       }
     ),
   },
@@ -1129,6 +1202,8 @@ local snacks_picker_group_keys = {
       ["<C-O>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
       ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
       ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+      -- TODO: support git operations
+      -- ["<M-S>"] = { "select_subproject_cwd", mode = { "n", "i" }, desc = "Pick Subproject CWD" },
     },
     list = {
       ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
@@ -1379,6 +1454,22 @@ M.sources_n_keys = {
       },
     },
     -- Common win settings used in opts.win in myEditor.lua
+    undo = {
+      actions = {
+        undo_picker_split = require("utils.snacks_actions").undo_picker_split,
+      },
+      win = {
+        input = {
+          keys = {
+            ["<C-s>"] = {
+              "undo_picker_split",
+              mode = { "n", "i" },
+              desc = "Show diff in new tab",
+            },
+          },
+        },
+      },
+    },
   },
 
   -- ===================== common keymap sections ====================
@@ -1402,6 +1493,10 @@ M.sources_n_keys = {
     input = {
       keys = {
         ["<C-y>"] = { "yank", mode = { "n", "i" } },
+        -- all below works
+        ["<C-c>"] = { "yank_sys", mode = { "n", "i" }, desc = "Yank to system clipboard" },
+        -- ["<C-c>"] = { "yank_sys_og", mode = { "n", "i" }, desc = "Yank to system clipboard" },
+        -- ["<C-c>"] = { { "yank", "yank_sys" }, mode = { "n", "i" }, desc = "Yank to system clipboard" },
         ["<S-t>"] = { "trouble_open", mode = { "n" }, desc = "Smart open Touble" },
         ["<C-t>"] = { "terminal", mode = { "i" }, desc = "Open terminal from picker" },
         -- ["<C-p>"] = { "focus_preview", desc = "Focus Preview" },
@@ -1411,7 +1506,7 @@ M.sources_n_keys = {
         ["<c-a>"] = { "sidekick_send", mode = { "n", "i" } },
         ["<a-a>"] = { "select_all", mode = { "n", "i" } },
         ["<a-q>"] = { "qflist", mode = { "n", "i" } },
-        ["<c-q>"] = "cancel",
+        ["<C-q>"] = { "cancel", mode = { "n", "i" }, desc = "Cancel" },
         ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
         ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
       },
