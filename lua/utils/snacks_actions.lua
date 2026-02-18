@@ -2,6 +2,8 @@
 -- All reusable picker actions extracted from editor_keymaps.lua and snacks_terminal.lua
 -- This module contains action functions that can be used across different snacks pickers
 
+---@class snacks.picker.actions
+---@field [string] snacks.picker.Action.spec
 local M = {}
 
 local pathUtil = require "utils.mypath"
@@ -125,11 +127,27 @@ end
 --#region Path Copy Utilities
 
 -- Get the selected file path from picker item
+--- Extract file path and line/col info from picker item
+--- @param item table Picker item
+--- @return string|nil file_path
+--- @return number|nil line (1-based)
+--- @return number|nil col (1-based)
 local function get_item_path(item)
   if not item then
-    return nil
+    return nil, nil, nil
   end
-  return item._path or item.file or item.path
+
+  local file_path = item._path or item.file or item.path
+  local line = nil
+  local col = nil
+
+  -- Extract line/col from grep items
+  if item.pos and type(item.pos) == "table" then
+    line = item.pos[1] -- already 1-based
+    col = item.pos[2] + 1 -- convert from 0-based to 1-based
+  end
+
+  return file_path, line, col
 end
 
 -- Get relative path from source to target with ../ if outside
@@ -240,6 +258,80 @@ local function generate_path_formats(file_path)
   return deduplicated
 end
 
+-- Generate code-ref format variants from path formats + line/col
+-- @param path_formats table[] Array of path format objects from generate_path_formats()
+-- @param line number|nil Line number (1-based)
+-- @param col number|nil Column number (1-based)
+-- @return table[] Array of code-ref format objects
+local function generate_coderef_formats(path_formats, line, col)
+  if not line or not col then
+    return {}
+  end
+
+  local coderef_formats = {}
+  local hide_col = vim.g.code_ref_hide_col or false
+
+  -- For each path variant, generate all 5 code-ref format variants
+  for _, path_format in ipairs(path_formats) do
+    local path = path_format.path
+    if not path or path == "" then
+      goto continue
+    end
+
+    -- Skip directory variants (only process file paths)
+    if path_format.key:match "^dir_" then
+      goto continue
+    end
+
+    -- Determine label prefix based on path type
+    local path_type_label = path_format.label
+
+    -- Generate 5 code-ref format variants for this path
+    local ref_formats = {
+      {
+        format = "colon",
+        label = path_type_label .. " (colon)",
+        path = hide_col and string.format("%s:%d", path, line) or string.format("%s:%d:%d", path, line, col),
+      },
+      {
+        format = "space",
+        label = path_type_label .. " (space)",
+        path = hide_col and string.format("%s %d", path, line) or string.format("%s %d:%d", path, line, col),
+      },
+      {
+        format = "at",
+        label = path_type_label .. " (@)",
+        path = hide_col and string.format("@%s %d", path, line) or string.format("@%s %d:%d", path, line, col),
+      },
+      {
+        format = "at_caps",
+        label = path_type_label .. " (@caps)",
+        path = hide_col and string.format("@%s L%d", path, line) or string.format("@%s L%d:C%d", path, line, col),
+      },
+      {
+        format = "hash",
+        label = path_type_label .. " (#)",
+        path = hide_col and string.format("%s#L%d", path, line) or string.format("%s#L%dC%d", path, line, col),
+      },
+    }
+
+    for _, ref_format in ipairs(ref_formats) do
+      table.insert(coderef_formats, {
+        label = ref_format.label,
+        path = ref_format.path,
+        key = path_format.key .. "_" .. ref_format.format,
+        is_coderef = true,
+        line = line,
+        col = col,
+      })
+    end
+
+    ::continue::
+  end
+
+  return coderef_formats
+end
+
 -- Get file/directory statistics
 local function get_path_stats(path)
   if not path or path == "" then
@@ -308,7 +400,7 @@ end
 
 --- Picker action: Copy relative path to previous/active buffer
 function M.copy_path_relative_buffer(picker, item)
-  local file_path = get_item_path(item)
+  local file_path, _, _ = get_item_path(item)
   if not file_path then
     vim.notify("No file path found", vim.log.levels.WARN)
     return
@@ -326,7 +418,7 @@ end
 
 --- Picker action: Copy relative path to git root
 function M.copy_path_relative_git(picker, item)
-  local file_path = get_item_path(item)
+  local file_path, _, _ = get_item_path(item)
   if not file_path then
     vim.notify("No file path found", vim.log.levels.WARN)
     return
@@ -346,7 +438,7 @@ end
 
 --- Picker action: Copy relative path to current CWD
 function M.copy_path_relative_cwd(picker, item)
-  local file_path = get_item_path(item)
+  local file_path, _, _ = get_item_path(item)
   if not file_path then
     vim.notify("No file path found", vim.log.levels.WARN)
     return
@@ -360,7 +452,7 @@ end
 
 --- Picker action: Copy absolute path
 function M.copy_path_absolute(picker, item)
-  local file_path = get_item_path(item)
+  local file_path, _, _ = get_item_path(item)
   if not file_path then
     vim.notify("No file path found", vim.log.levels.WARN)
     return
@@ -397,24 +489,42 @@ end
 
 --- Picker action: Open Snacks picker to choose copy format with preview
 function M.copy_path_select(picker, item)
-  local file_path = get_item_path(item)
+  local file_path, line, col = get_item_path(item)
   if not file_path then
     vim.notify("No file path found", vim.log.levels.WARN)
     return
   end
 
-  local formats = generate_path_formats(file_path)
+  local path_formats = generate_path_formats(file_path)
+  local coderef_formats = generate_coderef_formats(path_formats, line, col)
 
+  -- Build picker items: path formats first, then code-ref formats
   local picker_items = {}
-  for _, format in ipairs(formats) do
+
+  -- Add path formats
+  for _, format in ipairs(path_formats) do
     if format.path and format.path ~= "" then
       table.insert(picker_items, {
         text = format.label,
         path = format.path,
         label = format.label,
         key = format.key,
+        is_coderef = false,
       })
     end
+  end
+
+  -- Add code-ref formats if available
+  for _, format in ipairs(coderef_formats) do
+    table.insert(picker_items, {
+      text = format.label,
+      path = format.path,
+      label = format.label,
+      key = format.key,
+      is_coderef = true,
+      line = format.line,
+      col = format.col,
+    })
   end
 
   if #picker_items == 0 then
@@ -424,9 +534,15 @@ function M.copy_path_select(picker, item)
 
   local parent_picker = picker
 
+  -- Title shows if code-refs are available
+  local title = "Select Path Format (C-y: copy, Enter: paste)"
+  if #coderef_formats > 0 then
+    title = title .. " [+" .. #coderef_formats .. " code-refs]"
+  end
+
   Snacks.picker.pick {
     source = "path_formats",
-    title = "Select Path Format (C-y: copy, Enter: paste)",
+    title = title,
     items = picker_items,
     format = function(picker_item)
       return {
@@ -503,16 +619,12 @@ function M.copy_path_select(picker, item)
     win = {
       input = {
         keys = {
-          ["<C-q>"] = {
-            "quit_all",
-            mode = { "n", "i" },
-            desc = "Exit Quit all",
-          },
-          ["<Esc>"] = {
-            "cancel",
-            mode = { "n", "i" },
-            desc = "Close picker",
-          },
+          -- follow default keymap esc quit all
+          -- ["<C-q>"] = {
+          --   "quit_all",
+          --   mode = { "n", "i" },
+          --   desc = "Exit Quit all",
+          -- },
           ["<C-p>"] = {
             "paste_to_buffer",
             mode = { "n", "i" },
@@ -528,6 +640,27 @@ function M.copy_path_select(picker, item)
             mode = { "n", "i" },
             desc = "Paste as markdown link",
           },
+          ["<A-c>"] = {
+            function()
+              -- Toggle column visibility for code-ref items
+              vim.g.code_ref_hide_col = not (vim.g.code_ref_hide_col or false)
+              local state = vim.g.code_ref_hide_col and "hidden" or "shown"
+              vim.notify("Column: " .. state, vim.log.levels.INFO)
+
+              -- Close and reopen with updated formats
+              local pickers = Snacks.picker.get { source = "path_formats" }
+              local cur_picker = pickers and pickers[1]
+              if cur_picker then
+                cur_picker:close()
+              end
+
+              vim.schedule(function()
+                M.copy_path_select(parent_picker, item)
+              end)
+            end,
+            mode = { "n", "i" },
+            desc = "Toggle column visibility",
+          },
         },
       },
     },
@@ -542,6 +675,194 @@ end
 --#endregion Path Copy Utilities
 
 --#region CWD Cycling Actions
+
+--- snacks.picker.actions: actions
+function M.yank_sys(picker, item)
+  local clipboardUtil = require "utils.myinput"
+  picker:action "yank"
+  clipboardUtil.copy_yank_to_system(true)
+end
+
+function M.select_subproject_cwd(picker)
+  local pathUtil = require "utils.mypath"
+  local path = require "utils.path"
+  local picker_util = require "snacks.picker.util"
+
+  local from_dir = pathUtil.get_previous_buffer_dir() or vim.fn.getcwd()
+  local git_root = path.get_root_directory() or Snacks.git.get_root()
+  local subprojects = pathUtil.get_sub_project_dir(from_dir, true, true) or {}
+
+  if type(subprojects) ~= "table" then
+    subprojects = { subprojects }
+  end
+
+  if #subprojects == 0 then
+    vim.notify("No subprojects found for current context", vim.log.levels.WARN)
+    return
+  end
+
+  local items = {}
+  local seen_dirs = {}
+
+  local function build_item_meta(info, dir)
+    local display_dir = dir and vim.fn.fnamemodify(dir, ":~") or ""
+    local rel_path = ""
+    if git_root and dir then
+      local rel = dir:gsub("^" .. vim.pesc(git_root) .. "/?", "")
+      rel_path = rel == "" and "." or rel
+    end
+
+    local sub_type = info and info.project_type or "subproj"
+    local is_git_root = info and info.is_git_root
+    local depth = info and info.depth_from_start or 0
+    local full_path = dir or ""
+    local trunc_full = full_path ~= "" and picker_util.truncpath(full_path, 50, { cwd = full_path }) or ""
+
+    return {
+      display_dir = display_dir,
+      rel_path = rel_path,
+      sub_type = is_git_root and "gitroot" or sub_type,
+      is_git_root = is_git_root,
+      depth = depth,
+      full_path = full_path,
+      trunc_full = trunc_full,
+    }
+  end
+
+  local function build_preview_header(info, dir)
+    local header = {}
+    if info and info.depth_from_start ~= nil then
+      table.insert(header, "depth:" .. tostring(info.depth_from_start))
+    end
+    if info and info.matched_file and info.matched_file ~= "" then
+      table.insert(header, "marker:" .. info.matched_file)
+    elseif info and info.project_type and info.project_type ~= "" then
+      table.insert(header, "type:" .. info.project_type)
+    end
+    if git_root and dir then
+      local rel = dir:gsub("^" .. vim.pesc(git_root) .. "/?", "")
+      rel = rel == "" and "." or rel
+      table.insert(header, "git:" .. rel)
+    end
+    return header
+  end
+
+  local function add_item(dir, label, info)
+    if not dir or dir == "" then
+      return
+    end
+    local key = vim.fn.fnamemodify(dir, ":p")
+    if seen_dirs[key] then
+      return
+    end
+    local meta = build_item_meta(info, dir)
+    seen_dirs[key] = true
+    table.insert(items, {
+      text = dir,
+      label = label,
+      dir = dir,
+      file = dir,
+      info = info,
+      meta = meta,
+    })
+  end
+
+  if git_root and vim.fn.isdirectory(git_root) == 1 then
+    local root_info = { dir = git_root, project_type = "gitroot", is_git_root = true }
+    add_item(git_root, "Git", root_info)
+  end
+
+  for _, sp_info in ipairs(subprojects) do
+    add_item(sp_info.dir, "Sub-Project", sp_info)
+  end
+
+  Snacks.picker.pick {
+    source = "subproject_cwd",
+    title = "Select Subproject CWD",
+    items = items,
+    format = function(item)
+      local meta = item.meta or {}
+      if meta.is_git_root then
+        local root_path = meta.display_dir ~= "" and meta.display_dir or (meta.full_path or "")
+        return {
+          { "Git ", "SnacksPickerLabel" },
+          { root_path, "SnacksPickerFile" },
+        }
+      end
+
+      return {
+        { meta.sub_type or "subproj", "SnacksPickerLabel" },
+        { " d:" .. tostring(meta.depth or 0), "Comment" },
+        { " ", "Comment" },
+        { meta.rel_path or "", "SnacksPickerFile" },
+        { " ", "Comment" },
+        { meta.trunc_full or "", "Comment" },
+      }
+    end,
+    preview = function(ctx)
+      local item = ctx.item
+      if not item then
+        return false
+      end
+
+      local ok = Snacks.picker.preview.file(ctx)
+      if ok == false then
+        return ok
+      end
+
+      local info = item.info or {}
+      local header = build_preview_header(info, item.dir)
+      if #header > 0 and ctx.buf and vim.api.nvim_buf_is_valid(ctx.buf) then
+        local lines = vim.api.nvim_buf_get_lines(ctx.buf, 0, -1, false)
+        local header_line = table.concat(header, " | ")
+        vim.api.nvim_buf_set_option(ctx.buf, "modifiable", true)
+        vim.api.nvim_buf_set_lines(ctx.buf, 0, 0, false, { header_line, "" })
+        -- vim.api.nvim_buf_set_lines(ctx.buf, 2, 2, false, lines)
+        vim.api.nvim_buf_set_option(ctx.buf, "modifiable", false)
+      end
+      return ok
+    end,
+    actions = {
+      apply_filter = function(subpicker, item)
+        vim.print("Applying CWD: " .. tostring(item.dir))
+        vim.g.picker_cwd_cycle_state = "subproject_picker"
+        vim.g.picker_cwd_cycle_state_value = item.dir
+        -- close seems to also close the parent picker as well
+        subpicker:action "cancel"
+        -- vim.print(vim.inspect {
+        --   picker_cwd_cycle_state = vim.g.picker_cwd_cycle_state,
+        --   picker_cwd_cycle_state_value = vim.g.picker_cwd_cycle_state_value,
+        -- })
+        local newOpts = require("utils.snacks_terminal").get_initial_picker_state {}
+        picker.opts = vim.tbl_deep_extend("force", picker.opts, newOpts)
+        -- vim.print(picker.opts.cwd)
+        picker:find()
+      end,
+    },
+    win = {
+      preview = {
+        width = 0.25,
+        min_width = 20,
+      },
+      input = {
+        footer = "<CR/C-s> apply, <C-q> to cancel",
+        keys = {
+          ["<CR>"] = {
+            "apply_filter",
+            mode = { "n", "i" },
+            desc = "Apply subproject CWD",
+          },
+          ["<C-s>"] = {
+            "apply_filter",
+            mode = { "n", "i" },
+            desc = "Apply subproject CWD",
+          },
+          -- default cancel with c-q
+        },
+      },
+    },
+  }
+end
 
 --- Toggle CWD scope for pickers (files/grep/etc)
 --- Cycles through: current dir -> git root -> sub-project dir -> previous buffer dir
@@ -1358,6 +1679,77 @@ function M.toggle_case_sensitivity(picker, item)
 end
 
 --#endregion Case Sensitivity Actions
+
+--#region Undo Pickers action
+M.undo_picker_split = function(picker, item)
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  if not item then
+    return
+  end
+  -- Create a new tab
+  -- picker:close()
+  vim.cmd.tabnew()
+
+  -- Get the current buffer (original file)
+  local orig_buf = item.buf
+  -- __AUTO_GENERATED_PRINT_VAR_START__
+  local orig_file = vim.api.nvim_buf_get_name(orig_buf)
+
+  -- Load the original file in the new tab (left window) - keep editable
+  vim.cmd("edit " .. orig_file)
+  local left_win = vim.api.nvim_get_current_win()
+  local left_buf = vim.api.nvim_get_current_buf()
+
+  -- Create a temporary buffer for the full undo state (right window)
+  vim.cmd "vsplit"
+  local right_win = vim.api.nvim_get_current_win()
+  local right_buf = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_win_set_buf(right_win, right_buf)
+
+  -- Get the full undo state content
+  -- We need to replay the undo in a temporary buffer to get full content
+  local tmp_file = vim.fn.stdpath "cache" .. "/snacks-undo-diff"
+  local tmp_undo = tmp_file .. ".undo"
+  local tmpbuf = vim.fn.bufadd(tmp_file)
+  vim.bo[tmpbuf].swapfile = false
+  vim.fn.writefile(vim.api.nvim_buf_get_lines(orig_buf, 0, -1, false), tmp_file)
+  vim.fn.bufload(tmpbuf)
+
+  -- Save and load undo history
+  vim.api.nvim_buf_call(orig_buf, function()
+    vim.cmd("silent wundo! " .. tmp_undo)
+  end)
+  vim.api.nvim_buf_call(tmpbuf, function()
+    pcall(vim.cmd, "silent rundo " .. tmp_undo)
+    -- Apply the specific undo
+    vim.cmd("noautocmd silent undo " .. item.seq)
+    -- Get the full content after undo
+    local undo_content = vim.api.nvim_buf_get_lines(tmpbuf, 0, -1, false)
+    -- Set the undo content in the right buffer
+    vim.api.nvim_buf_set_lines(right_buf, 0, -1, false, undo_content)
+  end)
+
+  -- Clean up temporary buffer
+  vim.api.nvim_buf_delete(tmpbuf, { force = true })
+  vim.fn.delete(tmp_file)
+  vim.fn.delete(tmp_undo)
+
+  -- Make right buffer read-only (left stays editable)
+  vim.bo[right_buf].readonly = true
+  vim.bo[right_buf].modifiable = false
+
+  -- Set up diff mode
+  vim.cmd "diffthis"
+  vim.api.nvim_set_current_win(left_win)
+  vim.cmd "diffthis"
+
+  -- Set buffer names
+  vim.bo[right_buf].filetype = vim.bo[left_buf].filetype
+  local undo_filename = "undo_" .. item.seq .. "//" .. orig_file
+  vim.api.nvim_buf_set_name(right_buf, undo_filename)
+  -- vim.api.nvim_buf_set_name(right_buf, "undo_" .. item.seq .. " (readonly)")
+end
+--#endregion
 
 --#region Exported Action Tables
 

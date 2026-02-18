@@ -10,6 +10,14 @@ local common_agent_env = {
   GITLAB_TOKEN = vim.env.GITLAB_TOKEN,
   GEMINI_API_KEY = vim.env.GEMINI_API_KEY,
 }
+
+local EMPTY_PROMPT_CCOMP = {
+  {
+    role = "user",
+    content = "",
+  },
+}
+
 return {
   {
     -- https://deepwiki.com/search/explain-if-luarcjson-file-can_a16e3ee5-0d51-46cf-9c7d-6b6a96e5ad8c?mode=fast
@@ -255,10 +263,24 @@ return {
       --
       -- [WARN] above not help disable textmsg: CodeCompanion.nvim will experience breaking changes soon. Pin to version v17.33.0 or earlier to avoid this.
       -- https://codecompanion.olimorris.dev/configuration/chat-buffer
+      -- require("codecompanion").setup({
+      --       interactions = {
+      --         chat = {
+      --           adapter = "anthropic",
+      --           model = "claude-sonnet-4-20250514"
+      --         },
+      --       },
+      --       opts = {
+      --         log_level = "DEBUG",
+      --       },
+      --- @type CodeCompanion.Interactions_NOTWORK
+      --     }
       interactions = {
         chat = {
-          -- You can specify an adapter by name and model (both ACP and HTTP)
           adapter = {
+            -- model default here not working ?
+            -- name = "copilot",
+            -- model = "gpt-5-mini",
             name = "copilot",
             model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
           },
@@ -357,20 +379,45 @@ return {
       prompt_library = {
         -- https://deepwiki.com/search/check-the-settting-from-prompt_65b9cc4c-5ada-41a8-8b0d-49142cfdef65?mode=deep
         -- will work only when open new chat with the action cmd else not change model while there is prompt
-        ["Model GPT mini 5 - G5"] = {
+        ["AGD gpt 5.2"] = {
+          interaction = "chat",
+          description = "Use AGD Claude Sonnet 4-5 for better context understanding",
+          opts = {
+            adapter = {
+              name = "openai_agd",
+              model = "gpt-5.2",
+              -- model = "claude-sonnet-4-5", `temperature` and `top_p` cannot both be specified for this model.
+              -- model = "gpt-5.2",
+            },
+            is_slash_cmd = true,
+            alias = "agd_claude_sonnet_4_5", -- ✅ Fixed: short_name → alias
+          },
+          prompts = EMPTY_PROMPT_CCOMP,
+        },
+        ["Grok codefast 1"] = {
+          interaction = "chat",
+          description = "Use Grok Fast for quick responses",
+          opts = {
+            adapter = {
+              name = "copilot",
+              model = "grok-code-fast-1",
+            },
+            is_slash_cmd = true,
+          },
+          prompts = EMPTY_PROMPT_CCOMP,
+        },
+        ["Model GPT 5mini - G5"] = {
           interaction = "chat", -- ✅ Fixed: strategy → interaction
           opts = {
-            adapter = "copilot", -- ✅ Fixed: simplified to string (model override via command params)
+            adapter = {
+              name = "copilot",
+              model = "gpt-5-mini",
+            },
             is_slash_cmd = true,
             alias = "gpt5mini_g5m_gfree", -- ✅ Fixed: short_name → alias
             stop_context_insertion = true,
           },
-          prompts = {
-            {
-              role = "user",
-              content = "",
-            },
-          },
+          prompts = EMPTY_PROMPT_CCOMP,
         },
         ["Codecompanion Context"] = {
           interaction = "chat", -- ✅ Fixed: strategy → interaction

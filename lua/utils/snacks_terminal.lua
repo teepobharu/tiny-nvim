@@ -188,30 +188,12 @@ end
 
 --#endregion Public API
 
---#region Delegate Functions (backward compatibility)
+--#region Delegate Functions (highly discourage when direct usage can be used)
 -- These delegate to the new modules for backward compatibility
 
 --- Tmux window picker (delegates to snacks_pickers)
 function M.pick_tmux_window()
   require("utils.snacks_pickers").pick_tmux_window()
-end
-
---- Git last commit files picker (delegates to snacks_pickers)
-M.custom_git_pickers = {
-   git_last_commit_show = function()
-     require("utils.snacks_pickers").custom_git_pickers.git_last_commit_show()
-   end,
-   git_diff_upstream = function()
-     require("utils.snacks_pickers").custom_git_pickers.git_diff_upstream()
-   end,
-   git_diff_merge_base = function()
-     require("utils.snacks_pickers").custom_git_pickers.git_diff_merge_base()
-   end,
-}
-
---- Custom change list picker (delegates to snacks_pickers)
-function M.custom_change_list_picker()
-  require("utils.snacks_pickers").custom_change_list_picker()
 end
 
 --- Terminal picker (delegates to snacks_pickers)
@@ -223,38 +205,6 @@ end
 function M.get_initial_picker_state(pickerOpts, opts)
   return require("utils.snacks_pickers").get_initial_picker_state(pickerOpts, opts)
 end
-
---- Toggle CWD for files/grep pickers (delegates to snacks_actions)
-function M.toggle_cwd_files_grep(picker, item)
-  require("utils.snacks_actions").toggle_cwd_files_grep(picker, item)
-end
-
---- Adjust picker depth (delegates to snacks_actions)
-function M.adjust_picker_depth(picker, item, direction, max_depth_limit)
-  require("utils.snacks_actions").adjust_picker_depth(picker, item, direction, max_depth_limit)
-end
-
---- Path copy actions (delegates to snacks_actions)
-function M.copy_path_relative_buffer(picker, item)
-  require("utils.snacks_actions").copy_path_relative_buffer(picker, item)
-end
-
-function M.copy_path_relative_git(picker, item)
-  require("utils.snacks_actions").copy_path_relative_git(picker, item)
-end
-
-function M.copy_path_relative_cwd(picker, item)
-  require("utils.snacks_actions").copy_path_relative_cwd(picker, item)
-end
-
-function M.copy_path_absolute(picker, item)
-  require("utils.snacks_actions").copy_path_absolute(picker, item)
-end
-
-function M.copy_path_select(picker, item)
-  require("utils.snacks_actions").copy_path_select(picker, item)
-end
-
---#endregion Delegate Functions
+--#endregion
 
 return M

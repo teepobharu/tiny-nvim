@@ -207,7 +207,7 @@ function M.current(opts)
   return ref
 end
 
---- Build current ref options for pickers
+--- Build current ref options for pickers with unified path variants
 ---@param show_char_range? boolean whether to show char positions in ranges
 ---@param use_visual? boolean whether to include visual range
 ---@return table|nil
@@ -221,28 +221,61 @@ function M.current_options(show_char_range, use_visual)
   col = col + 1
   local range = get_visual_range(use_visual or false)
 
+  -- Get path variants (uses same logic as snacks_actions)
+  local bufpath = vim.api.nvim_buf_get_name(0)
+  local git_root = pathUtil.get_git_root()
+  local cwd = vim.fn.getcwd()
+  
+  local path_variants = {}
+  
+  -- Relative to git root
+  if git_root and git_root ~= "" and bufpath:sub(1, #git_root) == git_root then
+    table.insert(path_variants, {
+      label = "Git",
+      path = bufpath:sub(#git_root + 2),
+      key = "git",
+    })
+  end
+  
+  -- Relative to CWD
+  local rel_cwd = vim.fn.fnamemodify(bufpath, ":.")
+  if rel_cwd ~= bufpath then -- Only add if different from absolute
+    table.insert(path_variants, {
+      label = "Relative CWD",
+      path = rel_cwd,
+      key = "cwd",
+    })
+  end
+  
+  -- Absolute
+  table.insert(path_variants, {
+    label = "Absolute",
+    path = parts.abs,
+    key = "absolute",
+  })
+
   local formats = {
-    { key = "colon", label = "path:line:col" },
-    { key = "space", label = "path line:col" },
-    { key = "at", label = "@path line:col" },
-    { key = "at_caps", label = "@path Lline:Ccol" },
-    { key = "hash", label = "path#LlineCcol" },
+    { key = "colon", label = "colon" },
+    { key = "space", label = "space" },
+    { key = "at", label = "@" },
+    { key = "at_caps", label = "@caps" },
+    { key = "hash", label = "#" },
   }
 
   local items = {}
-  for _, fmt in ipairs(formats) do
-    table.insert(items, {
-      format = fmt.key,
-      absolute = false,
-      label = "rel " .. fmt.label,
-      text = format_ref(parts.rel, line, col, fmt.key, range, show_char_range),
-    })
-    table.insert(items, {
-      format = fmt.key,
-      absolute = true,
-      label = "abs " .. fmt.label,
-      text = format_ref(parts.abs, line, col, fmt.key, range, show_char_range),
-    })
+  
+  -- Generate code-ref for each path variant × format combination
+  for _, path_variant in ipairs(path_variants) do
+    for _, fmt in ipairs(formats) do
+      local ref_text = format_ref(path_variant.path, line, col, fmt.key, range, show_char_range)
+      table.insert(items, {
+        format = fmt.key,
+        path_type = path_variant.key,
+        label = path_variant.label .. " (" .. fmt.label .. ")",
+        text = ref_text,
+        path = ref_text,
+      })
+    end
   end
 
   return items

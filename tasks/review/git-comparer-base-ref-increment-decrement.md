@@ -26,6 +26,10 @@ Enable increment/decrement navigation of the base reference in git comparer pick
   - [ ] when c-k it should start from the current ref base (not from head) fix this behavior better to make it scalable by accepting base and current ref (left/right ref) so it can be reused and trigger opt update each picker can use new value to reflect on the new ref
 
 - [ ] Test new `git_diff_merge_base()` picker with increment/decrement
+- [ ] Test fallback to HEAD when merge-base equals HEAD (no commits ahead)
+- [ ] Test workdir diff toggle (`<C-w>`) when comparing with HEAD
+- [ ] Verify staged-only mode works (fallback without workdir toggle)
+- [ ] Verify workdir mode shows all changes (staged + unstaged)
 
 Enhancement
 
@@ -33,9 +37,14 @@ Enhancement
   - [ ] then some key to toggle the variant
 - [ ] Dont limit the ref on to base or HEAD just alert that it go beyond head+/-1 and allow to
 - [x] merge-base - done show commit range count + ref +warn
+  - [x] Fallback to HEAD when merge-base equals HEAD
+  - [x] Workdir diff toggle for HEAD comparisons
+  - [ ] move keymap from mykeymap to editor_keymaps.lua
 - [ ] custom ref - not yet
 - [ ] last commit - work but not show commit range count + ref + warn when reach merge-refs / head
-- [ ] Remap the key to switch they c-j/k to have the correct mnemonic for left (specific commit) and right (HEAD)
+- [ ] MAPPING
+  - [ ] Remap the key to switch they c-j/k to have the correct mnemonic for left (specific commit) and move base commit closer to (HEAD)
+- [ ] Unify all mapping on custom git to follow this approach
 - [ ] better score matcher searchable in git status M/D/A
 - [ ] slight lag when change base fast / scroll list fast is debounce available ?
 
@@ -58,8 +67,20 @@ Enhancement
 
 - `<C-j>`: Move closer to merge-base (earlier in history)
 - `<C-k>`: Move further from merge-base (later in history)
+- `<C-w>`: Toggle workdir diff (only when comparing with HEAD)
 - Updates file list and counts dynamically
 - Prevents going before merge-base commit
+
+**Fallback Behavior**:
+
+When merge-base equals HEAD (no commits ahead of origin):
+
+- Automatically falls back to comparing with the merge-base ref (which equals HEAD)
+- Shows "HEAD (staged)" or "HEAD (workdir)" in title
+- **Staged mode** (default): `git diff --cached base_ref` - Shows only staged changes from base_ref
+- **Workdir mode** (toggled): `git diff base_ref` - Shows all changes from base_ref (staged + unstaged)
+- Use `<C-w>` to toggle between staged and workdir modes
+- **Base ref is always included** - Never omitted even when at HEAD
 
 **Features**:
 
@@ -69,12 +90,17 @@ Enhancement
 - [x] Commit count display in notifications
 - [x] Changed file count tracking
 - [x] Bounds checking (can't go before merge-base)
+- [x] Automatic fallback to HEAD when merge-base equals HEAD
+- [x] Workdir diff toggle for HEAD comparisons
+- [x] Staged-only mode (default when at HEAD)
+- [x] Workdir mode shows all changes (staged + unstaged)
 
 **Keymaps available**:
 
 - `<leader>fu`: Open merge-base picker
 - Custom actions in picker: open_file_diff, open_remote_at_ref
 - Navigation: `<C-j>` forward, `<C-k>` backward
+- Workdir toggle: `<C-w>` (HEAD only)
 
 **Files modified**:
 

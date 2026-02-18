@@ -518,6 +518,9 @@ function my_vscode_keymaps(vscode)
     -- blame
     vscode.action("gitlens.toggleFileBlame")
   end)
+  vim.keymap.set("n", "<leader>gL", function()
+    vscode.action "gitlens.showLineHistoryView"
+  end)
   vim.keymap.set({ "n", "v" }, "<leader>ghs", function()
     vscode.action("git.stageSelectedRanges")
   end)

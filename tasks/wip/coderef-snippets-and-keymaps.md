@@ -11,7 +11,7 @@
 Latest changes (Session 2):
 
 - [ ] Check number line revert, copy not work picker
-- [ ] char toggle toggle changes reflect in line range select correctly on all format except the hash # variant, it does not toggle the single mode 
+- [ ] char toggle toggle changes reflect in line range select correctly on all format except the hash # variant, it does not toggle the single mode
 - [ ] some faulty range identification
 - [ ] TO ADD : relative from cwd , subprojand relative from git
 
@@ -145,7 +145,12 @@ Latest changes (Session 3 - backward range fix):
 **Picker:**
 
 ```
-<localleader>crp - picker (all variants) ✨ visual mode support
+<localleader>crp - Unified picker with path variants × formats
+                   Shows: Git, Relative CWD, Absolute × 5 formats each
+                   Total: ~15 items (3 path types × 5 formats)
+                   Preview: hidden by default
+                   Same item structure as <M-y> in grep/files pickers
+                   ✨ visual mode support
 ```
 
 **Toggle keymaps (normal mode only):**
@@ -303,3 +308,209 @@ Latest changes (Session 3 - backward range fix):
 - `crb`, `crB` = at format: `@path line:col` (moved from old 'a'/'A')
 - `crh`, `crH` = hash format: `path#LlineCcol`
 - Lowercase suffix = relative paths, Uppercase = absolute paths
+
+---
+
+## Files/Grep Picker Integration (`<M-y>` / `YY`)
+
+### Overview
+
+The `<M-y>` and `YY` keymaps in files/grep/buffers pickers now show **both path formats AND code-ref variants** when line/col information is available (grep results).
+
+### Implementation
+
+**Modified Files:**
+
+- [`lua/utils/snacks_actions.lua 128-656`]
+  - `get_item_path()` - now returns `(path, line, col)`
+  - `generate_coderef_formats()` - generates 5 code-ref variants per path format
+  - `copy_path_select()` - merges path + code-ref formats
+
+### Behavior
+
+#### Files Picker (`<leader>ff`)
+
+- Press `<M-y>` or `YY` on a file
+- Shows: ~4-8 path format variants (Relative, Git, CWD, Absolute, Dir variants)
+- **No code-ref variants** (no line/col info)
+
+#### Grep Picker (`<leader>/`)
+
+- Search for a term (e.g., "function")
+- Press `<M-y>` or `YY` on a search result
+- Shows:
+  - **Path formats:** Relative, Git, CWD, Absolute (same as files)
+  - **Code-ref formats:** 5 variants per path × multiple paths = ~20-40 options
+
+    ```
+    Relative (colon): lua/utils/code_ref.lua:128:3
+    Relative (space): lua/utils/code_ref.lua 128:3
+    Relative (@):     @lua/utils/code_ref.lua 128:3
+    Relative (@caps): @lua/utils/code_ref.lua L128:C3
+    Relative (#):     lua/utils/code_ref.lua#L128C3
+
+    Git (colon):      utils/code_ref.lua:128:3
+    Git (@caps):      @utils/code_ref.lua L128:C3
+    ... (etc.)
+    ```
+- Line/col extracted from grep result `item.pos`: `{line, col}` (line 1-based, col 0-based → converted to 1-based)
+
+#### Buffers Picker (`<leader>,`)
+
+- Press `<M-y>` or `YY` on a buffer
+- Shows: ~4-8 path format variants
+- **No code-ref variants** (no line/col info)
+
+### Picker Actions
+
+| Keymap  | Action                   | Notes                                               |
+| ------- | ------------------------ | --------------------------------------------------- |
+| `<CR>`  | Paste path at cursor     | Closes picker                                       |
+| `<C-y>` | Copy to clipboard        | Stays open for multiple copies                      |
+| `<C-p>` | Paste path at cursor     | Same as `<CR>`                                      |
+| `<C-n>` | Paste as markdown link   | Closes picker                                       |
+| `<A-c>` | Toggle column visibility | Toggles `vim.g.code_ref_hide_col`, refreshes picker |
+| `<Esc>` | Close picker             | Does not close parent picker                        |
+| `<C-q>` | Close all pickers        | Closes both sub-picker and parent                   |
+
+---
+
+## Session 3: Unified Picker Implementation
+
+### Changes Made
+
+**Date:** 2026-02-12
+
+#### Unified Format Generation
+
+Modified [`lua/utils/code_ref.lua:210-259`] - `M.current_options()` function:
+
+**Before:** Generated only 2 path variants (relative, absolute) × 5 formats = 10 items
+
+**After:** Generates 3 path variants (Git, Relative CWD, Absolute) × 5 formats = ~15 items
+
+**Benefits:**
+
+- Same item structure as `<M-y>` picker in grep/files
+- Shows Git-relative paths first (most useful in git repos)
+- Consistent label format: "Git (colon)", "Relative CWD (@caps)", etc.
+- Preview hidden by default (faster UX)
+
+#### Path Variant Logic
+
+1. **Git relative** - Path relative to git root (if in git repo)
+   - Example: `lua/utils/code_ref.lua:128:3`
+2. **Relative CWD** - Path relative to current working directory
+   - Example: `../utils/code_ref.lua:128:3` (if CWD is different)
+3. **Absolute** - Full absolute path
+   - Example: `/Users/.../dotfiles/.config/nvim3_jelly_tinynvim/lua/utils/code_ref.lua:128:3`
+
+#### Preview Hidden by Default
+
+Changed [`lua/utils/snacks_pickers.lua:1935-1937`]:
+
+```lua
+layout = {
+  preview = false, -- Hide preview by default
+},
+```
+
+**Rationale:** Code-ref picker is a quick-select tool, preview adds unnecessary overhead.
+
+#### Item Structure Alignment
+
+Both `<localleader>crp` and `<M-y>` now use consistent item structure:
+
+```lua
+{
+  label = "Git (colon)",           -- Path type + format
+  text = "path:128:3",             -- Formatted reference (for crp)
+  path = "path:128:3",             -- Same (for M-y compatibility)
+  format = "colon",                -- Format key
+  path_type = "git",               -- Path variant key
+}
+```
+
+### Testing
+
+**Test `<localleader>crp`:**
+
+1. Open any file in a git repo
+2. Press `<localleader>crp`
+3. **Verify:** Shows ~15 items (3 path types × 5 formats)
+4. **Verify:** First items are "Git (colon)", "Git (space)", etc.
+5. **Verify:** No preview panel (faster)
+6. **Verify:** `<A-c>` toggle still works
+
+**Test `<M-y>` consistency:**
+
+1. Open grep picker: `<leader>/`
+2. Search for "function"
+3. Press `<M-y>` on a result
+4. **Verify:** Path variants match `crp` (Git, Relative CWD, Absolute)
+5. **Verify:** Format labels match `crp` style
+
+---
+
+### Column Toggle (`<A-c>`)
+
+Toggles `vim.g.code_ref_hide_col` global variable:
+
+**Before (column shown):**
+
+```
+lua/utils/code_ref.lua:128:3
+@lua/utils/code_ref.lua L128:C3
+lua/utils/code_ref.lua#L128C3
+```
+
+**After (column hidden):**
+
+```
+lua/utils/code_ref.lua:128
+@lua/utils/code_ref.lua L128
+lua/utils/code_ref.lua#L128
+```
+
+Affects all code-ref formats globally (persists across picker invocations).
+
+### Technical Details
+
+**Line/Col Parsing (Grep Items):**
+
+```lua
+-- Grep item structure:
+item.pos = {line, col}      -- line: 1-based, col: 0-based
+item.end_pos = {end_line, end_col}
+
+-- Extraction:
+line = item.pos[1]          -- 1-based (no conversion)
+col = item.pos[2] + 1       -- 0-based → 1-based
+```
+
+**Format Generation:**
+
+- Each path variant (Relative, Git, CWD, Absolute) → 5 code-ref formats
+- Total code-ref items = `path_variants × 5`
+- Example: 4 path variants → 20 code-ref items
+
+**Preview:**
+
+- Shows file stats (type, size, line count, modified date)
+- Shows current format label and path
+- Displays available actions
+
+### Testing
+
+See [`tests/spec_coderef_picker_extension.md`] for comprehensive test scenarios.
+
+**Quick Test:**
+
+1. Open grep picker: `<leader>/`
+2. Search for "function"
+3. Press `<M-y>` on a result
+4. Verify code-ref formats show line:col info
+5. Press `<A-c>` to toggle column visibility
+6. Copy/paste a code-ref variant
+
+---
