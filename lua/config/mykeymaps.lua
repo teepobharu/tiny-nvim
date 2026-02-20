@@ -829,7 +829,11 @@ keymap("n", "<localleader>q", ":q<CR>", { desc = "Close", noremap = true, silent
 keymap("n", "<localleader>cd", ":lcd%:p:h <CR>", { desc = "CD to current dir" })
 keymap("n", "<localleader>cn", ':let @+=expand("%:t")<CR>', { desc = "Copy basefilename into reg" })
 -- copy relative filepath name
-keymap("n", "<localleader>cf", ":let @+=@%<CR>", { desc = "Copy relative filepath name" })
+keymap("n", "<localleader>cf", function()
+  local bufname = vim.api.nvim_buf_get_name(0)
+  local rel_path = vim.fn.fnamemodify(bufname, ":.")
+  vim.fn.setreg("+", rel_path)
+end, { desc = "Copy relative filepath name" })
 -- copy absolute filepath - use neotree (no relative file)
 keymap("n", "<localleader>cF", ':let @+=expand("%:p")<CR>', { desc = "Copy absolute filepath" })
 -- lsp / files
