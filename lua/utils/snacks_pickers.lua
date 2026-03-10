@@ -1863,7 +1863,7 @@ function M.get_initial_picker_state(pickerOpts, opts)
   local cwd_defaultmap = {
     git = path.get_root_directory() or Snacks.git.get_root(),
     current = vim.fn.getcwd(),
-    subproject = pathUtil.get_sub_project_dir(),
+    subproject = pathUtil.get_sub_project_dirs_from_root(nil, nil, false, false, "nearest"),
   }
 
   local cwd = nil
@@ -2133,6 +2133,19 @@ function M.dotfiles_picker()
       picker:close()
       vim.cmd("edit " .. vim.fn.fnameescape(item.file))
     end,
+    actions = {
+      switch_to_grep = function(picker, item)
+        picker:close()
+        Snacks.picker.grep { cwd = base_dir, hidden = true }
+      end,
+    },
+    win = {
+      input = {
+        keys = {
+          ["<C-space>"] = { "switch_to_grep", mode = { "n", "i" }, desc = "Switch to Grep Mode" },
+        },
+      },
+    },
   }
 end
 
@@ -2140,5 +2153,130 @@ end
 
 -- Export pick_cmd_result for use in other modules
 M.pick_cmd_result = pick_cmd_result
+
+--#region LuaSnip Snippets Picker
+
+-- LuaSnip snippets picker source configuration
+-- Shows all available snippets (global + filetype-specific) with preview
+-- Press <M-g> to toggle between all snippets and filetype-only snippets
+M.snippets_source_config = {
+  supports_live = false,
+  preview = "preview",
+  title = "Snippets",
+  toggles = {
+    show_filetype_only = { icon = "F", value = true },
+  },
+  format = function(item, picker)
+    local name = Snacks.picker.util.align(item.name, picker.align_1 + 5)
+    local result = {
+      { name, item.ft == "" and "Conceal" or "DiagnosticWarn" },
+    }
+    -- Show [filetype] badge in red when filetype is set
+    if item.ft ~= "" then
+      result[#result + 1] = { " [" .. item.ft .. "]", "DiagnosticError" }
+    end
+    -- Add description
+    if item.description ~= "" then
+      result[#result + 1] = { " " .. item.description }
+    end
+    return result
+  end,
+  finder = function(_, ctx)
+    local show_filetype_only = ctx.picker.opts.show_filetype_only or false
+    local snippets = {}
+
+    -- Capture source buffer's filetype from picker.main (original window)
+    -- This prevents reading from the picker input buffer's filetype
+    local source_buf = vim.api.nvim_win_get_buf(ctx.picker.main)
+    local source_ft = vim.bo[source_buf].filetype
+
+    if show_filetype_only then
+      -- Only get filetype-specific snippets from source buffer
+      if source_ft ~= "" then
+        for _, snip in ipairs(require("luasnip").get_snippets(source_ft)) do
+          snip.ft = source_ft
+          table.insert(snippets, snip)
+        end
+      end
+    else
+      -- Get all snippets (global + filetype-specific)
+      for _, snip in ipairs(require("luasnip").get_snippets().all) do
+        snip.ft = ""
+        table.insert(snippets, snip)
+      end
+      if source_ft ~= "" then
+        for _, snip in ipairs(require("luasnip").get_snippets(source_ft)) do
+          snip.ft = source_ft
+          table.insert(snippets, snip)
+        end
+      end
+    end
+
+    -- Calculate alignment width
+    local align_1 = 0
+    for _, snip in pairs(snippets) do
+      align_1 = math.max(align_1, #snip.name)
+    end
+    ctx.picker.align_1 = align_1
+
+    -- Build picker items
+    local items = {}
+    for _, snip in pairs(snippets) do
+      local docstring = snip:get_docstring()
+      if type(docstring) == "table" then
+        docstring = table.concat(docstring)
+      end
+      local name = snip.name
+      local description = table.concat(snip.description)
+      description = name == description and "" or description
+      table.insert(items, {
+        text = name .. " " .. description, -- search string
+        name = name,
+        description = description,
+        trigger = snip.trigger,
+        ft = snip.ft,
+        preview = {
+          ft = snip.ft,
+          text = docstring,
+        },
+      })
+    end
+    return items
+  end,
+  confirm = function(picker, item)
+    picker:close()
+    local expand = {}
+    require("luasnip").available(function(snippet)
+      if snippet.trigger == item.trigger then
+        table.insert(expand, snippet)
+      end
+      return snippet
+    end)
+    if #expand > 0 then
+      vim.cmd ":startinsert!"
+      vim.defer_fn(function()
+        require("luasnip").snip_expand(expand[1])
+      end, 50)
+    else
+      Snacks.notify.warn "No snippet to expand"
+    end
+  end,
+  actions = {
+    toggle_filetype_filter = function(picker)
+      picker.opts.show_filetype_only = not picker.opts.show_filetype_only
+      picker.list:set_target()
+      picker:find()
+    end,
+  },
+  win = {
+    input = {
+      keys = {
+        ["<M-g>"] = { "toggle_filetype_filter", mode = { "n", "i" }, desc = "Toggle all/filetype filter" },
+      },
+    },
+  },
+}
+
+--#endregion LuaSnip Snippets Picker
 
 return M

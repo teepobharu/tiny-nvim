@@ -25,6 +25,7 @@ M.models = {
   claude = {
     CLAUDE_3_5_HAIKU = "claude-3-5-haiku",
     CLAUDE_3_7_SONNET = "claude-3-7-sonnet",
+    CLAUDE_SONNET_4 = "claude-sonnet-4",
     CLAUDE_HAIKU_4_5 = "claude-haiku-4-5",
     CLAUDE_SONNET_4_5 = "claude-sonnet-4-5",
     CLAUDE_OPUS_4_5 = "claude-opus-4-5",
@@ -79,8 +80,12 @@ M.filters = {
   -- Blacklist patterns (Lua pattern matching) - models to exclude completely
   blacklist = {
     "agoda", -- Contains "agoda"
-    "^claude%-", -- Starts with "claude-" (for AGD proxy that doesn't support Claude)
+    -- "^claude%-", -- Starts with "claude-" (for AGD proxy that doesn't support Claude)
     "^ft%-", -- Fine-tuned models
+  },
+  -- TODO: add opts to model
+  withNoTemp = {
+    "^claude%-",
   },
 
   -- Keyword filters - exclude models containing these substrings
@@ -107,8 +112,7 @@ M.filters = {
 -- Static Model Lists (fallback/priority)
 -- ============================================================================
 
-M.static_models = {
-  -- Fast models (for quick operations)
+M.static_models = { -- Fast models (for quick operations)
   fast = {
     M.models.gpt.GPT_4_1_MINI,
     M.models.gpt.GPT_5_MINI,
@@ -117,6 +121,7 @@ M.static_models = {
   -- Heavy models (for complex operations)
   heavy = {
     M.models.claude.CLAUDE_SONNET_4_5,
+    M.models.claude.CLAUDE_SONNET_4,
     M.models.claude.CLAUDE_OPUS_4_5,
   },
 
@@ -134,6 +139,9 @@ M.static_models = {
     M.models.gpt.GPT_4O,
     M.models.gpt.GPT_4O_MINI,
     M.models.gpt.GPT_3_5_TURBO,
+    M.models.claude.CLAUDE_SONNET_4,
+    M.models.claude.CLAUDE_SONNET_4_5,
+    M.models.claude.CLAUDE_HAIKU_4_5,
   },
 }
 
@@ -237,6 +245,7 @@ function M.filter_models(models, opts)
   return filtered
 end
 
-M.DEFAULT_COPILOT_MODEL = M.models.others.GROK_FAST_1
+-- M.DEFAULT_COPILOT_MODEL = M.models.others.GROK_FAST_1 -- x0.33
+M.DEFAULT_COPILOT_MODEL = M.models.gpt.GPT_5_MINI
 
 return M

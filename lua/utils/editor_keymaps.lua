@@ -325,9 +325,9 @@ M.keymaps = {
   -- Copilot Chat
   copilot_chat = {
     {
-      "<localleader>aE",
-      "<cmd>CopilotChatBuffEdit<cr>",
-      desc = "~ Copilot Chat Buf Edit ",
+      "<localleader>am",
+      "<cmd>CopilotChatModels<cr>",
+      desc = "Copilot Chat Model",
     },
   },
 
@@ -874,6 +874,13 @@ M.keymaps = {
         }
       end,
       desc = "Zoxide",
+    },
+    {
+      "<leader>fS",
+      function()
+        Snacks.picker.snippets()
+      end,
+      desc = "Snippets (LuaSnip)",
     },
   },
 
@@ -1470,6 +1477,8 @@ M.sources_n_keys = {
         },
       },
     },
+    -- LuaSnip snippets picker
+    snippets = require("utils.snacks_pickers").snippets_source_config,
   },
 
   -- ===================== common keymap sections ====================

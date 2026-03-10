@@ -1603,6 +1603,8 @@ end, { desc = "Paste prompt at cursor" })
 
 vim.api.nvim_create_user_command("DotfilesWorkspace", function()
   local dotfiles = vim.fn.expand "~/dotfiles"
+  -- badd add buffer (not open)
+  vim.cmd("badd" .. dotfiles .. "/.bash_profile")
   vim.cmd("edit " .. dotfiles .. "/.bash_exports")
   vim.cmd("vsplit " .. "~/.bash.local")
   vim.cmd "wincmd h"
@@ -1610,4 +1612,16 @@ vim.api.nvim_create_user_command("DotfilesWorkspace", function()
   vim.cmd "wincmd l"
   vim.cmd("split " .. dotfiles .. "/ai/AI-docs.md")
   vim.cmd "wincmd t"
+  vim.cmd "tabnew"
+  vim.cmd("edit " .. vim.fn.expand "~/dotfiles/tasks/open")
+  vim.cmd("vsplit " .. vim.fn.expand "~/dotfiles/claude/mcp-proxy/mcphub.json")
+  vim.cmd("split " .. vim.fn.expand "~/dotfiles/.config/nvim3_jelly_tinynvim/.mcphub/servers.json")
+  vim.cmd "wincmd h"
+  vim.cmd("split " .. vim.fn.expand "~/dotfiles/README.md")
+  local tabnum = vim.api.nvim_get_current_tabpage()
+  require("bufferline").rename_tab { tabnum, "ai" }
+  vim.api.nvim_command "tabprevious"
+  tabnum = vim.api.nvim_get_current_tabpage()
+  -- vim.cmd "BufferLineTabRename start"
+  require("bufferline").rename_tab { tabnum, "start" }
 end, { desc = "Open dotfiles workspace layout" })

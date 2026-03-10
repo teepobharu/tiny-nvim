@@ -1,6 +1,26 @@
 local path = require "utils.path"
 local M = {}
 
+-- Shared marker configuration for subproject detection
+-- Used by both get_sub_project_dir and get_sub_project_dirs_from_root
+M.SUBPROJECT_MARKERS = {
+  { name = ".nvim-config.lua", type = "path", project_type = ".nv" },
+  { name = "package.json", type = "path", project_type = "yarn" },
+  { name = "pyproject.toml", type = "path", project_type = "python" },
+  { name = "Cargo.toml", type = "path", project_type = "rust" },
+  { name = "go.mod", type = "path", project_type = "golang" },
+  { name = "pom.xml", type = "path", project_type = "maven" },
+  { name = "build.gradle", type = "path", project_type = "gradle" },
+  { name = "%.sln$", type = "pattern", project_type = "dotnet" },
+  { name = { "Clientside/", "Serverside/" }, type = "path", project_type = "cronos" },
+  -- Special marker: only matches when browsing INSIDE .gitlab directory
+  { name = ".gitlab", type = "path", project_type = ".glab", match_from_within = true },
+  { name = ".git", type = "path", project_type = "git" },
+}
+
+-- Module-level cache for get_sub_project_dirs_from_root
+local _subproject_cache = {}
+
 -- Function to get the Python path.
 -- @param pipenvFallback boolean: If true, falls back to pipenv --py if pyrightconfig.json is not found.
 -- @param isLog boolean: If true, logs the Python path using vim.notify.
@@ -169,26 +189,142 @@ function M.get_previous_buffer_dir()
   local bufdir = vim.fn.fnamemodify(bufname, ":p:h")
   return bufdir
 end
---- Get sub-project directories in a monorepo with metadata (supports multiple results)
---- Searches for common monorepo markers (package.json, pyproject.toml, etc.)
---- in parent directories up to the git root
---- Supports multiple marker matching with AND condition (all markers in array must exist)
---- Results sorted by: 1) depth from fromdir (nearest first), 2) marker order (earlier first)
----@param fromdir string|nil Starting directory (default: current buffer directory)
----@param return_metadata boolean|nil If true, returns table with metadata; if false, returns just dir path(s)
----@param return_all boolean|nil If true, returns all matches sorted by nearest to fromdir; if false, returns first match only
----@return string|table|string[]|table[]|nil Returns directory path(s) or metadata object(s)
---- Metadata includes: dir, matched_file, project_type, marker_type, depth (from git root), depth_from_start (from fromdir), marker_index, is_git_root (boolean)
-function M.get_sub_project_dir(fromdir, return_metadata, return_all)
-  local path = require "utils.path"
-  local current_dir = fromdir or vim.fn.expand "%:p:h"
-  local root_dir = path.get_root_directory()
+
+--- Check if a directory is in the ancestor chain from start_dir to end_dir
+--- @param dir string Directory to check
+--- @param start_dir string Starting directory (e.g., fromdir)
+--- @param end_dir string Ending directory (e.g., root_dir)
+--- @return boolean
+local function is_in_traversal_path(dir, start_dir, end_dir)
+  local temp_dir = start_dir
+  while temp_dir and temp_dir ~= "/" and temp_dir ~= end_dir do
+    if temp_dir == dir then
+      return true
+    end
+    local parent = vim.fn.fnamemodify(temp_dir, ":h")
+    if parent == temp_dir then
+      break
+    end
+    temp_dir = parent
+  end
+  return temp_dir == dir -- Also check end_dir itself
+end
+
+--- Helper function to calculate depth from a reference directory
+--- @param dir_path string Directory to measure
+--- @param ref_dir string Reference directory
+--- @return number
+local function calculate_depth_from_ref(dir_path, ref_dir)
+  local depth = 0
+  local temp_dir = dir_path
+  while temp_dir and temp_dir ~= "/" and temp_dir ~= ref_dir do
+    depth = depth + 1
+    local parent = vim.fn.fnamemodify(temp_dir, ":h")
+    if parent == temp_dir then
+      break
+    end
+    temp_dir = parent
+  end
+  return depth
+end
+
+--- Helper function to extract mono label from .nvim-config.lua
+--- Searches for pattern "-- mono:<label>" and returns the label
+--- @param file_path string Path to .nvim-config.lua
+--- @return string
+local function extract_mono_label(file_path)
+  local default_label = ".nv"
+  local ok, content = pcall(vim.fn.readfile, file_path)
+  if not ok or not content then
+    return default_label
+  end
+  for _, line in ipairs(content) do
+    local label = line:match "^%s*%-%-%s*mono:(%S+)"
+    if label then
+      return label
+    end
+  end
+  return default_label
+end
+
+--- Enrich and filter cached results with fromdir-dependent fields
+--- @param cached table[] Cached raw results
+--- @param root_dir string Git root directory
+--- @param fromdir string Reference directory for in_cwd_traversal
+--- @param return_metadata boolean|nil
+--- @param return_all boolean|nil
+--- @param sort_by "nearest"|"depth"|nil Sort strategy
+--- @return string|table|string[]|table[]|nil
+local function filter_and_enrich_cached_results(cached, root_dir, fromdir, return_metadata, return_all, sort_by)
+  local results = {}
+
+  for _, item in ipairs(cached) do
+    local enriched = vim.tbl_extend("force", {}, item)
+    enriched.in_cwd_traversal = is_in_traversal_path(item.dir, fromdir, root_dir)
+    enriched.depth_from_start = calculate_depth_from_ref(item.dir, fromdir)
+    table.insert(results, enriched)
+  end
+
+  -- Sort based on strategy
+  if sort_by == "nearest" then
+    -- Tier 1: CWD traversal items first
+    -- Tier 2: Depth from fromdir (NEAREST first)
+    -- Tier 3: Marker order
+    table.sort(results, function(a, b)
+      if a.in_cwd_traversal ~= b.in_cwd_traversal then
+        return a.in_cwd_traversal
+      end
+      if a.depth_from_start ~= b.depth_from_start then
+        return a.depth_from_start < b.depth_from_start
+      end
+      return a.marker_index < b.marker_index
+    end)
+  else
+    -- Default: depth from root (existing behavior)
+    table.sort(results, function(a, b)
+      if a.in_cwd_traversal ~= b.in_cwd_traversal then
+        return a.in_cwd_traversal
+      end
+      if a.depth ~= b.depth then
+        return a.depth < b.depth
+      end
+      return a.marker_index < b.marker_index
+    end)
+  end
+
+  if return_metadata then
+    return return_all and results or results[1]
+  else
+    local dirs = {}
+    for _, result in ipairs(results) do
+      table.insert(dirs, result.dir)
+    end
+    return return_all and dirs or dirs[1]
+  end
+end
+
+--- Get all sub-project directories from git root (entire tree scan)
+--- Scans entire git root tree for marker files, not just ancestor chain
+--- Returns same metadata as get_sub_project_dir plus in_cwd_traversal flag
+--- @param root_dir string|nil Git root directory (default: auto-detect)
+--- @param fromdir string|nil Reference directory for in_cwd_traversal flag (default: current buffer dir)
+--- @param return_metadata boolean|nil If true, returns table with metadata; if false, returns just dir path(s)
+--- @param return_all boolean|nil If true, returns all matches; if false, returns first match only
+--- @param sort_by "nearest"|"depth"|nil Sort strategy: "nearest" = by depth_from_start (CWD proximity), "depth" = by depth from root (default)
+--- @return string|table|string[]|table[]|nil Returns directory path(s) or metadata object(s)
+--- Metadata includes: dir, matched_file, project_type, marker_type, depth, depth_from_start,
+---                   marker_index, is_git_root, in_cwd_traversal, in_submodule, submodule_root
+function M.get_sub_project_dirs_from_root(root_dir, fromdir, return_metadata, return_all, sort_by)
+  local gitUtil = require "utils.git"
+
+  -- Auto-detect root_dir and fromdir
+  root_dir = root_dir or path.get_root_directory()
+  fromdir = fromdir or vim.fn.expand "%:p:h"
 
   if not root_dir then
-    print([==[M.get_sub_project_dir#if root_dir:]==], vim.inspect(root_dir)) -- __AUTO_GENERATED_PRINT_VAR_END__
     local fallback = return_metadata
         and {
-          dir = current_dir,
+          dir = fromdir,
           matched_file = nil,
           project_type = "unknown",
           marker_type = nil,
@@ -196,74 +332,34 @@ function M.get_sub_project_dir(fromdir, return_metadata, return_all)
           depth_from_start = 0,
           marker_index = 999,
           is_git_root = false,
+          in_cwd_traversal = true,
+          in_submodule = false,
+          submodule_root = nil,
         }
-      or current_dir
+      or fromdir
     return return_all and { fallback } or fallback
   end
 
-  -- Marker configuration with project type metadata
-  -- name can be a string or array of strings (AND condition for arrays)
-  -- match_from_within: if true, only matches when current_dir is inside this directory
-  local markers = {
-    { name = ".nvim-config.lua", type = "path", project_type = ".nv" },
-    { name = "package.json", type = "path", project_type = "yarn" },
-    { name = "pyproject.toml", type = "path", project_type = "python" },
-    { name = "Cargo.toml", type = "path", project_type = "rust" },
-    { name = "go.mod", type = "path", project_type = "golang" },
-    { name = "pom.xml", type = "path", project_type = "maven" },
-    { name = "build.gradle", type = "path", project_type = "gradle" },
-    { name = "%.sln$", type = "pattern", project_type = "dotnet" },
-    { name = { "Clientside/", "Serverside/" }, type = "path", project_type = "cronos" },
-    -- { name = ".gitlab-ci.yml", type = "path", project_type = "gitlab" },
-    -- Special marker: only matches when browsing INSIDE .gitlab directory
-    { name = ".gitlab", type = "path", project_type = ".glab", match_from_within = true },
-    { name = ".git", type = "path", project_type = "git" },
-  }
+  -- Check cache first
+  local git_mtime = vim.fn.getftime(root_dir .. "/.git")
+  local cache_key = root_dir .. ":" .. tostring(git_mtime)
+  if _subproject_cache[cache_key] then
+    return filter_and_enrich_cached_results(
+      _subproject_cache[cache_key],
+      root_dir,
+      fromdir,
+      return_metadata,
+      return_all,
+      sort_by
+    )
+  end
 
-  local results = {}
+  -- Perform full scan
+  local all_results = {}
   local seen_dirs = {}
 
-  -- Helper function to calculate depth from a reference directory (fromdir or git root)
-  local function calculate_depth_from_ref(dir_path, ref_dir)
-    local depth = 0
-    local temp_dir = dir_path
-    while temp_dir and temp_dir ~= "/" and temp_dir ~= ref_dir do
-      depth = depth + 1
-      local parent = vim.fn.fnamemodify(temp_dir, ":h")
-      if parent == temp_dir then
-        break
-      end
-      temp_dir = parent
-    end
-    return depth
-  end
-
-  -- Helper function to extract mono label from .nvim-config.lua
-  -- Searches for pattern "-- mono:<label>" and returns the label
-  -- Falls back to ".nv" if not found
-  local function extract_mono_label(file_path)
-    local default_label = ".nv"
-    
-    -- Try to read the file
-    local ok, content = pcall(vim.fn.readfile, file_path)
-    if not ok or not content then
-      return default_label
-    end
-    
-    -- Search for "-- mono:<label>" pattern in file content
-    for _, line in ipairs(content) do
-      -- Match "-- mono:" followed by any non-whitespace characters
-      local label = line:match("^%s*%-%-%s*mono:(%S+)")
-      if label then
-        return label
-      end
-    end
-    
-    return default_label
-  end
-
-  -- Helper function to check if marker matches (handles both string and array names)
-  local function check_marker_match(dir, marker, marker_index)
+  -- Helper: check marker match with submodule detection
+  local function check_marker_match_with_meta(dir, marker, marker_idx)
     local names = type(marker.name) == "table" and marker.name or { marker.name }
     local matched_files = {}
 
@@ -289,139 +385,170 @@ function M.get_sub_project_dir(fromdir, return_metadata, return_all)
         end
       end
 
-      -- If any name in the array doesn't match, fail the whole marker (AND condition)
       if not found then
         return nil
       end
     end
-    
-    -- Check match_from_within option: only match if current_dir is inside this directory
+
+    -- Check match_from_within
     if marker.match_from_within and #matched_files > 0 then
       local marker_dir = dir .. "/" .. matched_files[1]
-      -- Check if current_dir is inside marker_dir
-      local is_inside = current_dir:match("^" .. vim.pesc(marker_dir) .. "/") 
-                     or current_dir == marker_dir
+      local is_inside = fromdir:match("^" .. vim.pesc(marker_dir) .. "/") or fromdir == marker_dir
       if not is_inside then
-        return nil  -- Skip this marker if not browsing inside the directory
+        return nil
       end
     end
 
-    -- All names matched, determine project_type
+    -- Determine project_type
     local project_type = marker.project_type
-    
-    -- Special handling for .nvim-config.lua: extract mono label
     if marker.name == ".nvim-config.lua" and #matched_files > 0 then
-      local config_file_path = dir .. "/" .. matched_files[1]
-      local mono_label = extract_mono_label(config_file_path)
-      project_type = mono_label
+      local config_file = dir .. "/" .. matched_files[1]
+      project_type = extract_mono_label(config_file)
     end
 
-    -- All names matched, return result
+    -- Detect submodule info
+    local in_submodule = gitUtil.is_in_submodule(dir)
+    local submodule_root = in_submodule and gitUtil.get_submodule_root(dir) or nil
+
     return {
       dir = dir,
       matched_file = table.concat(matched_files, ", "),
       project_type = project_type,
       marker_type = marker.type,
-      depth = calculate_depth_from_ref(dir, root_dir), -- depth from git root
-      depth_from_start = calculate_depth_from_ref(dir, current_dir), -- depth from fromdir
-      marker_index = marker_index, -- original marker order for secondary sort
-      is_git_root = (dir == root_dir), -- flag to indicate if this dir is the git root
+      depth = calculate_depth_from_ref(dir, root_dir),
+      depth_from_start = calculate_depth_from_ref(dir, fromdir),
+      marker_index = marker_idx,
+      is_git_root = (dir == root_dir),
+      in_cwd_traversal = is_in_traversal_path(dir, fromdir, root_dir),
+      in_submodule = in_submodule,
+      submodule_root = submodule_root,
     }
   end
 
-  local dir = current_dir
+  -- Build list of file markers for git ls-files
+  local file_markers = {}
+  local pattern_markers = {}
+  local dir_markers = {}
 
-  while dir and dir ~= "/" and dir ~= root_dir do
-    -- print([==[M.get_sub_project_dir#while dir:]==], vim.inspect(dir)) -- __AUTO_GENERATED_PRINT_VAR_END__
-    for marker_idx, marker in ipairs(markers) do
-      local match = check_marker_match(dir, marker, marker_idx)
-      if match then
-        -- Avoid duplicate directories in results
-        if not seen_dirs[match.dir] then
-          seen_dirs[match.dir] = true
-
-          if not return_all then
-            -- Return first match immediately
-            if return_metadata then
-              return match
-            end
-            return match.dir
-          else
-            -- Collect all matches
-            table.insert(results, match)
-          end
+  for _, marker in ipairs(M.SUBPROJECT_MARKERS) do
+    if marker.type == "pattern" then
+      -- Convert Lua pattern to shell glob (e.g., %.sln$ -> *.sln)
+      local glob = marker.name:gsub("%%.", "*"):gsub("%$$", "")
+      table.insert(pattern_markers, glob)
+    elseif marker.type == "path" then
+      if type(marker.name) == "string" then
+        table.insert(file_markers, marker.name)
+      elseif type(marker.name) == "table" then
+        -- Array markers (AND condition): add each individually as candidate finder
+        for _, name in ipairs(marker.name) do
+          table.insert(file_markers, name)
         end
       end
     end
-
-    local parent = vim.fn.fnamemodify(dir, ":h")
-    if parent == dir then
-      break
-    end
-    dir = parent
   end
 
-  -- No match found, return git root
-  if #results == 0 then
-    local fallback = return_metadata
-        and {
-          dir = root_dir,
-          matched_file = nil,
-          project_type = "gitroot",
-          marker_type = nil,
-          depth = 0,
-          depth_from_start = calculate_depth_from_ref(root_dir, current_dir),
-          marker_index = 999, -- fallback always last in sort order
-          is_git_root = true,
-        }
-      or root_dir
-    if return_all then
-      return { fallback }
-    else
-      return fallback
+  -- Execute git ls-files for file markers
+  local candidate_dirs = {}
+
+  if #file_markers > 0 then
+    local escaped_markers = {}
+    for _, m in ipairs(file_markers) do
+      -- Use **/<marker> glob to find at any depth
+      table.insert(escaped_markers, vim.fn.shellescape("**/" .. m))
+    end
+    local cmd = string.format(
+      "git -C %s ls-files --cached --others --exclude-standard -- %s 2>/dev/null",
+      vim.fn.shellescape(root_dir),
+      table.concat(escaped_markers, " ")
+    )
+    local marker_files = vim.fn.systemlist(cmd)
+
+    for _, file in ipairs(marker_files) do
+      local full_path = root_dir .. "/" .. file
+      local dir = vim.fn.fnamemodify(full_path, ":h")
+      candidate_dirs[dir] = true
     end
   end
 
-  -- Sort by depth from fromdir (smallest = nearest), then by marker order
-  --   How It Works
-  --
-  -- Example scenario: You have a monorepo with nested projects:
-  -- /repo (git root)
-  --   /frontend
-  --     /packages
-  --       /app1          <- package.json (marker index 1)
-  --       /app2          <- pyproject.toml (marker index 2)
-  --         /nested      <- package.json (marker index 1)
-  --
-  -- When called from /repo/frontend/packages/app2/nested:
-  -- 1. Finds all matching subprojects going up the tree
-  -- 2. Sorts by depth_from_start:
-  --   - nested (depth 0) comes first
-  --   - app2 (depth 1) comes second
-  --   - app1 (depth 2) comes third
-  --
-  table.sort(results, function(a, b)
-    if a.depth_from_start == b.depth_from_start then
-      -- If same depth from fromdir, use original marker order
+  -- Execute git ls-files for pattern markers
+  if #pattern_markers > 0 then
+    for _, pattern in ipairs(pattern_markers) do
+      local cmd = string.format(
+        "git -C %s ls-files --cached --others --exclude-standard -- %s 2>/dev/null",
+        vim.fn.shellescape(root_dir),
+        vim.fn.shellescape("**/" .. pattern)
+      )
+      local pattern_files = vim.fn.systemlist(cmd)
+
+      for _, file in ipairs(pattern_files) do
+        local full_path = root_dir .. "/" .. file
+        local dir = vim.fn.fnamemodify(full_path, ":h")
+        candidate_dirs[dir] = true
+      end
+    end
+  end
+
+  -- Always include git root as candidate
+  candidate_dirs[root_dir] = true
+
+  -- Validate each candidate against marker rules
+  for dir, _ in pairs(candidate_dirs) do
+    for marker_idx, marker in ipairs(M.SUBPROJECT_MARKERS) do
+      local match = check_marker_match_with_meta(dir, marker, marker_idx)
+      if match and not seen_dirs[match.dir] then
+        seen_dirs[match.dir] = true
+        table.insert(all_results, match)
+      end
+    end
+  end
+
+  -- Cache the raw results (without fromdir-dependent fields recomputed)
+  _subproject_cache[cache_key] = all_results
+
+  -- Sort based on strategy
+  if sort_by == "nearest" then
+    -- Tier 1: CWD traversal items first
+    -- Tier 2: Depth from fromdir (NEAREST first)
+    -- Tier 3: Marker order
+    table.sort(all_results, function(a, b)
+      if a.in_cwd_traversal ~= b.in_cwd_traversal then
+        return a.in_cwd_traversal
+      end
+      if a.depth_from_start ~= b.depth_from_start then
+        return a.depth_from_start < b.depth_from_start
+      end
       return a.marker_index < b.marker_index
-    end
-    return a.depth_from_start < b.depth_from_start
-  end)
+    end)
+  else
+    -- Default: depth from root (existing behavior)
+    table.sort(all_results, function(a, b)
+      if a.in_cwd_traversal ~= b.in_cwd_traversal then
+        return a.in_cwd_traversal
+      end
+      if a.depth ~= b.depth then
+        return a.depth < b.depth
+      end
+      return a.marker_index < b.marker_index
+    end)
+  end
+
+  -- Return in same format as get_sub_project_dir
   if return_metadata then
-    return return_all and results or results[1] -- return metadata object(s)
+    return return_all and all_results or all_results[1]
   else
     local dirs = {}
-    for _, result in ipairs(results) do
+    for _, result in ipairs(all_results) do
       table.insert(dirs, result.dir)
     end
-    return return_all and dirs or dirs[1] -- return dir string(s)
+    return return_all and dirs or dirs[1]
   end
 end
 
--- vim.keymap.set("n", "<localleader>zt", function()
---   local subdir = M.get_sub_project_dir()
---   Snacks.debug(subdir)
--- end, { desc = "Get Sub-Project Directory" })
+--- Clear the subproject cache (useful for manual refresh)
+function M.clear_subproject_cache()
+  _subproject_cache = {}
+  vim.notify("Subproject cache cleared", vim.log.levels.INFO)
+end
 
 function M.get_git_real_filepath(filepath)
   if not filepath or filepath == "" then
