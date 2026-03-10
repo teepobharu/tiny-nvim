@@ -31,7 +31,7 @@
 local M = {}
 
 -- Import shared AI constants for deduplication
-local AI = require("utils.my_ai_constants")
+local AI = require "utils.my_ai_constants"
 
 local DEFAULT_ADAPTER = AI.defaults.adapter
 local DEFAULT_MODEL = AI.defaults.model
@@ -51,9 +51,6 @@ local DEFAULT_MODEL = AI.defaults.model
 function M.fetch_model_helper(self, opts)
   opts = opts or {}
 
-  -- Use shared static models with CodeCompanion additional filters
-  local static_models = AI.static_models.codecompanion_default
-
   -- Build complete blacklist (shared + CodeCompanion specific)
   local blacklist = AI.filters.blacklist
   if opts.blacklist then
@@ -66,66 +63,36 @@ function M.fetch_model_helper(self, opts)
     vim.list_extend(keyword_filters, opts.keyword_filters)
   end
 
-  -- For immediate display, return filtered static models
-  if opts.async ~= false then
-    return AI.filter_models(static_models, {
-      additional_blacklist = blacklist,
-      additional_keywords = keyword_filters,
-    })
-  end
-
-  -- For model selection UI, try to fetch dynamic models
-  local ok, openai_compatible = pcall(require, "codecompanion.adapters.http.openai_compatible")
-
-  if ok and openai_compatible.schema and openai_compatible.schema.model and openai_compatible.schema.model.choices then
-    local dynamic_models = openai_compatible.schema.model.choices(self, opts)
-
-    if dynamic_models and #dynamic_models > 0 then
-      -- Create lookup set for dynamic models
-      local dynamic_set = {}
-      for _, model in ipairs(dynamic_models) do
-        dynamic_set[model] = true
-      end
-
-      -- Filter static models to only those present in dynamic models
-      local filtered_static = {}
-      for _, model in ipairs(static_models) do
-        if dynamic_set[model] then
-          table.insert(filtered_static, model)
-        end
-      end
-
-      -- Merge: prioritize filtered static models first, then remaining dynamic models
-      local merged = {}
-      local seen = {}
-
-      -- Add filtered static models first (for priority positioning)
-      for _, model in ipairs(filtered_static) do
-        merged[#merged + 1] = model
-        seen[model] = true
-      end
-
-      -- Add remaining dynamic models
-      for _, model in ipairs(dynamic_models) do
-        if not seen[model] then
-          merged[#merged + 1] = model
-          seen[model] = true
-        end
-      end
-
-      -- Apply blacklist and keyword filters to merged list
-      return AI.filter_models(merged, {
-        additional_blacklist = blacklist,
-        additional_keywords = keyword_filters,
-      })
-    end
-  end
-
-  -- Fallback: return filtered static models
-  return AI.filter_models(static_models, {
+  local filter_opts = {
     additional_blacklist = blacklist,
     additional_keywords = keyword_filters,
-  })
+  }
+
+  -- Dynamic fetch: call default openai_compatible choices fn, then apply our filters
+  if opts.use_dynamic_fetch == true then
+    local ok, openai_compatible = pcall(require, "codecompanion.adapters.http.openai_compatible")
+    if ok and openai_compatible.schema and openai_compatible.schema.model then
+      local choices_fn = openai_compatible.schema.model.choices
+      if type(choices_fn) == "function" then
+        -- Pass clean opts to codecompanion (strip our custom fields)
+        local cc_opts = { async = opts.async }
+        local fetch_ok, dynamic_models = pcall(choices_fn, self, cc_opts)
+        if fetch_ok and type(dynamic_models) == "table" and #dynamic_models > 0 then
+          return AI.filter_models(dynamic_models, filter_opts)
+        end
+      end
+    end
+    -- Fallback to static on fetch error
+  end
+
+  -- Default: return filtered static models (no network dependency)
+  local filteredModels = AI.filter_models(AI.static_models.agd_default, filter_opts)
+  -- TODO : after filter -> inject appropriate opts for some model to remove some fields in request
+  -- ie. add appropriate
+  -- for claudeX models get below error
+  -- `temperature` and `top_p` cannot both be specified for this model.
+
+  return filteredModels
 end
 
 -- ============================================================================
@@ -134,7 +101,7 @@ end
 
 -- Get current adapter and model from CodeCompanion config
 function M.current_adapter_and_model()
-  local config = require("codecompanion.config")
+  local config = require "codecompanion.config"
   local adapter = config.interactions.chat.adapter or DEFAULT_ADAPTER
 
   -- Get model from adapter config
@@ -157,8 +124,7 @@ end
 -- Creates an inline instance with the specified adapter
 function M.inline_with_adapter(adapter_name, model)
   local api = vim.api
-  local config = require("codecompanion.config")
-  print([==[M.inline_with_adapter config:]==], vim.inspect(config)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  local config = require "codecompanion.config"
 
   -- Get current buffer context
   local bufnr = api.nvim_get_current_buf()
@@ -172,6 +138,7 @@ function M.inline_with_adapter(adapter_name, model)
   end
 
   local adapter = require("codecompanion.adapters").resolve(adapter_config)
+  print([==[M.inline_with_adapter adapter:]==], vim.inspect(adapter)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
   -- Override model if specified
   if model and adapter.schema and adapter.schema.model then
@@ -179,10 +146,10 @@ function M.inline_with_adapter(adapter_name, model)
   end
 
   -- Create inline instance with specific adapter
-  local inline = require("codecompanion.interactions.inline").new({
+  local inline = require("codecompanion.interactions.inline").new {
     adapter = adapter,
     buffer_context = context,
-  })
+  }
 
   if not inline then
     vim.notify("Failed to create inline instance", vim.log.levels.ERROR)
@@ -206,16 +173,16 @@ function M.chat_with_adapter(adapter_name, model)
     params.model = model
   end
 
-  require("codecompanion").chat({
+  require("codecompanion").chat {
     params = params,
     subcommand = "toggle",
-  })
+  }
 end
 
 -- Switch CodeCompanion default adapter and model
 -- Updates the configuration and shows a notification
 function M.switch_adapter(adapter_name, model)
-  local config = require("codecompanion.config")
+  local config = require "codecompanion.config"
 
   -- Get adapter config and resolve it
   local adapter_config = config.adapters.http[adapter_name] or config.adapters.acp[adapter_name]
@@ -237,7 +204,10 @@ function M.switch_adapter(adapter_name, model)
 
   -- Show notification
   local Snacks = require "snacks"
-  Snacks.notify.warn(string.format("Switched CodeCompanion to %s/%s", adapter_name, model or "default"), { title = "CodeCompanion" })
+  Snacks.notify.warn(
+    string.format("Switched CodeCompanion to %s/%s", adapter_name, model or "default"),
+    { title = "CodeCompanion" }
+  )
 end
 
 -- Generate keymaps for CodeCompanion model selection
@@ -340,27 +310,47 @@ function M.generate_codecompanion_keymaps(baseKeymap)
   -- Fix adapter for Claude models in AGD keymaps
   for _, keymap in ipairs(agd_keymaps) do
     local key = keymap[1]
-    -- If key ends with 'h' or 'H', use vertex_claude_agd adapter
-    if key:match "[hH]$" then
-      if keymap.mode == "n" then
-        -- Normal mode: switch adapter
-        keymap[2] = function()
-          local model_key = key:match "[hH]$"
-          local model_config = M.get_vertex_claude_agd_models_config()[model_key]
-          M.switch_adapter("vertex_claude_agd", model_config.model)
-        end
-      else
-        -- Visual mode: inline with adapter
-        keymap[2] = function()
-          local model_key = key:match "[hH]$"
-          local model_config = M.get_vertex_claude_agd_models_config()[model_key]
-          M.inline_with_adapter("vertex_claude_agd", model_config.model)
-        end
-      end
-    end
   end
 
   vim.list_extend(keymaps, agd_keymaps)
+
+  -- Picker keymaps
+  table.insert(keymaps, {
+    "<leader>ASmm",
+    function()
+      M.toggle_inline_with_picker()
+    end,
+    desc = "CC Inline: Pick Adapter+Model",
+    mode = { "v", "x" },
+  })
+
+  table.insert(keymaps, {
+    "<leader>ASM",
+    function()
+      M.toggle_chat_with_picker()
+    end,
+    desc = "CC Chat: Toggle with Model Picker",
+    mode = "n",
+  })
+
+  -- Dynamic fetch picker keymaps (requires VPN)
+  table.insert(keymaps, {
+    "<leader>ASSMM",
+    function()
+      M.toggle_inline_with_picker_dynamic()
+    end,
+    desc = "CC Inline: Pick Adapter+Model (Dynamic)",
+    mode = { "v", "x" },
+  })
+
+  table.insert(keymaps, {
+    "<leader>ASSM",
+    function()
+      M.toggle_chat_with_picker_dynamic()
+    end,
+    desc = "CC Chat: Toggle with Model Picker (Dynamic)",
+    mode = "n",
+  })
 
   -- Additional utility keymaps
   table.insert(keymaps, {
@@ -375,6 +365,238 @@ function M.generate_codecompanion_keymaps(baseKeymap)
   })
 
   return keymaps
+end
+
+-- ============================================================================
+-- Picker-based Adapter/Model Selection
+-- ============================================================================
+
+-- Get available adapter names from config (both http and acp)
+local function get_available_adapters()
+  local config = require "codecompanion.config"
+  local adapters = {}
+
+  if config.adapters.http then
+    for name, _ in pairs(config.adapters.http) do
+      table.insert(adapters, name)
+    end
+  end
+  if config.adapters.acp then
+    for name, _ in pairs(config.adapters.acp) do
+      table.insert(adapters, name)
+    end
+  end
+
+  table.sort(adapters)
+  return adapters
+end
+
+-- Get model choices for a given adapter
+local function get_adapter_models(adapter_name, use_dynamic)
+  local config = require "codecompanion.config"
+  local adapter_config = config.adapters.http[adapter_name] or config.adapters.acp[adapter_name]
+  if not adapter_config then
+    return {}
+  end
+  -- // TODO: check logic
+  local adapter = require("codecompanion.adapters").resolve(adapter_config)
+  if not adapter or not adapter.schema or not adapter.schema.model then
+    return {}
+  end
+
+  --- @field openai CodeCompanion.HTTPAdapter.OpenAI[model]
+  local models = adapter.schema.model.choices
+  if type(models) == "function" then
+    -- Dynamic fetch needs async=false for synchronous HTTP request
+    -- Static mode uses async=true for immediate return
+    local async_val = use_dynamic and false or true
+    -- __AUTO_GENERATED_PRINT_VAR_START__
+    models = models(adapter, { async = async_val, use_dynamic_fetch = use_dynamic or false })
+  end
+
+  return models or {}
+end
+
+-- Toggle inline with adapter + model picker (visual mode)
+-- Presents adapter selection -> model selection -> triggers inline edit
+function M.toggle_inline_with_picker()
+  local adapters = get_available_adapters()
+
+  vim.ui.select(adapters, {
+    prompt = "Select Adapter:",
+    format_item = function(item)
+      return item
+    end,
+  }, function(adapter_name)
+    if not adapter_name then
+      return
+    end
+
+    local models = get_adapter_models(adapter_name)
+    if #models == 0 then
+      -- No model choices, use default
+      M.inline_with_adapter(adapter_name, nil)
+      return
+    end
+
+    vim.ui.select(models, {
+      prompt = "Select Model:",
+      format_item = function(item)
+        return type(item) == "table" and item.id or item
+      end,
+    }, function(selected_model)
+      if not selected_model then
+        return
+      end
+
+      local model_id = type(selected_model) == "table" and selected_model.id or selected_model
+
+      M.inline_with_adapter(adapter_name, model_id)
+    end)
+  end)
+end
+
+-- Toggle chat with adapter + model picker (normal mode)
+-- If chat exists, use built-in change_adapter; if no chat, create new with picker
+function M.toggle_chat_with_picker()
+  local chat = require("codecompanion").last_chat()
+
+  if chat then
+    -- Chat exists, use built-in adapter change keymap
+    local ok, change_adapter = pcall(require, "codecompanion.interactions.chat.keymaps.change_adapter")
+    if ok and change_adapter and change_adapter.callback then
+      change_adapter.callback(chat)
+    else
+      vim.notify("change_adapter keymap not available", vim.log.levels.WARN)
+    end
+    return
+  end
+
+  -- No chat exists, create new with picker
+  local adapters = get_available_adapters()
+
+  vim.ui.select(adapters, {
+    prompt = "Select Adapter for New Chat:",
+    format_item = function(item)
+      return item
+    end,
+  }, function(adapter_name)
+    if not adapter_name then
+      return
+    end
+
+    local models = get_adapter_models(adapter_name)
+    if #models == 0 then
+      M.chat_with_adapter(adapter_name, nil)
+      return
+    end
+
+    vim.ui.select(models, {
+      prompt = "Select Model:",
+      format_item = function(item)
+        return type(item) == "table" and item.id or item
+      end,
+    }, function(selected_model)
+      if not selected_model then
+        return
+      end
+
+      local model_id = type(selected_model) == "table" and selected_model.id or selected_model
+
+      M.chat_with_adapter(adapter_name, model_id)
+    end)
+  end)
+end
+
+-- Toggle inline with adapter + model picker (visual mode) - DYNAMIC FETCH
+-- Fetches models from AGD proxy (requires VPN). Produces error notifications when offline.
+function M.toggle_inline_with_picker_dynamic()
+  local adapters = get_available_adapters()
+
+  vim.ui.select(adapters, {
+    prompt = "Select Adapter for Inline (Dynamic):",
+    format_item = function(item)
+      return item
+    end,
+  }, function(adapter_name)
+    if not adapter_name then
+      return
+    end
+
+    local models = get_adapter_models(adapter_name, true) -- use_dynamic = true
+    if #models == 0 then
+      M.inline_with_adapter(adapter_name, nil)
+      return
+    end
+
+    vim.ui.select(models, {
+      prompt = "Select Model:",
+      format_item = function(item)
+        return type(item) == "table" and item.id or item
+      end,
+    }, function(selected_model)
+      if not selected_model then
+        return
+      end
+
+      local model_id = type(selected_model) == "table" and selected_model.id or selected_model
+
+      M.inline_with_adapter(adapter_name, model_id)
+    end)
+  end)
+end
+
+-- Toggle chat with adapter + model picker (normal mode) - DYNAMIC FETCH
+-- If chat exists, use built-in change_adapter; if no chat, create new with picker
+-- Fetches models from AGD proxy (requires VPN). Produces error notifications when offline.
+function M.toggle_chat_with_picker_dynamic()
+  local chat = require("codecompanion").last_chat()
+
+  if chat then
+    -- Chat exists, use built-in adapter change keymap
+    local ok, change_adapter = pcall(require, "codecompanion.interactions.chat.keymaps.change_adapter")
+    if ok and change_adapter and change_adapter.callback then
+      change_adapter.callback(chat)
+    else
+      vim.notify("change_adapter keymap not available", vim.log.levels.WARN)
+    end
+    return
+  end
+
+  -- No chat exists, create new with picker (dynamic fetch)
+  local adapters = get_available_adapters()
+
+  vim.ui.select(adapters, {
+    prompt = "Select Adapter for New Chat (Dynamic):",
+    format_item = function(item)
+      return item
+    end,
+  }, function(adapter_name)
+    if not adapter_name then
+      return
+    end
+
+    local models = get_adapter_models(adapter_name, true) -- use_dynamic = true
+    if #models == 0 then
+      M.chat_with_adapter(adapter_name, nil)
+      return
+    end
+
+    vim.ui.select(models, {
+      prompt = "Select Model:",
+      format_item = function(item)
+        return type(item) == "table" and item.id or item
+      end,
+    }, function(selected_model)
+      if not selected_model then
+        return
+      end
+
+      local model_id = type(selected_model) == "table" and selected_model.id or selected_model
+
+      M.chat_with_adapter(adapter_name, model_id)
+    end)
+  end)
 end
 
 -- Quick actions for common use cases
@@ -396,7 +618,7 @@ M.actions = {
 
   -- Quick inline with heavy model (using shared constants)
   inline_heavy = function()
-    M.inline_with_adapter(AI.defaults.adapter, AI.models.claude.CLAUDE_SONNET_4_5)
+    M.inline_with_adapter(AI.defaults.adapter, AI.agd_models.claude.CLAUDE_SONNET_4_5)
   end,
 }
 

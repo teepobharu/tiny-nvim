@@ -66,6 +66,34 @@ local actions = create_git_file_actions("HEAD~1", false)
 - `no_resolve`: boolean - if true, skip ref resolution
 **Reference**: lua/utils/snacks_pickers.lua:220, 333
 
+### 6. Capturing Source Buffer Info in Finder
+**⚠️ CRITICAL CAVEAT**: When accessing the current buffer's filetype/properties in a finder function, **always use `picker.main`** to get the source window, NOT `vim.bo.ft`.
+
+**Problem**: Inside a finder function called from `picker:find()`, the active buffer is the **picker input buffer** (`snacks_picker_input`), not the original source buffer.
+
+```lua
+finder = function(_, ctx)
+  -- ❌ WRONG - reads from picker input buffer
+  local ft = vim.bo.ft  -- Returns "snacks_picker_input"
+  
+  -- ✓ CORRECT - reads from original source window
+  local source_buf = vim.api.nvim_win_get_buf(ctx.picker.main)
+  local source_ft = vim.bo[source_buf].filetype
+  
+  -- Use source_ft for all source-buffer-aware logic
+end
+```
+
+**Why this matters**:
+- The picker temporarily changes the active buffer to the input prompt
+- Direct `vim.bo` access returns the picker's own buffer properties
+- `picker.main` preserves the original window reference across the picker lifetime
+- This is especially critical when toggling filters or refreshing the finder
+
+**Use case**: Snippets picker that filters by current buffer's filetype - when user presses the toggle key, `picker:find()` is called and the finder runs again, but `vim.bo.ft` would return "snacks_picker_input" instead of "lua" (or whatever the source was).
+
+**Reference**: lua/utils/snacks_pickers.lua:2190-2191 (LuaSnip snippets picker implementation)
+
 ## Actions 
 https://github.com/folke/snacks.nvim/blob/main/lua/snacks/picker/actions.lua
 

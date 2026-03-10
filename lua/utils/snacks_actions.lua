@@ -690,7 +690,8 @@ function M.select_subproject_cwd(picker)
 
   local from_dir = pathUtil.get_previous_buffer_dir() or vim.fn.getcwd()
   local git_root = path.get_root_directory() or Snacks.git.get_root()
-  local subprojects = pathUtil.get_sub_project_dir(from_dir, true, true) or {}
+  -- Default to root scan mode (finds all subprojects in entire repo)
+  local subprojects = pathUtil.get_sub_project_dirs_from_root(git_root, from_dir, true, true) or {}
 
   if type(subprojects) ~= "table" then
     subprojects = { subprojects }
@@ -739,6 +740,9 @@ function M.select_subproject_cwd(picker)
     elseif info and info.project_type and info.project_type ~= "" then
       table.insert(header, "type:" .. info.project_type)
     end
+    if info and info.in_submodule then
+      table.insert(header, "submodule:" .. (info.submodule_root or "unknown"))
+    end
     if git_root and dir then
       local rel = dir:gsub("^" .. vim.pesc(git_root) .. "/?", "")
       rel = rel == "" and "." or rel
@@ -757,8 +761,14 @@ function M.select_subproject_cwd(picker)
     end
     local meta = build_item_meta(info, dir)
     seen_dirs[key] = true
+
+    -- Extract project type for searchable text
+    local project_type = info and info.project_type or "subproj"
+    local searchable_text = project_type .. " " .. dir
+
     table.insert(items, {
-      text = dir,
+      text = searchable_text, -- Makes project type searchable (e.g., "yarn /path/to/frontend")
+      data = dir, -- Preserves yank behavior to copy only clean directory path
       label = label,
       dir = dir,
       file = dir,
@@ -776,21 +786,40 @@ function M.select_subproject_cwd(picker)
     add_item(sp_info.dir, "Sub-Project", sp_info)
   end
 
+  -- Store both full and cwd-only item lists for toggle
+  local all_items = items
+  local cwd_items = vim.tbl_filter(function(item)
+    local info = item.info or {}
+    return info.in_cwd_traversal or (item.meta and item.meta.is_git_root)
+  end, items)
+  local show_all = true -- start in "root" (all) mode
+
   Snacks.picker.pick {
     source = "subproject_cwd",
-    title = "Select Subproject CWD",
+    title = "Subprojects [root]",
     items = items,
     format = function(item)
       local meta = item.meta or {}
+      local info = item.info or {}
+
+      -- CWD traversal indicator
+      local cwd_prefix = info.in_cwd_traversal and "↑ " or "  "
+
+      -- Submodule indicator
+      local submod_indicator = info.in_submodule and "[sub] " or ""
+
       if meta.is_git_root then
         local root_path = meta.display_dir ~= "" and meta.display_dir or (meta.full_path or "")
         return {
+          { cwd_prefix, "Comment" },
           { "Git ", "SnacksPickerLabel" },
           { root_path, "SnacksPickerFile" },
         }
       end
 
       return {
+        { cwd_prefix, "Comment" },
+        { submod_indicator, "Special" },
         { meta.sub_type or "subproj", "SnacksPickerLabel" },
         { " d:" .. tostring(meta.depth or 0), "Comment" },
         { " ", "Comment" },
@@ -838,6 +867,13 @@ function M.select_subproject_cwd(picker)
         -- vim.print(picker.opts.cwd)
         picker:find()
       end,
+      toggle_scope = function(subpicker)
+        show_all = not show_all
+        local mode_label = show_all and "[root]" or "[cwd]"
+        subpicker.opts.title = "Subprojects " .. mode_label
+        subpicker.opts.items = show_all and all_items or cwd_items
+        subpicker:find()
+      end,
     },
     win = {
       preview = {
@@ -845,7 +881,7 @@ function M.select_subproject_cwd(picker)
         min_width = 20,
       },
       input = {
-        footer = "<CR/C-s> apply, <C-q> to cancel",
+        footer = "<CR/C-s> apply, <M-S> toggle scope, <C-q> cancel",
         keys = {
           ["<CR>"] = {
             "apply_filter",
@@ -856,6 +892,11 @@ function M.select_subproject_cwd(picker)
             "apply_filter",
             mode = { "n", "i" },
             desc = "Apply subproject CWD",
+          },
+          ["<M-S>"] = {
+            "toggle_scope",
+            mode = { "n", "i" },
+            desc = "Toggle root/cwd scope",
           },
           -- default cancel with c-q
         },
@@ -890,7 +931,7 @@ function M.toggle_cwd_files_grep(picker, item)
     return temp_dir == to_dir and depth or nil
   end
 
-  local sub_projects = pathUtil.get_sub_project_dir(prev_buffer_dir, true, true) or {}
+  local sub_projects = pathUtil.get_sub_project_dirs_from_root(nil, prev_buffer_dir, true, true, "nearest") or {}
   local sub_project_results = {}
   for i, sp in ipairs(sub_projects) do
     if not sp.is_git_root then

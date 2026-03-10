@@ -23,6 +23,15 @@
       },
       {
         "language": [
+          "javascript",
+          "javascriptreact",
+          "typescript",
+          "typescriptreact"
+        ],
+        "path": "./web/coding-exercise.json"
+      },
+      {
+        "language": [
           "license"
         ],
         "path": "./license.json"
