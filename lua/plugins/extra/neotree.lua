@@ -113,7 +113,7 @@ return {
       {
         "<localleader>e",
         function()
-          require("neo-tree.command").execute({ toggle = true, dir = Mypath.get_root_directory_current_buffer() })
+          require("neo-tree.command").execute({ dir = Mypath.get_root_directory_current_buffer() })
         end,
         desc = "Explorer NeoTree (Root)",
       },

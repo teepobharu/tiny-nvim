@@ -321,6 +321,13 @@ local testingmap_snacks = {
       -- Default options for smart picker
     },
   },
+  snippets = {
+    key = "<localleader>zS",
+    modes = { "n", "x" },
+    default_opts = {
+      -- Default options for smart picker
+    },
+  },
 }
 -- Auto-mapper function that applies opts and creates keymaps
 -- @param mapConfig table: Configuration with picker names, keys, and default_opts
@@ -352,7 +359,13 @@ function autoMapSnacksKeys(mapConfig, optsConfig, useDefaultOpts, useGlobalOpts)
     -- Create the keymap
     vim.keymap.set(map_info.modes or { "n" }, map_info.key, function()
       -- Call the appropriate Snacks picker with merged opts
-      Snacks.picker[picker_name](final_opts)
+      if Snacks.picker[picker_name] then
+        Snacks.picker[picker_name](final_opts)
+      else
+        -- set new picker with source name as picker_name and final_opts as opts
+        vim.notify("Snacks picker '" .. picker_name .. "' does not exist", vim.log.levels.ERROR)
+        Snacks.picker(picker_name, final_opts)
+      end
     end, {
       desc = "Snacks: " .. picker_name,
       noremap = true,
@@ -739,7 +752,7 @@ function snacks_opt_tgg()
           -- Get available cwd options
           local current_dir = vim.fn.getcwd()
           local git_root = path.get_root_directory()
-          local sub_project_dir = pathUtil.get_sub_project_dir()
+          local sub_project_dir = pathUtil.get_sub_project_dirs_from_root(nil, nil, false, false, "nearest")
           local prev_buf = vim.api.nvim_buf_get_name(vim.fn.bufnr "#")
           local prev_buffer_dir = prev_buf ~= "" and vim.fn.fnamemodify(prev_buf, ":p:h") or nil
 
@@ -1001,7 +1014,7 @@ function snacks_opt_tgg()
 
   -- Apply the configuration with default opts enabled
   autoMapSnacksKeys(testingmap_snacks, optsToTest, true, true)
-  Snacks.debug "Snacks keymaps configured!"
+  Snacks.debug "default test toggles Snacks keymaps configured!"
   print "Note: Matcher settings are initialized at creation time."
   print "To change matcher behavior, recreate the picker or use toggles."
 end
@@ -1056,6 +1069,89 @@ function map_layout()
   }
   autoMapSnacksKeys(testingmap_snacks, optsLayout, true, true)
 end
+function map_new_luasnippets()
+  local optsLayout = {
+    _all = {
+      layout = {
+        strategy = "horizontal",
+        preview = "main",
+        preview_width = 0.6,
+      },
+    },
+    --- @class snacks.Picker
+    --- @field [string] unknown
+    snippets = {
+      supports_live = false,
+      preview = "preview",
+      format = function(item, picker)
+        local name = Snacks.picker.util.align(item.name, picker.align_1 + 5)
+        return {
+          { name, item.ft == "" and "Conceal" or "DiagnosticWarn" },
+          { item.description },
+        }
+      end,
+      finder = function(_, ctx)
+        local snippets = {}
+        for _, snip in ipairs(require("luasnip").get_snippets().all) do
+          snip.ft = ""
+          table.insert(snippets, snip)
+        end
+        for _, snip in ipairs(require("luasnip").get_snippets(vim.bo.ft)) do
+          snip.ft = vim.bo.ft
+          table.insert(snippets, snip)
+        end
+        local align_1 = 0
+        for _, snip in pairs(snippets) do
+          align_1 = math.max(align_1, #snip.name)
+        end
+        ctx.picker.align_1 = align_1
+        local items = {}
+        for _, snip in pairs(snippets) do
+          local docstring = snip:get_docstring()
+          if type(docstring) == "table" then
+            docstring = table.concat(docstring)
+          end
+          local name = snip.name
+          local description = table.concat(snip.description)
+          description = name == description and "" or description
+          table.insert(items, {
+            text = name .. " " .. description, -- search string
+            name = name,
+            description = description,
+            trigger = snip.trigger,
+            ft = snip.ft,
+            preview = {
+              ft = snip.ft,
+              text = docstring,
+            },
+          })
+        end
+        return items
+      end,
+      confirm = function(picker, item)
+        picker:close()
+        --
+        local expand = {}
+        require("luasnip").available(function(snippet)
+          if snippet.trigger == item.trigger then
+            table.insert(expand, snippet)
+          end
+          return snippet
+        end)
+        if #expand > 0 then
+          vim.cmd ":startinsert!"
+          vim.defer_fn(function()
+            require("luasnip").snip_expand(expand[1])
+          end, 50)
+        else
+          Snacks.notify.warn "No snippet to expand"
+        end
+      end,
+    },
+  }
+  autoMapSnacksKeys(testingmap_snacks, optsLayout, true, true)
+end
+
 function mapGitOpts()
   local gitMapOpts = {
     -- TODO: use this in git custom picker
@@ -1431,7 +1527,8 @@ end
 --#endregion
 
 function main()
-  snacks_opt_tgg()
+  -- snacks_opt_tgg()
+  map_new_luasnippets()
   -- mapGitOpts()
   -- map_layout()
 end

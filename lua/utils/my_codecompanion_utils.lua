@@ -9,7 +9,8 @@ local MODELS = require("utils.my_ai_constants").models
 -- Get Agoda-specific adapter configurations
 -- These adapters use internal Agoda endpoints and are separated from the main config
 -- for easier maintenance and to optionally exclude them from adapter selection
-function M.get_agoda_adapters()
+--- @param use_dynamic_fetch boolean? whether to use dynamic model fetching for the OpenAI Agoda adapter (default: false)
+function M.get_agoda_adapters(use_dynamic_fetch)
   return {
     -- not used
     -- Claude via Agoda GenAI Gateway
@@ -76,7 +77,9 @@ function M.get_agoda_adapters()
           model = {
             default = MODELS.gpt.GPT_5_2,
             choices = function(self, opts)
-              return require("utils.my_codecompanion_actions").fetch_model_helper(self, opts)
+              local finalOpt = vim.tbl_deep_extend("force", {}, opts or {})
+              finalOpt.use_dynamic_fetch = use_dynamic_fetch
+              return require("utils.my_codecompanion_actions").fetch_model_helper(self, finalOpt)
             end,
           },
           -- temperature = {
@@ -135,10 +138,10 @@ end
 --   }
 function M.merge_agoda_adapters(base_adapters)
   base_adapters = base_adapters or {}
-  local agoda_adapters = M.get_agoda_adapters()
+  local agoda_adapters = M.get_agoda_adapters(true)
   local result = vim.tbl_extend("force", base_adapters, agoda_adapters)
-  -- print([==[M.merge_agoda_adapters result:]==], vim.inspect(result)) -- __AUTO_GENERATED_PRINT_VAR_END__
   return result
+  -- __AUTO_GENERATED_PRINT_VAR_START__
   -- __AUTO_GENERATED_PRINT_VAR_START__
 end
 

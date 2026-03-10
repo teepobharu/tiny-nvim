@@ -1,9 +1,9 @@
 local M = {}
 
-local pathUtil = require("utils.path")
+local pathUtil = require "utils.path"
 
 function M.git_main_branch()
-  local git_dir = vim.fn.system("git rev-parse --git-dir 2> /dev/null")
+  local git_dir = vim.fn.system "git rev-parse --git-dir 2> /dev/null"
   if vim.v.shell_error ~= 0 then
     return nil
   end
@@ -94,7 +94,7 @@ function M.get_ref_metadata(ref_name)
   }
 
   -- Verify ref exists
-  vim.fn.systemlist({ "git", "rev-parse", "--verify", ref_name })
+  vim.fn.systemlist { "git", "rev-parse", "--verify", ref_name }
   if vim.v.shell_error ~= 0 then
     return metadata
   end
@@ -107,14 +107,14 @@ function M.get_ref_metadata(ref_name)
 
     -- Extract clean branch name without refs/ prefix and remote name
     local branch_name = ""
-    if full_ref:find("^refs/heads/") then
+    if full_ref:find "^refs/heads/" then
       -- Local branch: refs/heads/main -> main
       branch_name = full_ref:sub(12)
       metadata.remote = nil
-    elseif full_ref:find("^refs/remotes/") then
+    elseif full_ref:find "^refs/remotes/" then
       -- Remote branch: refs/remotes/origin/main -> extract remote and branch
       local remote_and_branch = full_ref:sub(14) -- Remove "refs/remotes/"
-      local remote_name = remote_and_branch:match("^([^/]+)/")
+      local remote_name = remote_and_branch:match "^([^/]+)/"
       branch_name = remote_and_branch:gsub("^[^/]+/", "") -- Remove remote prefix
       metadata.remote = remote_name
     else
@@ -163,8 +163,8 @@ function M.get_branch_url(ref, mode, file)
   if not ref or ref == "" then
     ref = M.git_main_branch()
   end
-  local file_path = file or vim.fn.expand("%:p")
-  local line_number = vim.fn.line(".")
+  local file_path = file or vim.fn.expand "%:p"
+  local line_number = vim.fn.line "."
 
   local gitroot = pathUtil.get_git_root()
   if not gitroot then
@@ -172,14 +172,14 @@ function M.get_branch_url(ref, mode, file)
     return ""
   end
 
-  local remote_name = ref:match("([^/]+)") or "origin"
+  local remote_name = ref:match "([^/]+)" or "origin"
   local remote_path = M.get_remote_path(remote_name)
   local ref_no_remote = ref:gsub("^[^/]+/", "") -- remove remote
   local gitrootescape = vim.pesc(gitroot)
   local git_file_path = file_path:gsub(gitrootescape .. "/?", "")
   local url_pattern = "https://%s/blob/%s/%s#L%d"
   local url = ""
-  local is_commit = ref_no_remote:match("[0-9a-fA-F]+$") ~= nil and (#ref_no_remote == 40 or #ref_no_remote == 7)
+  local is_commit = ref_no_remote:match "[0-9a-fA-F]+$" ~= nil and (#ref_no_remote == 40 or #ref_no_remote == 7)
   -- print([==[function is_commit:]==], vim.inspect(is_commit))
 
   if mode == "file" then
@@ -216,11 +216,11 @@ function M.open_mr(branch)
   local branch_name = branch
 
   -- Detect git hosting provider
-  local remote_path = M.get_remote_path("origin")
+  local remote_path = M.get_remote_path "origin"
 
-  local cmd_util = require("utils.cmd")
+  local cmd_util = require "utils.cmd"
 
-  if remote_path:match("gitlab") then
+  if remote_path:match "gitlab" then
     -- GitLab MR - try to view first, fallback to create if not exists
     cmd_util.run_command({ "glab", "mr", "view", "-w", branch_name }, {
       success = function()
@@ -229,7 +229,7 @@ function M.open_mr(branch)
       fail = function(error)
         local error_msg = table.concat(error, "\n")
         -- Check if error indicates MR doesn't exist
-        if error_msg:match("not found") or error_msg:match("no merge request") or error_msg:match("could not find") then
+        if error_msg:match "not found" or error_msg:match "no merge request" or error_msg:match "could not find" then
           vim.notify("MR not found, creating new MR for: " .. branch_name, vim.log.levels.INFO)
           -- Fallback to creating MR
           cmd_util.run_command({ "glab", "mr", "create", "-w" }, {
@@ -238,11 +238,10 @@ function M.open_mr(branch)
             end,
             fail = function(create_error)
               vim.notify("Failed to create MR: " .. table.concat(create_error, "\n"), vim.log.levels.ERROR)
-            end
+            end,
           })
-        elseif error_msg:match("looking for beginning of value") then
-          vim.notify("glab error: Check connection to gitlab or auth", vim.log.levels
-            .ERROR)
+        elseif error_msg:match "looking for beginning of value" then
+          vim.notify("glab error: Check connection to gitlab or auth", vim.log.levels.ERROR)
           -- check auth result
           vim.fn.jobstart({ "glab", "auth", "status" }, {
             on_stdout = function(_, data, _)
@@ -260,9 +259,9 @@ function M.open_mr(branch)
         else
           vim.notify("glab error: " .. error_msg, vim.log.levels.ERROR)
         end
-      end
+      end,
     })
-  elseif remote_path:match("github") then
+  elseif remote_path:match "github" then
     -- GitHub PR - try to view first, fallback to create if not exists
     cmd_util.run_command({ "gh", "pr", "view", "-w", branch_name }, {
       success = function()
@@ -271,7 +270,11 @@ function M.open_mr(branch)
       fail = function(error)
         local error_msg = table.concat(error, "\n")
         -- Check if error indicates PR doesn't exist
-        if error_msg:match("no pull requests found") or error_msg:match("not found") or error_msg:match("could not find") then
+        if
+          error_msg:match "no pull requests found"
+          or error_msg:match "not found"
+          or error_msg:match "could not find"
+        then
           vim.notify("PR not found, creating new PR for: " .. branch_name, vim.log.levels.INFO)
           -- Fallback to creating PR
           cmd_util.run_command({ "gh", "pr", "create", "-w" }, {
@@ -280,12 +283,12 @@ function M.open_mr(branch)
             end,
             fail = function(create_error)
               vim.notify("Failed to create PR: " .. table.concat(create_error, "\n"), vim.log.levels.ERROR)
-            end
+            end,
           })
         else
           vim.notify("gh error: " .. error_msg, vim.log.levels.ERROR)
         end
-      end
+      end,
     })
   else
     vim.notify("Unsupported git hosting provider: " .. remote_path, vim.log.levels.WARN)
@@ -406,13 +409,13 @@ function M.get_commits_between(from_ref, to_ref)
   end
 
   -- Get commits in range from_ref..to_ref
-  local commits = vim.fn.systemlist({
+  local commits = vim.fn.systemlist {
     "git",
     "log",
     "--oneline",
     "--pretty=format:%H",
     from_ref .. ".." .. to_ref,
-  })
+  }
 
   if vim.v.shell_error ~= 0 then
     return {}
@@ -453,9 +456,9 @@ function M.get_ref_branch_name(ref)
 
   -- For refs/remotes/origin/main -> origin/main
   local fullref = vim.fn.system("git rev-parse --symbolic-full-name " .. ref):gsub("\n", "")
-  if fullref:find("^refs/remotes/") then
+  if fullref:find "^refs/remotes/" then
     return fullref:sub(14) -- Remove "refs/remotes/"
-  elseif fullref:find("^refs/heads/") then
+  elseif fullref:find "^refs/heads/" then
     return fullref:sub(12) -- Remove "refs/heads/"
   end
 
@@ -484,5 +487,57 @@ function M.format_ref_display(ref)
 end
 
 --#endregion Git Helper Functions for Pickers
+
+--#region Submodule Helper Functions
+
+--- Get superproject root if current directory is in a submodule
+--- @param dir string|nil Directory to check (default: cwd)
+--- @return string|nil Superproject root path or nil
+function M.get_superproject_root(dir)
+  dir = dir or vim.fn.getcwd()
+  local cmd = string.format("git -C %s rev-parse --show-superproject-working-tree 2>/dev/null", vim.fn.shellescape(dir))
+  local result = vim.fn.systemlist(cmd)[1]
+  return result and result ~= "" and result or nil
+end
+
+--- Check if a directory is inside a git submodule
+--- Combined approach: check .git file + parse content
+--- @param dir string Directory to check
+--- @return boolean
+function M.is_in_submodule(dir)
+  local git_path = dir .. "/.git"
+
+  -- Fast check: if .git is a directory, it's a normal repo
+  if vim.fn.isdirectory(git_path) == 1 then
+    return false
+  end
+
+  -- Check if .git is a file (submodule or worktree)
+  if vim.fn.filereadable(git_path) == 1 then
+    local content = vim.fn.readfile(git_path)[1] or ""
+    -- Submodule: "gitdir: ../../.git/modules/name"
+    -- Worktree:  "gitdir: /path/to/repo/.git/worktrees/name"
+    if content:match "modules" then
+      return true
+    end
+  end
+
+  return false
+end
+
+--- Get the root directory of a submodule
+--- @param dir string Directory inside submodule
+--- @return string|nil Submodule root path or nil
+function M.get_submodule_root(dir)
+  if not M.is_in_submodule(dir) then
+    return nil
+  end
+
+  local cmd = string.format("git -C %s rev-parse --show-toplevel 2>/dev/null", vim.fn.shellescape(dir))
+  local result = vim.fn.systemlist(cmd)[1]
+  return result and result ~= "" and result or nil
+end
+
+--#endregion Submodule Helper Functions
 
 return M

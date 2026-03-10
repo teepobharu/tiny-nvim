@@ -214,8 +214,8 @@ return {
   -- },
   {
     "olimorris/codecompanion.nvim",
-    -- version = "^17.33.0", -- pin to avoid breaking changes
-    version = "^18.4.1",
+    -- version = "^19", -- variables rename break mcphub var code saw error on startup and mcp not seem to be used - fix https://github.com/ravitemer/mcphub.nvim/issues/275
+    version = "^18.7.0",
     dependencies = {
       -- MCPHub integration for MCP tools/resources access
       { "ravitemer/mcphub.nvim", optional = true },
@@ -277,37 +277,45 @@ return {
       --     }
       interactions = {
         chat = {
-          adapter = {
-            -- model default here not working ?
-            -- name = "copilot",
-            -- model = "gpt-5-mini",
-            name = "copilot",
-            model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
-          },
+          -- adapter = "openai_agd",
+          adapter = "copilot",
+          -- adapter = {
+          -- dont know why override model in interaction not work need replace in adpaters schema
+          -- https://codecompanion.olimorris.dev/configuration/adapters-http#changing-the-default-model
+          -- model default here not working ?
+          -- name = "copilot",
+          -- model = "grok-code-fast-1",
+          -- model = "gpt-5-mini",
+          -- model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
+          -- model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
+          -- },
         },
         -- Or, just specify the adapter by name
         inline = {
-          adapter = {
-            name = "copilot",
-            model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
-          },
+          adapter = "copilot",
         },
         cmd = {
-          adapter = {
-            name = "copilot",
-            model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
-          },
+          adapter = "copilot",
         },
         background = {
-          --          adapter = {
-          --            name = "ollama",
-          --            model = "qwen-7b-instruct",
-          --            model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
-          --          },
+          --adapter = "copilot",
         },
       },
       adapters = {
+        cache_models_for = 5000, -- local cached inside var - def 1800 (30m)
         http = require("utils.my_codecompanion_utils").merge_agoda_adapters {
+          copilot = function()
+            return require("codecompanion.adapters").extend("copilot", {
+              schema = {
+                model = {
+                  default = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
+                  -- choices -> currently no temperature opts check for 5mini
+                  -- /Users/tharutaipree/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/copilot/init.lua:334:27
+                },
+                -- temperature = { -- see tasks/open/investigate-codecompanion-adapter-switching.md:85:1
+              },
+            })
+          end,
           --   copilot = {
           --    schema = {
           --     model = {
@@ -381,7 +389,7 @@ return {
         -- will work only when open new chat with the action cmd else not change model while there is prompt
         ["AGD gpt 5.2"] = {
           interaction = "chat",
-          description = "Use AGD Claude Sonnet 4-5 for better context understanding",
+          description = "Use AGD Claude GPT 5.2 for better context understanding",
           opts = {
             adapter = {
               name = "openai_agd",
@@ -390,7 +398,36 @@ return {
               -- model = "gpt-5.2",
             },
             is_slash_cmd = true,
-            alias = "agd_claude_sonnet_4_5", -- ✅ Fixed: short_name → alias
+            alias = "agd_gpt52",
+          },
+          prompts = EMPTY_PROMPT_CCOMP,
+        },
+        --
+        -- no temp and topp together not work
+        -- opus 4.5 and 4.6 same error temp topp
+        -- ["AGD Claude Sonnet 4.5"] = {
+        --   interaction = "chat",
+        --   description = "Use AGD Claude Sonnet 4-5 for better context understanding",
+        --   opts = {
+        --     adapter = {
+        --       name = "openai_agd",
+        --       model = "claude-sonnet-4-5", -- `temperature` and `top_p` cannot both be specified for this model.
+        --     },
+        --     is_slash_cmd = true,
+        --     alias = "agd_claude_sonnet_4_5",
+        --   },
+        --   prompts = EMPTY_PROMPT_CCOMP,
+        -- },
+        ["AGD Claude Sonnet 4"] = { --works
+          interaction = "chat",
+          description = "Use AGD Claude Sonnet 4 for better context understanding",
+          opts = {
+            adapter = {
+              name = "openai_agd",
+              model = "claude-sonnet-4",
+            },
+            is_slash_cmd = true,
+            alias = "agd_claude_sonnet_4",
           },
           prompts = EMPTY_PROMPT_CCOMP,
         },
