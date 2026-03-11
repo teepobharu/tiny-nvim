@@ -11,12 +11,10 @@ local common_agent_env = {
   GEMINI_API_KEY = vim.env.GEMINI_API_KEY,
 }
 
-local EMPTY_PROMPT_CCOMP = {
-  {
-    role = "user",
-    content = "",
-  },
-}
+-- Import AI prompts from centralized location
+local ai_prompts = require "utils.my_ai_prompts"
+local EMPTY_PROMPT_CCOMP = ai_prompts.EMPTY_PROMPT_CODECOMPANION
+local CODE_REVIEW_INSTRUCTIONS = ai_prompts.CODE_REVIEW_INSTRUCTIONS
 
 return {
   {
@@ -835,6 +833,122 @@ staged-commits
 ---
 
                   ]] .. "\n\n```\n" .. vim.fn.system "git diff --staged" .. "\n```"
+              end,
+              opts = {
+                contains_code = true,
+              },
+            },
+          },
+        },
+        -- Code review actions for current buffer changes
+        ["Review Staged Changes (Current Buffer)"] = {
+          interaction = "chat",
+          description = "AI code review of staged changes in the current buffer",
+          opts = {
+            is_slash_cmd = false, -- Available in actions picker, not slash command
+            auto_submit = false, -- Manual review before sending
+            stop_context_insertion = false, -- Allow visual selection context
+          },
+          context = {
+            {
+              type = "file",
+              path = function()
+                return vim.api.nvim_buf_get_name(0)
+              end,
+            },
+          },
+          prompts = {
+            {
+              role = "user",
+              content = function(context)
+                local diff = require("utils.my_codecompanion_utils").get_buffer_staged_diff(context)
+
+                -- Check if error or no changes
+                if diff:match "^Error:" or diff:match "^No" then
+                  return diff
+                end
+
+                local scope = (context and context.start_line) and "selected lines" or "entire file"
+                local filepath = vim.api.nvim_buf_get_name(0)
+                local relpath = vim.fn.fnamemodify(filepath, ":.")
+
+                return CODE_REVIEW_INSTRUCTIONS("staged", scope, relpath, diff)
+              end,
+              opts = {
+                contains_code = true,
+              },
+            },
+          },
+        },
+        ["Review Unstaged Changes (Current Buffer)"] = {
+          interaction = "chat",
+          description = "AI code review of unstaged changes in the current buffer",
+          opts = {
+            is_slash_cmd = false,
+            auto_submit = false,
+            stop_context_insertion = false,
+          },
+          context = {
+            {
+              type = "file",
+              path = function()
+                return vim.api.nvim_buf_get_name(0)
+              end,
+            },
+          },
+          prompts = {
+            {
+              role = "user",
+              content = function(context)
+                local diff = require("utils.my_codecompanion_utils").get_buffer_unstaged_diff(context)
+
+                if diff:match "^Error:" or diff:match "^No" then
+                  return diff
+                end
+
+                local scope = (context and context.start_line) and "selected lines" or "entire file"
+                local filepath = vim.api.nvim_buf_get_name(0)
+                local relpath = vim.fn.fnamemodify(filepath, ":.")
+
+                return CODE_REVIEW_INSTRUCTIONS("unstaged", scope, relpath, diff)
+              end,
+              opts = {
+                contains_code = true,
+              },
+            },
+          },
+        },
+        ["Review All Changes (Current Buffer)"] = {
+          interaction = "chat",
+          description = "AI code review of all changes (staged + unstaged) in current buffer",
+          opts = {
+            is_slash_cmd = false,
+            auto_submit = false,
+            stop_context_insertion = false,
+          },
+          context = {
+            {
+              type = "file",
+              path = function()
+                return vim.api.nvim_buf_get_name(0)
+              end,
+            },
+          },
+          prompts = {
+            {
+              role = "user",
+              content = function(context)
+                local diff = require("utils.my_codecompanion_utils").get_buffer_all_diff(context)
+
+                if diff:match "^Error:" or diff:match "^No changes" then
+                  return diff
+                end
+
+                local scope = (context and context.start_line) and "selected lines" or "entire file"
+                local filepath = vim.api.nvim_buf_get_name(0)
+                local relpath = vim.fn.fnamemodify(filepath, ":.")
+
+                return CODE_REVIEW_INSTRUCTIONS("all (staged + unstaged)", scope, relpath, diff)
               end,
               opts = {
                 contains_code = true,
