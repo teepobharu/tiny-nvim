@@ -696,7 +696,15 @@ Documentation and Tracking:
           },
         },
         -- overrides the prompt from jellydn to
-        ["Generate a Commit Message for Staged Short"] = {
+        ["Generate a Commit Message for Staged"] = {
+          strategy = "chat",
+          description = "Generate a commit message for staged change",
+          -- fix original lua/plugins/extra/codecompanion.lua for overriding to alias instead of shortname
+          opts = {
+            alias = "staged-commit",
+          },
+        },
+        ["Generate a Commit Message for Short Staged"] = {
           interaction = "chat",
           description = "Generate a commit message for staged change",
           opts = {
