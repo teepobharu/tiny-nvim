@@ -1,160 +1,118 @@
-# AGENTS.md - tiny-nvim
-
-Guide for agentic coding agents working in this Neovim configuration repository.
+# AGENTS.md — Neovim Config Agent Guide
 
 ## Project Overview
 
-tiny-nvim is a minimal Neovim 0.11+ config that relies on built-in LSP and a curated set
-of plugins managed by lazy.nvim. Most edits are Lua under `lua/` with optional extras
-under `lua/plugins/extra/`.
+Lightweight Neovim 0.11+ config forked from `jellydn/tiny-nvim`. Focus: minimal plugins, built-in LSP, fast startup, AI tool integration (CodeCompanion, Avante, CopilotChat, MCPHub).
 
-## Build, Lint, Test
+**Language**: Lua | **Formatter**: `stylua` (120 col, 2-space indent) | **Key config**: `lua/plugins/extra/my*.lua`
 
-### Setup
+## Directory Structure
 
-```bash
-# Install required external tools
-./scripts/install-tools.sh
-
-# Plugin sync (run inside Neovim)
-:Lazy sync
+```
+├── init.lua
+├── lua/
+│   ├── config/         # options, keymaps, autocmds (my*.lua = personal overrides)
+│   ├── plugins/        # upstream specs (read-only); extra/my*.lua = personal overrides
+│   ├── utils/          # shared utilities
+│   └── langs/          # language-specific settings
+├── docs/memory/        # living plugin docs (update as you learn)
+├── tasks/              # task management — see tasks/AGENTS.md
+└── scripts/install-tools.sh
 ```
 
-### Linting and Formatting
+## Editing Guidelines
 
-```bash
-# Format all Lua
-stylua .
+- Do not remove any code comments unless instructed to or the implementation makes the comment obsolete.
+- Avoid adding to existing `lua/plugins/*.lua` unless required.
+- `myEditor` currently contains most overridden user config for plugins, but ideally plugins should be in `plugins/extra/my<plugin_groups/plugin_name>.lua` — slowly migrate, not urgent. For new overrides not yet in a `my*.lua` file, start there.
+- For plugin configuration overrides, use files named `plugins/extra/my<group_name/plugin_name>.lua`. This separates personal changes from upstream configurations.
+- When adding new overrides, prefer creating a `my*.lua` file with the "my" prefix to avoid conflicts with upstream updates.
+- For POCs or temporary task changes, use `plugins/extra/tmp_<description>.lua` and clean them up later.
+- Only modify `plugins/*.lua` directly if necessary (e.g., when deep-merging config is not possible for functions vs tables). In such cases, move custom code to `lua/plugins/extra/` or `lua/utils/`. If placed in `/extra`, ensure it is imported at the relevant entry point.
+- When asked to work on a spec in `docs/*.md`, update the detail and short description in the shortlist with code reference hyperlinks.
+- **DIGDEEP**: A reliable source for installed plugin source code is `~/.local/share/$NVIM_APPNAME/lazy/<plugin_name>` (e.g., `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/`).
+- When working with plugin configurations or editing Vim/Lua files, be vigilant for common caveats, patterns, or recurring issues. Whenever you encounter a problem and its solution, document both in `docs/memory/<plugin_name>.md`. Keep it clean and concise. Treat this as a living resource — continually review and amend it.
 
-# Format a single file
-stylua lua/plugins/coding.lua
+## Plugin Conventions
 
-# Lint JS/TS/JSON (biome is linter only)
-biome lint .
-biome lint --write .
-biome lint --write --unsafe .
+| Rule | Detail |
+|------|--------|
+| Personal overrides | `lua/plugins/extra/my<name>.lua` |
+| Temporary POCs | `lua/plugins/extra/tmp_<desc>.lua` |
+| Don't edit | `lua/plugins/*.lua` (upstream) |
+| Deep-merge not possible? | Move custom code to `lua/plugins/extra/` or `lua/utils/` |
 
-# Spell check
-cspell "**/*.{lua,md,txt}"
-```
+Plugin source for investigation: `~/.local/share/nvim3_jelly_tinynvim/lazy/<plugin-name>/`
 
-### Health Checks
+## Essential Commands
 
-```vim
-:checkhealth
-:check vim.lsp
-:ConformInfo
-```
+| Task | Command |
+|------|---------|
+| Start Neovim | `NVIM_APPNAME=nvim3_jelly_tinynvim nvim` |
+| Install plugins | `NVIM_APPNAME=nvim3_jelly_tinynvim nvim --headless -c "Lazy install" -c "qa"` |
+| Format Lua | `stylua lua/` |
+| Plugin status | `:Lazy` |
+| LSP status | `:LspInfo` |
+| MCP servers | `:MCPHub` |
 
-### Tests (Single Test Focus)
+## Key Gotchas
 
-This repo does not include unit tests itself. Testing is typically done through Neovim
-plugins against external projects.
-
-Within Neovim (vim-test):
-
-- `:TestNearest` single test at cursor
-- `:TestFile` tests in current file
-- `:TestSuite` full suite
-- `:JestRunner` or `:VitestRunner` for nearest test
-
-Within Neovim (neotest):
-
-- `<leader>ctr` run nearest test
-- `<leader>ctt` run current file
-- `<leader>ctT` run all test files
-- `<leader>ctl` rerun last test
-
-## Code Style Guidelines
-
-### Lua Formatting
-
-- Indentation: 2 spaces, no tabs
-- Max line width: 120
-- Quotes: prefer double quotes
-- Call parens: omit for single string arg (`require "config.options"`)
-
-### Imports and Requires
-
+**MCPHub workspace mode** — disable for consistent CLI agent port:
 ```lua
-require "config.options"
-local map = vim.keymap.set
-
-local ok, mod = pcall(require, "module")
-if not ok then
-  return
-end
-
-local on_attach = require("utils.lsp").on_attach
+-- lua/plugins/extra/myAi.lua
+opts = { port = 37373, workspace = { enabled = false } }
 ```
 
-### Naming
+**Lazy.nvim merging** — tables deep-merge, functions don't (last wins). See `docs/memory/lazy-nvim-config-merging.md`.
 
-- Variables/functions: `snake_case`
-- Modules/tables: `PascalCase`
-- Globals: `_G.camelCase()` only when required for keymaps
-- Private helpers: prefix with `_`
+**Project-specific config** — Neovim loads `.nvim-config.lua` from CWD (not git-tracked).
 
-### Error Handling
+## AI Tool Integration
 
-- Prefer guard clauses and early returns
-- Use `pcall` for optional modules or IO
-- Notify errors via `vim.notify(..., vim.log.levels.ERROR)` when user-facing
+| Tool | Config file |
+|------|-------------|
+| CodeCompanion | `lua/plugins/extra/codecompanion.lua` |
+| Avante | `lua/plugins/extra/avante.lua` |
+| CopilotChat | `lua/plugins/extra/copilot-chat.lua` |
+| MCPHub (orchestrates all) | `lua/plugins/extra/myAi.lua` |
 
-### Comments
+MCPHub port: `37373` | Config: `~/dotfiles/ai/mcp/mcphub.json`
 
-- Keep comments minimal; rely on clear names
-- Comment only for non-obvious logic or user-facing behavior
+Reference: `docs/memory/mcphub.md`, `docs/memory/mcphub-nvim-integrations.md`
 
-### Types and Diagnostics
+## Task Management
 
-- Lua runtime is LuaJIT
-- Allowed globals include `vim` and `Snacks` (from `.luarc.json`)
-- Keep `workspace.checkThirdParty = false`
+See **[tasks/AGENTS.md](tasks/AGENTS.md)** for the full workflow.
 
-## Project Conventions
+- Keep user in the loop to verify changes work with checkboxes, then iterate to fix failed cases.
+- Pick up work from `tasks/open/` first before starting anything new.
+- Follow `tasks/` folder structure for status management:
+  - `tasks/drafts/` — Ideas and planning
+  - `tasks/open/` — New tasks ready to start
+  - `tasks/wip/` — Work in progress (optional, for longer tasks)
+  - `tasks/review/` — Awaiting user verification
+  - `tasks/completed/` — Completed and verified by USER
+  - `tasks/archive/` — Abandoned or superseded
+  - `tasks/projects/` — Long-running projects with dedicated directories
+- **IMPORTANT**: AI agents MUST NOT move tasks from `review/` to `completed/` — only the USER can do this.
+- **Link Format Rule**: All file links in task files MUST use paths relative to git root WITHOUT `../` prefix
+  - Correct: `[File](lua/utils/snacks_actions.lua)`
+  - Wrong: `[File](../../lua/utils/snacks_actions.lua)`
+- **Verification Required**: Before moving to `review/`, fill in the Verification section with:
+  - How to verify (environment, preconditions)
+  - Exact commands to run
+  - Checklist of expected outcomes
+- Learnings go in `docs/memory/`, not `tasks/`
+- See [tasks/TASK-TEMPLATE.md](tasks/TASK-TEMPLATE.md) for task file template
+- See [docs/task_tracking.md](docs/task_tracking.md) for detailed templates and reference
 
-### Structure
+## Documentation (Living Memory)
 
-```
-lua/
-  config/      core options, keymaps, autocmds, lazy
-  plugins/     plugin specs
-    extra/     optional/extra plugins
-  langs/       language-specific configs
-  utils/       shared helpers
-lsp/           native Neovim 0.11+ LSP configs
-scripts/       install/setup scripts
-```
+Update `docs/memory/<plugin>.md` whenever you find a non-obvious pattern or fix. Key files:
 
-### Plugin Specs
+- `codecompanion.md` · `avante.md` · `mcphub.md` · `mcphub-nvim-integrations.md`
+- `gitsigns.md` · `neotree.md` · `lazy-nvim-config-merging.md` · `keybindings_conflicts.md`
 
-- Files under `lua/plugins/` return plugin spec tables for lazy.nvim
-- Use `optional = true` for extension plugins
-- Keep plugin config close to its spec
+---
 
-### LSP and Project Overrides
-
-- LSP configs live in `lsp/` and use native Neovim 0.11+ format
-- Project-specific overrides go in `.nvim-config.lua` (gitignored)
-- Global config toggles use `vim.g.*` (e.g., `vim.g.enable_extra_plugins`)
-
-## Rules and Agent Notes
-
-### Cursor and Copilot Rules
-
-- No `.cursor/rules/`, `.cursorrules`, or `.github/copilot-instructions.md` found
-  in this repo at the time of writing.
-
-### Editing Expectations
-
-- Keep changes small and focused
-- Avoid unnecessary new dependencies
-- Do not auto-generate large blocks or rewrite unrelated files
-
-## Quick Validation
-
-After changes, run:
-
-- `stylua .` for Lua formatting
-- `:checkhealth` in Neovim to confirm config health
+**Last Updated**: 2026-03-11

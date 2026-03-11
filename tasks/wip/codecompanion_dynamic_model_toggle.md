@@ -16,6 +16,7 @@ related:
 ## Overview
 
 Enhance CodeCompanion integration with three key features:
+
 1. **Toggle inline with adapter** - Enable inline edits with adapter selection
 2. **Toggle chat with model select** - Quick chat toggle with model picker
 3. **Dynamic model list for openai_agd** - Fetch models from API instead of hardcoded choices
@@ -25,15 +26,18 @@ Enhance CodeCompanion integration with three key features:
 ### Current Limitations (from source investigation)
 
 **Inline Commands:**
+
 - `:CodeCompanion adapter=copilot <prompt>` - ✅ Supports adapter
 - `:CodeCompanion adapter=copilot model=gpt-4.1 <prompt>` - ❌ Model parameter NOT parsed
 - Source: [lua/codecompanion/interactions/inline/init.lua:238-239](lua/codecompanion/interactions/inline/init.lua)
 
 **Chat Commands:**
+
 - `:CodeCompanionChat adapter=copilot model=gpt-4.1` - ✅ Both supported
 - Source: [lua/codecompanion/commands.lua:158-194](lua/codecompanion/commands.lua)
 
 **Model Configuration:**
+
 - Current: Hardcoded choices in adapter config
 - Needed: Dynamic fetching from OpenAI API for openai_agd adapter
 
@@ -145,6 +149,7 @@ end
 ```
 
 **Keymap:**
+
 ```lua
 vim.keymap.set("v", "<leader>ASmm", function()
   require("utils.my_codecompanion_actions").toggle_inline_with_picker()
@@ -195,6 +200,7 @@ end
 ```
 
 **Keymap:**
+
 ```lua
 vim.keymap.set("n", "<leader>ASM", function()
   require("utils.my_codecompanion_actions").toggle_chat_with_picker()
@@ -344,11 +350,13 @@ end
 ## Implementation Plan
 
 ### Phase 0: Consolidation (Prerequisite)
+
 - [x] Move CodeCompanion plugin spec from [lua/plugins/extra/myEditor.lua](lua/plugins/extra/myEditor.lua) to [lua/plugins/extra/myAi.lua](lua/plugins/extra/myAi.lua)
 - [x] Replace inline `openai_agd` with `merge_agoda_adapters()` from [lua/utils/my_codecompanion_utils.lua](lua/utils/my_codecompanion_utils.lua)
 - [x] Remove debug print in `inline_with_adapter`
 
 ### Phase 1: Local Wrappers (Quick Win)
+
 - [x] Add `toggle_inline_with_picker()` to [lua/utils/my_codecompanion_actions.lua](lua/utils/my_codecompanion_actions.lua)
 - [x] Add `toggle_chat_with_picker()` to [lua/utils/my_codecompanion_actions.lua](lua/utils/my_codecompanion_actions.lua)
 - [x] Add keymaps in `generate_codecompanion_keymaps()`:
@@ -356,6 +364,7 @@ end
   - `<leader>ASM` - Chat toggle with picker (normal mode)
 
 ### Phase 2: Dynamic Model Fetching
+
 - [x] Verify `fetch_model_helper` exists in [lua/utils/my_codecompanion_actions.lua](lua/utils/my_codecompanion_actions.lua)
 - [x] Wire `fetch_model_helper` as `choices` function in `openai_agd` adapter schema
 - [x] Dual fetch mode: Static (default) vs Dynamic (requires VPN)
@@ -371,31 +380,42 @@ end
     - `<leader>ASM` - Chat toggle with static picker (normal mode)
 
 ### Phase 3: Upstream Contribution (Optional)
+
 - [ ] Submit PR to codecompanion.nvim to support `model=` in inline commands
 - [ ] Add model parameter parsing in [lua/codecompanion/interactions/inline/init.lua:238-261](lua/codecompanion/interactions/inline/init.lua)
 - [ ] Update command completion in [lua/codecompanion/commands.lua:67-118](lua/codecompanion/commands.lua)
 
+## TODO
+
+More requirements
+
+- [ ] handle specific models parameters opts claude (check todo) define some configuration in the model or apply generic rules in model provider in lua/utils/my_codecompanion_actions.lua:90:40
+
 ## Testing Checklist
 
 ### Toggle Inline with Picker (Static)
+
 - [ ] Visual select code → `<leader>ASmm` → Select adapter → Select model → Inline edit works
 - [ ] Model override persists for that inline session
 - [ ] Falls back to default if picker cancelled
 - [ ] Uses static models from `my_ai_constants` (no network dependency)
 
 ### Toggle Chat with Picker (Static)
+
 - [ ] No chat exists → `<leader>ASM` → Creates chat with selected adapter+model
 - [ ] Chat exists → `<leader>ASM` → Changes adapter+model in existing chat
 - [ ] Model persists across chat toggle
 - [ ] Uses static models from `my_ai_constants` (no network dependency)
 
 ### Toggle Inline with Picker (Dynamic) - Requires VPN
+
 - [ ] Visual select code → `<leader>ASSMM` → Select adapter → Select model → Inline edit works
 - [ ] Shows models fetched from AGD proxy `/v1/models` endpoint
 - [ ] Produces error notification when proxy unreachable (no VPN) - expected behavior
 - [ ] Falls back to static list on API error
 
 ### Toggle Chat with Picker (Dynamic) - Requires VPN
+
 - [ ] No chat exists → `<leader>ASSM` → Creates chat with selected adapter+model
 - [ ] Chat exists → `<leader>ASSM` → Changes adapter+model in existing chat
 - [ ] Shows models fetched from AGD proxy `/v1/models` endpoint
@@ -403,12 +423,14 @@ end
 - [ ] Falls back to static list on API error
 
 ### Model Filtering (Both Modes)
+
 - [ ] Filters apply (blacklist/keywords from [lua/utils/my_ai_constants.lua](lua/utils/my_ai_constants.lua))
 - [ ] Works with both `openai_agd` and potential future adapters
 
 ## Documentation Updates
 
 After implementation, update:
+
 - [ ] [docs/codecompanion_20260107_update.md](docs/codecompanion_20260107_update.md) - Add new features section
 - [ ] [lua/utils/my_codecompanion_actions.lua](lua/utils/my_codecompanion_actions.lua) - Add JSDoc comments
 - [ ] [myKeys.md](myKeys.md) - Document new keymaps
@@ -419,6 +441,7 @@ After implementation, update:
 ### Why Not Use Command Line?
 
 Command-line approach has limitations:
+
 - `:CodeCompanion adapter=x model=y` - Model NOT parsed for inline (source confirmed)
 - `:CodeCompanionChat adapter=x model=y` - Works but no completion until adapter selected
 - Picker UI is more user-friendly for model selection
@@ -426,12 +449,18 @@ Command-line approach has limitations:
 ### Compatibility with Existing Keymaps
 
 Current keymaps in [lua/utils/my_codecompanion_actions.lua](lua/utils/my_codecompanion_actions.lua):
+
 - `<leader>ASf/F/h/H/c/C` - Direct model selection (keep these)
 - `<leader>ASmm` - NEW: Inline picker
 - `<leader>ASM` - NEW: Chat picker
 - `<leader>ASi` - Current adapter info (existing)
 
 No conflicts - new keymaps complement existing workflow.
+
+### Customization
+
+Opts in model
+~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/copilot/get_models.lua#L162C16
 
 ## References
 

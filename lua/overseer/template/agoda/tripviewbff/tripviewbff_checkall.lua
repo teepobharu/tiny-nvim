@@ -1,8 +1,8 @@
 ---@return overseer.TemplateDefinition
 return {
-  name = "Run TW Tripviewbff pick",
+  name = "Run TW Tripviewbff checkall",
   tags = vim.list_extend({ "agoda", "custom" }, require("overseer").TAG.values),
-  description = "run android test on current file",
+  description = "Run tripviewbff checkall script",
   builder = function(params)
     -- v2: Validation moved from condition callback
     local current_path = vim.fn.expand "%:p:h"
@@ -14,10 +14,14 @@ return {
     end
 
     local sel_command = params.command
-    local base_command = "sh " .. vim.fn.expand "$HOME" .. "/Personal/mynotes/work/AgodaCoding/agodaSnip.sh mmba "
+
+    -- __AUTO_GENERATED_PRINT_VAR_START__
+    print([==[builder sel_command:]==], vim.inspect(sel_command)) -- __AUTO_GENERATED_PRINT_VAR_END__
+    local base_command = "sh " .. vim.fn.expand "$HOME" .. "/Personal/mynotes/work/AgodaCoding/agodaSnip.sh mmba"
 
     -- NOTES: ONLY CHANGE IS HERE FROM the ./tripviewbff_pick.lua
-    local finalcmd = base_command .. " " .. (sel_command or "tw_checkall_choose")
+    local is_select = sel_command and sel_command ~= ""
+    local finalcmd = base_command .. " " .. (is_select and sel_command or "tw_checkall_choose")
 
     ---@type overseer.TaskDefinition
     return {
