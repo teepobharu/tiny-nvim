@@ -464,6 +464,84 @@ git add <files>
 
 ---
 
+## 12. Custom Actions with Visual Mode Line Range Filtering
+
+**Date Added:** 2026-03-11  
+**Pattern:** Creating CodeCompanion actions that filter git diffs by visual selection
+
+### Key Findings
+
+**Visual Mode Context:**
+CodeCompanion actions receive visual selection context automatically when invoked with `:'<,'>CodeCompanionActions`:
+
+```lua
+prompts = {
+  {
+    role = "user",
+    content = function(context)
+      -- context.start_line and context.end_line available in visual mode
+      local start_line = context and context.start_line
+      local end_line = context and context.end_line
+      -- Use these to filter content
+    end,
+  },
+}
+```
+
+**Git Diff Hunk Filtering:**
+To filter git diff by line range, parse hunk headers (`@@ -old +new @@`):
+
+```lua
+-- Example hunk header: @@ -10,5 +15,8 @@
+local new_start, new_count = line:match "^@@%s*%-(%d+),?(%d*)%s*%+(%d+),?(%d*)%s*@@"
+
+-- Check if hunk overlaps with [start_line, end_line]
+local hunk_end = new_start + new_count - 1
+local overlaps = (new_start <= end_line and hunk_end >= start_line)
+```
+
+**Full File Context Pattern:**
+Include full file content as context for better AI analysis:
+
+```lua
+context = {
+  {
+    type = "file",
+    path = function()
+      return vim.api.nvim_buf_get_name(0)
+    end,
+  },
+}
+```
+
+This provides AI with complete file structure while the prompt contains specific changes to review.
+
+**Reusable Prompts:**
+Extract common prompts to `lua/utils/my_ai_prompts.lua` for sharing across actions:
+
+```lua
+-- In my_ai_prompts.lua
+M.MY_PROMPT = function(param1, param2)
+  return string.format([[Your prompt template with %s and %s]], param1, param2)
+end
+
+-- In myAi.lua
+local prompts = require("utils.my_ai_prompts")
+content = function(context)
+  return prompts.MY_PROMPT(arg1, arg2)
+end
+```
+
+### Example Implementation
+
+See `tasks/review/codecompanion-code-review-actions.md` for complete implementation example with:
+- Visual mode line range filtering for git diffs
+- Full file context integration
+- Reusable prompt templates
+- Error handling patterns
+
+---
+
 ## References
 
 - **CodeCompanion Repo:** https://github.com/olimorris/codecompanion.nvim
@@ -471,5 +549,5 @@ git add <files>
 - **Adapter Code:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/`
 - **Config Schema:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/init.lua`
 - **OpenAI Adapter:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai.lua`
-- **OpenAI Responses Adapter:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai_responses.lua`
+- **OpenAI Responses Adapter:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai_responses.lua`
 
