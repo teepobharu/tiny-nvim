@@ -301,7 +301,7 @@ return {
     build = "bundled_build.lua",
     opts = {
       use_bundled_binary = true,
-      config = vim.fn.expand("~/dotfiles/claude/mcp-proxy/mcphub.json"),
+      config = vim.fn.expand("~/dotfiles/ai/mcp/mcphub.json"),
       port = 37373,
       auto_approve = false,
       auto_toggle_mcp_servers = true,

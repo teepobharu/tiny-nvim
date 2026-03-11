@@ -53,6 +53,7 @@ Successfully extended the `<M-y>` and `YY` keymaps in files/grep/buffers pickers
 ### New Keymap
 
 **`<A-c>` in sub-picker** (line 647)
+
 - Toggles `vim.g.code_ref_hide_col` global variable
 - Shows notification: "Column: hidden" / "Column: shown"
 - Closes and reopens picker with updated formats
@@ -60,16 +61,19 @@ Successfully extended the `<M-y>` and `YY` keymaps in files/grep/buffers pickers
 ## Behavior
 
 ### Files Picker (`<leader>ff` / `<leader><space>`)
+
 - Press `<M-y>` or `YY` on a file
 - **Shows:** ~4-8 path format variants only
 - **No code-ref variants** (no line/col info available)
 
 ### Grep Picker (`<leader>/`)
+
 - Search for a term (e.g., "function", "local")
 - Press `<M-y>` or `YY` on a search result
 - **Shows:** Path formats + Code-ref variants (~20-40 total items)
 
 **Example output:**
+
 ```
 Relative (colon): lua/utils/snacks_actions.lua:128:3
 Relative (space): lua/utils/snacks_actions.lua 128:3
@@ -83,6 +87,7 @@ Git (@caps):      @utils/snacks_actions.lua L128:C3
 ```
 
 ### Buffers Picker (`<leader>,` / `<leader>fb`)
+
 - Press `<M-y>` or `YY` on a buffer
 - **Shows:** ~4-8 path format variants only
 - **No code-ref variants** (no line/col info available)
@@ -151,13 +156,26 @@ Git (@caps):      @utils/snacks_actions.lua L128:C3
   2. Check `:messages` for errors
   3. **Verify:** No error messages
 
+## User Reviewed Notes
+
+- [ ] Unify behavior - [ ] enter = paste - [ ] c-y = copy
+      Tested result
+  - current file / grep picker enter = paste
+    - preview show action hints + file info
+    - paste as markdown link do weird thing should show correct format as : ()[<selected>]
+  - keymap picker = copy
+    - ui should show key hints in footer
+    - preview show nothing
+
 ## Documentation
 
 ### Created Files
+
 - [`tests/spec_coderef_picker_extension.md`](tests/spec_coderef_picker_extension.md) - Comprehensive test specification
 - [`tests/manual_test_coderef_grep.md`](tests/manual_test_coderef_grep.md) - Manual testing log template
 
 ### Updated Files
+
 - [`tasks/wip/coderef-snippets-and-keymaps.md`](tasks/wip/coderef-snippets-and-keymaps.md) - Added "Files/Grep Picker Integration" section
 
 ## Technical Details
@@ -194,11 +212,13 @@ col = item.pos[2] + 1       -- 0-based → 1-based
 ## Rollback Plan
 
 If issues found, revert changes:
+
 ```bash
 git checkout HEAD~1 -- lua/utils/snacks_actions.lua
 ```
 
 Or manually revert:
+
 1. `get_item_path()` - restore to return only `file_path`
 2. Delete `generate_coderef_formats()` function
 3. `copy_path_select()` - remove code-ref merging logic

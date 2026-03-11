@@ -254,13 +254,13 @@ For CLI agents to always have access (without Neovim), run mcp-hub independently
 npm install -g mcp-hub
 
 # Start with your config
-mcp-hub --config ~/dotfiles/claude/mcp-proxy/mcphub.json --port 37373 --watch
+mcp-hub --config ~/dotfiles/ai/mcp/mcphub.json --port 37373 --watch
 ```
 
 ### Option 2: Using start-mcphub.sh
 
 ```bash
-cd ~/dotfiles/claude/mcp-proxy
+cd ~/dotfiles/ai/mcp
 
 # Start
 ./start-mcphub.sh start
@@ -350,9 +350,9 @@ require("mcphub").setup({
 
 | File                                          | Purpose                                     |
 | --------------------------------------------- | ------------------------------------------- |
-| `~/dotfiles/claude/mcp-proxy/mcphub.json`     | MCP server definitions                      |
-| `~/dotfiles/claude/mcp-proxy/.env`            | Environment variables                       |
-| `~/dotfiles/claude/mcp-proxy/start-mcphub.sh` | Management script                           |
+| `~/dotfiles/ai/mcp/mcphub.json`     | MCP server definitions                      |
+| `~/dotfiles/ai/mcp/.env`            | Environment variables                       |
+| `~/dotfiles/ai/mcp/start-mcphub.sh` | Management script                           |
 | `lua/plugins/extra/myAi.lua`                  | MCPHub + CodeCompanion MCP extension config |
 
 ### mcphub.json Format
