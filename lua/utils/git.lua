@@ -540,4 +540,126 @@ end
 
 --#endregion Submodule Helper Functions
 
+--#region Git Helper Functions for Diff Changes
+-- Helper to extract file status (M/A/D/R) from name-status output
+local function get_file_status(name_status, filename)
+  for line in name_status:gmatch "[^\r\n]+" do
+    -- Match status at start of line
+    local status, file = line:match "^(%S+)%s+(.+)"
+    if file and file:match(vim.pesc(filename)) then
+      return status
+    end
+  end
+  return "M" -- default to Modified
+end
+
+-- Helper to parse rename paths from numstat output
+-- Handles patterns like: "path/{old => new}/file.txt" or "{old => new}"
+local function parse_rename(rename_str)
+  -- Pattern 1: "path/{old => new}/rest"
+  local prefix, old_name, new_name, suffix = rename_str:match "(.-)%{(.-)%s*=>%s*(.-)%}(.*)"
+  if prefix and old_name and new_name then
+    return prefix .. old_name .. suffix, prefix .. new_name .. suffix
+  end
+
+  -- Pattern 2: Direct rename without braces (from name-status)
+  local old_path, new_path = rename_str:match "(.+)%s+=>%s+(.+)"
+  if old_path and new_path then
+    return old_path:match "^%s*(.-)%s*$", new_path:match "^%s*(.-)%s*$"
+  end
+
+  return rename_str, rename_str
+end
+
+-- Get filtered staged diff with large files shown as summary only
+-- @param threshold number: minimum total line changes to show as summary (default: 50)
+-- @return string: formatted diff output
+function M.get_filtered_staged_diff(threshold)
+  threshold = threshold or 50
+
+  -- Get numstat (line counts per file)
+  local numstat = vim.fn.system "git diff --staged --numstat"
+  if vim.v.shell_error ~= 0 or numstat == "" then
+    return "No staged changes"
+  end
+
+  -- Get name-status (M/A/D/R status per file)
+  local name_status = vim.fn.system "git diff --staged --name-status"
+
+  local large_files = {}
+  local small_files = {}
+  local renames = {}
+  local binaries = {}
+
+  -- Parse numstat and categorize files
+  for line in numstat:gmatch "[^\r\n]+" do
+    local added, deleted, filename = line:match "(%S+)%s+(%S+)%s+(.+)"
+
+    if filename then
+      -- Check if binary file (git shows "- -" for binary)
+      if added == "-" and deleted == "-" then
+        table.insert(binaries, filename)
+      -- Check if rename (contains "{old => new}")
+      elseif filename:match "{.*=>.*}" then
+        table.insert(renames, filename)
+      else
+        -- Calculate total changes
+        local added_num = tonumber(added) or 0
+        local deleted_num = tonumber(deleted) or 0
+        local total = added_num + deleted_num
+
+        if total > threshold then
+          table.insert(large_files, {
+            file = filename,
+            added = added,
+            deleted = deleted,
+          })
+        else
+          table.insert(small_files, filename)
+        end
+      end
+    end
+  end
+
+  -- Build output
+  local output = {}
+
+  -- 1. Large files (summary only)
+  for _, item in ipairs(large_files) do
+    local status = get_file_status(name_status, item.file)
+    table.insert(output, string.format("%s %s +%s -%s", status, item.file, item.added, item.deleted))
+  end
+
+  -- 2. Renames (summary only)
+  for _, rename_path in ipairs(renames) do
+    local old_name, new_name = parse_rename(rename_path)
+    table.insert(output, string.format("R %s -> %s", old_name, new_name))
+  end
+
+  -- 3. Binary files (summary only)
+  for _, binary_file in ipairs(binaries) do
+    local status = get_file_status(name_status, binary_file)
+    table.insert(output, string.format("%s %s (binary)", status, binary_file))
+  end
+
+  -- 4. Small files (full diff)
+  if #small_files > 0 then
+    local escaped_files = {}
+    for _, file in ipairs(small_files) do
+      -- Escape filenames with spaces
+      table.insert(escaped_files, vim.fn.shellescape(file))
+    end
+    local files_arg = table.concat(escaped_files, " ")
+    local small_diff = vim.fn.system("git diff --staged -- " .. files_arg)
+    if small_diff ~= "" then
+      if #output > 0 then
+        table.insert(output, "")
+      end
+      table.insert(output, small_diff)
+    end
+  end
+
+  return table.concat(output, "\n")
+end
+--#endregion
 return M

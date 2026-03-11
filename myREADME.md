@@ -39,6 +39,8 @@ uv tool list
 
 ## TODO
 
+- [ ] finder dotfiles c_space grep on dotfiles not generic
+
 ### Migration fixes
 
 - [x] sesssion picker works
@@ -48,7 +50,7 @@ uv tool list
 
 Fixes attempt
 
-- [x] uf auto format not works 
+- [x] uf auto format not works
 
 Migration added
 

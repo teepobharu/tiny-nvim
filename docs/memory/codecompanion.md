@@ -1,0 +1,475 @@
+# CodeCompanion Adapter Customization & Model Parameter Handling
+
+**Date:** 2026-02-12  
+**Status:** Research & Knowledge Base  
+**Related Issues:** GPT-5.2 parameter incompatibilities with OpenAI Proxy
+
+---
+
+## 1. Adapter Schema Architecture
+
+### How Schema Maps to Request Parameters
+
+CodeCompanion uses a **schema-to-parameters mapping system** via the `mapping` key:
+
+```lua
+schema = {
+  max_tokens = {
+    mapping = "parameters",      -- Emits to adapter.parameters.max_tokens
+    type = "integer",
+    default = 4096,
+  },
+  ["reasoning.effort"] = {
+    mapping = "parameters",      -- Emits to adapter.parameters.reasoning.effort
+    type = "string",
+  },
+  verbosity = {
+    mapping = "parameters.text", -- Emits to adapter.parameters.text.verbosity
+    type = "string",
+  },
+}
+```
+
+**Mapping resolution** (from `adapters/http/init.lua:185-226`):
+- Schema keys are split by `.` (e.g., `reasoning.effort`)
+- Mapping path is split by `.` (e.g., `parameters.text`)
+- CodeCompanion creates nested objects and emits the final value there
+- All schema defaults are collected and applied via `map_schema_to_params()`
+
+### Critical Implication
+If your schema lists `max_tokens`, CodeCompanion **will always send it** in the request. The proxy/endpoint must accept it, or you get a 400 error.
+
+---
+
+## 2. OpenAI Endpoints & Parameter Requirements
+
+### Chat Completions (`/v1/chat/completions`)
+
+**CodeCompanion Adapter:** `openai.lua`  
+**Current Schema (v18.3.1):**
+- `model` → `parameters.model`
+- `reasoning_effort` → `parameters.reasoning_effort` (reasoning models only)
+- `temperature` → `parameters.temperature`
+- `top_p` → `parameters.top_p`
+- `max_tokens` → `parameters.max_tokens` ⚠️
+
+**GPT-5.2 Compatibility (per OpenAI docs):**
+- ✅ Supports: `max_completion_tokens` (not `max_tokens`)
+- ❌ Does NOT support: `temperature`, `top_p` when `reasoning_effort` > `none`
+- ⚠️ Default reasoning_effort: `none` (allows temperature/top_p)
+
+**Issue:** CodeCompanion's `openai.lua` uses `max_tokens` which GPT-5.2 rejects. No parameter auto-renaming happens.
+
+### Responses API (`/v1/responses`)
+
+**CodeCompanion Adapter:** `openai_responses.lua`  
+**Schema Parameters:**
+- `["reasoning.effort"]` → `parameters.reasoning.effort`
+- `["reasoning.summary"]` → `parameters.reasoning.summary`
+- `temperature` → `parameters.temperature`
+- `top_p` → `parameters.top_p`
+- `max_output_tokens` → `parameters.max_output_tokens` ✅
+- `verbosity` → `parameters.text.verbosity`
+
+**Note:** Responses API is newer, preferred for reasoning models. Not covered by your current setup.
+
+---
+
+## 3. Custom Adapter Implementation Pattern
+
+### File Structure (from `openai_compatible.lua`)
+
+```lua
+return {
+  name = "adapter_name",
+  formatted_name = "Display Name",
+  roles = { llm = "assistant", user = "user" },
+  opts = { stream = true, tools = true, vision = true },
+  features = { text = true, tokens = true },
+  url = "${url}${chat_url}",
+  env = {
+    api_key = "OPENAI_API_KEY",
+    url = "http://openai-proxy.agoda.is",
+    chat_url = "/v1/chat/completions",
+  },
+  headers = { ["Content-Type"] = "application/json", Authorization = "Bearer ${api_key}" },
+  handlers = { /* response parsing, setup, teardown */ },
+  schema = { /* model, temperature, max_tokens, etc. */ },
+}
+```
+
+### Env Variable Substitution
+
+- `env` table defines variable sources (hardcoded, env vars, commands)
+- Variables are resolved via `adapter_utils.get_env_vars()` → `adapter.env_replaced`
+- In `url`, headers, anywhere with `${var}` pattern, CodeCompanion substitutes values
+- Supports: plain strings, env var names (e.g., `"OPENAI_API_KEY"`), `"cmd:..."` for shell commands, functions
+
+### Schema Key Features
+
+**Example:**
+```lua
+max_tokens = {
+  order = 6,                           -- UI display order
+  mapping = "parameters",              -- Where to emit in request
+  type = "integer|number|string|enum", -- Validation type
+  optional = true,                     -- Can be omitted
+  default = 4096,                      -- Default value (or function)
+  desc = "The maximum number of...",   -- UI description
+  validate = function(n)               -- Custom validation
+    return n > 0, "Must be > 0"
+  end,
+  enabled = function(self)             -- Conditionally show (reasoning models)
+    return self.schema.model.default == "gpt-5.2"
+  end,
+}
+```
+
+**Conditional Parameters** (e.g., reasoning_effort only for reasoning models):
+```lua
+reasoning_effort = {
+  enabled = function(self)
+    local model = self.schema.model.default
+    if type(model) == "function" then model = model(self) end
+    local choices = self.schema.model.choices
+    if type(choices) == "function" then choices = choices(self) end
+    return choices and choices[model] and choices[model].opts and choices[model].opts.can_reason
+  end,
+  -- ...rest of schema
+}
+```
+
+---
+
+## 4. Model-Specific Configuration
+
+### Model Choices with Options
+
+From `openai.lua:391-442`:
+
+```lua
+choices = {
+  ["gpt-5.2"] = {
+    formatted_name = "GPT 5.2",
+    opts = { has_vision = true, can_reason = true },
+  },
+  ["gpt-4.1"] = {
+    formatted_name = "GPT 4.1",
+    opts = { has_vision = true },
+  },
+  "gpt-3.5-turbo",  -- Simple string (no opts)
+}
+```
+
+**How it works:**
+1. If model is a string key in `choices` map, and it has `opts`, those opts are merged into `adapter.opts`
+2. Handlers can check `adapter.opts.can_reason`, `adapter.opts.has_vision`, etc.
+3. Schema `enabled` functions check `choices[model].opts.can_reason` to conditionally enable reasoning params
+
+**Setup Handler Pattern** (from `openai.lua:64-89`):
+```lua
+setup = function(self)
+  local model = self.schema.model.default
+  if type(model) == "function" then model = model(self) end
+  local model_opts = self.schema.model.choices
+  if type(model_opts) == "function" then model_opts = model_opts(self) end
+  
+  if model_opts and model_opts[model] and model_opts[model].opts then
+    self.opts = vim.tbl_deep_extend("force", self.opts, model_opts[model].opts)
+  end
+  return true
+end
+```
+
+---
+
+## 5. OpenAI Proxy / Custom Endpoint Considerations
+
+### Pass-Through Behavior
+
+Your Agoda OpenAI Proxy at `http://openai-proxy.agoda.is/v1` is **OpenAI API-compatible** but:
+- **Does not rename parameters** (e.g., won't auto-convert `max_tokens` → `max_completion_tokens`)
+- **May enforce model-specific constraints** (e.g., GPT-5.2 rejects `max_tokens`, only accepts `max_completion_tokens`)
+- **Acts as a transparent forwarder**, not a translator
+
+### Implication for Your Setup
+
+Since the proxy is pass-through, **all parameter naming must be correct at the client level** (CodeCompanion). CodeCompanion doesn't have built-in parameter translation, so your adapter schema must emit exactly what the backend expects.
+
+---
+
+## 6. GPT-5.2 Specific Constraints
+
+From OpenAI docs (https://platform.openai.com/docs/guides/latest-model):
+
+| Parameter | Constraint | Workaround |
+|-----------|-----------|-----------|
+| `max_tokens` | ❌ Not supported | Use `max_completion_tokens` (chat) or `max_output_tokens` (responses) |
+| `temperature` | ❌ Only when reasoning_effort = `none` | Default is `none`, so OK if reasoning not used |
+| `top_p` | ❌ Only when reasoning_effort = `none` | Same as temperature |
+| `reasoning_effort` | ✅ Supports: none/low/medium/high/xhigh | Default: `none` |
+
+**For chat/completions with GPT-5.2:**
+1. Use `max_completion_tokens` instead of `max_tokens`
+2. Keep `temperature` and `top_p`, but they only work when `reasoning_effort` is `none` (default)
+3. If user increases reasoning effort, temperature/top_p will cause errors
+4. **Solution:** Gate temperature/top_p via `enabled = function(self)` to check reasoning_effort is `none`
+
+---
+
+## 7. Current Setup Issues
+
+### In `lua/utils/my_codecompanion_utils.lua`
+
+```lua
+openai_agd = function()
+  return require("codecompanion.adapters").extend("openai", {
+    schema = {
+      model = { default = MODELS.gpt.GPT_5_2, choices = ... },
+      temperature = { default = 0 },
+      max_tokens = { default = 4096 },  -- ❌ GPT-5.2 rejects this
+    },
+  })
+end
+```
+
+**Problems:**
+1. ✅ `model` default is correct (GPT_5_2)
+2. ✅ `temperature = 0` is OK (only active when reasoning_effort = none, which is default)
+3. ❌ `max_tokens` is wrong; GPT-5.2 expects `max_completion_tokens`
+4. ⚠️ No gating on temperature/top_p if reasoning_effort is set to > none
+
+### In `lua/utils/my_ai_constants.lua`
+
+```lua
+defaults = {
+  agd = {
+    temperature = 0,
+    max_completion_tokens = 4096,  -- ✅ Correct name, but not used by adapter
+  },
+}
+```
+
+The constant `max_completion_tokens` is defined but **not referenced by the adapter schema**, so it has no effect.
+
+---
+
+## 8. Fix Approaches
+
+### Option A: Remove max_tokens (Simplest)
+
+Delete `max_tokens` from adapter schema. CodeCompanion won't emit it.  
+**Risk:** May hit internal token limits or get unexpected truncation.  
+**Status:** Testing now.
+
+### Option B: Rename to max_completion_tokens
+
+Change schema key from `max_tokens` to `max_completion_tokens`:
+
+```lua
+max_completion_tokens = {
+  order = 6,
+  mapping = "parameters",
+  type = "integer",
+  optional = true,
+  default = 4096,
+  desc = "...",
+}
+```
+
+**Benefit:** Explicit, correct for GPT-5.2 and other new models.  
+**Caveat:** May break with older OpenAI models if using same adapter.
+
+### Option C: Model-Specific Schema
+
+Gate `max_tokens` vs `max_completion_tokens` based on model:
+
+```lua
+schema = {
+  model = { /* ... */ },
+  max_completion_tokens = {
+    enabled = function(self)
+      local model = self.schema.model.default
+      if type(model) == "function" then model = model(self) end
+      return string.match(model, "gpt%-5")
+    end,
+    mapping = "parameters",
+    type = "integer",
+    default = 4096,
+  },
+}
+```
+
+**Benefit:** Works across multiple model families in one adapter.
+
+### Option D: Proxy-side handling (Not viable)
+
+Configure proxy to rename parameters → **Not applicable** (proxy is pass-through).
+
+---
+
+## 9. Best Practices Discovered
+
+1. **Schema maps 1:1 to request params** via `mapping` key; no magic renaming.
+2. **Conditional parameters** use `enabled = function()` to gate visibility.
+3. **Model options** are metadata (opts) not config; use them to control features, enable/disable other params.
+4. **Env vars** are flexible (hardcoded, env, cmd, or function-resolved).
+5. **Custom adapters** should extend a known adapter (`openai`, `anthropic`, etc.) for handler inheritance.
+6. **Proxy endpoints** that are pass-through require correct param names at the client.
+7. **Reasoning models** have constraint conflicts (e.g., GPT-5.2 disallows temp/top_p when reasoning > none).
+
+---
+
+## 10. Testing Checklist
+
+- [ ] Remove `max_tokens` from schema; test with GPT-5.2
+- [ ] If that fails, switch to `max_completion_tokens`
+- [ ] Verify temperature/top_p work with default reasoning (none)
+- [ ] Test with reasoning_effort set to "low", "medium", "high" to see if temp/top_p cause errors
+- [ ] Document any errors and workarounds in this file
+- [ ] Update `my_codecompanion_utils.lua` with final fix
+
+---
+
+## 11. Commit Message Generation Commands
+
+**Date Added:** 2026-03-11  
+**Feature:** Dual commit message generation with smart diff filtering
+
+### Overview
+
+Two complementary commands for generating git commit messages:
+
+1. **Full Diff Command** (`<leader>Amm`) - All staged changes with full diffs
+2. **Large Files Summary** (`<leader>AmM`) - Large file summaries + small file diffs
+
+### Command Details
+
+#### Full Diff: `<leader>Amm`
+- **Alias:** `/short-staged-commit`
+- **Behavior:** Sends complete `git diff --staged` output to AI
+- **Use case:** Small changesets, detailed commit messages needed
+- **Output:** Complete diff content for all staged files
+
+#### Large Files Summary: `<leader>AmM`
+- **Alias:** `/large-files-commit`
+- **Behavior:** Smart filtering of staged diff:
+  - Files >50 lines → Summary only (`M filepath +added -deleted`)
+  - Files ≤50 lines → Full diff content
+  - Renames → Summary (`R old/path -> new/path`)
+  - Binary files → Summary (`M filepath (binary)`)
+- **Use case:** Large changesets, reduce token usage, focus AI on small changes
+- **Implementation:** `utils.my_codecompanion_utils.get_filtered_staged_diff(50)`
+
+### Output Format Example
+
+```
+M lua/plugins/extra/myAi.lua +141 -378
+M tasks/AGENTS.md +76 -0
+A tasks/new_file.md +94 -0
+D tasks/old_file.md +0 -180
+R tasks/done/task.md -> tasks/completed/task.md
+B assets/image.png (binary)
+
+diff --git c/small_file.lua i/small_file.lua
+index e380f04..c5340cc 100644
+--- c/small_file.lua
++++ i/small_file.lua
+@@ -1,3 +1,5 @@
++-- New content
+ local M = {}
+...
+```
+
+### Implementation Details
+
+**Function:** `get_filtered_staged_diff(threshold)` in `lua/utils/my_codecompanion_utils.lua`
+
+**Algorithm:**
+1. Run `git diff --staged --numstat` to get line change counts
+2. Run `git diff --staged --name-status` to get file status (M/A/D/R)
+3. Categorize files:
+   - `added + deleted > threshold` → Large files (summary only)
+   - `added == "-" and deleted == "-"` → Binary files
+   - `filename contains "{old => new}"` → Renames
+   - Otherwise → Small files (full diff)
+4. Build output:
+   - Large files: `<status> <filepath> +<added> -<deleted>`
+   - Renames: `R <old_path> -> <new_path>`
+   - Binary files: `<status> <filepath> (binary)`
+   - Small files: Full `git diff` content
+
+**Status Symbols:**
+- `M` - Modified
+- `A` - Added
+- `D` - Deleted
+- `R` - Renamed
+- `B` - Binary (inferred from status + binary marker)
+
+### Configuration
+
+**Threshold:** Default 50 lines (hardcoded in prompt function)
+**Location:** `lua/plugins/extra/myAi.lua:739-789`
+
+To change threshold, modify the function call:
+```lua
+local filtered_diff = require("utils.my_codecompanion_utils").get_filtered_staged_diff(100) -- 100 line threshold
+```
+
+### Keymaps
+
+Defined in `lua/utils/editor_keymaps.lua:303-311`:
+```lua
+{
+  "<leader>Amm",  -- All staged files (full diff)
+  "<cmd>CodeCompanion /short-staged-commit<cr>",
+  desc = "Code Companion - Git commit (all staged)",
+},
+{
+  "<leader>AmM",  -- Large files summary
+  "<cmd>CodeCompanion /large-files-commit<cr>",
+  desc = "Code Companion - Git commit (large files summary)",
+},
+```
+
+**Which-key group:** `<leader>Am` → "Commit Message"
+
+### Benefits
+
+1. **Token efficiency:** Large refactors don't overwhelm the AI with diffs
+2. **Focused analysis:** AI can still see detailed changes for small modifications
+3. **Rename clarity:** Clearly distinguishes file moves from content changes
+4. **Binary handling:** Prevents binary content from polluting prompt
+5. **Consistent format:** Same commit message style for both commands
+
+### Testing
+
+```bash
+# Test the filtering function directly
+NVIM_APPNAME=nvim3_jelly_tinynvim nvim --headless \
+  -c "lua print(require('utils.my_codecompanion_utils').get_filtered_staged_diff(50))" \
+  -c "qa"
+
+# Stage some changes and test keymaps
+git add <files>
+# In Neovim: <leader>Amm or <leader>AmM
+```
+
+### Related Files
+
+- **Utility:** `lua/utils/my_codecompanion_utils.lua:150-268`
+- **Prompts:** `lua/plugins/extra/myAi.lua:700-789`
+- **Keymaps:** `lua/utils/editor_keymaps.lua:303-311`
+- **Which-key:** `lua/plugins/extra/myAi.lua:110-117`
+
+---
+
+## References
+
+- **CodeCompanion Repo:** https://github.com/olimorris/codecompanion.nvim
+- **OpenAI GPT-5.2 Guide:** https://platform.openai.com/docs/guides/latest-model
+- **Adapter Code:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/`
+- **Config Schema:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/init.lua`
+- **OpenAI Adapter:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai.lua`
+- **OpenAI Responses Adapter:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai_responses.lua`
+

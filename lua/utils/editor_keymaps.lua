@@ -300,9 +300,14 @@ M.keymaps = {
         mode = "v",
       },
       {
-        companion_prefix .. "M",
+        companion_prefix .. "mm",
         "<cmd>CodeCompanion /short-staged-commit<cr>",
-        desc = "Code Companion - Git commit message (staged)",
+        desc = "Code Companion - Git commit (all staged)",
+      },
+      {
+        companion_prefix .. "mM",
+        "<cmd>CodeCompanion /large-files-commit<cr>",
+        desc = "Code Companion - Git commit (large files summary)",
       },
       {
         companion_prefix .. "Q",

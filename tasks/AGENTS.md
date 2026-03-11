@@ -8,7 +8,6 @@ The `tasks/` directory tracks work in this Neovim configuration repo. Use it to 
 
 ```
 tasks/
-├── projects/   # Long-running projects with dedicated working directories
 ├── drafts/     # Ideas or POCs, not yet committed to
 ├── open/       # Actively being worked on
 ├── wip/        # Work in progress (optional, use for longer tasks)
@@ -27,7 +26,7 @@ tasks/
 ## Creating a Task
 
 - **Single outcome**: `tasks/open/task-name.md` with frontmatter
-- **Multi-artifact**: `tasks/open/task-name/README.md` + sibling files
+- **Complex/Projects/Milestones**: `tasks/open/task-name/README.md` + sibling files (plans, notes, scripts, samples)
 - Use [TASK-TEMPLATE.md](TASK-TEMPLATE.md) as the starting point
 
 ## Moving a Task
@@ -156,30 +155,34 @@ When working with plugins, include:
    ~/.local/share/nvim3_jelly_tinynvim/lazy/<plugin-name>/
    ```
 
-### Projects vs Tasks
+### Complex Tasks / Milestones / Projects
 
-| Type | Location | Purpose |
-|------|----------|---------|
-| **Project** | `tasks/projects/` | Multi-session work with dedicated working directory |
-| **Task** | `tasks/open\|wip\|review/` | Single-session or short work items |
+Use directory-based structure for complex, multi-session, or project-level work:
 
-Projects have their own working directories (e.g., `cursor-migration/`) and contain multiple related tasks.
-
-Example project structure:
 ```
-cursor-migration/
-├── README.md           # Project documentation
-├── configs/            # Configuration samples
-├── docker/             # Docker setup
-└── samples/            # Code samples/templates
+tasks/open/cursor-migration/
+├── README.md              # Main task documentation
+├── configs/               # Configuration samples
+├── docker/                # Docker setup
+└── samples/               # Code samples/templates
 ```
 
-Link tasks to projects:
+Example frontmatter for project-level tasks:
 ```markdown
-parent:
-  - [Cursor Migration Project](tasks/projects/cursor-migration.md)
+---
+title: "Cursor Migration - Multi-Session Setup"
+status: "open"
+priority: "high"
+created: 2026-02-02
+category: "ai-tooling"
+---
+```
+
+Link to sub-tasks or related work:
+```markdown
 related:
-  - [Project Dir](cursor-migration/)
+  - [Setup Config](tasks/open/cursor-migration/configs/)
+  - [Docker Setup](tasks/open/cursor-migration/docker/)
 ```
 
 ## Integration with CLAUDE.md

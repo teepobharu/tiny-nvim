@@ -93,7 +93,7 @@ See **[tasks/AGENTS.md](tasks/AGENTS.md)** for the full workflow.
   - `tasks/review/` — Awaiting user verification
   - `tasks/completed/` — Completed and verified by USER
   - `tasks/archive/` — Abandoned or superseded
-  - `tasks/projects/` — Long-running projects with dedicated directories
+- **File vs Directory**: Use flat files (`.md`) for single tasks, directories (`task-name/README.md`) for complex tasks, projects, or milestones
 - **IMPORTANT**: AI agents MUST NOT move tasks from `review/` to `completed/` — only the USER can do this.
 - **Link Format Rule**: All file links in task files MUST use paths relative to git root WITHOUT `../` prefix
   - Correct: `[File](lua/utils/snacks_actions.lua)`
