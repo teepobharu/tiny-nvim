@@ -702,7 +702,7 @@ Documentation and Tracking:
           interaction = "chat",
           description = "Generate a commit message for staged change",
           opts = {
-            alias = "short-staged-commit",
+            alias = "short-staged-commit-msg",
             auto_submit = true,
             is_slash_cmd = true,
             adapter = {
@@ -741,7 +741,7 @@ feat(release): add slack msg and create release after deploy
           interaction = "chat",
           description = "Generate commit message with large file summaries (>50 lines)",
           opts = {
-            alias = "large-files-commit",
+            alias = "large-staged-files-commit-msg",
             auto_submit = true,
             is_slash_cmd = true,
             adapter = {

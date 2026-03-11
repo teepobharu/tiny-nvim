@@ -301,12 +301,12 @@ M.keymaps = {
       },
       {
         companion_prefix .. "mm",
-        "<cmd>CodeCompanion /short-staged-commit<cr>",
+        "<cmd>CodeCompanion /short-staged-commit-msg<cr>",
         desc = "Code Companion - Git commit (all staged)",
       },
       {
         companion_prefix .. "mM",
-        "<cmd>CodeCompanion /large-files-commit<cr>",
+        "<cmd>CodeCompanion /large-staged-files-commit-msg<cr>",
         desc = "Code Companion - Git commit (large files summary)",
       },
       {
