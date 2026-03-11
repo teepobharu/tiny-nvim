@@ -818,10 +818,17 @@ Cmd.create_cmd("StopAllLspClients", function()
   Snacks.debug("Stopped all LSP clients", vim.log.levels.INFO)
 end, { nargs = 0 })
 
-keymap("n", "<leader>Lr", ":RestartLspClients<CR>", { desc = "LSPRestart", noremap = true, silent = true })
-keymap("n", "<leader>Lx", ":StopLspClients<CR>", { desc = "LSP Stop", noremap = true, silent = true })
+-- LSP Client Management: Simple select dialogs (backward compatible)
+keymap("n", "<leader>Lr", ":RestartLspClients<CR>", { desc = "LSP Restart (select)", noremap = true, silent = true })
+keymap("n", "<leader>Lx", ":StopLspClients<CR>", { desc = "LSP Stop (select)", noremap = true, silent = true })
 keymap("n", "<leader>LX", ":StopAllLspClients<CR>", { desc = "LSP Stop All", noremap = true, silent = true })
 keymap("n", "<leader>Li", ":check lsp<CR>", { desc = "LSP Info", noremap = true, silent = true })
+
+-- LSP Client Management: Snacks picker with preview (shows full paths, capabilities, etc.)
+-- In picker: <C-r> restart, <C-x> stop, <CR> show hint
+keymap("n", "<leader>Ll", function()
+  require("utils.lsp_setup").lsp_clients_picker()
+end, { desc = "LSP Manager (picker with preview)", noremap = true, silent = true })
 
 --   # which key migrate .nvim $HOME/.config/nvim/keys/which-key.vim
 keymap("n", "<c-q>", ":q<CR>", { desc = "Close", noremap = true, silent = true })
