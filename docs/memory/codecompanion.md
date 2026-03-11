@@ -6,6 +6,39 @@
 
 ---
 
+## ⚠️ IMPORTANT: Configuration Location
+
+**All CodeCompanion configuration is newer and more updated in `lua/plugins/extra/myAi.lua`**
+
+The old fork config that is not updated anymore `lua/plugins/extra/codecompanion.lua` file has been **disabled** to avoid conflicts.
+
+### Common Issues & Solutions
+
+**If you see errors like:**
+
+- ❌ `Could not find '<alias>' in the prompt library`
+- Wrong configuration field
+- ❌ Duplicate prompt definitions
+- ❌ Conflicting slash commands
+
+**Solution - Check these files:**
+
+TO Decide later: use Single source of truth:
+
+- ✅ `lua/plugins/extra/myAi.lua` - Active configuration
+- ❌ `lua/plugins/extra/codecompanion.lua.disabled` - Not maintained
+
+### Why This Matters
+
+**Root Cause of Conflicts:**
+
+- Having both files enabled loads duplicate CodeCompanion configurations
+- Different aliases in each file create "not found" errors
+- Last loaded file wins ?, but aliases from both remain in memory
+- Result: Confusing errors and broken slash commands
+
+---
+
 ## 1. Adapter Schema Architecture
 
 ### How Schema Maps to Request Parameters
@@ -31,12 +64,14 @@ schema = {
 ```
 
 **Mapping resolution** (from `adapters/http/init.lua:185-226`):
+
 - Schema keys are split by `.` (e.g., `reasoning.effort`)
 - Mapping path is split by `.` (e.g., `parameters.text`)
 - CodeCompanion creates nested objects and emits the final value there
 - All schema defaults are collected and applied via `map_schema_to_params()`
 
 ### Critical Implication
+
 If your schema lists `max_tokens`, CodeCompanion **will always send it** in the request. The proxy/endpoint must accept it, or you get a 400 error.
 
 ---
@@ -47,6 +82,7 @@ If your schema lists `max_tokens`, CodeCompanion **will always send it** in the 
 
 **CodeCompanion Adapter:** `openai.lua`  
 **Current Schema (v18.3.1):**
+
 - `model` → `parameters.model`
 - `reasoning_effort` → `parameters.reasoning_effort` (reasoning models only)
 - `temperature` → `parameters.temperature`
@@ -54,6 +90,7 @@ If your schema lists `max_tokens`, CodeCompanion **will always send it** in the 
 - `max_tokens` → `parameters.max_tokens` ⚠️
 
 **GPT-5.2 Compatibility (per OpenAI docs):**
+
 - ✅ Supports: `max_completion_tokens` (not `max_tokens`)
 - ❌ Does NOT support: `temperature`, `top_p` when `reasoning_effort` > `none`
 - ⚠️ Default reasoning_effort: `none` (allows temperature/top_p)
@@ -64,6 +101,7 @@ If your schema lists `max_tokens`, CodeCompanion **will always send it** in the 
 
 **CodeCompanion Adapter:** `openai_responses.lua`  
 **Schema Parameters:**
+
 - `["reasoning.effort"]` → `parameters.reasoning.effort`
 - `["reasoning.summary"]` → `parameters.reasoning.summary`
 - `temperature` → `parameters.temperature`
@@ -108,6 +146,7 @@ return {
 ### Schema Key Features
 
 **Example:**
+
 ```lua
 max_tokens = {
   order = 6,                           -- UI display order
@@ -126,6 +165,7 @@ max_tokens = {
 ```
 
 **Conditional Parameters** (e.g., reasoning_effort only for reasoning models):
+
 ```lua
 reasoning_effort = {
   enabled = function(self)
@@ -162,18 +202,20 @@ choices = {
 ```
 
 **How it works:**
+
 1. If model is a string key in `choices` map, and it has `opts`, those opts are merged into `adapter.opts`
 2. Handlers can check `adapter.opts.can_reason`, `adapter.opts.has_vision`, etc.
 3. Schema `enabled` functions check `choices[model].opts.can_reason` to conditionally enable reasoning params
 
 **Setup Handler Pattern** (from `openai.lua:64-89`):
+
 ```lua
 setup = function(self)
   local model = self.schema.model.default
   if type(model) == "function" then model = model(self) end
   local model_opts = self.schema.model.choices
   if type(model_opts) == "function" then model_opts = model_opts(self) end
-  
+
   if model_opts and model_opts[model] and model_opts[model].opts then
     self.opts = vim.tbl_deep_extend("force", self.opts, model_opts[model].opts)
   end
@@ -188,6 +230,7 @@ end
 ### Pass-Through Behavior
 
 Your Agoda OpenAI Proxy at `http://openai-proxy.agoda.is/v1` is **OpenAI API-compatible** but:
+
 - **Does not rename parameters** (e.g., won't auto-convert `max_tokens` → `max_completion_tokens`)
 - **May enforce model-specific constraints** (e.g., GPT-5.2 rejects `max_tokens`, only accepts `max_completion_tokens`)
 - **Acts as a transparent forwarder**, not a translator
@@ -202,14 +245,15 @@ Since the proxy is pass-through, **all parameter naming must be correct at the c
 
 From OpenAI docs (https://platform.openai.com/docs/guides/latest-model):
 
-| Parameter | Constraint | Workaround |
-|-----------|-----------|-----------|
-| `max_tokens` | ❌ Not supported | Use `max_completion_tokens` (chat) or `max_output_tokens` (responses) |
-| `temperature` | ❌ Only when reasoning_effort = `none` | Default is `none`, so OK if reasoning not used |
-| `top_p` | ❌ Only when reasoning_effort = `none` | Same as temperature |
-| `reasoning_effort` | ✅ Supports: none/low/medium/high/xhigh | Default: `none` |
+| Parameter          | Constraint                              | Workaround                                                            |
+| ------------------ | --------------------------------------- | --------------------------------------------------------------------- |
+| `max_tokens`       | ❌ Not supported                        | Use `max_completion_tokens` (chat) or `max_output_tokens` (responses) |
+| `temperature`      | ❌ Only when reasoning_effort = `none`  | Default is `none`, so OK if reasoning not used                        |
+| `top_p`            | ❌ Only when reasoning_effort = `none`  | Same as temperature                                                   |
+| `reasoning_effort` | ✅ Supports: none/low/medium/high/xhigh | Default: `none`                                                       |
 
 **For chat/completions with GPT-5.2:**
+
 1. Use `max_completion_tokens` instead of `max_tokens`
 2. Keep `temperature` and `top_p`, but they only work when `reasoning_effort` is `none` (default)
 3. If user increases reasoning effort, temperature/top_p will cause errors
@@ -234,6 +278,7 @@ end
 ```
 
 **Problems:**
+
 1. ✅ `model` default is correct (GPT_5_2)
 2. ✅ `temperature = 0` is OK (only active when reasoning_effort = none, which is default)
 3. ❌ `max_tokens` is wrong; GPT-5.2 expects `max_completion_tokens`
@@ -346,12 +391,14 @@ Two complementary commands for generating git commit messages:
 ### Command Details
 
 #### Full Diff: `<leader>Amm`
+
 - **Alias:** `/short-staged-commit`
 - **Behavior:** Sends complete `git diff --staged` output to AI
 - **Use case:** Small changesets, detailed commit messages needed
 - **Output:** Complete diff content for all staged files
 
 #### Large Files Summary: `<leader>AmM`
+
 - **Alias:** `/large-files-commit`
 - **Behavior:** Smart filtering of staged diff:
   - Files >50 lines → Summary only (`M filepath +added -deleted`)
@@ -386,6 +433,7 @@ index e380f04..c5340cc 100644
 **Function:** `get_filtered_staged_diff(threshold)` in `lua/utils/my_codecompanion_utils.lua`
 
 **Algorithm:**
+
 1. Run `git diff --staged --numstat` to get line change counts
 2. Run `git diff --staged --name-status` to get file status (M/A/D/R)
 3. Categorize files:
@@ -400,6 +448,7 @@ index e380f04..c5340cc 100644
    - Small files: Full `git diff` content
 
 **Status Symbols:**
+
 - `M` - Modified
 - `A` - Added
 - `D` - Deleted
@@ -412,6 +461,7 @@ index e380f04..c5340cc 100644
 **Location:** `lua/plugins/extra/myAi.lua:739-789`
 
 To change threshold, modify the function call:
+
 ```lua
 local filtered_diff = require("utils.my_codecompanion_utils").get_filtered_staged_diff(100) -- 100 line threshold
 ```
@@ -419,6 +469,7 @@ local filtered_diff = require("utils.my_codecompanion_utils").get_filtered_stage
 ### Keymaps
 
 Defined in `lua/utils/editor_keymaps.lua:303-311`:
+
 ```lua
 {
   "<leader>Amm",  -- All staged files (full diff)
@@ -535,6 +586,7 @@ end
 ### Example Implementation
 
 See `tasks/review/codecompanion-code-review-actions.md` for complete implementation example with:
+
 - Visual mode line range filtering for git diffs
 - Full file context integration
 - Reusable prompt templates
@@ -550,4 +602,3 @@ See `tasks/review/codecompanion-code-review-actions.md` for complete implementat
 - **Config Schema:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/init.lua`
 - **OpenAI Adapter:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai.lua`
 - **OpenAI Responses Adapter:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai_responses.lua`
-
