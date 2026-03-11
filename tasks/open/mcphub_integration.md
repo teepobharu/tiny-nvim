@@ -27,7 +27,7 @@ All MCPHub and CodeCompanion MCP extension config consolidated in: [lua/plugins/
 
 ### MCPHub Setup
 
-- **Config**: `~/dotfiles/claude/mcp-proxy/mcphub.json`
+- **Config**: `~/dotfiles/ai/mcp/mcphub.json`
 - **Port**: 37373 (fixed, workspace mode should be disabled)
 - **14 MCP Servers** configured (12 ready, 2 need tokens)
 
@@ -123,7 +123,7 @@ mcphub.nvim handles port conflicts gracefully:
 ### Phase 1: MCPHub Core Setup ✅
 
 - [x] **1.1** Add config myAi.lua
-- [x] **1.2** Point to `~/dotfiles/claude/mcp-proxy/mcphub.json`
+- [x] **1.2** Point to `~/dotfiles/ai/mcp/mcphub.json`
 - [x] **1.3** Add `<leader>ah` keymap for `:MCPHub`
 - [x] **1.4** Disable workspace mode for consistent port (37373)
 
@@ -158,7 +158,7 @@ mcphub.nvim handles port conflicts gracefully:
 
 - [x] **6.1** Create main guide: [docs/memory/mcphub.md](docs/memory/mcphub.md)
 - [x] **6.2** Create integration guide: [docs/memory/mcphub-nvim-integrations.md](docs/memory/mcphub-nvim-integrations.md)
-- [x] **6.3** Update [MCP-HUB-GUIDE.md](~/dotfiles/claude/mcp-proxy/MCP-HUB-GUIDE.md)
+- [x] **6.3** Update [MCP-HUB-GUIDE.md](~/dotfiles/ai/mcp/MCP-HUB-GUIDE.md)
 - [x] **6.4** Document server customization options
 
 ### Phase 7: Server Customization ✅ (Documented)
