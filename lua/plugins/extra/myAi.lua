@@ -112,6 +112,7 @@ return {
     opts = {
       spec = {
         { "<leader>ah", group = "MCPHub", mode = { "n" } },
+        { "<leader>Am", group = "Commit Message", mode = { "n" } },
       },
     },
   },
@@ -143,7 +144,7 @@ return {
     --
     opts = {
       use_bundled_binary = true,
-      config = vim.fn.expand "~/dotfiles/claude/mcp-proxy/mcphub.json",
+      config = vim.fn.expand "~/dotfiles/ai/mcp/mcphub.json",
       port = 37373,
       -- Disable workspace mode for consistent port 37373 access by CLI agents
       -- Without this, workspace mode creates per-directory hubs on random ports (40000-41000)
@@ -728,6 +729,44 @@ feat(release): add slack msg and create release after deploy
                   ]]
                   .. "\n\n```\n"
                   .. vim.fn.system "git diff --staged"
+                  .. "\n```"
+              end,
+              opts = {
+                contains_code = true,
+              },
+            },
+          },
+        },
+        ["Generate a Commit Message for Large Files Summary"] = {
+          interaction = "chat",
+          description = "Generate commit message with large file summaries (>50 lines)",
+          opts = {
+            alias = "large-files-commit",
+            auto_submit = true,
+            is_slash_cmd = true,
+            adapter = {
+              name = "copilot",
+              model = "gpt-5-mini",
+            },
+          },
+          prompts = {
+            {
+              role = "user",
+              content = function()
+                local filtered_diff = require("utils.git").get_filtered_staged_diff(50)
+                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (use only 1 line break between title and body description). Important: keep the text clean no formatting (bad: **, '') keep plaintext with shortlist/dash prefix in body description. Only output the commit message. Do not output more than 5 bullet points. Do use acronym to save space and each point not too long. Don't include filepath, specific code changes or variables name.\n\nNote: Files with >50 line changes are shown as summary only (M/A/D filepath +added -deleted). Renamed files shown as (R old -> new). Binary files shown with (binary) marker."
+                  .. [[
+Example commit message:
+feat(release): add slack msg and create release after deploy
+- enhance GL CI release job
+- update dependency job name to have common prefix
+- add release desc with deploy dt, ver, pipeline, quick link, and changelog
+- include direct release link in Slack notifications for better traceability
+- expand clone repo section to include overview with folder structure, instructions, and IDE setup
+- provide clearer onboarding for new contributors
+                  ]]
+                  .. "\n\n```\n"
+                  .. filtered_diff
                   .. "\n```"
               end,
               opts = {

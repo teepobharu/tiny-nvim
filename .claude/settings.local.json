@@ -16,7 +16,9 @@
       "WebFetch(domain:docs.cursor.com)",
       "WebFetch(domain:cursor.com)",
       "Bash(gemini:*)",
-      "Bash(tree:*)"
+      "Bash(tree:*)",
+      "Bash(nvim:*)",
+      "Bash(echo:*)"
     ],
     "deny": []
   }

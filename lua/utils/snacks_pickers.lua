@@ -2270,6 +2270,7 @@ M.snippets_source_config = {
   },
   win = {
     input = {
+      footer = "M-g: toggle ft",
       keys = {
         ["<M-g>"] = { "toggle_filetype_filter", mode = { "n", "i" }, desc = "Toggle all/filetype filter" },
       },

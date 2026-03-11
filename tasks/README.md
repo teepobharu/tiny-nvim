@@ -17,15 +17,20 @@ drafts/ -> open/ -> wip/ -> review/ -> completed/ -> archive/
 | completed/ | Finished and verified — kept for reference           |
 | archive/   | Abandoned, superseded, or irrelevant                 |
 
-## Projects
-
-Long-running work with dedicated directories (e.g., `cursor-migration/`) lives in `tasks/projects/` and contains multiple related tasks.
-
 ## File vs Dir
 
-Use a **dir** (`task-name/README.md`) when a task has multiple files (plan, notes, completion summary, referenced scripts).
+Use a **dir** (`task-name/README.md`) when a task has multiple files or is complex/multi-session (plan, notes, completion summary, referenced scripts) — for projects or milestones.
 
-Use a **flat file** (`task-name.md`) when it is a simple investigation or single-outcome note.
+Use a **flat file** (`task-name.md`) when it is a simple investigation or single-outcome task.
+
+Example project-level task:
+```
+tasks/open/cursor-migration/
+├── README.md
+├── configs/
+├── docker/
+└── samples/
+```
 
 ## Frontmatter
 
