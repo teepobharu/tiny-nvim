@@ -2,22 +2,22 @@
 -- setup examples
 -- https://github.com/LazyVim/LazyVim/blob/0e2eaa3fbad1519e9f4fb29235e13374f297ff00/lua/lazyvim/plugins/editor.lua#L43
 -- open spectre search and live grep telescope : https://www.reddit.com/r/neovim/comments/17o6g2n/comment/k7wf2wp/?utm_source=share&utm_medium=web3x&utm_name=web3xcss&utm_term=1&utm_content=share_button
-local Util = require("lazy.core.util")
-local Path = require("utils.path")
-local Mypath = require("utils.mypath")
-local KeyUtils = require("utils.keyutil")
+local Util = require "lazy.core.util"
+local Path = require "utils.path"
+local Mypath = require "utils.mypath"
+local KeyUtils = require "utils.keyutil"
 local key_f = KeyUtils.key_f
 local key_g = KeyUtils.key_g
 
 local isSnackEnabled = KeyUtils.isSnackEnabled
 
 function openGitRemote(state)
-  local gitUtils = require("utils.git")
+  local gitUtils = require "utils.git"
   local node = state.tree:get_node()
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[openGitRemote node:]==], vim.inspect(node)) -- __AUTO_GENERATED_PRINT_VAR_END__
   local path = node:get_id()
-  local current_file = path or vim.fn.expand("%:p")
+  local current_file = path or vim.fn.expand "%:p"
   local branch = nil
   vim.ui.select({
     "1. Main Branch",
@@ -31,11 +31,11 @@ function openGitRemote(state)
         branch = gitUtils.get_current_branch_or_hash()
       end
     else
-        return
-      end
-      gitUtils.open_remote(branch, "file", current_file)
-      -- local fullUrl = "https://" .. urlPath .. "/blob/" .. (branch or "master") .. "/" .. relative_file_path
-      -- require("lazy.util").open(fullUrl)
+      return
+    end
+    gitUtils.open_remote(branch, "file", current_file)
+    -- local fullUrl = "https://" .. urlPath .. "/blob/" .. (branch or "master") .. "/" .. relative_file_path
+    -- require("lazy.util").open(fullUrl)
   end)
 end
 
@@ -54,7 +54,7 @@ function get_opts_for_files_and_grep(state, type)
   if type == "file" then
     table.insert(extra_opts_list, "-t=f")
   end
-  local extra_opts = table.concat(extra_opts_list, " ")                           -- works on fzf not in telescope
+  local extra_opts = table.concat(extra_opts_list, " ") -- works on fzf not in telescope
   -- __AUTO_GENERATED_PRINT_VAR_START__
   print([==[get_opts_for_files_and_grep extra_opts:]==], vim.inspect(extra_opts)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
@@ -62,7 +62,7 @@ function get_opts_for_files_and_grep(state, type)
   return {
     current_file_dir = current_file_dir,
     cwdPath = cwdPath,
-    extra_opts = extra_opts,           -- fzf files
+    extra_opts = extra_opts, -- fzf files
     extra_opts_list = extra_opts_list, -- telescope grep
     filepath = filepath,
   }
@@ -90,7 +90,7 @@ return {
           else
             local stats = vim.uv.fs_stat(vim.fn.argv(0))
             if stats and stats.type == "directory" then
-              require("neo-tree")
+              require "neo-tree"
             end
           end
         end,
@@ -106,21 +106,21 @@ return {
       {
         "<leader>e",
         function()
-          require("neo-tree.command").execute({ toggle = true, dir = Path.get_root_directory() })
+          require("neo-tree.command").execute { toggle = true, dir = Path.get_root_directory() }
         end,
         desc = "Explorer NeoTree (Root)",
       },
       {
         "<localleader>e",
         function()
-          require("neo-tree.command").execute({ dir = Mypath.get_root_directory_current_buffer() })
+          require("neo-tree.command").execute { dir = Mypath.get_root_directory_current_buffer() }
         end,
         desc = "Explorer NeoTree (Root)",
       },
       {
         isSnackEnabled and "<localleader>E" or "<leader>E",
         function()
-          require("neo-tree.command").execute({ toggle = true, dir = vim.fn.expand("%:p:h") })
+          require("neo-tree.command").execute { toggle = true, dir = vim.fn.expand "%:p:h" }
         end,
         desc = "Explorer NeoTree (CWD)",
       },
@@ -128,7 +128,7 @@ return {
         "<leader>fE",
         function()
           -- %:p:h:h
-          require("neo-tree.command").execute({ toggle = true, dir = vim.fn.expand("%:p:h") })
+          require("neo-tree.command").execute { toggle = true, dir = vim.fn.expand "%:p:h" }
         end,
         desc = "NeoTree (CWD expand)",
       },
@@ -159,10 +159,10 @@ return {
 
             if not ok then
               vim.notify("Snacks Explorer: " .. err, vim.log.levels.ERROR)
-              require("neo-tree.command").execute({ toggle = true, dir = Mypath.get_root_directory_current_buffer() })
+              require("neo-tree.command").execute { toggle = true, dir = Mypath.get_root_directory_current_buffer() }
             end
           else
-            require("neo-tree.command").execute({ toggle = true, dir = Mypath.get_root_directory_current_buffer() })
+            require("neo-tree.command").execute { toggle = true, dir = Mypath.get_root_directory_current_buffer() }
           end
         end,
         desc = (isSnackEnabled and "Snack Explorer" or "NeoTree Explorer") .. "(Root)",
@@ -171,14 +171,14 @@ return {
       {
         "<leader>" .. key_g .. "e",
         function()
-          require("neo-tree.command").execute({ source = "git_status", toggle = true })
+          require("neo-tree.command").execute { source = "git_status", toggle = true }
         end,
         desc = "Git Explorer",
       },
       {
         "<leader>be",
         function()
-          require("neo-tree.command").execute({ source = "buffers", toggle = true })
+          require("neo-tree.command").execute { source = "buffers", toggle = true }
         end,
         desc = "Buffer Explorer",
       },
@@ -186,7 +186,7 @@ return {
 
         "<leader>" .. key_f .. "e",
         function()
-          require("neo-tree.command").execute({ toggle = true, dir = Path.get_root_directory() })
+          require("neo-tree.command").execute { toggle = true, dir = Path.get_root_directory() }
         end,
         desc = "Explorer NeoTree (Root Dir)",
       },
@@ -196,12 +196,12 @@ return {
     -- { "<leader>e", "<leader>fe", desc = "Explorer NeoTree (Root Dir)", remap = true },
     -- { "<leader>E", "<leader>fE", desc = "Explorer NeoTree (cwd)", remap = true },
     deactivate = function()
-      vim.cmd([[Neotree close]])
+      vim.cmd [[Neotree close]]
     end,
     opts = function(_, opts)
       -- lazyvim.nvim
       opts.open_files_do_not_replace_types = opts.open_files_do_not_replace_types
-          or { "terminal", "Trouble", "qf", "Outline", "trouble" }
+        or { "terminal", "Trouble", "qf", "Outline", "trouble" }
       table.insert(opts.open_files_do_not_replace_types, "edgy")
       -- use function to merge config (behiovr = force/override  )
       Util.merge(
@@ -290,7 +290,7 @@ return {
                     vim.fn.setreg("+", result)
                     vim.notify("Copied: " .. result .. " to vim clipboard")
                   else
-                    vim.notify("Invalid selection")
+                    vim.notify "Invalid selection"
                   end
                 else
                   vim.fn.setreg("+", results[4])
@@ -316,7 +316,7 @@ return {
               -- __AUTO_GENERATED_PRINT_VAR_START__
               print([==[function#function opts:]==], vim.inspect(opts)) -- __AUTO_GENERATED_PRINT_VAR_END__
               -- fzf grep not work in live grep : https://www.reddit.com/r/neovim/comments/r74647/comment/hmx7i68/?utm_source=share&utm_medium=web2x&context=3
-              require("telescope.builtin").live_grep({ cwd = opts.cwdPath, additional_args = opts.extra_opts })
+              require("telescope.builtin").live_grep { cwd = opts.cwdPath, additional_args = opts.extra_opts }
             end,
             fzf_grep = function(state)
               local opts = get_opts_for_files_and_grep(state, "file")
@@ -324,18 +324,18 @@ return {
               -- print([==[function#function opts.cwdPath:]==], vim.inspect(opts)) -- __AUTO_GENERATED_PRINT_VAR_END__
               -- local search_paths =
               --   { opts.current_file_dir }, print([==[function#function search_paths:]==], vim.inspect(search_paths)) -- __AUTO_GENERATED_PRINT_VAR_END__
-              require("fzf-lua").live_grep({
+              require("fzf-lua").live_grep {
                 cwd = opts.cwdPath,
                 -- rg_opts = opts.extra_opts_list,
-              })
+              }
             end,
             fzf_find_files = function(state)
               local opts = get_opts_for_files_and_grep(state, "file")
-              require("fzf-lua").files({ cwd = opts.cwdPath, fd_opts = opts.extra_opts })
+              require("fzf-lua").files { cwd = opts.cwdPath, fd_opts = opts.extra_opts }
             end,
             telescope_find_files = function(state)
               local opts = get_opts_for_files_and_grep(state, "file")
-              require("telescope.builtin").find_files({ cwd = opts.cwdPath })
+              require("telescope.builtin").find_files { cwd = opts.cwdPath }
             end,
             cd = function(state)
               local node = state.tree:get_node()
@@ -346,7 +346,7 @@ return {
             end,
             fzf_cd = function(state)
               local opts = get_opts_for_files_and_grep(state, "directory")
-              require("fzf-lua").files({
+              require("fzf-lua").files {
                 cwd = opts.cwdPath,
                 fd_opts = "-t d",
                 action = {
@@ -359,7 +359,50 @@ return {
                     vim.cmd("lcd " .. selected)
                   end,
                 },
-              })
+              }
+            end,
+            snacks_grep = function(state)
+              if not Snacks then
+                vim.notify("Snacks not available", vim.log.levels.WARN)
+                return
+              end
+
+              local opts = get_opts_for_files_and_grep(state, "file")
+              Snacks.picker.grep {
+                cwd = opts.cwdPath,
+              }
+            end,
+            snacks_find_files = function(state)
+              if not Snacks then
+                vim.notify("Snacks not available", vim.log.levels.WARN)
+                return
+              end
+
+              local opts = get_opts_for_files_and_grep(state, "file")
+
+              -- Parse extra_opts to extract depth settings
+              -- extra_opts format: "-d=1 -t=f" (from fzf-lua)
+              -- Convert to Snacks args format: { "--max-depth", "1" }
+              local snacks_args = {}
+              if opts.extra_opts and opts.extra_opts ~= "" then
+                -- Extract depth: -d=N
+                local depth = opts.extra_opts:match "-d=(%d+)"
+                if depth then
+                  table.insert(snacks_args, "--max-depth")
+                  table.insert(snacks_args, depth)
+                end
+              end
+
+              local picker_opts = {
+                cwd = opts.cwdPath,
+              }
+
+              -- Add args if we have depth constraints
+              if #snacks_args > 0 then
+                picker_opts.args = snacks_args
+              end
+
+              Snacks.picker.files(picker_opts)
             end,
           },
           -- https://github.com/nvim-neo-tree/neo-tree.nvim/discussions/370
@@ -408,6 +451,9 @@ return {
                 -- ["F"] = "filter_on_submit",
                 ["Ff"] = "fzf_find_files",
                 ["Fg"] = "fzf_grep",
+                -- Snacks pickers
+                ["<leader>/"] = "snacks_grep",
+                ["<leader>f"] = "snacks_find_files",
                 ["<tab>"] = "toggle_node",
 
                 ["Y"] = {
