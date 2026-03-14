@@ -447,18 +447,93 @@ Use the Complete Testing Matrix above (Features 1-4 + Integration + Performance)
 - [Task workflow](tasks/AGENTS.md)
 - [Task tracking](docs/task_tracking.md)
 
+## Feature 5: Hybrid Scanning Pipelines (Pipeline A/B/C)
+
+### Summary
+
+Fixed three marker types that were not being detected by the root scan function due to `git ls-files` limitations.
+
+### Root Causes Fixed
+
+1. **`.gitlab` (directory marker)**: `git ls-files` only tracks files, not directories. Pattern `**/.gitlab` returned nothing.
+2. **`.nvim-config.lua` (git-ignored file)**: File is in global gitignore (`~/.gitignore_global`). Recursive fallback approaches (`glob`, `git ls-files --others --ignored`) were either wrong or too slow on large repos.
+3. **`Clientside/Serverside` (directory markers)**: Same as `.gitlab` — directories not found by `git ls-files`.
+
+### Implementation
+
+**New marker flags** added to `M.SUBPROJECT_MARKERS`:
+
+- `git_ignored = true` — file is in gitignore, scanned via grouped `fd`/`find` pipeline with timeout
+- `is_directory = true` — target is a directory, needs `**/<name>/**` pattern
+- `skip_scan = true` — marker is discovered via static candidates only (used by `.git`)
+
+**Three scanning pipelines** replace the single-pass scan:
+
+| Pipeline | Condition | git ls-files pattern | Markers |
+|----------|-----------|---------------------|---------|
+| A: Tracked files | `!git_ignored && !is_directory` | `**/<name>` | package.json, Cargo.toml, etc. |
+| B: Tracked dirs | `!git_ignored && is_directory && !skip_scan` | `**/<name>/**` | .gitlab, Clientside, Serverside |
+| C: Ignored files | `git_ignored` | grouped `fd` with timeout, `find` fallback | .nvim-config.lua |
+
+**`match_from_within` fix**: The `.gitlab` dir itself is now the subproject dir (not its parent). Two code paths handle this:
+1. Direct match when candidate dir IS the marker dir (basename comparison)
+2. Parent match redirecting `effective_dir` to the marker dir
+
+**`scan_source` field** added to result metadata for diagnostics: `"tracked"`, `"dir"`, or `"ignored"`. Shown in picker preview header.
+
+**Opt-out config**: `vim.g.subproject_scan_ignored = false` disables Pipeline C.
+
+**Force refresh**: `<C-r>` inside the subproject picker clears cache and reruns discovery with `force_refresh = true`. This matters for ignored-only markers because cache normally invalidates from `.git` mtime, and `.nvim-config.lua` changes do not touch `.git`.
+
+**Cronos cleanup**: Trailing `/` stripped from marker names (`"Clientside/"` → `"Clientside"`).
+
+### Files Modified
+
+- [lua/utils/mypath.lua:4-25](lua/utils/mypath.lua) — Updated marker definitions with flags
+- [lua/utils/mypath.lua:367-616](lua/utils/mypath.lua) — Three scanning pipelines + match_from_within fix
+- [lua/utils/snacks_actions.lua:733-752](lua/utils/snacks_actions.lua) — Preview header shows scan_source
+- [docs/memory/mypath_marker_options.md](docs/memory/mypath_marker_options.md) — Updated documentation
+
+### Verification
+
+```bash
+NVIM_APPNAME=nvim3_jelly_tinynvim nvim
+```
+
+```vim
+" Clear cache first
+:lua require('utils.mypath').clear_subproject_cache()
+
+" Test from trips-web worktree
+:cd /path/to/trips-web.worktrees/<branch>
+:lua vim.print(vim.tbl_map(function(r) return r.project_type .. " " .. r.dir end, require('utils.mypath').get_sub_project_dirs_from_root(nil, nil, true, true)))
+
+" Should now include .nvim-config.lua entries (if file exists)
+" Should include .gitlab when browsing inside .gitlab/
+```
+
+- [ ] `.nvim-config.lua` detected in repos where it exists (marker shown as `ignored` source)
+- [ ] `.gitlab` detected when editing files inside `.gitlab/` directory (marker shown as `dir` source)
+- [ ] `.gitlab` NOT shown when editing files outside `.gitlab/` directory
+- [ ] Cronos markers detected when both `Clientside/` and `Serverside/` directories exist
+- [ ] Existing markers (package.json, etc.) still work
+- [ ] Pipeline C disabled with `vim.g.subproject_scan_ignored = false`
+- [ ] `<C-r>` in subproject picker force-refreshes ignored markers after `.nvim-config.lua` changes
+- [ ] Preview header shows `marker:<name>(dir)` or `marker:<name>(ignored)` for non-tracked sources
+
 ## Commit History
 
 1. **2026-02-07**: .nvim-config.lua root detection + mono label extraction
 2. **2026-02-11**: Subproject CWD picker with `<M-S>` keymap
 3. **2026-03-09**: Root scan with toggle scope, submodule detection, caching
 4. **2026-03-10**: Searchable project types with preserved yank behavior
+5. **2026-03-13**: Hybrid scanning pipelines (A/B/C) + match_from_within fix + marker flags
 
 ## Success Criteria
 
-✅ All 4 features implemented and working
+✅ All 5 features implemented and working
 ✅ No regressions in existing functionality
 ✅ Performance acceptable for large repos
-✅ User verification completed on all features
+✅ User verification completed on features 1-4
 ✅ Code formatted with stylua
 ✅ Documentation updated

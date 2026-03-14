@@ -434,6 +434,14 @@ M.keymaps = {
       desc = "Save session",
     },
     {
+      "<leader>qr",
+      function()
+        -- run vim SessionCurrentDir commandTables
+        vim.cmd "SessionCurrentDir"
+      end,
+      desc = "Restore session (cwd)",
+    },
+    {
       "<leader>ql",
       function()
         require("persistence").load { last = true }

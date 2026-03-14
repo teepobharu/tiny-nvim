@@ -690,19 +690,19 @@ function M.select_subproject_cwd(picker)
 
   local from_dir = pathUtil.get_previous_buffer_dir() or vim.fn.getcwd()
   local git_root = path.get_root_directory() or Snacks.git.get_root()
-  -- Default to root scan mode (finds all subprojects in entire repo)
-  local subprojects = pathUtil.get_sub_project_dirs_from_root(git_root, from_dir, true, true) or {}
-
-  if type(subprojects) ~= "table" then
-    subprojects = { subprojects }
-  end
-
-  if #subprojects == 0 then
-    vim.notify("No subprojects found for current context", vim.log.levels.WARN)
-    return
+  local function fetch_subprojects(force_refresh)
+    local subprojects = pathUtil.get_sub_project_dirs_from_root(git_root, from_dir, true, true, nil, {
+      force_refresh = force_refresh,
+    }) or {}
+    if type(subprojects) ~= "table" then
+      subprojects = { subprojects }
+    end
+    return subprojects
   end
 
   local items = {}
+  local all_items = {}
+  local cwd_items = {}
   local seen_dirs = {}
 
   local function build_item_meta(info, dir)
@@ -736,7 +736,12 @@ function M.select_subproject_cwd(picker)
       table.insert(header, "depth:" .. tostring(info.depth_from_start))
     end
     if info and info.matched_file and info.matched_file ~= "" then
-      table.insert(header, "marker:" .. info.matched_file)
+      local marker_label = info.matched_file
+      -- Append scan source if not default tracked
+      if info.scan_source and info.scan_source ~= "tracked" then
+        marker_label = marker_label .. "(" .. info.scan_source .. ")"
+      end
+      table.insert(header, "marker:" .. marker_label)
     elseif info and info.project_type and info.project_type ~= "" then
       table.insert(header, "type:" .. info.project_type)
     end
@@ -777,21 +782,34 @@ function M.select_subproject_cwd(picker)
     })
   end
 
-  if git_root and vim.fn.isdirectory(git_root) == 1 then
-    local root_info = { dir = git_root, project_type = "gitroot", is_git_root = true }
-    add_item(git_root, "Git", root_info)
+  local function rebuild_items(force_refresh)
+    local subprojects = fetch_subprojects(force_refresh)
+    items = {}
+    seen_dirs = {}
+
+    if git_root and vim.fn.isdirectory(git_root) == 1 then
+      local root_info = { dir = git_root, project_type = "gitroot", is_git_root = true }
+      add_item(git_root, "Git", root_info)
+    end
+
+    for _, sp_info in ipairs(subprojects) do
+      add_item(sp_info.dir, "Sub-Project", sp_info)
+    end
+
+    all_items = items
+    cwd_items = vim.tbl_filter(function(item)
+      local info = item.info or {}
+      return info.in_cwd_traversal or (item.meta and item.meta.is_git_root)
+    end, items)
+
+    return #items > 0
   end
 
-  for _, sp_info in ipairs(subprojects) do
-    add_item(sp_info.dir, "Sub-Project", sp_info)
+  if not rebuild_items(false) then
+    vim.notify("No subprojects found for current context", vim.log.levels.WARN)
+    return
   end
 
-  -- Store both full and cwd-only item lists for toggle
-  local all_items = items
-  local cwd_items = vim.tbl_filter(function(item)
-    local info = item.info or {}
-    return info.in_cwd_traversal or (item.meta and item.meta.is_git_root)
-  end, items)
   local show_all = true -- start in "root" (all) mode
 
   Snacks.picker.pick {
@@ -874,6 +892,18 @@ function M.select_subproject_cwd(picker)
         subpicker.opts.items = show_all and all_items or cwd_items
         subpicker:find()
       end,
+      refresh_subprojects = function(subpicker)
+        pathUtil.clear_subproject_cache { silent = true }
+        if not rebuild_items(true) then
+          vim.notify("No subprojects found for current context", vim.log.levels.WARN)
+          return
+        end
+        local mode_label = show_all and "[root]" or "[cwd]"
+        subpicker.opts.title = "Subprojects " .. mode_label
+        subpicker.opts.items = show_all and all_items or cwd_items
+        vim.notify("Subproject cache refreshed", vim.log.levels.INFO)
+        subpicker:find()
+      end,
     },
     win = {
       preview = {
@@ -881,7 +911,7 @@ function M.select_subproject_cwd(picker)
         min_width = 20,
       },
       input = {
-        footer = "<CR/C-s> apply, <M-S> toggle scope, <C-q> cancel",
+        footer = "<CR/C-s> apply, <M-S> toggle scope, <C-r> refresh, <C-q> cancel",
         keys = {
           ["<CR>"] = {
             "apply_filter",
@@ -897,6 +927,11 @@ function M.select_subproject_cwd(picker)
             "toggle_scope",
             mode = { "n", "i" },
             desc = "Toggle root/cwd scope",
+          },
+          ["<C-r>"] = {
+            "refresh_subprojects",
+            mode = { "n", "i" },
+            desc = "Force refresh subprojects",
           },
           -- default cancel with c-q
         },

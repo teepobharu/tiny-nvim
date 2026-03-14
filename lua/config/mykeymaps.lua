@@ -1632,3 +1632,121 @@ vim.api.nvim_create_user_command("DotfilesWorkspace", function()
   -- vim.cmd "BufferLineTabRename start"
   require("bufferline").rename_tab { tabnum, "start" }
 end, { desc = "Open dotfiles workspace layout" })
+
+-- Shell alias commands: these user commands replace complex inline Lua/vimscript
+-- in shell aliases so that `ps` shows a clean command like `nvim -c SessionSelect`
+-- instead of raw Lua with parens that break tmux-resurrect replay.
+
+-- vq: persistence.nvim session picker with PWD auto-fill
+vim.api.nvim_create_user_command("SessionSelect", function()
+  local function run()
+    local ok, p = pcall(require, "persistence")
+    if not (ok and p and p.select) then
+      return
+    end
+    p.select()
+    local pwd = vim.env.PWD or ""
+    local home = vim.env.HOME or ""
+    if home ~= "" and pwd:sub(1, #home) == home then
+      pwd = "~" .. pwd:sub(#home + 1)
+    end
+    vim.api.nvim_feedkeys(pwd, "t", false)
+  end
+  if vim.g.lazy_did_setup then
+    vim.schedule(run)
+  else
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "LazyDone",
+      once = true,
+      callback = function()
+        vim.schedule(run)
+      end,
+    })
+  end
+end, { desc = "Session picker with PWD auto-fill (for vq alias)" })
+
+-- v: load last persistence session
+vim.api.nvim_create_user_command("SessionLoadLast", function()
+  local ok, p = pcall(require, "persistence")
+  if ok and p and p.load then
+    p.load { last = true }
+  end
+end, { desc = "Load last persistence session (for v alias)" })
+
+-- vd: load last persistence session if exist else select
+vim.api.nvim_create_user_command("SessionCurrentDir", function()
+  -- Confirm to restore the session for the current working directory.
+  local ok, persistence = pcall(require, "persistence")
+  if not ok then
+    vim.notify("persistence.nvim is not available", vim.log.levels.ERROR)
+    return
+  end
+
+  -- local choice = vim.fn.confirm("Restore session for current directory?", "&Yes\n&Select session...\n&No", 1)
+  -- Load session for current directory if it exists, otherwise fall back to selection.
+  local session_file = persistence.current()
+  if session_file and session_file ~= "" and vim.fn.filereadable(session_file) == 1 then
+    persistence.load()
+  else
+    vim.print "No session found for current directory. Select a session ..."
+    persistence.select()
+    -- insert text into input of current cwd, use ~ for $HOME
+    vim.api.nvim_feedkeys(
+      vim.api.nvim_replace_termcodes(
+        "<C-r>=substitute(expand('%:p:h'), '^'.escape($HOME, '/'), '~', '')<CR>",
+        true,
+        false,
+        true
+      ),
+      "n",
+      true
+    )
+  end
+end, { desc = "Load last persistence session (for v alias)" })
+
+-- Shell alias commands: these user commands replace complex inline Lua/vimscript
+-- in shell aliases so that `ps` shows a clean command like `nvim -c SessionSelect`
+-- instead of raw Lua with parens that break tmux-resurrect replay.
+
+-- vq: persistence.nvim session picker with PWD auto-fill
+vim.api.nvim_create_user_command("SessionSelect", function()
+  local function run()
+    local ok, p = pcall(require, "persistence")
+    if not (ok and p and p.select) then
+      return
+    end
+    p.select()
+    local pwd = vim.env.PWD or ""
+    local home = vim.env.HOME or ""
+    if home ~= "" and pwd:sub(1, #home) == home then
+      pwd = "~" .. pwd:sub(#home + 1)
+    end
+    vim.api.nvim_feedkeys(pwd, "t", false)
+  end
+  if vim.g.lazy_did_setup then
+    vim.schedule(run)
+  else
+    vim.api.nvim_create_autocmd("User", {
+      pattern = "LazyDone",
+      once = true,
+      callback = function()
+        vim.schedule(run)
+      end,
+    })
+  end
+end, { desc = "Session picker with PWD auto-fill (for vq alias)" })
+
+-- v: load last persistence session
+vim.api.nvim_create_user_command("SessionLoadLast", function()
+  local ok, p = pcall(require, "persistence")
+  if ok and p and p.load then
+    p.load { last = true }
+  end
+end, { desc = "Load last persistence session (for v alias)" })
+
+-- vs: open FzfSession picker after startup
+vim.api.nvim_create_user_command("FzfSessionDelayed", function()
+  vim.fn.timer_start(200, function()
+    vim.cmd [[execute "normal \<Esc>:FzfSession\<CR>"]]
+  end)
+end, { desc = "Open FzfSession picker with delay (for vs alias)" })

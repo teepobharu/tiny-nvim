@@ -3,8 +3,15 @@ local M = {}
 
 -- Shared marker configuration for subproject detection
 -- Used by both get_sub_project_dir and get_sub_project_dirs_from_root
+--
+-- Flags:
+--   git_ignored  = true  -> file is in global/local gitignore, scanned via fd/find with timeout
+--   is_directory = true  -> target is a directory, needs **/<name>/** pattern for git ls-files
+--   skip_scan   = true  -> skip pipeline scan, detected via candidate_dirs (e.g. root always added)
+--   match_from_within    -> only matches when current buffer is inside the marker directory
+
 M.SUBPROJECT_MARKERS = {
-  { name = ".nvim-config.lua", type = "path", project_type = ".nv" },
+  { name = ".nvim-config.lua", type = "path", project_type = ".nv", git_ignored = true },
   { name = "package.json", type = "path", project_type = "yarn" },
   { name = "pyproject.toml", type = "path", project_type = "python" },
   { name = "Cargo.toml", type = "path", project_type = "rust" },
@@ -12,14 +19,17 @@ M.SUBPROJECT_MARKERS = {
   { name = "pom.xml", type = "path", project_type = "maven" },
   { name = "build.gradle", type = "path", project_type = "gradle" },
   { name = "%.sln$", type = "pattern", project_type = "dotnet" },
-  { name = { "Clientside/", "Serverside/" }, type = "path", project_type = "cronos" },
+  { name = { "Clientside", "Serverside" }, type = "path", project_type = "cronos", is_directory = true },
   -- Special marker: only matches when browsing INSIDE .gitlab directory
-  { name = ".gitlab", type = "path", project_type = ".glab", match_from_within = true },
-  { name = ".git", type = "path", project_type = "git" },
+  -- match_from_within: the .gitlab dir itself becomes the subproject dir
+  { name = ".gitlab", type = "path", project_type = ".glab", match_from_within = true, is_directory = true },
+  -- .git: skip Pipeline B scan — root is always added as candidate via candidate_dirs[root_dir]
+  { name = ".git", type = "path", project_type = "git", is_directory = true, skip_scan = true },
 }
 
 -- Module-level cache for get_sub_project_dirs_from_root
 local _subproject_cache = {}
+local _subproject_cache_generation = 0
 
 -- Function to get the Python path.
 -- @param pipenvFallback boolean: If true, falls back to pipenv --py if pyrightconfig.json is not found.
@@ -303,6 +313,118 @@ local function filter_and_enrich_cached_results(cached, root_dir, fromdir, retur
   end
 end
 
+local function systemlist_with_timeout(cmd, opts)
+  opts = opts or {}
+  if vim.system then
+    local proc = vim.system(cmd, {
+      cwd = opts.cwd,
+      text = true,
+    })
+    local result = proc:wait(opts.timeout_ms)
+    if not result then
+      pcall(proc.kill, proc, 15)
+      pcall(proc.wait, proc)
+      return {}, true
+    end
+    local stdout = result and result.stdout or ""
+    if result.code == 0 then
+      return vim.split(stdout, "\n", { trimempty = true }), false
+    end
+    return {}, false
+  end
+
+  if opts.cwd then
+    local escaped_cwd = vim.fn.shellescape(opts.cwd)
+    local escaped_cmd = {}
+    for _, part in ipairs(cmd) do
+      table.insert(escaped_cmd, vim.fn.shellescape(part))
+    end
+    return vim.fn.systemlist(string.format("cd %s && %s 2>/dev/null", escaped_cwd, table.concat(escaped_cmd, " "))),
+      false
+  end
+
+  return vim.fn.systemlist(cmd), false
+end
+
+local function build_fd_brace_glob(names)
+  if #names == 1 then
+    return names[1]
+  end
+  return "{" .. table.concat(names, ",") .. "}"
+end
+
+local function collect_ignored_marker_paths(root_dir, ignored_file_markers)
+  if #ignored_file_markers == 0 or vim.g.subproject_scan_ignored == false then
+    return {}
+  end
+
+  local timeout_ms = vim.g.subproject_scan_ignored_timeout_ms or 250
+  local max_depth = vim.g.subproject_scan_ignored_depth or 4
+  local fd_bin = vim.fn.exepath "fd"
+  if fd_bin == "" then
+    fd_bin = vim.fn.exepath "fdfind"
+  end
+
+  if fd_bin ~= "" then
+    local paths, timed_out = systemlist_with_timeout({
+      fd_bin,
+      "--hidden",
+      "--absolute-path",
+      "--no-ignore-vcs",
+      "--max-depth",
+      tostring(max_depth),
+      "-E",
+      ".git",
+      "-E",
+      "node_modules",
+      "-E",
+      ".next",
+      "-E",
+      "dist",
+      "-g",
+      build_fd_brace_glob(ignored_file_markers),
+    }, {
+      cwd = root_dir,
+      timeout_ms = timeout_ms,
+    })
+    if timed_out then
+      vim.notify(
+        string.format("Ignored marker scan timed out after %dms; skipping ignored markers", timeout_ms),
+        vim.log.levels.WARN
+      )
+      return {}
+    end
+    return paths
+  end
+
+  local find_cmd = { "find", root_dir, "-maxdepth", tostring(max_depth), "(" }
+  for i, name in ipairs(ignored_file_markers) do
+    table.insert(find_cmd, "-name")
+    table.insert(find_cmd, name)
+    if i < #ignored_file_markers then
+      table.insert(find_cmd, "-o")
+    end
+  end
+  vim.list_extend(find_cmd, {
+    ")",
+    "-not",
+    "-path",
+    "*/node_modules/*",
+    "-not",
+    "-path",
+    "*/.git/*",
+  })
+  local paths, timed_out = systemlist_with_timeout(find_cmd, { timeout_ms = timeout_ms })
+  if timed_out then
+    vim.notify(
+      string.format("Ignored marker scan timed out after %dms; skipping ignored markers", timeout_ms),
+      vim.log.levels.WARN
+    )
+    return {}
+  end
+  return paths
+end
+
 --- Get all sub-project directories from git root (entire tree scan)
 --- Scans entire git root tree for marker files, not just ancestor chain
 --- Returns same metadata as get_sub_project_dir plus in_cwd_traversal flag
@@ -311,11 +433,13 @@ end
 --- @param return_metadata boolean|nil If true, returns table with metadata; if false, returns just dir path(s)
 --- @param return_all boolean|nil If true, returns all matches; if false, returns first match only
 --- @param sort_by "nearest"|"depth"|nil Sort strategy: "nearest" = by depth_from_start (CWD proximity), "depth" = by depth from root (default)
+--- @param opts table|nil Optional settings: { force_refresh = boolean }
 --- @return string|table|string[]|table[]|nil Returns directory path(s) or metadata object(s)
 --- Metadata includes: dir, matched_file, project_type, marker_type, depth, depth_from_start,
 ---                   marker_index, is_git_root, in_cwd_traversal, in_submodule, submodule_root
-function M.get_sub_project_dirs_from_root(root_dir, fromdir, return_metadata, return_all, sort_by)
+function M.get_sub_project_dirs_from_root(root_dir, fromdir, return_metadata, return_all, sort_by, opts)
   local gitUtil = require "utils.git"
+  opts = opts or {}
 
   -- Auto-detect root_dir and fromdir
   root_dir = root_dir or path.get_root_directory()
@@ -340,10 +464,11 @@ function M.get_sub_project_dirs_from_root(root_dir, fromdir, return_metadata, re
     return return_all and { fallback } or fallback
   end
 
-  -- Check cache first
+  -- Cache invalidates when .git mtime changes or when clear_subproject_cache() bumps the
+  -- generation counter. Ignored-only markers do not touch .git, so use force_refresh when needed.
   local git_mtime = vim.fn.getftime(root_dir .. "/.git")
-  local cache_key = root_dir .. ":" .. tostring(git_mtime)
-  if _subproject_cache[cache_key] then
+  local cache_key = table.concat({ root_dir, tostring(git_mtime), tostring(_subproject_cache_generation) }, ":")
+  if not opts.force_refresh and _subproject_cache[cache_key] then
     return filter_and_enrich_cached_results(
       _subproject_cache[cache_key],
       root_dir,
@@ -362,8 +487,48 @@ function M.get_sub_project_dirs_from_root(root_dir, fromdir, return_metadata, re
   local function check_marker_match_with_meta(dir, marker, marker_idx)
     local names = type(marker.name) == "table" and marker.name or { marker.name }
     local matched_files = {}
+    local is_dir_marker = marker.is_directory or false
 
-    for _, name in ipairs(names) do
+    -- For match_from_within markers, check if dir itself IS the marker directory
+    -- e.g. dir=/root/.gitlab and marker.name=".gitlab" → dir IS the marker, not its parent
+    if marker.match_from_within and type(marker.name) == "string" then
+      local clean_name = marker.name:gsub("/$", "")
+      local dir_basename = vim.fn.fnamemodify(dir, ":t")
+      if dir_basename == clean_name then
+        -- dir IS the marker directory itself — validate fromdir is inside
+        local is_inside = fromdir:match("^" .. vim.pesc(dir) .. "/") or fromdir == dir
+        if not is_inside then
+          return nil
+        end
+
+        -- Determine project_type
+        local project_type = marker.project_type
+
+        -- Detect submodule info
+        local in_submodule = gitUtil.is_in_submodule(dir)
+        local submodule_root = in_submodule and gitUtil.get_submodule_root(dir) or nil
+
+        local scan_source = (marker.git_ignored and "ignored") or (is_dir_marker and "dir") or "tracked"
+
+        return {
+          dir = dir,
+          matched_file = clean_name,
+          project_type = project_type,
+          marker_type = marker.type,
+          depth = calculate_depth_from_ref(dir, root_dir),
+          depth_from_start = calculate_depth_from_ref(dir, fromdir),
+          marker_index = marker_idx,
+          is_git_root = (dir == root_dir),
+          in_cwd_traversal = is_in_traversal_path(dir, fromdir, root_dir),
+          in_submodule = in_submodule,
+          submodule_root = submodule_root,
+          scan_source = scan_source,
+        }
+      end
+    end
+
+    for _, raw_name in ipairs(names) do
+      local name = raw_name:gsub("/$", "") -- strip trailing /
       local found = false
 
       if marker.type == "pattern" then
@@ -378,10 +543,14 @@ function M.get_sub_project_dirs_from_root(root_dir, fromdir, return_metadata, re
           end
         end
       else
-        local file_path = dir .. "/" .. name
-        if vim.fn.filereadable(file_path) == 1 or vim.fn.isdirectory(file_path) == 1 then
+        local target_path = dir .. "/" .. name
+        if is_dir_marker then
+          found = vim.fn.isdirectory(target_path) == 1
+        else
+          found = vim.fn.filereadable(target_path) == 1 or vim.fn.isdirectory(target_path) == 1
+        end
+        if found then
           table.insert(matched_files, name)
-          found = true
         end
       end
 
@@ -390,13 +559,17 @@ function M.get_sub_project_dirs_from_root(root_dir, fromdir, return_metadata, re
       end
     end
 
-    -- Check match_from_within
+    -- Resolve the effective subproject directory
+    -- match_from_within: the marker dir itself is the subproject (e.g. .gitlab/ not its parent)
+    local effective_dir = dir
     if marker.match_from_within and #matched_files > 0 then
       local marker_dir = dir .. "/" .. matched_files[1]
       local is_inside = fromdir:match("^" .. vim.pesc(marker_dir) .. "/") or fromdir == marker_dir
       if not is_inside then
         return nil
       end
+      -- The marker directory itself is the subproject
+      effective_dir = marker_dir
     end
 
     -- Determine project_type
@@ -407,83 +580,150 @@ function M.get_sub_project_dirs_from_root(root_dir, fromdir, return_metadata, re
     end
 
     -- Detect submodule info
-    local in_submodule = gitUtil.is_in_submodule(dir)
-    local submodule_root = in_submodule and gitUtil.get_submodule_root(dir) or nil
+    local in_submodule = gitUtil.is_in_submodule(effective_dir)
+    local submodule_root = in_submodule and gitUtil.get_submodule_root(effective_dir) or nil
+
+    -- Determine scan source for diagnostics
+    local scan_source = "tracked"
+    if marker.git_ignored then
+      scan_source = "ignored"
+    elseif is_dir_marker then
+      scan_source = "dir"
+    end
 
     return {
-      dir = dir,
+      dir = effective_dir,
       matched_file = table.concat(matched_files, ", "),
       project_type = project_type,
       marker_type = marker.type,
-      depth = calculate_depth_from_ref(dir, root_dir),
-      depth_from_start = calculate_depth_from_ref(dir, fromdir),
+      depth = calculate_depth_from_ref(effective_dir, root_dir),
+      depth_from_start = calculate_depth_from_ref(effective_dir, fromdir),
       marker_index = marker_idx,
-      is_git_root = (dir == root_dir),
-      in_cwd_traversal = is_in_traversal_path(dir, fromdir, root_dir),
+      is_git_root = (effective_dir == root_dir),
+      in_cwd_traversal = is_in_traversal_path(effective_dir, fromdir, root_dir),
       in_submodule = in_submodule,
       submodule_root = submodule_root,
+      scan_source = scan_source,
     }
   end
 
-  -- Build list of file markers for git ls-files
-  local file_markers = {}
-  local pattern_markers = {}
-  local dir_markers = {}
+  -- Classify markers into scanning pipelines based on flags
+  local tracked_file_markers = {} -- Pipeline A: git-tracked files
+  local tracked_dir_markers = {} -- Pipeline B: git-tracked directories
+  local ignored_file_markers = {} -- Pipeline C: git-ignored files
+  local pattern_markers = {} -- Existing pattern matching (unchanged)
 
-  for _, marker in ipairs(M.SUBPROJECT_MARKERS) do
-    if marker.type == "pattern" then
-      -- Convert Lua pattern to shell glob (e.g., %.sln$ -> *.sln)
+  for marker_idx, marker in ipairs(M.SUBPROJECT_MARKERS) do
+    if marker.skip_scan then
+      -- skip_scan: marker is detected via candidate_dirs (e.g. root always added)
+    elseif marker.type == "pattern" then
       local glob = marker.name:gsub("%%.", "*"):gsub("%$$", "")
-      table.insert(pattern_markers, glob)
+      table.insert(pattern_markers, { glob = glob, marker = marker, idx = marker_idx })
     elseif marker.type == "path" then
-      if type(marker.name) == "string" then
-        table.insert(file_markers, marker.name)
-      elseif type(marker.name) == "table" then
-        -- Array markers (AND condition): add each individually as candidate finder
-        for _, name in ipairs(marker.name) do
-          table.insert(file_markers, name)
+      local names = type(marker.name) == "table" and marker.name or { marker.name }
+      local is_dir = marker.is_directory or false
+      local is_ignored = marker.git_ignored or false
+
+      for _, name in ipairs(names) do
+        local clean_name = name:gsub("/$", "") -- strip trailing / if any
+        if is_ignored then
+          table.insert(ignored_file_markers, clean_name)
+        elseif is_dir then
+          table.insert(tracked_dir_markers, clean_name)
+        else
+          table.insert(tracked_file_markers, clean_name)
         end
       end
     end
   end
 
-  -- Execute git ls-files for file markers
   local candidate_dirs = {}
+  local shellescape = vim.fn.shellescape
+  local escaped_root = shellescape(root_dir)
 
-  if #file_markers > 0 then
-    local escaped_markers = {}
-    for _, m in ipairs(file_markers) do
-      -- Use **/<marker> glob to find at any depth
-      table.insert(escaped_markers, vim.fn.shellescape("**/" .. m))
+  -- PIPELINE A: git ls-files for tracked file markers.
+  -- Sample on trips-web worktree (TRIPWEB-2701-custom-note-slice, Mar 2026): ~0.38s cold.
+  if #tracked_file_markers > 0 then
+    local escaped = {}
+    for _, m in ipairs(tracked_file_markers) do
+      table.insert(escaped, shellescape("**/" .. m))
     end
     local cmd = string.format(
       "git -C %s ls-files --cached --others --exclude-standard -- %s 2>/dev/null",
-      vim.fn.shellescape(root_dir),
-      table.concat(escaped_markers, " ")
+      escaped_root,
+      table.concat(escaped, " ")
     )
-    local marker_files = vim.fn.systemlist(cmd)
-
-    for _, file in ipairs(marker_files) do
-      local full_path = root_dir .. "/" .. file
-      local dir = vim.fn.fnamemodify(full_path, ":h")
-      candidate_dirs[dir] = true
+    for _, file in ipairs(vim.fn.systemlist(cmd)) do
+      candidate_dirs[root_dir .. "/" .. vim.fn.fnamemodify(file, ":h")] = true
     end
   end
 
-  -- Execute git ls-files for pattern markers
+  -- PIPELINE B: git ls-files for directory markers, then collapse file hits to unique dirs.
+  -- Sample on trips-web worktree (TRIPWEB-2701-custom-note-slice, Mar 2026): ~0.32s cold.
+  -- Uses **/<dir>/** pattern to find files inside, then extracts the marker dir
+  -- Optimization: pre-compile patterns and deduplicate on first match per directory
+  if #tracked_dir_markers > 0 then
+    -- Build pre-compiled pattern lookup for each marker name
+    local dir_patterns = {}
+    for _, m in ipairs(tracked_dir_markers) do
+      local esc = vim.pesc(m)
+      table.insert(dir_patterns, {
+        name = m,
+        mid = "/(" .. esc .. ")/", -- matches /Clientside/ mid-path
+        start = "^(" .. esc .. ")/", -- matches Clientside/ at start
+      })
+    end
+
+    local escaped = {}
+    for _, m in ipairs(tracked_dir_markers) do
+      table.insert(escaped, shellescape("**/" .. m .. "/**"))
+    end
+    local cmd = string.format(
+      "git -C %s ls-files --cached --others --exclude-standard -- %s 2>/dev/null",
+      escaped_root,
+      table.concat(escaped, " ")
+    )
+    local seen_dir_candidates = {}
+    for _, file in ipairs(vim.fn.systemlist(cmd)) do
+      for _, dp in ipairs(dir_patterns) do
+        local s, _, match = file:find(dp.mid)
+        if not s then
+          s, _, match = file:find(dp.start)
+        end
+        if s and match then
+          local prefix = s > 1 and file:sub(1, s - 1) or ""
+          local parent_dir = prefix == "" and root_dir or (root_dir .. "/" .. prefix:gsub("/$", ""))
+          local key = parent_dir .. "|" .. match
+          if not seen_dir_candidates[key] then
+            seen_dir_candidates[key] = true
+            candidate_dirs[parent_dir] = true
+            -- Also add the marker dir itself as candidate (for match_from_within markers)
+            candidate_dirs[parent_dir .. "/" .. match] = true
+          end
+          break -- first marker match wins for this file, skip remaining markers
+        end
+      end
+    end
+  end
+
+  -- PIPELINE C: ignored marker scan.
+  -- Group ignored names into one command and cap runtime to keep the picker responsive.
+  -- Sample on trips-web worktree (TRIPWEB-2701-custom-note-slice, Mar 2026): fd ~0.05s cold,
+  -- while find with the same depth cap was ~0.53s cold.
+  for _, abs_path in ipairs(collect_ignored_marker_paths(root_dir, ignored_file_markers)) do
+    candidate_dirs[vim.fn.fnamemodify(abs_path, ":h")] = true
+  end
+
+  -- Pattern markers (%.sln$ etc. - unchanged)
   if #pattern_markers > 0 then
-    for _, pattern in ipairs(pattern_markers) do
+    for _, pm in ipairs(pattern_markers) do
       local cmd = string.format(
         "git -C %s ls-files --cached --others --exclude-standard -- %s 2>/dev/null",
-        vim.fn.shellescape(root_dir),
-        vim.fn.shellescape("**/" .. pattern)
+        escaped_root,
+        shellescape("**/" .. pm.glob)
       )
-      local pattern_files = vim.fn.systemlist(cmd)
-
-      for _, file in ipairs(pattern_files) do
-        local full_path = root_dir .. "/" .. file
-        local dir = vim.fn.fnamemodify(full_path, ":h")
-        candidate_dirs[dir] = true
+      for _, file in ipairs(vim.fn.systemlist(cmd)) do
+        candidate_dirs[root_dir .. "/" .. vim.fn.fnamemodify(file, ":h")] = true
       end
     end
   end
@@ -545,9 +785,13 @@ function M.get_sub_project_dirs_from_root(root_dir, fromdir, return_metadata, re
 end
 
 --- Clear the subproject cache (useful for manual refresh)
-function M.clear_subproject_cache()
+function M.clear_subproject_cache(opts)
+  opts = opts or {}
   _subproject_cache = {}
-  vim.notify("Subproject cache cleared", vim.log.levels.INFO)
+  _subproject_cache_generation = _subproject_cache_generation + 1
+  if not opts.silent then
+    vim.notify("Subproject cache cleared", vim.log.levels.INFO)
+  end
 end
 
 function M.get_git_real_filepath(filepath)
