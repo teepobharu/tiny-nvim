@@ -1,5 +1,8 @@
 local M = {}
 local path_utils = require "utils.path"
+local mypath = require "utils.mypath"
+
+-- ...existing code...
 
 local function parse_jsonc_with_deno(file_path)
   -- Create a temporary file for deno script
@@ -21,10 +24,7 @@ console.log(JSON.stringify(result));]],
   script_file:close()
 
   -- Execute deno script
-  local cmd = string.format(
-    "deno run --allow-read %s 2>/dev/null",
-    script_path
-  )
+  local cmd = string.format("deno run --allow-read %s 2>/dev/null", script_path)
   local handle = io.popen(cmd)
   if not handle then
     os.remove(script_path)
@@ -71,24 +71,24 @@ local function generate_opencode_jsonc()
   -- Generate JSONC content with comments and prepopulated config
   local jsonc_lines = {
     "{",
-    '  // OpenCode configuration - https://opencode.ai/docs/config',
+    "  // OpenCode configuration - https://opencode.ai/docs/config",
     '  "$schema": "https://opencode.ai/config.json",',
-    '  ',
-    '  // Control which actions require approval',
-    '  // Learn more: https://opencode.ai/docs/permissions',
+    "  ",
+    "  // Control which actions require approval",
+    "  // Learn more: https://opencode.ai/docs/permissions",
     '  "permission": {',
     '    "bash": {',
     '      "*": "ask",           // Ask before running shell commands',
     '      "git *": "allow",     // Allow git commands',
     '      "npm *": "allow",     // Allow npm commands',
     '      "rm *": "deny"        // Deny dangerous rm commands',
-    '    },',
+    "    },",
     '    "edit": "ask",          // Ask before editing files',
     '    "external_directory": { // Control access outside project',
     '      "~/projects/**": "allow"',
-    '    }',
-    '  }',
-    '}',
+    "    }",
+    "  }",
+    "}",
   }
 
   return table.concat(jsonc_lines, "\n")
@@ -110,13 +110,13 @@ local function write_config(git_root, action, existing_file)
       if temp_file then
         temp_file:write(new_config_str)
         temp_file:close()
-        
+
         local new_config = parse_jsonc_with_deno(temp_path)
         os.remove(temp_path)
-        
+
         if new_config then
           local merged = merge_configs(existing_config, new_config)
-          
+
           -- Convert merged config back to JSONC with comments
           local merged_json = vim.json.encode(merged)
           local function pretty_json(json_str)
@@ -168,20 +168,16 @@ local function write_config(git_root, action, existing_file)
 
             return result
           end
-          
+
           final_content = pretty_json(merged_json)
           vim.notify(
-            "Merged configuration with existing "
-              .. vim.fn.fnamemodify(existing_file, ":t"),
+            "Merged configuration with existing " .. vim.fn.fnamemodify(existing_file, ":t"),
             vim.log.levels.INFO
           )
         end
       end
     else
-      vim.notify(
-        "Could not parse existing config. Using new config instead.",
-        vim.log.levels.WARN
-      )
+      vim.notify("Could not parse existing config. Using new config instead.", vim.log.levels.WARN)
     end
   end
 
@@ -190,11 +186,8 @@ local function write_config(git_root, action, existing_file)
   if file then
     file:write(final_content .. "\n")
     file:close()
-    vim.notify(
-      "Created/updated " .. target_path,
-      vim.log.levels.INFO
-    )
-    
+    vim.notify("Created/updated " .. target_path, vim.log.levels.INFO)
+
     -- Open the file in current buffer
     vim.cmd("edit " .. vim.fn.fnameescape(target_path))
   else
@@ -229,20 +222,16 @@ local function create_opencode_config()
 
   -- If existing file found, ask user about merge/replace
   if has_existing then
-    vim.ui.select(
-      { "merge", "replace", "cancel" },
-      {
-        prompt = "opencode config exists at " .. existing_file .. ". Choose action: ",
-      },
-      function(action)
-        if not action or action == "cancel" then
-          return
-        end
-
-        -- Generate and write config
-        write_config(git_root, action, existing_file)
+    vim.ui.select({ "merge", "replace", "cancel" }, {
+      prompt = "opencode config exists at " .. existing_file .. ". Choose action: ",
+    }, function(action)
+      if not action or action == "cancel" then
+        return
       end
-    )
+
+      -- Generate and write config
+      write_config(git_root, action, existing_file)
+    end)
   else
     -- No existing file, proceed directly
     write_config(git_root, "replace", nil)
@@ -252,6 +241,72 @@ end
 function M.setup()
   vim.api.nvim_create_user_command("OpenCodeInit", create_opencode_config, {
     desc = "Create opencode.jsonc with prepopulated permissions",
+  })
+
+  vim.api.nvim_create_user_command("ProjectIgnore", function()
+    local cwd = mypath.get_cwd()
+    mypath.open_project_ignore(cwd)
+  end, {
+    desc = "Create/open .ignore in cwd with initial project ignore rules",
+  })
+
+  vim.api.nvim_create_user_command("ProjectSettingsReload", function()
+    local cwd, cwd_display = mypath.get_cwd()
+    local project_setting = cwd .. "/.nvim-config.lua"
+
+    -- Open file first (creates buffer even if missing), then wait 2s before prompting
+    vim.cmd("edit " .. vim.fn.fnameescape(project_setting))
+
+    vim.defer_fn(function()
+      local function confirm(prompt, on_choice)
+        if vim.ui and type(vim.ui.confirm) == "function" then
+          vim.ui.confirm(prompt, on_choice)
+          return
+        end
+
+        vim.ui.select({ "Yes", "No" }, { prompt = prompt }, function(choice)
+          if choice == "Yes" then
+            on_choice(1)
+          else
+            on_choice(0)
+          end
+        end)
+      end
+
+      if vim.loop.fs_stat(project_setting) then
+        confirm(("Reload project settings?\n file:%s"):format(project_setting), function(choice)
+          if choice == 1 then
+            local ok, err = pcall(dofile, project_setting)
+            if ok then
+              vim.notify("Reloaded project settings from " .. project_setting, vim.log.levels.INFO)
+            else
+              vim.notify("Error loading project setting: " .. tostring(err), vim.log.levels.ERROR)
+            end
+          end
+        end)
+        return
+      end
+
+      confirm((".nvim-config.lua not found.\n\ncwd:\n%s\n\nCreate it now?"):format(cwd_display), function(choice)
+        if choice ~= 1 then
+          return
+        end
+
+        -- Ensure ProjectSettings command exists by requiring the module that defines it
+        local ok, mod = pcall(require, "utils.project")
+        if not ok then
+          vim.notify("Failed to require utils.project: " .. tostring(mod), vim.log.levels.ERROR)
+          return
+        end
+        if type(mod) == "table" and type(mod.setup) == "function" then
+          mod.setup()
+        end
+
+        vim.cmd "ProjectSettings"
+      end)
+    end, 100)
+  end, {
+    desc = "Open and reload .nvim-config.lua from current cwd (prompts after 2s)",
   })
 end
 
