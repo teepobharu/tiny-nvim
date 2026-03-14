@@ -221,8 +221,11 @@ local function _normalize_input_text(s)
   -- Replace any escaped sequences like \n or \t
   s = s:gsub("\\n", "\n")
   s = s:gsub("\\t", "\t")
-  -- Collapse multiple spaces into one and trim leading/trailing whitespace
-  s = s:gsub("%s+", " ")
+  -- Collapse runs of horizontal whitespace (spaces/tabs) into a single space.
+  -- Preserve newlines so clean_selected_text can distinguish line-wrapping
+  -- from legitimate spaces in paths (e.g. "/Application Support/").
+  s = s:gsub("[ \t]+", " ")
+  -- Trim leading/trailing whitespace per line, then trim the whole string
   return vim.trim(s)
 end
 --- Get the text from the previous visual selection
@@ -280,9 +283,8 @@ function M.clean_selected_text(s)
   if path_like then
     -- Remove newlines and any following indentation/whitespace so wrapped
     -- path segments are concatenated without accidental spaces.
+    -- NOTE: Do NOT strip all spaces — paths like "/Application Support/..." have legitimate spaces.
     s = s:gsub("[\r\n]+%s*", "")
-    -- Remove any remaining stray whitespace inside path-like strings
-    s = s:gsub("%s+", "")
   else
     -- For general text: convert newlines to spaces and collapse whitespace
     s = s:gsub("[\r\n]+", " ")

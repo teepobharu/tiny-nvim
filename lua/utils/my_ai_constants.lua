@@ -11,9 +11,14 @@ M.models = {
   gpt = {
     GPT_4_1 = "gpt-4.1",
     GPT_4_1_MINI = "gpt-4.1-mini",
+    GPT_4_1_NANO = "gpt-4.1-nano",
+    GPT_5 = "gpt-5",
+    GPT_5_NANO = "gpt-5-nano",
     GPT_5_MINI = "gpt-5-mini",
     GPT_5_1 = "gpt-5.1",
     GPT_5_2 = "gpt-5.2",
+    GPT_5_3_CODEX = "gpt-5.3-codex",
+    GPT_5_4 = "gpt-5.4",
     GPT_5_1_CODEX_MAX = "gpt-5.1-codex-max",
     GPT_5_1_CODEX_MINI = "gpt-5.1-codex-mini",
     GPT_4O = "gpt-4o",
@@ -28,25 +33,57 @@ M.models = {
     CLAUDE_SONNET_4 = "claude-sonnet-4",
     CLAUDE_HAIKU_4_5 = "claude-haiku-4-5",
     CLAUDE_SONNET_4_5 = "claude-sonnet-4-5",
+    CLAUDE_SONNET_4_6 = "claude-sonnet-4-6",
     CLAUDE_OPUS_4_5 = "claude-opus-4-5",
+    CLAUDE_OPUS_4_6 = "claude-opus-4-6",
   },
 
-  -- Gemini models
   gemini = {
-    GEMINI_3_PRO_PREVIEW = "gemini-3-pro-preview",
-    GEMINI_2_5_FLASH = "gemini-2.5-flash",
+    GEMINI_3_1_PRO = "gemini-3.1-pro",
+    GEMINI_3_1_FLASH_LITE = "gemini-3.1-flash-lite",
+    GEMINI_3_PRO = "gemini-3-pro",
+    GEMINI_3_FLASH = "gemini-3-flash",
     GEMINI_2_5_PRO = "gemini-2.5-pro",
+    GEMINI_2_5_FLASH = "gemini-2.5-flash",
+    GEMINI_2_5_FLASH_LITE = "gemini-2.5-flash-lite",
+  },
+
+  -- O-series reasoning models
+  o_series = {
+    O3 = "o3",
+    O3_MINI = "o3-mini",
+    O4_MINI = "o4-mini",
   },
 
   -- DeepSeek models
   deepseek = {
-    DEEPSEEK_R1 = "deepseek-r1",
-    DEEPSEEK_R1_DISTILL = "deepseek-r1-distill",
+    DEEPSEEK = "deepseek",
+    DEEPSEEK_R1 = "deepseek-r1-0528-maas",
+  },
+
+  -- Qwen models (AGD proxy IDs)
+  qwen = {
+    QWQ_32B = "qwq-32b",
+    QWEN_3_5_27B = "qwen-3.5-27b",
   },
 
   others = {
     GROK_FAST_1 = "grok-code-fast-1",
   },
+}
+
+M.providers = {
+  OPENAI_AGD = "openai_agd",
+}
+
+M.provider_model_remap = {
+  [M.providers.OPENAI_AGD] = {
+    -- Gemini models (3.x/3.1.x REQUIRE -preview suffix on AGD proxy chat endpoint)
+    [M.models.gemini.GEMINI_3_1_PRO] = M.models.gemini.GEMINI_3_1_PRO .. "-preview",
+    -- [M.models.gemini.GEMINI_3_PRO] = M.models.gemini.GEMINI_3_PRO .. "-preview", -- works on hurl but get vertex error on codecompanion : body = "{\"error\":{\"message\":\"litellm.NotFoundError: Vertex_ai_betaException - b'{\\\\n  \\\"error\\\": {\\\\n    \\\"code\\\": 404,\\\\n    \\\"message\\\": \\\"Publisher Model `projects/llmgatewayprod-17939/locations/us-central1/publishers/google/models/gemini-3-pro-preview` was not found or your project does not have access to it.
+    [M.models.gemini.GEMINI_3_1_FLASH_LITE] = M.models.gemini.GEMINI_3_1_FLASH_LITE .. "-preview",
+    [M.models.gemini.GEMINI_3_FLASH] = M.models.gemini.GEMINI_3_FLASH .. "-preview",
+  }
 }
 
 -- ============================================================================
@@ -82,6 +119,7 @@ M.filters = {
     "agoda", -- Contains "agoda"
     -- "^claude%-", -- Starts with "claude-" (for AGD proxy that doesn't support Claude)
     "^ft%-", -- Fine-tuned models
+    M.models.gemini.GEMINI_3_PRO
   },
   -- TODO: add opts to model
   withNoTemp = {
@@ -116,30 +154,35 @@ M.static_models = { -- Fast models (for quick operations)
   fast = {
     M.models.gpt.GPT_4_1_MINI,
     M.models.gpt.GPT_5_MINI,
+    M.models.gpt.GPT_5_NANO,
   },
 
   -- Heavy models (for complex operations)
   heavy = {
+    M.models.claude.CLAUDE_SONNET_4_6,
     M.models.claude.CLAUDE_SONNET_4_5,
     M.models.claude.CLAUDE_SONNET_4,
+    M.models.claude.CLAUDE_OPUS_4_6,
     M.models.claude.CLAUDE_OPUS_4_5,
   },
 
   -- Codex models (for code-specific operations)
   codex = {
+    M.models.gpt.GPT_5_3_CODEX,
     M.models.gpt.GPT_5_1_CODEX_MAX,
     M.models.gpt.GPT_5_1_CODEX_MINI,
   },
 
   -- Default priority order for CodeCompanion
   agd_default = {
+    M.models.gpt.GPT_5_4,
     M.models.gpt.GPT_5_2,
     M.models.gpt.GPT_5_1,
     M.models.gpt.GPT_5_MINI,
     M.models.gpt.GPT_4O,
     M.models.gpt.GPT_4O_MINI,
     M.models.gpt.GPT_3_5_TURBO,
-    M.models.claude.CLAUDE_SONNET_4,
+    M.models.claude.CLAUDE_SONNET_4_6,
     M.models.claude.CLAUDE_SONNET_4_5,
     M.models.claude.CLAUDE_HAIKU_4_5,
   },
@@ -229,7 +272,7 @@ function M.contains_filtered_keyword(model_name, additional_keywords)
 end
 
 -- Filter models based on blacklist and keywords
-function M.filter_models(models, opts)
+function M.filter_models(models, opts, provider)
   opts = opts or {}
   local filtered = {}
 
@@ -238,7 +281,13 @@ function M.filter_models(models, opts)
       not M.matches_blacklist(model, opts.additional_blacklist)
       and not M.contains_filtered_keyword(model, opts.additional_keywords)
     then
-      table.insert(filtered, model)
+      -- remap eligible name for agoda proxy (known issue in agoda proxy model name return response)
+      local remapprovider = M.provider_model_remap[provider]
+      if provider and remapprovider[model] then
+        table.insert(filtered, remapprovider[model])
+      else
+        table.insert(filtered, model)
+      end
     end
   end
 

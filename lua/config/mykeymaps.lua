@@ -1590,6 +1590,14 @@ if not vim.g.vscode then
   -- vim.api.nvim_del_keymap("n", "<S-h>")
   -- vim.api.nvim_del_keymap("n", "<S-l>")
 end
+-- GLOBAL 
+function _G.userdbg(...) return require("utils.user_debug").dbg(...) end
+
+vim.api.nvim_create_user_command("UserToggleDebug", function()
+  require("utils.user_debug").toggle()
+  vim.print("User debug mode: " .. tostring(require("utils.user_debug").is_enabled()))
+end, { desc = "Toggle user debug mode" })
+
 -- OVERRIDE MAP ==========================
 keymap("n", "zj", "zj")
 keymap("n", "zk", "zk")
