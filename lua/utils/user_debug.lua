@@ -12,7 +12,6 @@ end
 function M.toggle(val)
   vim.g.userdebug = not vim.g.userdebug or false
 end
-_G.userdebugtoggle = M.toggle_debug -- global function for easy toggling from command line
 
 --- Return whether debug printing is enabled
 function M.is_enabled()

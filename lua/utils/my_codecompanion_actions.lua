@@ -48,7 +48,7 @@ local DEFAULT_MODEL = AI.defaults.model
 --   - blacklist: table - additional patterns to blacklist
 --   - keyword_filters: table - additional keywords to filter
 -- @return table Filtered list of model names
-function M.fetch_model_helper(self, opts)
+function M.fetch_model_helper(self, opts, provider)
   opts = opts or {}
 
   -- Build complete blacklist (shared + CodeCompanion specific)
@@ -78,7 +78,7 @@ function M.fetch_model_helper(self, opts)
         local cc_opts = { async = opts.async }
         local fetch_ok, dynamic_models = pcall(choices_fn, self, cc_opts)
         if fetch_ok and type(dynamic_models) == "table" and #dynamic_models > 0 then
-          return AI.filter_models(dynamic_models, filter_opts)
+          return AI.filter_models(dynamic_models, filter_opts, provider)
         end
       end
     end
@@ -86,7 +86,7 @@ function M.fetch_model_helper(self, opts)
   end
 
   -- Default: return filtered static models (no network dependency)
-  local filteredModels = AI.filter_models(AI.static_models.agd_default, filter_opts)
+  local filteredModels = AI.filter_models(AI.static_models.agd_default, filter_opts, provider)
   -- TODO : after filter -> inject appropriate opts for some model to remove some fields in request
   -- ie. add appropriate
   -- for claudeX models get below error
@@ -138,7 +138,7 @@ function M.inline_with_adapter(adapter_name, model)
   end
 
   local adapter = require("codecompanion.adapters").resolve(adapter_config)
-  print([==[M.inline_with_adapter adapter:]==], vim.inspect(adapter)) -- __AUTO_GENERATED_PRINT_VAR_END__
+  _G.userdbg([==[M.inline_with_adapter adapter:]==], vim.inspect(adapter))
 
   -- Override model if specified
   if model and adapter.schema and adapter.schema.model then
