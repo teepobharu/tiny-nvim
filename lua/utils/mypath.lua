@@ -354,7 +354,12 @@ local function build_fd_brace_glob(names)
 end
 
 local function collect_ignored_marker_paths(root_dir, ignored_file_markers)
-  if #ignored_file_markers == 0 or vim.g.subproject_scan_ignored == false then
+  if #ignored_file_markers == 0 then
+    return {}
+  end
+
+  if vim.g.subproject_scan_ignored == false then
+    Snacks.debug "Skip ignored marker scan (ie: .nv) no vim.g.subproject_scan_ignored=false"
     return {}
   end
 
@@ -1056,6 +1061,53 @@ function M.goto_file_line(open_in_previous_buffer)
     -- Fallback to default gf behavior
     vim.cmd "normal! gf"
   end
+end
+
+--- Create (or open) .ignore in `dir`. Creates with initial lines if new; appends them if file exists.
+---@param dir string directory where .ignore should live
+function M.open_project_ignore(dir)
+  local ignore_path = dir .. "/.ignore"
+  local exists = vim.fn.filereadable(ignore_path) == 1
+
+  -- stylua: ignore
+  local initial_content = table.concat({
+    "!.nvim-config.lua",
+    "!.opencode.jsonc",
+    "",
+  }, "\n")
+
+  local mode = exists and "a" or "w"
+  local file = io.open(ignore_path, mode)
+  if file then
+    file:write(initial_content)
+    file:close()
+    local verb = exists and "Appended to " or "Created "
+    vim.notify(verb .. ignore_path, vim.log.levels.INFO)
+  else
+    vim.notify("Failed to write " .. ignore_path, vim.log.levels.ERROR)
+    return
+  end
+
+  vim.cmd("edit " .. vim.fn.fnameescape(ignore_path))
+end
+
+--- Format a path for display by replacing $HOME prefix with "~".
+---@param path string
+---@return string
+function M.format_path(path)
+  local home = vim.env.HOME
+  if type(home) == "string" and home ~= "" and path:sub(1, #home) == home then
+    return "~" .. path:sub(#home + 1)
+  end
+  return path
+end
+
+--- Get current working directory plus a display-formatted variant.
+---@return string cwd
+---@return string cwd_display
+function M.get_cwd()
+  local cwd = vim.fn.getcwd()
+  return cwd, M.format_path(cwd)
 end
 
 return M
