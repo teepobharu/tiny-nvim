@@ -1863,7 +1863,11 @@ function M.get_initial_picker_state(pickerOpts, opts)
   local cwd_defaultmap = {
     git = path.get_root_directory() or Snacks.git.get_root(),
     current = vim.fn.getcwd(),
-    subproject = pathUtil.get_sub_project_dirs_from_root(nil, nil, false, false, "nearest"),
+    -- Lazy: only scan for subprojects when cwd_default is "subproject" to avoid
+    -- freezing the picker on open (root scan runs git ls-files across 3 pipelines)
+    subproject = cwd_default == "subproject"
+        and pathUtil.get_sub_project_dirs_from_root(nil, nil, false, false, "nearest")
+      or nil,
   }
 
   local cwd = nil
@@ -2171,6 +2175,10 @@ M.snippets_source_config = {
     local result = {
       { name, item.ft == "" and "Conceal" or "DiagnosticWarn" },
     }
+    -- Show ~trigger alias when it differs from the name
+    if item.trigger ~= item.name then
+      result[#result + 1] = { " ~" .. item.trigger, "Comment" }
+    end
     -- Show [filetype] badge in red when filetype is set
     if item.ft ~= "" then
       result[#result + 1] = { " [" .. item.ft .. "]", "DiagnosticError" }
@@ -2230,7 +2238,7 @@ M.snippets_source_config = {
       local description = table.concat(snip.description)
       description = name == description and "" or description
       table.insert(items, {
-        text = name .. " " .. description, -- search string
+        text = name .. " " .. snip.trigger .. " " .. description, -- search string (name + trigger + description)
         name = name,
         description = description,
         trigger = snip.trigger,
