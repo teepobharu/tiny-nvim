@@ -148,6 +148,7 @@ local function create_nvim_config()
       -- Create the config file
       local config = [[
 -- Project-specific Neovim configuration
+-- mono:nvproj <- set the label to show in files/grep subproject picker here
 
 -- Set TypeScript LSP server
 vim.g.lsp_typescript_server = "ts_ls" -- or "vtsls"
@@ -184,6 +185,7 @@ vim.g.enable_extra_plugins = {
 -- Add any other project-specific settings below
 -- vim.opt.tabstop = 2
 -- vim.opt.shiftwidth = 2
+-- vim.g.subproject_scan_ignored = false -- disable subproject scanning in snacks file/grep picker
 ]]
 
       local file = io.open(".nvim-config.lua", "w")
