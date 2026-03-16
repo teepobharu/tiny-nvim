@@ -18,6 +18,7 @@ vim.g.enable_extra_plugins = {
   "myCoding",
   "myGit",
   "myAi",
+  "myLazyPatcher",
   "snacks", -- error when removed - error when no extra dir so create dummy {}
 }
 
