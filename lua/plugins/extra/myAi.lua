@@ -216,8 +216,7 @@ return {
   -- },
   {
     "olimorris/codecompanion.nvim",
-    -- version = "^19", -- variables rename break mcphub var code saw error on startup and mcp not seem to be used - fix https://github.com/ravitemer/mcphub.nvim/issues/275
-    version = "^18.7.0",
+    version = "^19", -- v19 compat via local patch on mcphub.nvim (PR #279) — see docs/memory/lazy-local-patching.md
     dependencies = {
       -- MCPHub integration for MCP tools/resources access
       { "ravitemer/mcphub.nvim", optional = true },
@@ -641,7 +640,7 @@ Documentation and Tracking:
           description = "Generate a commit message for staged change",
           -- fix original lua/plugins/extra/codecompanion.lua for overriding to alias instead of shortname
           opts = {
-            alias = "staged-commit",
+            alias = "staged-commit-jelly",
           },
         },
         ["Generate a Commit Message for Short Staged"] = {
@@ -687,7 +686,7 @@ feat(release): add slack msg and create release after deploy
           interaction = "chat",
           description = "Generate commit message with large file summaries (>50 lines)",
           opts = {
-            alias = "large-staged-files-commit-msg",
+            alias = "staged-commit",
             auto_submit = true,
             is_slash_cmd = true,
             adapter = {
@@ -699,8 +698,14 @@ feat(release): add slack msg and create release after deploy
             {
               role = "user",
               content = function()
-                local filtered_diff = require("utils.git").get_filtered_staged_diff(50)
-                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (use only 1 line break between title and body description). Important: keep the text clean no formatting (bad: **, '') keep plaintext with shortlist/dash prefix in body description. Only output the commit message. Do not output more than 5 bullet points. Do use acronym to save space and each point not too long. Don't include filepath, specific code changes or variables name.\n\nNote: Files with >50 line changes are shown as summary only (M/A/D filepath +added -deleted). Renamed files shown as (R old -> new). Binary files shown with (binary) marker."
+                local filtered_diff = require("utils.git").get_filtered_staged_diff(50, {
+                  total_threshold = 700,
+                  file_treatments = {
+                    { pattern = "%.md$" }, -- skip md diffs entirely
+                    { pattern = ".*", skip_diff_threshold = 100, trim_diff = true }, -- default: trim if >100 lines
+                  },
+                })
+                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (use only 1 line break between title and body description). Important: keep the text clean no formatting (bad: **, '') keep plaintext with shortlist/dash prefix in body description. Only output the commit message. Do not output more than 5 bullet points. Do use acronym to save space and each point not too long. Don't include filepath, specific code changes or variables name.\n\nNote: If total changes ≤700 lines, full diff shown. Otherwise: FILES CHANGED lists all files; LARGE FILES (>50 lines) shows summary only; SMALL FILES shows diff (trimmed to 100 lines if exceeded). Markdown files excluded from diff sections. Binary files marked with (binary)."
                   .. [[
 Example commit message:
 feat(release): add slack msg and create release after deploy
