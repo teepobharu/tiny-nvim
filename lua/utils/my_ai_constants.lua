@@ -72,18 +72,43 @@ M.models = {
   },
 }
 
-M.providers = {
-  OPENAI_AGD = "openai_agd",
-}
+--- @alias ModelSize "S"|"M"|"L"
+--- @alias TierName "default"|"alt"|"max"
 
-M.provider_model_remap = {
-  [M.providers.OPENAI_AGD] = {
-    -- Gemini models (3.x/3.1.x REQUIRE -preview suffix on AGD proxy chat endpoint)
-    [M.models.gemini.GEMINI_3_1_PRO] = M.models.gemini.GEMINI_3_1_PRO .. "-preview",
-    -- [M.models.gemini.GEMINI_3_PRO] = M.models.gemini.GEMINI_3_PRO .. "-preview", -- works on hurl but get vertex error on codecompanion : body = "{\"error\":{\"message\":\"litellm.NotFoundError: Vertex_ai_betaException - b'{\\\\n  \\\"error\\\": {\\\\n    \\\"code\\\": 404,\\\\n    \\\"message\\\": \\\"Publisher Model `projects/llmgatewayprod-17939/locations/us-central1/publishers/google/models/gemini-3-pro-preview` was not found or your project does not have access to it.
-    [M.models.gemini.GEMINI_3_1_FLASH_LITE] = M.models.gemini.GEMINI_3_1_FLASH_LITE .. "-preview",
-    [M.models.gemini.GEMINI_3_FLASH] = M.models.gemini.GEMINI_3_FLASH .. "-preview",
-  }
+--- Sparse size-indexed table (not every size is required)
+--- @class ModelSizeMap
+--- @field S? string
+--- @field M? string
+--- @field L? string
+
+--- Each model family's tiered selections within a provider
+--- @class ModelTiers
+--- @field default ModelSizeMap   Standard picks
+--- @field alt? ModelSizeMap      Alternative/lighter picks
+--- @field max? ModelSizeMap      Maximum capability picks
+
+--- Avante-specific provider settings (endpoint, inherited_from, request body)
+--- @class AvanteProviderOpts
+--- @field avante_inherited_from string  Avante __inherited_from key
+--- @field endpoint string               API endpoint URL
+--- @field request_defaults table        Extra request body params
+
+--- Per-provider configuration with per-family tiered model selections
+--- @class ProviderConfig
+--- @field adapter_name string                     Adapter key for CC/Avante
+--- @field display_label string                    Short label for titles (e.g. "AGD", "Copilot")
+--- @field top_choices table<string, ModelTiers>   Keyed by model family ("gpt", "claude", etc.)
+--- @field avante_opts? AvanteProviderOpts         Avante-specific settings (AGD only)
+
+--- @class AvailableProviderConfig
+--- @field openai_agd ProviderConfig
+--- @field copilot ProviderConfig
+
+--- @type ModelSizeMap
+M.models.sizing = {
+  S = "S",
+  M = "M",
+  L = "L",
 }
 
 -- ============================================================================
@@ -96,6 +121,81 @@ M.endpoints = {
     OPENAI_PROXY = "http://openai-proxy.agoda.is/v1",
     OPENAI_PROXY_MODELS = "http://openai-proxy.agoda.is/v1/models",
     OPENAI_PROXY_CHAT = "http://openai-proxy.agoda.is/v1/chat/completions",
+  },
+}
+
+-- ============================================================================
+-- Provider Configurations (single source of truth for model tiers)
+-- ============================================================================
+
+--- @class AvailableProviderConfig
+M.providers = {
+  openai_agd = {
+    adapter_name = "openai_agd",
+    display_label = "AGD",
+    top_choices = {
+      gpt = {
+        default = { S = M.models.gpt.GPT_5_MINI, M = M.models.gpt.GPT_5_2, L = M.models.gpt.GPT_5_4 },
+        alt = { S = M.models.gpt.GPT_4_1_MINI },
+        max = { M = M.models.gpt.GPT_5_1_CODEX_MAX, L = M.models.gpt.GPT_5_1_CODEX_MINI },
+      },
+      claude = {
+        default = {
+          S = M.models.claude.CLAUDE_HAIKU_4_5,
+          M = M.models.claude.CLAUDE_SONNET_4_6,
+          L = M.models.claude.CLAUDE_OPUS_4_6,
+        },
+      },
+      gemini = {
+        default = {
+          S = M.models.gemini.GEMINI_3_1_FLASH_LITE,
+          M = M.models.gemini.GEMINI_3_1_PRO,
+          L = M.models.gemini.GEMINI_3_FLASH,
+        },
+      },
+      grok = {
+        default = { S = M.models.others.GROK_FAST_1 },
+      },
+    },
+    avante_opts = {
+      avante_inherited_from = "openai",
+      endpoint = M.endpoints.agoda.OPENAI_PROXY,
+      request_defaults = {
+        temperature = 0,
+        max_completion_tokens = 4096,
+      },
+    },
+  },
+  copilot = {
+    adapter_name = "copilot",
+    display_label = "Copilot",
+    top_choices = {
+      gpt = {
+        default = { S = M.models.gpt.GPT_5_MINI, M = M.models.gpt.GPT_5_3_CODEX },
+        alt = { S = M.models.gpt.GPT_4_1_MINI },
+        max = { M = M.models.gpt.GPT_5_1_CODEX_MAX, L = M.models.gpt.GPT_5_1_CODEX_MINI },
+      },
+      claude = {
+        default = {
+          S = M.models.claude.CLAUDE_HAIKU_4_5,
+          M = M.models.claude.CLAUDE_SONNET_4_6,
+          L = M.models.claude.CLAUDE_OPUS_4_6,
+        },
+      },
+      grok = {
+        default = { S = M.models.others.GROK_FAST_1 },
+      },
+    },
+  },
+}
+
+M.provider_model_remap = {
+  [M.providers.openai_agd.adapter_name] = {
+    -- Gemini models (3.x/3.1.x REQUIRE -preview suffix on AGD proxy chat endpoint)
+    [M.models.gemini.GEMINI_3_1_PRO] = M.models.gemini.GEMINI_3_1_PRO .. "-preview",
+    -- [M.models.gemini.GEMINI_3_PRO] = M.models.gemini.GEMINI_3_PRO .. "-preview", -- works on hurl but get vertex error on codecompanion : body = "{\"error\":{\"message\":\"litellm.NotFoundError: Vertex_ai_betaException - b'{\\\\n  \\\"error\\\": {\\\\n    \\\"code\\\": 404,\\\\n    \\\"message\\\": \\\"Publisher Model `projects/llmgatewayprod-17939/locations/us-central1/publishers/google/models/gemini-3-pro-preview` was not found or your project does not have access to it.
+    [M.models.gemini.GEMINI_3_1_FLASH_LITE] = M.models.gemini.GEMINI_3_1_FLASH_LITE .. "-preview",
+    [M.models.gemini.GEMINI_3_FLASH] = M.models.gemini.GEMINI_3_FLASH .. "-preview",
   },
 }
 
@@ -119,7 +219,7 @@ M.filters = {
     "agoda", -- Contains "agoda"
     -- "^claude%-", -- Starts with "claude-" (for AGD proxy that doesn't support Claude)
     "^ft%-", -- Fine-tuned models
-    M.models.gemini.GEMINI_3_PRO
+    -- M.models.gemini.GEMINI_3_PRO,
   },
   -- TODO: add opts to model
   withNoTemp = {
@@ -200,12 +300,6 @@ M.defaults = {
   temperature = 0.75,
   max_tokens = 20480,
   timeout = 30000,
-
-  -- AGD specific
-  agd = {
-    temperature = 0,
-    max_completion_tokens = 4096,
-  },
 }
 
 -- ============================================================================
@@ -282,8 +376,8 @@ function M.filter_models(models, opts, provider)
       and not M.contains_filtered_keyword(model, opts.additional_keywords)
     then
       -- remap eligible name for agoda proxy (known issue in agoda proxy model name return response)
-      local remapprovider = M.provider_model_remap[provider]
-      if provider and remapprovider[model] then
+      local remapprovider = provider and M.provider_model_remap[provider]
+      if remapprovider and remapprovider[model] then
         table.insert(filtered, remapprovider[model])
       else
         table.insert(filtered, model)
@@ -296,5 +390,79 @@ end
 
 -- M.DEFAULT_COPILOT_MODEL = M.models.others.GROK_FAST_1 -- x0.33
 M.DEFAULT_COPILOT_MODEL = M.models.gpt.GPT_5_MINI
+
+-- ============================================================================
+-- Provider Keymap Slot Pattern
+-- ============================================================================
+
+--- Fixed slot pattern for keymap generation. Each entry maps a keyboard key to a
+--- specific model family + tier + size position within a provider's top_choices.
+--- Used by both Avante and CodeCompanion keymap generators.
+--- @type {key: string, family: string, tier: TierName, size: ModelSize}[]
+M.KEYMAP_SLOT_PATTERN = {
+  { key = "f", family = "gpt", tier = "alt", size = "S" },
+  { key = "F", family = "gpt", tier = "default", size = "S" },
+  { key = "g", family = "grok", tier = "default", size = "S" },
+  { key = "G", family = "claude", tier = "default", size = "S" },
+  { key = "h", family = "claude", tier = "default", size = "M" },
+  { key = "H", family = "claude", tier = "default", size = "L" },
+  { key = "c", family = "gpt", tier = "default", size = "M" },
+  { key = "C", family = "gpt", tier = "default", size = "L" },
+  { key = "m", family = "gpt", tier = "max", size = "M" },
+  { key = "M", family = "gpt", tier = "max", size = "L" },
+}
+
+--- Build a key→{model,desc} mapping from a provider's top_choices using the
+--- fixed KEYMAP_SLOT_PATTERN. Skips slots where the provider has no model.
+--- @param provider_name string Key in M.providers (e.g. "openai_agd", "copilot")
+--- @return table<string, {model: string, desc: string}>
+function M.build_keymap_slots(provider_name)
+  local pconfig = M.providers[provider_name]
+  if not pconfig then
+    return {}
+  end
+  local tc = pconfig.top_choices
+  local result = {}
+  for _, slot in ipairs(M.KEYMAP_SLOT_PATTERN) do
+    local family = tc[slot.family]
+    local tier = family and family[slot.tier]
+    local model = tier and tier[slot.size]
+    if model then
+      result[slot.key] = { model = model, desc = model }
+    end
+  end
+  return result
+end
+
+--- Flatten all models from a provider's top_choices into a unique flat array.
+--- Iterates all families → tiers → sizes.
+--- @param provider_name string
+--- @return string[]
+function M.get_top_choice_models(provider_name)
+  local pconfig = M.providers[provider_name]
+  if not pconfig then
+    return {}
+  end
+  local seen, result = {}, {}
+  for _, tiers in pairs(pconfig.top_choices) do
+    for _, sizes in pairs(tiers) do
+      for _, model in pairs(sizes) do
+        if not seen[model] then
+          seen[model] = true
+          table.insert(result, model)
+        end
+      end
+    end
+  end
+  return result
+end
+
+--- Return filtered + remapped model names for the openai_agd Avante provider.
+--- Collects all models from M.models.*, applies filter_models with AGD remap.
+--- @return string[]
+function M.get_agd_model_names()
+  local all = M.get_all_models()
+  return M.filter_models(all, {}, M.providers.openai_agd.adapter_name)
+end
 
 return M

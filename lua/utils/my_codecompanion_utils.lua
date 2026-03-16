@@ -1,7 +1,7 @@
 -- CodeCompanion utility functions for Agoda-specific adapter configurations
 -- Similar pattern to my_avante_utils.lua for consistency
 -- TODO: extract common model name, url, env keys to be in common place to be reused in both avante, codecomponion, others
-local myAiC = require("utils.my_ai_constants")
+local myAiC = require "utils.my_ai_constants"
 local M = {}
 
 -- `CodeCompanionChat adapter=<adapter> model=<model>` - Open a chat buffer with a specific http adapter and model
@@ -65,7 +65,7 @@ function M.get_agoda_adapters(use_dynamic_fetch)
     -- OpenAI/GPT via Agoda OpenAI Proxy
     -- Uses env-based URL templating: AG_OPENAIPROXY provides base URL (e.g. http://openai-proxy.agoda.is)
     -- Uses dynamic model fetching via fetch_model_helper from my_codecompanion_actions
-    [myAiC.providers.OPENAI_AGD] = function()
+    [myAiC.providers.openai_agd.adapter_name] = function()
       return require("codecompanion.adapters").extend("openai", {
         env = {
           api_key = "OPENAI_API_KEY",
@@ -80,7 +80,11 @@ function M.get_agoda_adapters(use_dynamic_fetch)
             choices = function(self, opts)
               local finalOpt = vim.tbl_deep_extend("force", {}, opts or {})
               finalOpt.use_dynamic_fetch = use_dynamic_fetch
-              return require("utils.my_codecompanion_actions").fetch_model_helper(self, finalOpt, myAiC.providers.OPENAI_AGD)
+              return require("utils.my_codecompanion_actions").fetch_model_helper(
+                self,
+                finalOpt,
+                myAiC.providers.openai_agd.adapter_name
+              )
             end,
           },
           -- temperature = {
@@ -262,7 +266,14 @@ function M.get_buffer_git_diff(diff_args, context)
   -- start and end might be equal even not select why ?
   _G.userdbg([==[M.get_buffer_git_diff#if context:]==], vim.inspect(context)) -- __AUTO_GENERATED_PRINT_VAR_END__
   -- Check visual selection context is valid and spans multiple lines in visual or linewise visual mode
-  if context and context.mode and (context.mode == "v" or context.mode == "V") and context.start_line and context.end_line and context.start_line ~= context.end_line then
+  if
+    context
+    and context.mode
+    and (context.mode == "v" or context.mode == "V")
+    and context.start_line
+    and context.end_line
+    and context.start_line ~= context.end_line
+  then
     -- __AUTO_GENERATED_PRINT_VAR_START__
     local start_line = context.start_line
     local end_line = context.end_line
