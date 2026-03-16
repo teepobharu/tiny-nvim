@@ -340,8 +340,9 @@ return {
             cd = function(state)
               local node = state.tree:get_node()
               local filepath = node:get_id()
-              local cwdPath = vim.fn.fnamemodify(filepath, ":h")
-              vim.notify("Changing directory to: " .. cwdPath)
+              local is_dir = node.type == "directory"
+              local cwdPath = is_dir and filepath or vim.fn.fnamemodify(filepath, ":h")
+              vim.print("Changing directory to: " .. cwdPath)
               vim.cmd("cd " .. cwdPath)
             end,
             fzf_cd = function(state)

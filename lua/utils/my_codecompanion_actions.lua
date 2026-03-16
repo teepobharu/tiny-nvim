@@ -252,25 +252,16 @@ function M.generate_model_keymaps(config)
   return keymaps
 end
 
--- Get default model configurations for Copilot adapter (using shared constants)
+-- Get default model configurations for Copilot adapter
+-- Derived from AI.providers.copilot.top_choices via KEYMAP_SLOT_PATTERN
 function M.get_copilot_models_config()
-  return {
-    f = { model = AI.models.gpt.GPT_4_1_MINI, desc = "GPT-4.1-mini (fast)" },
-    F = { model = AI.models.gpt.GPT_5_MINI, desc = "GPT-5-mini (fast-2)" },
-    h = { model = AI.models.claude.CLAUDE_SONNET_4_5, desc = "Claude Sonnet 4.5 (heavy)" },
-    H = { model = AI.models.claude.CLAUDE_OPUS_4_5, desc = "Claude Opus 4.5" },
-    c = { model = AI.models.gpt.GPT_5_1_CODEX_MAX, desc = "GPT-5.1-codex-max" },
-    C = { model = AI.models.gpt.GPT_5_1_CODEX_MINI, desc = "GPT-5.1-codex-mini" },
-  }
+  return AI.build_keymap_slots "copilot"
 end
 
--- Get default model configurations for OpenAI AGD adapter (using shared constants)
+-- Get default model configurations for OpenAI AGD adapter
+-- Derived from AI.providers.openai_agd.top_choices via KEYMAP_SLOT_PATTERN
 function M.get_openai_agd_models_config()
-  return {
-    f = { model = AI.models.gpt.GPT_4_1_MINI, desc = "GPT-4.1-mini" },
-    F = { model = AI.models.gpt.GPT_5_MINI, desc = "GPT-5-mini" },
-    c = { model = AI.models.gpt.GPT_5_2, desc = "GPT-5.2" },
-  }
+  return AI.build_keymap_slots "openai_agd"
 end
 
 -- Get default model configurations for Vertex Claude AGD adapter (using shared constants)
