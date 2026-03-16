@@ -571,16 +571,81 @@ local function parse_rename(rename_str)
   return rename_str, rename_str
 end
 
+-- Find first matching file treatment rule (first match wins)
+-- @param filename string: file path to match
+-- @param treatments table|nil: array of { pattern = "lua pattern or *", skip_diff_threshold = number, trim_diff = bool }
+-- @return table|nil: matched treatment rule or nil
+local function find_file_treatment(filename, treatments)
+  if not treatments or #treatments == 0 then
+    return nil
+  end
+  for _, rule in ipairs(treatments) do
+    if rule.pattern == "*" or filename:match(rule.pattern) then
+      return rule
+    end
+  end
+  return nil
+end
+
+-- Trim diff text to first N/2 and last N/2 lines
+-- @param diff_text string: full diff output
+-- @param max_lines number: max lines to keep
+-- @return string: trimmed diff
+local function trim_diff_lines(diff_text, max_lines)
+  local lines = {}
+  for line in diff_text:gmatch "[^\n]*" do
+    table.insert(lines, line)
+  end
+  -- Remove trailing empty line from gmatch
+  if #lines > 0 and lines[#lines] == "" then
+    table.remove(lines)
+  end
+  if #lines <= max_lines then
+    return diff_text
+  end
+  local half = math.floor(max_lines / 2)
+  local result = {}
+  for i = 1, half do
+    table.insert(result, lines[i])
+  end
+  table.insert(result, string.format("... (%d lines trimmed) ...", #lines - max_lines))
+  for i = #lines - half + 1, #lines do
+    table.insert(result, lines[i])
+  end
+  return table.concat(result, "\n")
+end
+
 -- Get filtered staged diff with large files shown as summary only
 -- @param threshold number: minimum total line changes to show as summary (default: 50)
+-- @param opts table|nil: options { file_treatments = table, total_threshold = number }
+--   file_treatments: array of rules (first match wins), each rule:
+--     { pattern = "lua pattern or *" }                             -- skip diff entirely
+--     { pattern = "*", skip_diff_threshold = 100, trim_diff = true } -- trim if diff > N lines
 -- @return string: formatted diff output
-function M.get_filtered_staged_diff(threshold)
+function M.get_filtered_staged_diff(threshold, opts)
   threshold = threshold or 50
+  opts = opts or {}
+  local file_treatments = opts.file_treatments
+  local total_threshold = opts.total_threshold or 700
 
   -- Get numstat (line counts per file)
   local numstat = vim.fn.system "git diff --staged --numstat"
   if vim.v.shell_error ~= 0 or numstat == "" then
     return "No staged changes"
+  end
+
+  -- Calculate total lines changed across all files
+  local total_changes = 0
+  for line in numstat:gmatch "[^\r\n]+" do
+    local added, deleted = line:match "(%S+)%s+(%S+)"
+    if added and deleted and added ~= "-" and deleted ~= "-" then
+      total_changes = total_changes + (tonumber(added) or 0) + (tonumber(deleted) or 0)
+    end
+  end
+
+  -- If total changes <= threshold, show full diff
+  if total_changes <= total_threshold then
+    return vim.fn.system "git diff --staged"
   end
 
   -- Get name-status (M/A/D/R status per file)
@@ -590,29 +655,39 @@ function M.get_filtered_staged_diff(threshold)
   local small_files = {}
   local renames = {}
   local binaries = {}
+  local all_files_summary = {}
 
   -- Parse numstat and categorize files
   for line in numstat:gmatch "[^\r\n]+" do
     local added, deleted, filename = line:match "(%S+)%s+(%S+)%s+(.+)"
 
     if filename then
+      local status = get_file_status(name_status, filename)
+
       -- Check if binary file (git shows "- -" for binary)
       if added == "-" and deleted == "-" then
         table.insert(binaries, filename)
+        table.insert(all_files_summary, string.format("%s %s (binary)", status, filename))
       -- Check if rename (contains "{old => new}")
       elseif filename:match "{.*=>.*}" then
         table.insert(renames, filename)
+        local old_name, new_name = parse_rename(filename)
+        table.insert(all_files_summary, string.format("R %s -> %s", old_name, new_name))
       else
         -- Calculate total changes
         local added_num = tonumber(added) or 0
         local deleted_num = tonumber(deleted) or 0
         local total = added_num + deleted_num
 
+        -- Add to summary (all files)
+        table.insert(all_files_summary, string.format("%s %s +%s -%s", status, filename, added, deleted))
+
         if total > threshold then
           table.insert(large_files, {
             file = filename,
             added = added,
             deleted = deleted,
+            status = status,
           })
         else
           table.insert(small_files, filename)
@@ -624,38 +699,76 @@ function M.get_filtered_staged_diff(threshold)
   -- Build output
   local output = {}
 
-  -- 1. Large files (summary only)
-  for _, item in ipairs(large_files) do
-    local status = get_file_status(name_status, item.file)
-    table.insert(output, string.format("%s %s +%s -%s", status, item.file, item.added, item.deleted))
-  end
-
-  -- 2. Renames (summary only)
-  for _, rename_path in ipairs(renames) do
-    local old_name, new_name = parse_rename(rename_path)
-    table.insert(output, string.format("R %s -> %s", old_name, new_name))
-  end
-
-  -- 3. Binary files (summary only)
-  for _, binary_file in ipairs(binaries) do
-    local status = get_file_status(name_status, binary_file)
-    table.insert(output, string.format("%s %s (binary)", status, binary_file))
-  end
-
-  -- 4. Small files (full diff)
-  if #small_files > 0 then
-    local escaped_files = {}
-    for _, file in ipairs(small_files) do
-      -- Escape filenames with spaces
-      table.insert(escaped_files, vim.fn.shellescape(file))
+  -- Section 1: ALL FILES SUMMARY
+  if #all_files_summary > 0 then
+    table.insert(output, "=== FILES CHANGED ===")
+    for _, summary in ipairs(all_files_summary) do
+      table.insert(output, summary)
     end
-    local files_arg = table.concat(escaped_files, " ")
-    local small_diff = vim.fn.system("git diff --staged -- " .. files_arg)
-    if small_diff ~= "" then
-      if #output > 0 then
-        table.insert(output, "")
+    table.insert(output, "")
+  end
+
+  -- Section 2: LARGE FILE CHANGES (>threshold lines) - SUMMARY ONLY
+  local large_visible = {}
+  for _, item in ipairs(large_files) do
+    local treatment = find_file_treatment(item.file, file_treatments)
+    -- No treatment or treatment has display opts → show in summary
+    if not treatment or treatment.skip_diff_threshold or treatment.trim_diff then
+      table.insert(large_visible, item)
+    end
+    -- Treatment with only pattern (no opts) → skip entirely
+  end
+
+  if #large_visible > 0 then
+    table.insert(output, string.format("=== LARGE FILES (>%d line changes) - SUMMARY ===", threshold))
+    for _, item in ipairs(large_visible) do
+      table.insert(output, string.format("%s %s +%s -%s", item.status, item.file, item.added, item.deleted))
+    end
+    table.insert(output, "")
+  end
+
+  -- Section 3: SMALL FILES (<= threshold) - DIFF with treatments
+  local small_full = {} -- files to show full diff
+  local small_treated = {} -- files needing individual treatment (trim)
+  for _, file in ipairs(small_files) do
+    local treatment = find_file_treatment(file, file_treatments)
+    if not treatment then
+      -- No treatment → full diff
+      table.insert(small_full, file)
+    elseif treatment.skip_diff_threshold or treatment.trim_diff then
+      -- Has display opts → apply treatment per file
+      table.insert(small_treated, { file = file, treatment = treatment })
+    end
+    -- Treatment with only pattern (no opts) → skip entirely
+  end
+
+  if #small_full > 0 or #small_treated > 0 then
+    table.insert(output, string.format("=== SMALL FILES (<=%d line changes) - FULL DIFF ===", threshold))
+    table.insert(output, "")
+
+    -- Full diff files (batch)
+    if #small_full > 0 then
+      local escaped_files = {}
+      for _, file in ipairs(small_full) do
+        table.insert(escaped_files, vim.fn.shellescape(file))
       end
-      table.insert(output, small_diff)
+      local files_arg = table.concat(escaped_files, " ")
+      local small_diff = vim.fn.system("git diff --staged -- " .. files_arg)
+      if small_diff ~= "" then
+        table.insert(output, small_diff)
+      end
+    end
+
+    -- Treated files (individual diff with trim)
+    for _, entry in ipairs(small_treated) do
+      local file_diff = vim.fn.system("git diff --staged -- " .. vim.fn.shellescape(entry.file))
+      if file_diff ~= "" then
+        local t = entry.treatment
+        if t.trim_diff and t.skip_diff_threshold then
+          file_diff = trim_diff_lines(file_diff, t.skip_diff_threshold)
+        end
+        table.insert(output, file_diff)
+      end
     end
   end
 

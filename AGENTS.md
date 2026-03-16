@@ -15,10 +15,22 @@ Lightweight Neovim 0.11+ config forked from `jellydn/tiny-nvim`. Focus: minimal 
 │   ├── plugins/        # upstream specs (read-only); extra/my*.lua = personal overrides
 │   ├── utils/          # shared utilities
 │   └── langs/          # language-specific settings
+├── patches/            # local patches for Lazy plugins (see docs/memory/lazy-local-patching.md)
 ├── docs/memory/        # living plugin docs (update as you learn)
 ├── tasks/              # task management — see tasks/AGENTS.md
 └── scripts/install-tools.sh
 ```
+
+## Worktree Testing
+
+This config uses **git worktrees + `NVIM_APPNAME`** for isolated testing. Each worktree directory name becomes a separate Neovim profile with its own plugin data, state, and cache — changes never affect the main daily-driver profile. See [docs/memory/nvim-worktree-testing.md](docs/memory/nvim-worktree-testing.md).
+
+| Profile | NVIM_APPNAME | Branch | Purpose |
+|---------|-------------|--------|---------|
+| Main | `nvim3_jelly_tinynvim` | `main` | Daily driver — stable |
+| Worktree | `nvimwt3a` | `nvim3wt1` | Testing, POCs, plugin upgrades |
+
+When making changes, test in the worktree profile first (`NVIM_APPNAME=nvimwt3a nvim`), then merge to `main` when verified.
 
 ## Editing Guidelines
 
@@ -49,6 +61,7 @@ Plugin source for investigation: `~/.local/share/nvim3_jelly_tinynvim/lazy/<plug
 | Task | Command |
 |------|---------|
 | Start Neovim | `NVIM_APPNAME=nvim3_jelly_tinynvim nvim` |
+| Start worktree profile | `NVIM_APPNAME=nvimwt3a nvim` |
 | Install plugins | `NVIM_APPNAME=nvim3_jelly_tinynvim nvim --headless -c "Lazy install" -c "qa"` |
 | Format Lua | `stylua lua/` |
 | Plugin status | `:Lazy` |
@@ -115,4 +128,4 @@ Update `docs/memory/<plugin>.md` whenever you find a non-obvious pattern or fix.
 
 ---
 
-**Last Updated**: 2026-03-11
+**Last Updated**: 2026-03-16

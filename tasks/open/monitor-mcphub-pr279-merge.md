@@ -5,7 +5,7 @@ priority: low
 created: 2026-03-15
 updated: 2026-03-15
 related:
-  - [Patch task](tasks/open/patch-mcphub-codecompanion-v19.md)
+  - [Patch task](tasks/review/patch-mcphub-codecompanion-v19.md)
   - [MCPHub config](lua/plugins/extra/myAi.lua)
   - [Upstream PR #279](https://github.com/ravitemer/mcphub.nvim/pull/279)
 ---
@@ -26,14 +26,14 @@ Once the fix lands upstream, the patch is no longer needed and should be
 removed to avoid drift. This is a watch-and-cleanup task.
 
 **PR to monitor**: https://github.com/ravitemer/mcphub.nvim/pull/279
-**Companion patch task**: `tasks/open/patch-mcphub-codecompanion-v19.md`
+**Companion patch task**: `tasks/review/patch-mcphub-codecompanion-v19.md`
 (move to archive once this task is completed)
 
 ## Implementation Plan
 
 - [ ] Periodically check PR #279 status — look for "Merged" badge on the PR page
-- [ ] Once merged: run `:Lazy update mcphub.nvim` to pull latest upstream
-- [ ] Remove patch files from `~/.config/nvim3_jelly_tinynvim/patches/mcphub.nvim/`
+- [ ] Once merged: run `:Lazy update mcphub.nvim` to pull latest upstream (in worktree profile: `NVIM_APPNAME=nvimwt3a`)
+- [ ] Remove patch files from `patches/mcphub.nvim/` (in the worktree config dir)
 - [ ] Verify MCPHub + CodeCompanion v19 still work without patches
 - [ ] If `lazy-local-patcher.nvim` is no longer needed for anything else, remove it too
 - [ ] Move the companion patch task (`patch-mcphub-codecompanion-v19.md`) to `tasks/archive/`
@@ -50,8 +50,9 @@ removed to avoid drift. This is a watch-and-cleanup task.
 
 ### How to verify
 
-After removing patches and updating mcphub.nvim, restart Neovim and confirm
-MCPHub tools/variables/slash commands still work in CodeCompanion.
+After removing patches and updating mcphub.nvim, restart Neovim with the
+**worktree profile** and confirm MCPHub tools/variables/slash commands still work
+in CodeCompanion.
 
 ### Commands
 
@@ -59,8 +60,13 @@ MCPHub tools/variables/slash commands still work in CodeCompanion.
 # Check PR status (requires gh CLI)
 gh pr view 279 --repo ravitemer/mcphub.nvim --json state,mergedAt
 
-# Remove patch files once merged
-rm -rf ~/.config/nvim3_jelly_tinynvim/patches/mcphub.nvim/
+# Remove patch files once merged (from worktree config dir)
+rm -rf patches/mcphub.nvim/
+```
+
+```bash
+# Test in worktree profile
+NVIM_APPNAME=nvimwt3a nvim
 ```
 
 ```vim
@@ -83,6 +89,6 @@ rm -rf ~/.config/nvim3_jelly_tinynvim/patches/mcphub.nvim/
 ## References
 
 - [Upstream PR #279](https://github.com/ravitemer/mcphub.nvim/pull/279)
-- [Companion patch task](tasks/open/patch-mcphub-codecompanion-v19.md)
+  - [Companion patch task](tasks/review/patch-mcphub-codecompanion-v19.md)
 - [lazy-local-patcher.nvim](https://github.com/polirritmico/lazy-local-patcher.nvim)
 - [MCPHub config](lua/plugins/extra/myAi.lua)

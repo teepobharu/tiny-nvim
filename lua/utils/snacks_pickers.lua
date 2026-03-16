@@ -2003,13 +2003,14 @@ function M.dotfiles_picker()
   -- Configuration table - easily editable for adding/removing patterns
   local CONFIG = {
     base_dir = "~/dotfiles",
-    include_patterns = { "*bash*", "*.lua", "*.vim", "*.json", "*.yaml", "*.yml", "*.toml", "*.conf", "*.config" },
+    include_patterns = { ".*", "*bash*", "*.lua", "*.vim", "*.json", "*.yaml", "*.yml", "*.toml", "*.conf", "*.config" },
     -- Exclude patterns: can be simple names or relative paths from base_dir
     exclude_dirs = {
       -- Simple directory names
       "fork",
       "nvim*",
       ".git",
+      ".config/github-copilot/*/chat*sessions",
       "node_modules",
       ".DS_Store",
       ".continue",
@@ -2022,7 +2023,7 @@ function M.dotfiles_picker()
       ".config/raycast/extensions",
       ".config/raycast/exports",
     },
-    extra_files = { "~/.bash.local" },
+    extra_files = { "~/.bash.local", "~/.zprofile", "~/.gitconfig.local" },
   }
 
   -- Expand paths
