@@ -1,12 +1,16 @@
 -- Avante utility functions for Agoda-specific provider configurations
 local M = {}
 
+local AI = require "utils.my_ai_constants"
+
 local DEFAULT_PROVIDER = "copilot"
-local DEFAULT_MODEL = vim.env.DEFAULT_MODEL_COPILOT or "gpt-5-mini"
+local DEFAULT_MODEL = vim.env.DEFAULT_MODEL_COPILOT or AI.defaults.model
 -- Get Agoda-specific provider configurations
--- These providers use internal Agoda endpoints and are separated from the main config
--- for easier maintenance and to optionally exclude them from model selection
+-- Derived from M.providers.openai_agd in my_ai_constants
+-- model_names: all available models filtered + remapped via AI.get_agd_model_names()
 function M.get_agoda_providers()
+  local p = AI.providers.openai_agd
+  local avante = p.avante_opts
   return {
     -- claude_agd = {
     --   __inherited_from = "claude",
@@ -48,33 +52,23 @@ function M.get_agoda_providers()
     --   api_key = "OPENAI_API_KEY",
     -- },
     openai_agd = {
-      __inherited_from = "openai",
-      -- api_key = "OPENAI_API_KEY",
-      -- endpoint = "https://genai-gateway.agoda.is/v1",
-      endpoint = "http://openai-proxy.agoda.is/v1",
-      -- http://openai-proxy.agoda.is/v1
-      model = "gpt-5.2",
-      timeout = 30000,
-      model_names = {
-        -- can cross check codecompanion with lua/plugins/extra/myEditor.lua:228:1
-        "gpt-4.1",
-        "gpt-4.1-mini",
-        "grok-code-fast-1",
-        "gpt-5-mini",
-        "gpt-5.1",
-        "gpt-5.2",
-        "gemini-3-pro-preview",
-        "gemini-2.5-flash",
-        "deepseek-r1-0528-maas",
-        "claude-haiku-4-5",
-        "claude-opus-4-5",
-        "claude-sonnet-4-5",
-      },
-      extra_request_body = {
-        temperature = 0,
-        max_completion_tokens = 4096,
-      },
+      __inherited_from = avante.avante_inherited_from,
+      endpoint = avante.endpoint,
+      model = p.top_choices.gpt.default.M, -- default to gpt default M tier
+      timeout = AI.defaults.timeout,
+      model_names = AI.get_agd_model_names(),
+      extra_request_body = avante.request_defaults,
     },
+    -- TODO: fix avante warning later after enter mappings <leader-r>S+ any agoda models is it because initially not have ?
+    --    Error  03:21:22 msg_show.lua_error Error executing Lua callback: ..._tinynvim/lazy/avante.nvim/lua/avante/providers/init.lua:162: The configuration of your provider "openai_agd" is incorrect, missing the `__inherited_from` attribute or a custom `parse_curl_args` function. Please fix your provider configuration. For more details, see: https://github.com/yetone/avante.nvim/wiki/Custom-providers
+    --     openai_agd = {
+    --   __inherited_from = avante.avante_inherited_from,
+    --   endpoint = avante.endpoint,
+    --   model = p.top_choices.gpt.default.M, -- default to gpt default M tier
+    --   timeout = AI.defaults.timeout,
+    --   model_names = AI.get_agd_model_names(),
+    --   extra_request_body = avante.request_defaults,
+    -- },
   }
 end
 
@@ -274,38 +268,23 @@ function M.generate_model_keymaps(config)
 end
 
 -- Get default model configurations for Copilot provider
+-- Derived from AI.providers.copilot.top_choices via KEYMAP_SLOT_PATTERN
 function M.get_copilot_models_config()
-  return {
-    f = { model = "gpt-4.1-mini", desc = "GPT-4.1-mini (fast)" },
-    F = { model = "gpt-5-mini", desc = "GPT-5-mini (fast-2)" },
-    g = { model = "grok-code-fast-1", desc = "Grok code (fast)" },
-    G = { model = "claude-haiku-4-5", desc = "Claude Haiku 4.5" },
-    h = { model = "claude-sonnet-4-5", desc = "Claude Sonnet 4.5 (heavy)" },
-    H = { model = "claude-opus-4-5", desc = "Claude Opus 4.5" },
-    c = { model = "gpt-5.1-codex-max", desc = "GPT-5.1-codex-max" },
-    C = { model = "gpt-5.1-codex-mini", desc = "GPT-5.1-codex-mini" },
-  }
+  return AI.build_keymap_slots "copilot"
 end
 
 -- Get default model configurations for OpenAI AGD provider
+-- Derived from AI.providers.openai_agd.top_choices via KEYMAP_SLOT_PATTERN
 function M.get_openai_agd_models_config()
-  return {
-    f = { model = "gpt-4.1-mini", desc = "GPT-4.1-mini" },
-    F = { model = "gpt-5-mini", desc = "GPT-5-mini" },
-    g = { model = "grok-code-fast-1", desc = "Grok code (fast)" },
-    G = { model = "claude-haiku-4-5", desc = "Claude Haiku 4.5" },
-    h = { model = "claude-sonnet-4-5", desc = "Claude Sonnet 4.5 (heavy)" },
-    H = { model = "claude-opus-4-5", desc = "Claude Opus 4.5" },
-    c = { model = "gpt-5.2", desc = "GPT-5.2" },
-    C = { model = "gpt-5.1-codex-mini", desc = "GPT-5.1-codex-mini" },
-  }
+  return AI.build_keymap_slots "openai_agd"
 end
 
 -- Get default model configurations for Vertex Claude AGD provider
+-- Kept manual — not actively used, not in M.providers
 function M.get_vertex_claude_agd_models_config()
   return {
-    h = { model = "claude-3-7-sonnet", desc = "Claude 3.7 Sonnet" },
-    H = { model = "claude-opus-4-5", desc = "Claude Opus 4.5" },
+    h = { model = AI.models.claude.CLAUDE_3_7_SONNET, desc = "Claude 3.7 Sonnet" },
+    H = { model = AI.models.claude.CLAUDE_OPUS_4_5, desc = "Claude Opus 4.5" },
   }
 end
 
