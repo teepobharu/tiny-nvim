@@ -102,4 +102,295 @@ function M.build(empty_prompt)
   return lib
 end
 
+--- Build the 12 jellydn/tiny-nvim prompt_library entries with v19 fields.
+--- Migrated from lua/plugins/extra/codecompanion.lua (strategy→interaction, short_name→alias).
+---@return table<string, table> prompt_library entries keyed by prompt name
+function M.build_jellydn_prompts()
+  local prompts = require "utils.my_ai_prompts"
+  local COPILOT_EXPLAIN = prompts.COPILOT_EXPLAIN
+  local COPILOT_REVIEW = prompts.COPILOT_REVIEW
+  local COPILOT_REFACTOR = prompts.COPILOT_REFACTOR
+
+  return {
+    ["Generate a Commit Message"] = {
+      prompts = {
+        {
+          role = "user",
+          content = function()
+            return "Write commit message with commitizen convention. Write clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'."
+              .. "\n\n```\n"
+              .. vim.fn.system "git diff"
+              .. "\n```"
+          end,
+          opts = {
+            contains_code = true,
+          },
+        },
+      },
+    },
+    ["Explain"] = {
+      interaction = "chat",
+      description = "Explain how code in a buffer works",
+      opts = {
+        default_prompt = true,
+        modes = { "v" },
+        alias = "explain",
+        auto_submit = true,
+        user_prompt = false,
+        stop_context_insertion = true,
+      },
+      prompts = {
+        {
+          role = "system",
+          content = COPILOT_EXPLAIN,
+          opts = { visible = false },
+        },
+        {
+          role = "user",
+          content = function(context)
+            local code = require("codecompanion.helpers.actions").get_code(context.start_line, context.end_line)
+            return "Please explain how the following code works:\n\n```"
+              .. context.filetype
+              .. "\n"
+              .. code
+              .. "\n```\n\n"
+          end,
+          opts = { contains_code = true },
+        },
+      },
+    },
+    ["Explain Code"] = {
+      interaction = "chat",
+      description = "Explain how code works",
+      opts = {
+        alias = "explain-code",
+        auto_submit = false,
+        is_slash_cmd = true,
+      },
+      prompts = {
+        {
+          role = "system",
+          content = COPILOT_EXPLAIN,
+          opts = { visible = false },
+        },
+        {
+          role = "user",
+          content = [[Please explain how the following code works.]],
+        },
+      },
+    },
+    ["Generate a Commit Message for Staged"] = {
+      interaction = "chat",
+      description = "Generate a commit message for staged change",
+      opts = {
+        alias = "staged-commit-jelly",
+        auto_submit = true,
+        is_slash_cmd = true,
+      },
+      prompts = {
+        {
+          role = "user",
+          content = function()
+            return "Write commit message for the change with commitizen convention. Write clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'."
+              .. "\n\n```\n"
+              .. vim.fn.system "git diff --staged"
+              .. "\n```"
+          end,
+          opts = { contains_code = true },
+        },
+      },
+    },
+    ["Inline Document"] = {
+      interaction = "inline",
+      description = "Add documentation for code.",
+      opts = {
+        modes = { "v" },
+        alias = "inline-doc",
+        auto_submit = true,
+        user_prompt = false,
+        stop_context_insertion = true,
+      },
+      prompts = {
+        {
+          role = "user",
+          content = function(context)
+            local code = require("codecompanion.helpers.actions").get_code(context.start_line, context.end_line)
+            return "Please provide documentation in comment code for the following code and suggest to have better naming to improve readability.\n\n```"
+              .. context.filetype
+              .. "\n"
+              .. code
+              .. "\n```\n\n"
+          end,
+          opts = { contains_code = true },
+        },
+      },
+    },
+    ["Document"] = {
+      interaction = "chat",
+      description = "Write documentation for code.",
+      opts = {
+        modes = { "v" },
+        alias = "doc",
+        auto_submit = true,
+        user_prompt = false,
+        stop_context_insertion = true,
+      },
+      prompts = {
+        {
+          role = "user",
+          content = function(context)
+            local code = require("codecompanion.helpers.actions").get_code(context.start_line, context.end_line)
+            return "Please brief how it works and provide documentation in comment code for the following code. Also suggest to have better naming to improve readability.\n\n```"
+              .. context.filetype
+              .. "\n"
+              .. code
+              .. "\n```\n\n"
+          end,
+          opts = { contains_code = true },
+        },
+      },
+    },
+    ["Review"] = {
+      interaction = "chat",
+      description = "Review the provided code snippet.",
+      opts = {
+        modes = { "v" },
+        alias = "review",
+        auto_submit = true,
+        user_prompt = false,
+        stop_context_insertion = true,
+      },
+      prompts = {
+        {
+          role = "system",
+          content = COPILOT_REVIEW,
+          opts = { visible = false },
+        },
+        {
+          role = "user",
+          content = function(context)
+            local code = require("codecompanion.helpers.actions").get_code(context.start_line, context.end_line)
+            return "Please review the following code and provide suggestions for improvement then refactor the following code to improve its clarity and readability:\n\n```"
+              .. context.filetype
+              .. "\n"
+              .. code
+              .. "\n```\n\n"
+          end,
+          opts = { contains_code = true },
+        },
+      },
+    },
+    ["Review Code"] = {
+      interaction = "chat",
+      description = "Review code and provide suggestions for improvement.",
+      opts = {
+        alias = "review-code",
+        auto_submit = false,
+        is_slash_cmd = true,
+      },
+      prompts = {
+        {
+          role = "system",
+          content = COPILOT_REVIEW,
+          opts = { visible = false },
+        },
+        {
+          role = "user",
+          content = "Please review the following code and provide suggestions for improvement then refactor the following code to improve its clarity and readability.",
+        },
+      },
+    },
+    ["Refactor"] = {
+      interaction = "inline",
+      description = "Refactor the provided code snippet.",
+      opts = {
+        modes = { "v" },
+        alias = "refactor",
+        auto_submit = true,
+        user_prompt = false,
+        stop_context_insertion = true,
+      },
+      prompts = {
+        {
+          role = "system",
+          content = COPILOT_REFACTOR,
+          opts = { visible = false },
+        },
+        {
+          role = "user",
+          content = function(context)
+            local code = require("codecompanion.helpers.actions").get_code(context.start_line, context.end_line)
+            return "Please refactor the following code to improve its clarity and readability:\n\n```"
+              .. context.filetype
+              .. "\n"
+              .. code
+              .. "\n```\n\n"
+          end,
+          opts = { contains_code = true },
+        },
+      },
+    },
+    ["Refactor Code"] = {
+      interaction = "chat",
+      description = "Refactor the provided code snippet.",
+      opts = {
+        alias = "refactor-code",
+        auto_submit = false,
+        is_slash_cmd = true,
+      },
+      prompts = {
+        {
+          role = "system",
+          content = COPILOT_REFACTOR,
+          opts = { visible = false },
+        },
+        {
+          role = "user",
+          content = "Please refactor the following code to improve its clarity and readability.",
+        },
+      },
+    },
+    ["Naming"] = {
+      interaction = "inline",
+      description = "Give betting naming for the provided code snippet.",
+      opts = {
+        modes = { "v" },
+        alias = "naming",
+        auto_submit = true,
+        user_prompt = false,
+        stop_context_insertion = true,
+      },
+      prompts = {
+        {
+          role = "user",
+          content = function(context)
+            local code = require("codecompanion.helpers.actions").get_code(context.start_line, context.end_line)
+            return "Please provide better names for the following variables and functions:\n\n```"
+              .. context.filetype
+              .. "\n"
+              .. code
+              .. "\n```\n\n"
+          end,
+          opts = { contains_code = true },
+        },
+      },
+    },
+    ["Better Naming"] = {
+      interaction = "chat",
+      description = "Give betting naming for the provided code snippet.",
+      opts = {
+        alias = "better-naming",
+        auto_submit = false,
+        is_slash_cmd = true,
+      },
+      prompts = {
+        {
+          role = "user",
+          content = "Please provide better names for the following variables and functions.",
+        },
+      },
+    },
+  }
+end
+
 return M

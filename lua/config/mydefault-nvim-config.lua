@@ -7,7 +7,7 @@ vim.g.enable_extra_plugins = {
   "harpoon",
   "wakatime",
   "avante",
-  "codecompanion",
+  -- "codecompanion", -- TODO: after refactor out to myAi should we remove this ?
   -- "blink",
   "lspsaga",
   "neotree",
