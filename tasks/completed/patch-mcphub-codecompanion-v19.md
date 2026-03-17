@@ -1,5 +1,5 @@
 ---
-title: "Patch mcphub.nvim for CodeCompanion v19 compatibility"
+ititle: "Patch mcphub.nvim for CodeCompanion v19 compatibility"
 status: review
 priority: high
 created: 2026-03-15
@@ -117,12 +117,12 @@ NVIM_APPNAME=nvimwt3a nvim
 - [x] In CodeCompanion chat, typing `/mcp` shows MCP prompt slash commands
 - [x] No regressions in other CodeCompanion functionality (chat, inline, adapters)
 
-  Not passing
-  - `:Lazy sync` completes without errors and leaves mcphub.nvim clean (no dirty state) - still has dirty state
-  - `:Lazy restore` fail message:
-      mcphub.nvim 19.83ms  avante.nvim
-        You have local changes in `/Users/tharutaipree/.local/share/nvimwt3a/lazy/mcphub.nvim`:
-        * lua/mcphub/extensions/codecompanion/core.lua
+### Not passing - to revise
+
+- `:Lazy sync` completes without errors and leaves mcphub.nvim clean (no dirty state) - still has dirty state
+- `:Lazy restore` fail message:
+  mcphub.nvim 19.83ms  avante.nvim
+  You have local changes in `/Users/tharutaipree/.local/share/nvimwt3a/lazy/mcphub.nvim`: \* lua/mcphub/extensions/codecompanion/core.lua
   Both can be remedied by using require("lazy-local-patcher").revert_all() to clean the state, but ideally should work without manual intervention.
 
 ## References

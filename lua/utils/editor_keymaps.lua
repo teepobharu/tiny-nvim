@@ -133,8 +133,8 @@ M.keymaps = {
     },
     {
       "<leader>ox",
-      ":OverseerRun run script<CR>",
-      desc = "Run script",
+      ":OverseerRun run\\ script<CR>",
+      desc = "Overseer Run script",
     },
     {
       "<leader>oP",
@@ -306,8 +306,8 @@ M.keymaps = {
       },
       {
         companion_prefix .. "mM",
-        "<cmd>CodeCompanion /large-staged-files-commit-msg<cr>",
-        desc = "Code Companion - Git commit (large files summary)",
+        "<cmd>CodeCompanion /short-commit-jelly<cr>",
+        desc = "Code Companion - Git commit (old jelly)",
       },
       {
         companion_prefix .. "Q",
