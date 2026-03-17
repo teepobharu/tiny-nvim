@@ -348,12 +348,12 @@ require("mcphub").setup({
 
 ## Configuration Files
 
-| File                                          | Purpose                                     |
-| --------------------------------------------- | ------------------------------------------- |
+| File                                | Purpose                                     |
+| ----------------------------------- | ------------------------------------------- |
 | `~/dotfiles/ai/mcp/mcphub.json`     | MCP server definitions                      |
 | `~/dotfiles/ai/mcp/.env`            | Environment variables                       |
 | `~/dotfiles/ai/mcp/start-mcphub.sh` | Management script                           |
-| `lua/plugins/extra/myAi.lua`                  | MCPHub + CodeCompanion MCP extension config |
+| `lua/plugins/extra/myAi.lua`        | MCPHub + CodeCompanion MCP extension config |
 
 ### mcphub.json Format
 
@@ -518,6 +518,13 @@ require("mcphub").setup({
 ```
 
 ---
+
+## Features
+
+Server customization (tools, resources, instructions) is a powerful way to tailor the LLM's behavior with specific servers. By configuring these settings, you can:
+
+`In the server_to_text function, custom instructions are added after the server description but before the tools and resources sections prompt.lua:232-233`
+ask:
 
 ## Troubleshooting
 

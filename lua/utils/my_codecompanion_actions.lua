@@ -349,7 +349,7 @@ function M.generate_codecompanion_keymaps(baseKeymap)
     function()
       local adapter, model = M.current_adapter_and_model()
       local Snacks = require "snacks"
-      Snacks.notify.info(string.format("CodeCompanion: %s/%s", adapter, model), { title = "Current Config" })
+      vim.print(string.format("CodeCompanion: %s/%s", adapter, model), { title = "Current Config" })
     end,
     desc = "CC: Show current adapter/model",
     mode = "n",
