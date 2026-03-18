@@ -861,40 +861,70 @@ keymap("n", "<localleader>rsn", addNvimConfigInRoot, { desc = "Setup nvim proj l
 keymap("n", "<localleader>rp", "", { desc = "Profile" })
 keymap("n", "<localleader>rF", ":luafile %<CR>", { desc = "Reload Lua file" })
 
-local function execute_selected_lua(showOutput, lastselected, clipenable)
+--- Unified runner for executing selected code (Lua or Vim command)
+---@param opts { mode: "lua"|"vim", show_output?: boolean, lastselected?: boolean }
+local function execute_selected_code(opts)
   local code
-  if lastselected then
+  if opts.lastselected then
     code = inputUtil.getPreviousSelectedText()
   else
-    -- if vim.api.nvim_get_mode().mode == 'v' or vim.api.nvim_get_mode().mode == 'V' then
     code = inputUtil.getSelectedLines()
-    -- end
   end
-  local f = code and load(code)
-  if f then
-    f()
-    if showOutput then
-      local current_win = vim.api.nvim_get_current_win()
-      -- some async delay then execute noice
-      vim.defer_fn(function()
-        vim.cmd "NoiceAll"
-        if vim.api.nvim_get_current_win() ~= current_win then
-          vim.api.nvim_set_current_win(current_win)
-        end
-      end, 200)
+  if not code then
+    return
+  end
+
+  if opts.mode == "lua" then
+    local f = load(code)
+    if f then
+      f()
     end
+  elseif opts.mode == "vim" then
+    -- strip leading whitespace
+    code = code:match "^%s*(.*%S)" or ""
+    if code == "" then
+      return
+    end
+    -- auto-prepend ":" if missing
+    if not code:match "^:" then
+      code = ":" .. code
+    end
+    -- strip the leading ":" for vim.cmd
+    local cmd = code:sub(2)
+    local ok, err = pcall(vim.cmd, cmd)
+    if not ok then
+      vim.notify("Vim cmd failed: " .. tostring(err), vim.log.levels.WARN)
+    end
+  end
+
+  if opts.show_output then
+    local current_win = vim.api.nvim_get_current_win()
+    -- some async delay then execute noice
+    vim.defer_fn(function()
+      vim.cmd "NoiceAll"
+      if vim.api.nvim_get_current_win() ~= current_win then
+        vim.api.nvim_set_current_win(current_win)
+      end
+    end, 200)
   end
 end
 
 keymap({ "n", "v" }, "<localleader>rl", function()
-  execute_selected_lua(true)
+  execute_selected_code { mode = "lua", show_output = true }
 end, { desc = "Execute selected Lua code (show output)" })
 keymap({ "n", "v" }, "<localleader>rL", function()
-  execute_selected_lua(false)
+  execute_selected_code { mode = "lua", show_output = false }
 end, { desc = "Execute selected Lua code (no output)" })
 keymap("n", "<localleader>rT", function()
-  execute_selected_lua(false, true)
-end, { desc = "Execute last selected Lua code (show output)" })
+  execute_selected_code { mode = "lua", lastselected = true }
+end, { desc = "Execute last selected Lua code" })
+
+keymap({ "n", "v" }, "<localleader>rv", function()
+  execute_selected_code { mode = "vim", show_output = true }
+end, { desc = "Execute selected Vim command (show output)" })
+keymap({ "n", "v" }, "<localleader>rV", function()
+  execute_selected_code { mode = "vim", show_output = false }
+end, { desc = "Execute selected Vim command (no output)" })
 
 keymap("n", "<localleader>rsv", "<cmd>so $MYVIMRC<CR>", { desc = "Source NVIM init" })
 keymap("n", "<localleader>rsV", "<cmd>so ~/.vimrc<CR>", { desc = "Source ~/.vimrc" })
@@ -1590,8 +1620,10 @@ if not vim.g.vscode then
   -- vim.api.nvim_del_keymap("n", "<S-h>")
   -- vim.api.nvim_del_keymap("n", "<S-l>")
 end
--- GLOBAL 
-function _G.userdbg(...) return require("utils.user_debug").dbg(...) end
+-- GLOBAL
+function _G.userdbg(...)
+  return require("utils.user_debug").dbg(...)
+end
 
 vim.api.nvim_create_user_command("UserToggleDebug", function()
   require("utils.user_debug").toggle()
