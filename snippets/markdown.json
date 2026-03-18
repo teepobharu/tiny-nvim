@@ -13,7 +13,7 @@
       "wrabcodeblock"
     ],
     "body": [
-      "``` ${1:lang}",
+      "```${1:lang}",
       "${TM_SELECTED_TEXT:code}",
       "```",
       "$0"
@@ -28,8 +28,29 @@
       "wlink"
     ],
     "body": [
-      "[${1:text}](${TM_SELECTED_TEXT:https://example.com})$0"
+      "[${1:text}](${TM_SELECTED_TEXT}$0)"
     ],
     "description": "Create a markdown link using the selected URL"
+  },
+  "WrapBacktick": {
+    "prefix": [
+      "bt",
+      "qb",
+      "code"
+    ],
+    "body": [
+      "`${TM_SELECTED_TEXT}$0`"
+    ],
+    "description": "Wrap selection in single backticks (inline code)"
+  },
+  "WrapBold": {
+    "prefix": [
+      "b",
+      "bd"
+    ],
+    "body": [
+      "**${TM_SELECTED_TEXT/^\\s+|\\s+$/ /g}$0**"
+    ],
+    "description": "Wrap selection in bold"
   }
 }

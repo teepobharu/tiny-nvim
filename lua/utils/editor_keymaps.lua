@@ -133,8 +133,8 @@ M.keymaps = {
     },
     {
       "<leader>ox",
-      ":OverseerRun run script<CR>",
-      desc = "Run script",
+      ":OverseerRun run\\ script<CR>",
+      desc = "Overseer Run script",
     },
     {
       "<leader>oP",
