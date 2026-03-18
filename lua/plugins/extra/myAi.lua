@@ -121,6 +121,7 @@ return {
       spec = {
         { "<leader>ah", group = "MCPHub", mode = { "n" } },
         { "<leader>Am", group = "Commit Message", mode = { "n" } },
+        { "<leader>C", group = "Claude Code", mode = { "n", "v" }, icon = "🤖" },
       },
     },
   },

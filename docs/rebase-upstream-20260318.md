@@ -322,9 +322,29 @@
 
 ## Some issues from manual testing
 
+### Pending
+
+1. refactor myEditor out
+2. claude code not workin with msg:
+3. check other non extras addition to ignore them in repective my<Plugin> and explicityly them and include in default config instead of providing full list of excludes disabled_plugins should be used exclusively for overriding from project settings and not defining initial desired state.
+
+```log
+  Error  00:41:19 notify.error ClaudeCode Error [ClaudeCode] [terminal] [ERROR] Claude exited with code 127.
+```
+
+### Solved
+
 1. <space><space> mapping got overriden somehow to be files instead of buffer picker
+
+- solve:
+
 2. M-S picker behavior is different it does not persist somehow after open another files or grep picker
+
+- solve:
+
 3. minor: error in treesitter in ui.lua see why this happens: (fix by update both treesitter and txtobject ?) also try healthcheck nvim-treesitter
+
+- solve:
 
 ```txt
 /Users/tharutaipree/.config/nvimwt3a/lua/plugins/ui.lua:325: module 'nvim-treesitter.config' not found:
@@ -335,8 +355,9 @@
 
 - sol: restore bufferline gitsign config and yo myUi
 
-Other improvements to consider:
+### Other todo or check for improvements:
 
 - pyright -> basedpyright LSP migration is in place, but ensure the new LSP config in `lsp/basedpyright.lua` is fully fleshed out with the same capabilities and settings as the old pyright config
 
 - there is some color change on the snacks picker not sure if expected ?
+- make case senstivity, hidden field set persist in initopts

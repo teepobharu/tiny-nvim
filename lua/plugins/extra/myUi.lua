@@ -133,12 +133,13 @@ return {
   },
 
   -- Override which-key preset back to "helix" if preferred
-  -- {
-  --   "folke/which-key.nvim",
-  --   opts = {
-  --     preset = "helix",
-  --   },
-  -- },
+  {
+    "folke/which-key.nvim",
+    enabled = true,
+    opts = {
+      preset = "helix",
+    },
+  },
 
   -- Re-add gitsigns-equivalent keymaps lost in mini.diff migration
   -- mini.diff doesn't have direct equivalents for:
