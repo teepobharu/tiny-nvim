@@ -342,20 +342,6 @@ return {
   },
   --#region Session and windows
   {
-    "akinsho/bufferline.nvim",
-    opts = {
-      -- check on health groups
-      -- options = {
-      -- groups = {
-      -- items = {
-      --   require('bufferline.groups').builtin.ungrouped,
-      -- }
-      -- }
-      -- }
-    },
-    keys = editor_keymaps.keymaps.bufferline,
-  },
-  {
     "folke/persistence.nvim",
     opts = {
       dir = vim.fn.stdpath "state" .. "/my-sessions/", -- directory where session files are saved
