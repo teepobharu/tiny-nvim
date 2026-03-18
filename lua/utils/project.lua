@@ -148,7 +148,6 @@ local function create_nvim_config()
       -- Create the config file
       local config = [[
 -- Project-specific Neovim configuration
--- mono: <- set the label to show (mono:label) in files/grep subproject picker here
 
 -- Set TypeScript LSP server
 vim.g.lsp_typescript_server = "ts_ls" -- or "vtsls"
@@ -185,7 +184,6 @@ vim.g.enable_extra_plugins = {
 -- Add any other project-specific settings below
 -- vim.opt.tabstop = 2
 -- vim.opt.shiftwidth = 2
--- vim.g.subproject_scan_ignored = false -- disable subproject scanning in snacks file/grep picker
 ]]
 
       local file = io.open(".nvim-config.lua", "w")
@@ -193,16 +191,6 @@ vim.g.enable_extra_plugins = {
         file:write(config)
         file:close()
         vim.notify("Created .nvim-config.lua with selected settings", vim.log.levels.INFO)
-        -- open the file
-        vim.cmd "edit .nvim-config.lua"
-
-        -- Create/open .ignore in the same directory
-        local ok, mypath = pcall(require, "utils.mypath")
-        if ok and type(mypath.open_project_ignore) == "function" then
-          -- split vert first
-          vim.cmd "vsplit"
-          mypath.open_project_ignore(vim.fn.getcwd())
-        end
       else
         vim.notify("Failed to create .nvim-config.lua", vim.log.levels.ERROR)
       end
