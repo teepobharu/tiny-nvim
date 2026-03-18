@@ -40,4 +40,24 @@ return {
       -- },
     },
   },
+  -- Support copilot as source
+  {
+    -- define here since coding removed blink.cmp
+    "saghen/blink.cmp",
+    dependencies = { "fang2hou/blink-copilot" },
+    opts = {
+      sources = {
+        -- TODO: move from myeditor to here
+        -- default = { "copilot" }, -- dont show it but togglable with c-c
+        providers = {
+          copilot = {
+            name = "copilot",
+            module = "blink-copilot",
+            score_offset = 100,
+            async = true,
+          },
+        },
+      },
+    },
+  },
 }
