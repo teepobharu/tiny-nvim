@@ -11,6 +11,11 @@ local common_agent_env = {
   GEMINI_API_KEY = vim.env.GEMINI_API_KEY,
 }
 
+-- Enable per-chat yolo mode (auto-approve all tool calls) via v19 approvals API
+local function enable_yolo_on_created(chat)
+  require("codecompanion.interactions.chat.tools.approvals"):toggle_yolo_mode(chat.bufnr)
+end
+
 -- Import AI prompts from centralized location
 local ai_prompts = require "utils.my_ai_prompts"
 local EMPTY_PROMPT_CCOMP = ai_prompts.EMPTY_PROMPT_CODECOMPANION
@@ -18,6 +23,8 @@ local CODE_REVIEW_INSTRUCTIONS = ai_prompts.CODE_REVIEW_INSTRUCTIONS
 
 -- Generated prompt_library entries from top_choices (AGD + Copilot)
 local prompt_lib_gen = require("utils.my_codecompanion_prompt_library").build(EMPTY_PROMPT_CCOMP)
+-- Jellydn base prompts (migrated from codecompanion.lua with v19 fields)
+local jellydn_prompts = require("utils.my_codecompanion_prompt_library").build_jellydn_prompts()
 
 return {
   {
@@ -214,13 +221,43 @@ return {
   --     },
   --   },
   -- },
+  -- use for codecompanion
+  {
+    "nvim-treesitter/nvim-treesitter",
+    opts = { ensure_installed = { "yaml", "markdown" } },
+  },
   {
     "olimorris/codecompanion.nvim",
-    version = "^19", -- v19 compat via local patch on mcphub.nvim (PR #279) — see docs/memory/lazy-local-patching.md
+    version = "19.3.0", -- v19 compat via local patch on mcphub.nvim (PR #279) — see docs/memory/lazy-local-patching.md
     dependencies = {
+      -- "ibhagwan/fzf-lua", -- For fzf provider, file or buffer picker
+      -- "nvim-lua/plenary.nvim",
+      "nvim-treesitter/nvim-treesitter",
       -- MCPHub integration for MCP tools/resources access
       { "ravitemer/mcphub.nvim", optional = true },
+      "jellydn/spinner.nvim", -- Show loading spinner when request is started
     },
+    config = function(_, options)
+      require("codecompanion").setup(options)
+
+      -- Show loading spinner when request is started (from jellydn/tiny-nvim)
+      local ok, spinner = pcall(require, "spinner")
+      if ok then
+        local group = vim.api.nvim_create_augroup("CodeCompanionHooks", {})
+        vim.api.nvim_create_autocmd({ "User" }, {
+          pattern = "CodeCompanionRequest*",
+          group = group,
+          callback = function(request)
+            if request.match == "CodeCompanionRequestStarted" then
+              spinner.show()
+            end
+            if request.match == "CodeCompanionRequestFinished" then
+              spinner.hide()
+            end
+          end,
+        })
+      end
+    end,
     keys = require("utils.editor_keymaps").keymaps.codecompanion(),
     adapters = {
       llama3_2 = function()
@@ -259,7 +296,8 @@ return {
       end,
     },
     opts = {
-      -- log_level = "DEBUG", -- TRACE|DEBUG|ERROR|INFO not work
+      system_prompt = require("utils.my_ai_prompts").COPILOT_SYSTEM_PROMPT,
+      log_level = "DEBUG", -- TRACE|DEBUG|ERROR|INFO not work
       -- see logs in ~/.local/state/nvim/codecompanion.log -- not sure why not see
       --
       -- [WARN] above not help disable textmsg: CodeCompanion.nvim will experience breaking changes soon. Pin to version v17.33.0 or earlier to avoid this.
@@ -290,6 +328,36 @@ return {
           -- model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
           -- model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
           -- },
+          roles = { llm = "  Copilot Chat", user = "☀️ Brightza" },
+          slash_commands = {
+            ["buffer"] = { opts = { provider = "snacks" } },
+            ["file"] = { opts = { provider = "snacks" } },
+            ["fetch"] = { opts = { provider = "snacks" } },
+            ["help"] = { opts = { provider = "snacks" } },
+            ["image"] = { opts = { provider = "snacks" } },
+            ["symbols"] = { opts = { provider = "snacks" } },
+          },
+          -- Chat buffer keymaps (from jellydn/tiny-nvim codecompanion.lua)
+          keymaps = {
+            send = {
+              modes = { n = "<CR>", i = "<C-CR>" },
+              index = 1,
+              callback = "keymaps.send",
+              description = "Send",
+            },
+            close = {
+              modes = { n = "q" },
+              index = 3,
+              callback = "keymaps.close",
+              description = "Close Chat",
+            },
+            stop = {
+              modes = { n = "<C-c>" },
+              index = 4,
+              callback = "keymaps.stop",
+              description = "Stop Request",
+            },
+          },
         },
         -- Or, just specify the adapter by name
         inline = {
@@ -345,21 +413,7 @@ return {
           provider = "snacks",
         },
       },
-      strategies = {
-        chat = {
-          adapter = "copilot",
-          roles = { llm = "  Copilot Chat", user = "☀️ Brightza" },
-          slash_commands = {
-            ["buffer"] = { opts = { provider = "snacks" } },
-            ["file"] = { opts = { provider = "snacks" } },
-            ["fetch"] = { opts = { provider = "snacks" } },
-            ["help"] = { opts = { provider = "snacks" } },
-            ["image"] = { opts = { provider = "snacks" } },
-            ["symbols"] = { opts = { provider = "snacks" } },
-            ["quickfix"] = { opts = { provider = "snacks" } },
-          },
-        },
-      },
+      -- NOTE: strategies block merged into interactions above (v19 migration)
       keymaps = {
         completion = {
           modes = {
@@ -385,7 +439,7 @@ return {
           },
         },
       },
-      prompt_library = vim.tbl_extend("keep", prompt_lib_gen, {
+      prompt_library = vim.tbl_extend("keep", {
         -- https://deepwiki.com/search/check-the-settting-from-prompt_65b9cc4c-5ada-41a8-8b0d-49142cfdef65?mode=deep
         -- will work only when open new chat with the action cmd else not change model while there is prompt
         -- NOTE: AGD + Copilot model entries are auto-generated by utils/my_codecompanion_prompt_library.lua
@@ -404,6 +458,7 @@ return {
             auto_submit = false,
             alias = "codecompanion_nvim_context", -- ✅ Fixed: short_name → alias
             stop_context_insertion = true,
+            callbacks = { on_created = enable_yolo_on_created },
           },
           context = {
             {
@@ -421,10 +476,7 @@ return {
           prompts = {
             {
               role = "user",
-              content = function()
-                vim.g.codecompanion_auto_tool_mode = true
-                -- Some clear instructions for the LLM to follow
-                return [[### Instructions
+              content = [[### Instructions
 Your instructions here
 
 ### Steps to Follow
@@ -433,8 +485,7 @@ Your instructions here
       1. Update the code in #buffer{watch} using the @editor tool
       2. Make sure you trigger both tools in the same response Specification
       3. Follow the given documentation
-      ]]
-              end,
+      ]],
             },
           },
         },
@@ -448,6 +499,7 @@ Your instructions here
             auto_submit = false,
             alias = "snacks_nvim_context", -- ✅ Fixed: short_name → alias
             stop_context_insertion = true,
+            callbacks = { on_created = enable_yolo_on_created },
           },
           context = {
             {
@@ -469,11 +521,7 @@ Your instructions here
           prompts = {
             {
               role = "user",
-              content = function()
-                -- Leverage auto_tool_mode which disables the requirement of approvals and automatically saves any edited buffer
-                vim.g.codecompanion_auto_tool_mode = true
-                -- Some clear instructions for the LLM to follow
-                return [[### Instructions
+              content = [[### Instructions
 Your instructions here
 
 ### Steps to Follow
@@ -482,8 +530,7 @@ Your instructions here
       1. Update the code in #buffer{watch} using the @editor tool
       2. Make sure you trigger both tools in the same response Specification
       3. Follow the given documentation
-      ]]
-              end,
+      ]],
             },
           },
         },
@@ -497,6 +544,7 @@ Your instructions here
             auto_submit = false,
             alias = "fzf_context", -- ✅ Fixed: short_name → alias (also changed alias to match prompt name)
             stop_context_insertion = true,
+            callbacks = { on_created = enable_yolo_on_created },
           },
           context = {
             -- {
@@ -518,11 +566,7 @@ Your instructions here
           prompts = {
             {
               role = "user",
-              content = function()
-                -- Leverage auto_tool_mode which disables the requirement of approvals and automatically saves any edited buffer
-                vim.g.codecompanion_auto_tool_mode = true
-                -- Some clear instructions for the LLM to follow
-                return [[### Instructions
+              content = [[### Instructions
 Your instructions here
 
 ### Steps to Follow
@@ -531,8 +575,7 @@ Your instructions here
       1. Update the code in #buffer{watch} using the @editor tool
       2. Make sure you trigger both tools in the same response Specification
       3. Follow the given documentation
-      ]]
-              end,
+      ]],
             },
           },
         },
@@ -591,12 +634,12 @@ Your instructions here
           },
         },
         ["Iterative Workflow with Documentation"] = {
-          strategy = "chat",
+          interaction = "chat",
           description = "Iteratively improve documentation",
           opts = {
             is_slash_cmd = true,
             auto_submit = false,
-            short_name = "iterative_removal_doc",
+            alias = "iterative_removal_doc",
             stop_context_insertion = true,
             adapter = {
               name = "copilot",
@@ -632,15 +675,6 @@ Documentation and Tracking:
 - Maintain an overarching summary file (`DATE-actions.md`), consolidating all changes and providing a single reference point for handover purposes.
           ]],
             },
-          },
-        },
-        -- overrides the prompt from jellydn to
-        ["Generate a Commit Message for Staged"] = {
-          strategy = "chat",
-          description = "Generate a commit message for staged change",
-          -- fix original lua/plugins/extra/codecompanion.lua for overriding to alias instead of shortname
-          opts = {
-            alias = "staged-commit-jelly",
           },
         },
         ["Generate a Commit Message for Short Staged"] = {
@@ -916,18 +950,14 @@ staged-commits
             is_workflow = true, -- v18+ syntax (was: strategy = "workflow")
             --   adapter = "openai", -- Always use the OpenAI adapter for this workflow
             adapter = "copilot",
+            callbacks = { on_created = enable_yolo_on_created },
           },
           prompts = {
             {
               name = "Setup Test", -- example edit <-> test in available
               role = "user",
               opts = { auto_submit = false },
-              content = function()
-                -- Leverage auto_tool_mode which disables the requirement of approvals and automatically saves any edited buffer
-                vim.g.codecompanion_auto_tool_mode = true
-
-                -- Some clear instructions for the LLM to follow
-                return [[### Instructions
+              content = [[### Instructions
 Your instructions here
 
 ### Steps to Follow
@@ -938,8 +968,7 @@ Your instructions here
       2. Then use the @cmd_runner tool to run the test suite with `<test_cmd>` (do this after you have updated the code)
       3. Make sure you trigger both tools in the same response
 
-      We'll repeat this cycle until the tests pass. Ensure no deviations from these steps.]]
-              end,
+      We'll repeat this cycle until the tests pass. Ensure no deviations from these steps.]],
             },
             {
               name = "Repeat On Failure",
@@ -957,7 +986,64 @@ Your instructions here
             },
           },
         },
-      }),
+        -- Agentic prompt: pull latest on all GKG-indexed projects (skip nvim lazy) then reindex successes
+        -- Tools: @{agent} = autonomous agent (cmd_runner), @{mcp} = static MCPHub tool group (always registered)
+        -- IMPORTANT: @{gkg} is a *dynamic* group — only registered when GKG SSE server is connected at load time.
+        -- Use @{mcp} (static, always available) instead; it provides use_mcp_tool to call GKG tools on demand.
+        ["GKG Update & Reindex Projects"] = {
+          interaction = "chat",
+          description = "Pull latest changes for all GKG-indexed projects and reindex them (skip nvim lazy plugin dirs)",
+          opts = {
+            alias = "gkg-update-proj-reindex",
+            is_slash_cmd = true,
+            auto_submit = true,
+            adapter = {
+              name = "copilot",
+              model = "gpt-5-mini",
+            },
+            callbacks = { on_created = enable_yolo_on_created },
+          },
+          prompts = {
+            {
+              role = "user",
+              content = [[@{agent} @{mcp}
+
+Tool-call contract (MUST follow exactly every time):
+- Always call `use_mcp_tool` with exactly these top-level keys:
+  `{ "server_name": "...", "tool_name": "...", "tool_input": { ... } }`
+- Never use `arguments`; use `tool_input`.
+- For `toggle_mcp_server`, `tool_input` MUST include BOTH:
+  `{ "server_name": "gkg", "action": "start" }`
+- If a tool error says missing params, retry immediately with corrected payload.
+- Make one tool call at a time and wait for result before next call.
+
+Step 0: Call use_mcp_tool with:
+{ "server_name": "mcphub", "tool_name": "get_current_servers", "tool_input": { "include_disabled": true, "format": "detailed" } }
+
+Step 1: If `gkg` is disabled/not connected, call use_mcp_tool with:
+{ "server_name": "mcphub", "tool_name": "toggle_mcp_server", "tool_input": { "server_name": "gkg", "action": "start" } }
+Wait for success before proceeding.
+
+Step 2: Call use_mcp_tool with:
+{ "server_name": "gkg", "tool_name": "list_projects", "tool_input": {} }
+
+For each project path listed:
+3. Skip any project whose path contains "lazy" (nvim lazy plugin cache dirs, e.g. ~/.local/share/*/lazy/*)
+4. For remaining projects, run `git -C <project_path> pull` using cmd_runner
+5. Record each project as success (exit 0) or failure (non-zero / error)
+
+After all git pulls:
+6. For each successfully updated project, call use_mcp_tool with:
+{ "server_name": "gkg", "tool_name": "index_project", "tool_input": { "path": "<project_path>" } }
+7. Present a final summary with two sections:
+   - Successfully updated & reindexed (list paths)
+   - Failed — needs manual update (list paths + reason)
+
+Proceed autonomously without asking for confirmation between steps.]],
+            },
+          },
+        },
+      }, jellydn_prompts, prompt_lib_gen),
     },
   },
 }
