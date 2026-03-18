@@ -19,7 +19,7 @@ vim.g.disabled_plugins = vim.g.disabled_plugins
   }
 
 -- Extra plugins to load from lua/plugins/extra/
--- load order follows the order defined here unless deps override it
+-- ⚠️ load ORDER follows the order defined here unless deps override it
 vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
   or {
     "disablePlugins", -- centralized plugin disable mechanism (must be first)
@@ -35,12 +35,13 @@ vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
     "fzf",
     "fold-preview",
     "myToggleterm",
+    "snacks", -- above myEditor, mySnacks in case need override
+    "mySnacks", -- snacks.nvim (picker, dashboard, terminal, explorer, etc.)
     "myEditor",
     "myCoding",
     "myGit",
     "myAi",
     "myLazyPatcher",
-    "snacks", -- snacks.nvim (picker, dashboard, terminal, explorer, etc.)
   }
 
 -- vim.g.lazydev_enabled = false -- uncomment this to load all lua dependencies (get access to vim object) will override one in (myopts - require first)

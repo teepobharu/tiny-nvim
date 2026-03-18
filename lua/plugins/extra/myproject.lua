@@ -2,7 +2,116 @@ local M = {}
 local path_utils = require "utils.path"
 local mypath = require "utils.mypath"
 
--- ...existing code...
+-- ═══════════════════════════════════════════════════════════════════════════════
+-- .nvim-config.lua marker-based template system
+-- Embeds a commented-out copy of mydefault-nvim-config.lua between markers so
+-- users can see available defaults and uncomment/override per-project.
+-- ═══════════════════════════════════════════════════════════════════════════════
+
+local MARKER_START =
+  "-- ──── NVIM DEFAULT CONFIG REFERENCE (auto-generated) DO NOT EDIT BETWEEN MARKERS ────"
+local MARKER_END = "-- ──── END NVIM DEFAULT CONFIG REFERENCE ────"
+
+--- Read mydefault-nvim-config.lua and return its content commented out, wrapped in markers
+---@return string|nil reference_block The full marker block, or nil on error
+local function get_default_config_reference()
+  local config_path = vim.fn.stdpath "config" .. "/lua/config/mydefault-nvim-config.lua"
+  local f = io.open(config_path, "r")
+  if not f then
+    return nil
+  end
+
+  local commented_lines = {}
+  for line in f:lines() do
+    -- Prefix each line with "-- " to comment it out
+    if line == "" then
+      table.insert(commented_lines, "--")
+    else
+      table.insert(commented_lines, "-- " .. line)
+    end
+  end
+  f:close()
+
+  local config_display = config_path:gsub(vim.env.HOME, "~")
+  local header = {
+    MARKER_START,
+    "-- Source: " .. config_display,
+    "-- Regenerated: " .. os.date "%Y-%m-%d" .. " | Run :ProjectSettingsReload to refresh",
+    "-- Uncomment and modify values below to override defaults for this project.",
+    "--",
+  }
+  local footer = { MARKER_END }
+
+  local result = {}
+  vim.list_extend(result, header)
+  vim.list_extend(result, commented_lines)
+  vim.list_extend(result, footer)
+  return table.concat(result, "\n")
+end
+
+--- Embed or replace the reference block in existing file content
+---@param existing_content string|nil Current file content (nil for new file)
+---@param reference_block string The marker block to embed
+---@return string new_content The updated file content
+local function embed_reference_in_content(existing_content, reference_block)
+  -- New file: reference block + template for user overrides
+  if not existing_content or existing_content == "" then
+    return reference_block
+      .. "\n\n"
+      .. "-- Project-specific overrides below\n"
+      .. "-- mono: <- set the label to show (mono:label) in files/grep subproject picker here\n"
+      .. "-- vim.g.subproject_scan_ignored = false -- disable subproject scanning in snacks file/grep picker\n"
+  end
+
+  -- Find marker positions in existing content
+  local start_pos = existing_content:find(MARKER_START, 1, true)
+  local end_pos = existing_content:find(MARKER_END, 1, true)
+
+  if start_pos and end_pos then
+    -- Both markers found: replace content between them, preserve before/after
+    local before = existing_content:sub(1, start_pos - 1)
+    local end_of_marker = end_pos + #MARKER_END
+    -- Skip trailing newline after end marker if present
+    if existing_content:sub(end_of_marker, end_of_marker) == "\n" then
+      end_of_marker = end_of_marker + 1
+    end
+    local after = existing_content:sub(end_of_marker)
+    return before .. reference_block .. "\n" .. after
+  else
+    -- No markers found (old-style file): prepend reference block, preserve old content below
+    return reference_block .. "\n\n" .. existing_content
+  end
+end
+
+--- Write .nvim-config.lua with embedded default config reference
+---@param filepath string Path to .nvim-config.lua
+---@return boolean success
+local function write_nvim_config_with_markers(filepath)
+  local ref_block = get_default_config_reference()
+  if not ref_block then
+    vim.notify("Could not read mydefault-nvim-config.lua", vim.log.levels.ERROR)
+    return false
+  end
+
+  -- Read existing content if file exists
+  local existing = nil
+  local f = io.open(filepath, "r")
+  if f then
+    existing = f:read "*a"
+    f:close()
+  end
+
+  local new_content = embed_reference_in_content(existing, ref_block)
+
+  local out = io.open(filepath, "w")
+  if not out then
+    vim.notify("Failed to write " .. filepath, vim.log.levels.ERROR)
+    return false
+  end
+  out:write(new_content)
+  out:close()
+  return true
+end
 
 local function parse_jsonc_with_deno(file_path)
   -- Create a temporary file for deno script
@@ -250,63 +359,78 @@ function M.setup()
     desc = "Create/open .ignore in cwd with initial project ignore rules",
   })
 
+  -- Override upstream's :ProjectSettings with marker-based template
+  -- This runs after utils/project.lua setup(), so it overwrites the upstream command
+  vim.api.nvim_create_user_command("ProjectSettings", function()
+    local filepath = vim.fn.getcwd() .. "/.nvim-config.lua"
+    local is_update = vim.loop.fs_stat(filepath) ~= nil
+
+    if not write_nvim_config_with_markers(filepath) then
+      return
+    end
+
+    local action = is_update and "Updated" or "Created"
+    vim.notify(action .. " .nvim-config.lua with default config reference", vim.log.levels.INFO)
+
+    -- Open the file (moved from utils/project.lua)
+    vim.cmd("edit " .. vim.fn.fnameescape(filepath))
+
+    -- Open .ignore in vsplit (moved from utils/project.lua)
+    local ok_mp, mp = pcall(require, "utils.mypath")
+    if ok_mp and type(mp.open_project_ignore) == "function" then
+      vim.cmd "vsplit"
+      mp.open_project_ignore(vim.fn.getcwd())
+    end
+  end, {
+    desc = "Create/update .nvim-config.lua with default config reference template",
+  })
+
   vim.api.nvim_create_user_command("ProjectSettingsReload", function()
     local cwd, cwd_display = mypath.get_cwd()
     local project_setting = cwd .. "/.nvim-config.lua"
 
-    -- Open file first (creates buffer even if missing), then wait 2s before prompting
-    vim.cmd("edit " .. vim.fn.fnameescape(project_setting))
-
-    vim.defer_fn(function()
-      local function confirm(prompt, on_choice)
-        if vim.ui and type(vim.ui.confirm) == "function" then
-          vim.ui.confirm(prompt, on_choice)
-          return
-        end
-
-        vim.ui.select({ "Yes", "No" }, { prompt = prompt }, function(choice)
-          if choice == "Yes" then
-            on_choice(1)
-          else
-            on_choice(0)
-          end
-        end)
-      end
-
-      if vim.loop.fs_stat(project_setting) then
-        confirm(("Reload project settings?\n file:%s"):format(project_setting), function(choice)
-          if choice == 1 then
-            local ok, err = pcall(dofile, project_setting)
-            if ok then
-              vim.notify("Reloaded project settings from " .. project_setting, vim.log.levels.INFO)
-            else
-              vim.notify("Error loading project setting: " .. tostring(err), vim.log.levels.ERROR)
-            end
-          end
-        end)
+    local function confirm(prompt, on_choice)
+      if vim.ui and type(vim.ui.confirm) == "function" then
+        vim.ui.confirm(prompt, on_choice)
         return
       end
 
-      confirm((".nvim-config.lua not found.\n\ncwd:\n%s\n\nCreate it now?"):format(cwd_display), function(choice)
-        if choice ~= 1 then
-          return
+      vim.ui.select({ "Yes", "No" }, { prompt = prompt }, function(choice)
+        if choice == "Yes" then
+          on_choice(1)
+        else
+          on_choice(0)
         end
-
-        -- Ensure ProjectSettings command exists by requiring the module that defines it
-        local ok, mod = pcall(require, "utils.project")
-        if not ok then
-          vim.notify("Failed to require utils.project: " .. tostring(mod), vim.log.levels.ERROR)
-          return
-        end
-        if type(mod) == "table" and type(mod.setup) == "function" then
-          mod.setup()
-        end
-
-        vim.cmd "ProjectSettings"
       end)
-    end, 100)
+    end
+
+    if vim.loop.fs_stat(project_setting) then
+      confirm(("Regenerate reference & reload project settings?\n file:%s"):format(project_setting), function(choice)
+        if choice == 1 then
+          -- Regenerate marker block before reloading
+          write_nvim_config_with_markers(project_setting)
+          -- Reload the buffer to show updated content
+          vim.cmd("edit " .. vim.fn.fnameescape(project_setting))
+          -- Execute the file to apply settings
+          local ok, err = pcall(dofile, project_setting)
+          if ok then
+            vim.notify("Regenerated reference & reloaded settings from " .. project_setting, vim.log.levels.INFO)
+          else
+            vim.notify("Error loading project setting: " .. tostring(err), vim.log.levels.ERROR)
+          end
+        end
+      end)
+      return
+    end
+
+    confirm((".nvim-config.lua not found.\n\ncwd:\n%s\n\nCreate it now?"):format(cwd_display), function(choice)
+      if choice ~= 1 then
+        return
+      end
+      vim.cmd "ProjectSettings"
+    end)
   end, {
-    desc = "Open and reload .nvim-config.lua from current cwd (prompts after 2s)",
+    desc = "Regenerate default config reference and reload .nvim-config.lua",
   })
 end
 
