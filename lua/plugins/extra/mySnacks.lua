@@ -1,10 +1,9 @@
 local logo = [[
-      ██╗████████╗    ███╗   ███╗ █████╗ ███╗   ██╗
-      ██║╚══██╔══╝    ████╗ ████║██╔══██╗████╗  ██║
-      ██║   ██║       ██╔████╔██║███████║██╔██╗ ██║
-      ██║   ██║       ██║╚██╔╝██║██╔══██║██║╚██╗██║
-      ██║   ██║       ██║ ╚═╝ ██║██║  ██║██║ ╚████║
-      ╚═╝   ╚═╝       ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝
+       \   /
+        .-.
+    -- (   ) --
+        `-'
+       /   \
 ]]
 
 logo = string.rep("\n", 4) .. logo .. "\n\n"
@@ -20,15 +19,6 @@ end
 local hostname = io.popen("hostname"):read("*a"):gsub("%s+", "")
 
 return {
-  {
-    "folke/lazydev.nvim",
-    optional = true,
-    opts = {
-      library = {
-        { path = "snacks.nvim", words = { "Snacks" } },
-      },
-    },
-  },
   {
     "nvim-treesitter/nvim-treesitter",
     optional = true,
@@ -113,26 +103,6 @@ return {
       },
       picker = {
         enabled = true,
-        actions = {
-          flash = function(picker)
-            require("flash").jump {
-              pattern = "^",
-              label = { after = { 0, 0 } },
-              search = {
-                mode = "search",
-                exclude = {
-                  function(win)
-                    return vim.bo[vim.api.nvim_win_get_buf(win)].filetype ~= "snacks_picker_list"
-                  end,
-                },
-              },
-              action = function(match)
-                local idx = picker.list:row2idx(match.pos[1])
-                picker.list:_move(idx, true, true)
-              end,
-            }
-          end,
-        },
         ---@class snacks.picker.sources.Config
         sources = {
           files = {
@@ -175,8 +145,6 @@ return {
               -- Hidden
               ["<a-.>"] = { "toggle_hidden", mode = { "i", "n" } },
               ["<a-h"] = false,
-              ["<a-s>"] = { "flash", mode = { "n", "i" } },
-              ["s"] = { "flash" },
             },
           },
         },
@@ -186,14 +154,14 @@ return {
         preset = {
           header = logo,
           keys = {
-            { icon = " ", key = "f", desc = "Find File", action = ":lua require('fff').find_files()" },
-            { icon = " ", key = "g", desc = "Find Text", action = ":lua require('fff').live_grep()" },
+            { icon = " ", key = "f", desc = "Find File", action = ":lua Snacks.dashboard.pick('files')" },
+            { icon = " ", key = "g", desc = "Find Text", action = ":lua Snacks.dashboard.pick('live_grep')" },
             { icon = " ", key = "r", desc = "Recent Files", action = ":lua Snacks.dashboard.pick('oldfiles')" },
             {
               icon = " ",
               key = "c",
               desc = "Config",
-              action = ":lua require('fff').find_files_in_dir(vim.fn.stdpath('config'))",
+              action = ":lua Snacks.dashboard.pick('files', {cwd = vim.fn.stdpath('config')})",
             },
             { icon = " ", key = "s", desc = "Restore Session", section = "session" },
             { icon = " ", key = "q", desc = "Quit", action = ":qa" },
@@ -218,7 +186,7 @@ return {
       bigfile = { enabled = true },
       scratch = { enabled = true },
       zen = {
-        enabled = false,
+        enabled = true,
         win = {
           -- Hide backdrop
           backdrop = { transparent = false },
@@ -270,8 +238,8 @@ return {
         },
         -- LazyGit full screen
         lazygit = {
-          width = 0.8,
-          height = 0.8,
+          width = 0,
+          height = 0,
         },
       },
       -- Learn this tip from LazyVim
@@ -359,6 +327,13 @@ return {
         desc = "Find Config File",
       },
       {
+        "<leader>fD",
+        function()
+          require("utils.snacks_pickers").dotfiles_picker()
+        end,
+        desc = "Dotfiles Config",
+      },
+      {
         "<leader>ff",
         function()
           Snacks.picker.files()
@@ -408,20 +383,23 @@ return {
         desc = "Visual selection or word",
         mode = { "n", "x" },
       },
-      {
-        "<c-/>",
-        function()
-          Snacks.terminal()
-        end,
-        desc = "Toggle Terminal",
-      },
-      {
-        "<c-_>",
-        function()
-          Snacks.terminal()
-        end,
-        desc = "which_key_ignore",
-      },
+      -- Commented out to prevent duplicate with myEditor.lua
+      -- {
+      --   "<c-/>",
+      --   function()
+      --     print("Hello from Snacks!")
+      --     Snacks.terminal()
+      --   end,
+      --   desc = "Toggle Terminal",
+      -- },
+      -- Commented out to prevent conflict - using <c-t> for ToggleTerm instead
+      -- {
+      --   "<c-_>",
+      --   function()
+      --     Snacks.terminal()
+      --   end,
+      --   desc = "which_key_ignore",
+      -- },
       -- git
       {
         "<leader>gc",
@@ -774,9 +752,6 @@ return {
             Snacks.debug.backtrace()
           end
           vim.print = _G.dd -- Override print to use snacks for `:=` command
-
-          -- Setup statuscolumn
-          vim.opt.statuscolumn = [[%!v:lua.require'snacks.statuscolumn'.get()]]
 
           -- Create some toggle mappings
           Snacks.toggle.option("spell", { name = "Spelling" }):map "<leader>us"
