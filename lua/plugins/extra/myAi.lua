@@ -1,6 +1,8 @@
 -- Only contains modifications to default configs
 -- put all related ai agents additional plugins options and configs here
 
+local editor_keymaps = require "utils.editor_keymaps"
+
 -- caveat : might not updated when something changed until restart nvim ?
 local common_agent_env = {
   OPENAI_API_KEY = vim.env.GENAIAG,
@@ -43,6 +45,17 @@ return {
     -- dev = true,
     opts = {
       cli = {
+        -- Moved from myEditor.lua — custom prompt context variables
+        prompts = {
+          fname = function()
+            return vim.fn.expand "%:t"
+          end,
+          fpath = function()
+            -- in this format file: <> \n name <> in newline separate
+            -- try sending just the file name not the content
+            return vim.fn.expand "%:p"
+          end,
+        },
         win = {
           keys = {
             -- Disable conflicting Ctrl keybindings
@@ -113,7 +126,95 @@ return {
         },
       },
     },
+    keys = require("utils.editor_keymaps").keymaps.sidekick,
   },
+  --#region AI tools moved from myEditor.lua
+  -- image support for code companion , requires pngpaste , brew install pngpaste https://github.com/jcsalterego/pngpaste
+  {
+    "HakonHarnes/img-clip.nvim",
+    event = "VeryLazy",
+    keys = editor_keymaps.keymaps.img_clip,
+    opts = {
+      default = {
+        prompt_for_file_name = false,
+        template = "[Image$CURSOR]($FILE_PATH)",
+        use_absolute_path = false,
+      },
+      filetypes = {
+        codecompanion = {
+          prompt_for_file_name = false,
+          use_absolute_path = true,
+        },
+        AvanteInput = {
+          prompt_for_file_name = false,
+          use_absolute_path = true,
+        },
+      },
+    },
+  },
+  {
+    "github/copilot.vim",
+    -- v1.58.0 has issue errors 2026-01-26 02:58
+    version = "1.57.0",
+  },
+  {
+    "CopilotC-Nvim/CopilotChat.nvim",
+    dependencies = {
+      { "github/copilot.vim" },
+      { "nvim-lua/plenary.nvim" },
+    },
+    enabled = true,
+    keys = editor_keymaps.keymaps.copilot_chat,
+    opts = {
+      model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL,
+    },
+  },
+  {
+    "yetone/avante.nvim",
+    -- https://github.com/yetone/avante.nvim?tab=readme-ov-file#default-setup-configuration
+    opts = {
+      provider = "copilot", -- You can then change this provider here
+      -- provider = "openai_agd", -- You can then change this provider here
+      web_search_engine = {
+        -- provider = "tavily", -- tavily, serpapi, google, kagi, brave, or searxng
+        provider = "google",
+      },
+      -- Providers: base providers merged with Agoda-specific providers from utils
+      -- See lua/utils/my_avante_utils.lua for Agoda provider configurations
+      providers = vim.tbl_extend("force", {
+        copilot = {
+          model = "gpt-5-mini",
+        },
+      }, {}), -- default = no custom provider
+      -- avante_utils.get_agoda_providers()),
+
+      acp_follow_agent_locations = false,
+      selection = {
+        enabled = true,
+        hint_display = "none",
+      },
+      behavior = {
+        -- auto_set_keymaps = false,
+        allow_access_to_git_ignored_files = true, -- still not allow outside repo / root how ?
+      },
+      mappings = { -- https://github.com/yetone/avante.nvim/blob/5df39b480d438a46afa1571db6480210bccea21b/lua/avante/config.lua#L641
+        sidebar = {
+          switch_windows = "<C-Tab>", -- not work
+        },
+        files = {
+          add_current = "<leader>aC",
+        },
+        toggle = {
+          debug = "<leader>rd", -- discard to some random key
+          selection = "<localleader>ax",
+        },
+        select_history = "<leader>rh",
+        focus = "<localleader>ax", -- discard to some random key
+      },
+    },
+    keys = editor_keymaps.keymaps.avante,
+  },
+  --#endregion AI tools moved from myEditor.lua
   {
     "folke/which-key.nvim",
     optional = true,
@@ -128,6 +229,7 @@ return {
 
   {
     "ravitemer/mcphub.nvim",
+    version = "6.2.0",
     -- MCPHub.nvim - MCP client and tool bridge for AI chat plugins
     --     require("mcphub")
     --     Do more investigation on integration and amed the documentation of dependencies check to reflect the investigations on these sites:
@@ -229,7 +331,7 @@ return {
   },
   {
     "olimorris/codecompanion.nvim",
-    version = "^19", -- v19 compat via local patch on mcphub.nvim (PR #279) — see docs/memory/lazy-local-patching.md
+    version = "19.6.x", -- exact pin: v19.6.0 / af7f1042a424e17ab49cef93442f33a55d514de6
     dependencies = {
       -- "ibhagwan/fzf-lua", -- For fzf provider, file or buffer picker
       -- "nvim-lua/plenary.nvim",

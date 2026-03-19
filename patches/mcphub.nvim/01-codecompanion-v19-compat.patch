@@ -292,12 +292,23 @@ diff --git a/lua/mcphub/extensions/codecompanion/variables.lua b/lua/mcphub/exte
 index 2a15a55..75820e9 100644
 --- a/lua/mcphub/extensions/codecompanion/variables.lua
 +++ b/lua/mcphub/extensions/codecompanion/variables.lua
-@@ -14,18 +14,17 @@ function M.register(opts)
+@@ -14,18 +14,28 @@ function M.register(opts)
          return
      end
  
 -    local cc_variables = config.interactions.chat.variables
-+    local cc_editor_context = config.interactions.chat.editor_context
++    local interactions = config.interactions or {}
++    local cc_editor_context = (interactions.shared and interactions.shared.editor_context)
++        or (interactions.chat and interactions.chat.editor_context)
++    if type(cc_editor_context) ~= "table" then
++        vim.schedule(function()
++            vim.notify(
++                "mcphub.nvim: CodeCompanion editor_context is not initialized yet; skipping MCP resource registration",
++                vim.log.levels.WARN
++            )
++        end)
++        return
++    end
  
 -    -- Remove existing MCP variables
 -    for key, value in pairs(cc_variables) do
@@ -317,7 +328,7 @@ index 2a15a55..75820e9 100644
      for _, resource in ipairs(resources) do
          local server_name = resource.server_name
          local uri = resource.uri
-@@ -34,12 +33,11 @@ function M.register(opts)
+@@ -34,12 +44,11 @@ function M.register(opts)
          description = description:gsub("\n", " ")
          description = resource_name .. " (" .. description .. ")"
          local var_id = "mcp:" .. uri
@@ -332,7 +343,7 @@ index 2a15a55..75820e9 100644
                  local result = hub:access_resource(server_name, uri, {
                      caller = {
                          type = "codecompanion",
-@@ -57,10 +55,9 @@ function M.register(opts)
+@@ -57,10 +66,9 @@ function M.register(opts)
  
                  -- Handle images
                  if result.images and #result.images > 0 then
@@ -344,7 +355,7 @@ index 2a15a55..75820e9 100644
                              id = id,
                              base64 = image.data,
                              mimetype = image.mimeType,
-@@ -74,7 +71,7 @@ function M.register(opts)
+@@ -74,7 +82,7 @@ function M.register(opts)
          table.insert(added_resources, var_id)
      end
  

@@ -19,6 +19,8 @@
 --       <C-y>        copy as config   <C-w>  write to .nvim-config.lua
 --       <C-e>        open config      <M-s>  switch mode
 --       <C-d>/<C-n>  filter disabled/enabled  <C-x> reset filter
+--     Mode 1 only:
+--       <C-g>        open GitHub page   <C-r>  open GitHub releases
 
 local disabled = vim.g.disabled_plugins or {}
 
@@ -134,6 +136,24 @@ local function get_selected_names(picker)
     end
   end
   return names
+end
+
+--- Derive GitHub URL from a plugin name like "owner/repo" or a .git URL
+---@param plugin_name string e.g. "folke/snacks.nvim"
+---@return string|nil url e.g. "https://github.com/folke/snacks.nvim"
+local function github_url_for(plugin_name)
+  if not plugin_name then
+    return nil
+  end
+  -- Already a full URL
+  if plugin_name:match "^https?://" then
+    return (plugin_name:gsub("%.git$", ""))
+  end
+  -- owner/repo format
+  if plugin_name:match "^[%w%-_.]+/[%w%-_.]+$" then
+    return "https://github.com/" .. plugin_name
+  end
+  return nil
 end
 
 -- Forward declaration for cross-referencing between the two pickers
@@ -255,6 +275,30 @@ local function open_disabled_plugins_picker()
         picker:close()
         vim.cmd("edit " .. vim.fn.fnameescape(get_config_path()))
       end,
+      open_github = function(picker)
+        local item = picker:current()
+        if not item or not item.data then
+          return
+        end
+        local url = github_url_for(item.data)
+        if url then
+          vim.ui.open(url)
+        else
+          Snacks.notify("No GitHub URL for: " .. item.data, { title = "disabled_plugins", level = "WARN" })
+        end
+      end,
+      open_releases = function(picker)
+        local item = picker:current()
+        if not item or not item.data then
+          return
+        end
+        local url = github_url_for(item.data)
+        if url then
+          vim.ui.open(url .. "/releases")
+        else
+          Snacks.notify("No GitHub URL for: " .. item.data, { title = "disabled_plugins", level = "WARN" })
+        end
+      end,
       switch_mode = function(picker)
         picker:close()
         vim.schedule(open_extras_plugins_picker)
@@ -283,12 +327,14 @@ local function open_disabled_plugins_picker()
           ["<C-y>"] = { "copy_config", mode = { "n", "i" }, desc = "Copy as config block" },
           ["<C-w>"] = { "write_config", mode = { "n", "i" }, desc = "Write to .nvim-config.lua" },
           ["<C-e>"] = { "open_config", mode = { "n", "i" }, desc = "Open .nvim-config.lua" },
+          ["<C-g>"] = { "open_github", mode = { "n", "i" }, desc = "Open GitHub page" },
+          ["<C-r>"] = { "open_releases", mode = { "n", "i" }, desc = "Open GitHub releases" },
           ["<M-s>"] = { "switch_mode", mode = { "n", "i" }, desc = "Switch to extras mode" },
           ["<C-d>"] = { "filter_disabled", mode = { "n", "i" }, desc = "Filter: disabled" },
           ["<C-n>"] = { "filter_enabled", mode = { "n", "i" }, desc = "Filter: enabled" },
           ["<C-x>"] = { "filter_reset", mode = { "n", "i" }, desc = "Filter: reset" },
         },
-        footer = "C-w:write C-y:copy C-e:open M-s:switch C-d/n/x:filter ",
+        footer = " vim.g.disabled_plugins │ C-w:write C-y:copy C-g:github C-r:releases M-s:switch ",
         footer_pos = "center",
       },
       list = {
@@ -296,6 +342,8 @@ local function open_disabled_plugins_picker()
           ["<C-y>"] = { "copy_config", mode = { "n" }, desc = "Copy as config block" },
           ["<C-w>"] = { "write_config", mode = { "n" }, desc = "Write to .nvim-config.lua" },
           ["<C-e>"] = { "open_config", mode = { "n" }, desc = "Open .nvim-config.lua" },
+          ["<C-g>"] = { "open_github", mode = { "n" }, desc = "Open GitHub page" },
+          ["<C-r>"] = { "open_releases", mode = { "n" }, desc = "Open GitHub releases" },
           ["<M-s>"] = { "switch_mode", mode = { "n" }, desc = "Switch to extras mode" },
           ["<C-d>"] = { "filter_disabled", mode = { "n" }, desc = "Filter: disabled" },
           ["<C-n>"] = { "filter_enabled", mode = { "n" }, desc = "Filter: enabled" },
@@ -483,7 +531,7 @@ open_extras_plugins_picker = function()
           ["<C-n>"] = { "filter_enabled", mode = { "n", "i" }, desc = "Filter: enabled" },
           ["<C-x>"] = { "filter_reset", mode = { "n", "i" }, desc = "Filter: reset" },
         },
-        footer = "C-w:write C-y:copy C-e:open M-s:switch C-d/n/x:filter ",
+        footer = " vim.g.enable_extra_plugins │ C-w:write C-y:copy C-e:open M-s:switch C-d/n/x:filter ",
         footer_pos = "center",
       },
       list = {

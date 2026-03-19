@@ -3,27 +3,30 @@
 -- Overridable per-project via .nvim-config.lua (loaded before this file).
 -- All vim.g tables use `or` guard so .nvim-config.lua values take precedence.
 
--- Disabled plugins: core upstream plugins to disable via lazy.nvim spec merging
+-- Disabled plugins: single-file core plugins to disable via lazy.nvim spec merging
 -- Handled by plugins/extra/disablePlugins.lua which returns { name, enabled = false }
+-- For group-level disables, use xx<Name>.lua mute files instead (see enable_extra_plugins).
 -- Override per-project: set vim.g.disabled_plugins in .nvim-config.lua before this runs
 vim.g.disabled_plugins = vim.g.disabled_plugins
   or {
-    -- Core plugins to disable when using snacks equivalents
-    -- TODO: remove from these init list ideally this part should be empty first accept if the plugin itself is define in a single file or define in extras/disable<plugin>.lua
-    "echasnovski/mini.pick", -- using snacks.picker instead (plugins/picker.lua)
-    "echasnovski/mini.extra", -- dependency of mini.pick (plugins/picker.lua)
-    "echasnovski/mini.starter", -- using snacks.dashboard instead (plugins/starter.lua)
-    -- "folke/persistence.nvim", -- session restore in mini.starter (plugins/starter.lua)
-    "jellydn/tiny-term.nvim", -- using snacks.terminal instead (plugins/tiny-term.lua)
-    "echasnovski/mini.files", -- uncomment to use snacks.explorer (plugins/ui.lua)
-    -- "echasnovski/mini.tabline",  -- uncomment to use snacks bufferline (plugins/ui.lua)
+    -- Single-file core plugins with no group owner
+    "jellydn/tiny-term.nvim", -- using snacks.terminal (plugins/tiny-term.lua)
   }
 
 -- Extra plugins to load from lua/plugins/extra/
 -- ⚠️ load ORDER follows the order defined here unless deps override it
 vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
   or {
+    -- UI overrides
     "myUi", -- UI overrides for upstream plugins/ui.lua
+    -- Mute switches for core plugin groups (uncomment to disable)
+    "xxMiniUi", -- mute mini UI/picker/starter (use snacks equivalents)
+    -- "xxMiniCode",        -- mute mini.pairs, mini.ai (coding helpers)
+    -- "xxMini",            -- mute ALL mini.* (do NOT combine with xxMiniUi/xxMiniCode)
+    -- "xxTest",            -- mute test runners (vim-test, neotest)
+    -- "xxRunner",          -- mute task runners (overseer, quick-code-runner, hurl)
+    -- "xxLegacyCopilotAi", -- mute legacy CopilotChat
+    -- Plugin-level extras
     "harpoon",
     "wakatime",
     "avante",
@@ -37,13 +40,15 @@ vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
     "fold-preview",
     "myToggleterm",
     "snacks", -- above myEditor, mySnacks in case need override
+    -- Personal override groups (load after extras they override)
     "myEditor",
     "mySnacks", -- snacks.nvim (picker, dashboard, terminal, explorer, etc.)
     "myCoding",
     "myGit",
     "myAi",
     "myLazyPatcher",
-    "disablePlugins", -- must be last to ensure it can override any plugin spec with `enabled = false`
+    -- Disable mechanism (must be LAST)
+    "disablePlugins",
   }
 
 -- vim.g.lazydev_enabled = false -- uncomment this to load all lua dependencies (get access to vim object) will override one in (myopts - require first)

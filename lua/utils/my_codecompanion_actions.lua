@@ -542,6 +542,12 @@ end
 -- Fetches models from AGD proxy (requires VPN). Produces error notifications when offline.
 function M.toggle_chat_with_picker_dynamic()
   local chat = require("codecompanion").last_chat()
+  -- v19.6.0 note:
+  -- CodeCompanion moved chat editor_context modules to interactions.shared.editor_context.
+  -- If MCP resources are registered into config.interactions.chat.editor_context
+  -- (old mcphub patch behavior), CodeCompanion can try resolving the stale path
+  -- `interactions.chat.editor_context.buffer` and fail. Keep the mcphub patch on
+  -- `config.interactions.shared.editor_context` and pin CodeCompanion to v19.6.0.
 
   if chat then
     -- Chat exists, use built-in adapter change keymap

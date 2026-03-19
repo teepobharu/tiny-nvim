@@ -27,12 +27,10 @@ Because `.nvim-config.lua` runs before `mydefault-nvim-config.lua`, and the defa
 
 ```lua
 vim.g.disabled_plugins = vim.g.disabled_plugins or {
-  "echasnovski/mini.pick",       -- using snacks.picker
-  "echasnovski/mini.extra",      -- dependency of mini.pick
-  "echasnovski/mini.starter",    -- using snacks.dashboard
-  "folke/persistence.nvim",      -- session in mini.starter
+  -- Single-file core plugins with no group owner
   "jellydn/tiny-term.nvim",     -- using snacks.terminal
 }
+-- For group-level disables, use xx<Name>.lua mute files (see enable_extra_plugins)
 ```
 
 ### Per-project override (`.nvim-config.lua`)
@@ -78,6 +76,13 @@ Footer shows current mode. Status column uses highlight colors:
 | `<C-n>` | Toggle filter: enabled only |
 | `<C-x>` | Reset filter (show all) |
 
+**Mode 1 only** (disabled plugins — items are `owner/repo` format):
+
+| Key | Action |
+|-----|--------|
+| `<C-g>` | Open plugin's GitHub page in browser |
+| `<C-r>` | Open plugin's GitHub releases page in browser |
+
 ## .nvim-config.lua Marker System
 
 When `:ProjectSettings` or `:ProjectSettingsReload` runs, it embeds a commented-out copy of `mydefault-nvim-config.lua` between markers:
@@ -93,12 +98,48 @@ When `:ProjectSettings` or `:ProjectSettingsReload` runs, it embeds a commented-
 
 Content outside the markers is preserved on regeneration.
 
+## xx Mute Switch Files
+
+Group-level mute switches for multi-spec core plugin files. Each `xx<Name>.lua` returns `{ "plugin/name", enabled = false }` specs for the **unique** plugins in that core file (shared plugins like which-key are NOT affected).
+
+| File | Mutes | Source |
+|------|-------|--------|
+| `xxMiniUi.lua` | mini.pick, mini.extra, mini.starter, mini.icons, mini.statusline, mini.tabline, mini.bufremove, mini.files, mini.diff | plugins/picker.lua, starter.lua, ui.lua |
+| `xxMiniCode.lua` | mini.pairs, mini.ai | plugins/coding.lua |
+| `xxMini.lua` | ALL mini.* (combines xxMiniUi + xxMiniCode) | meta-mute |
+| `xxTest.lua` | vim-test, neotest | plugins/test.lua |
+| `xxRunner.lua` | overseer, quick-code-runner, hurl | plugins/runner.lua |
+| `xxLegacyCopilotAi.lua` | CopilotChat | plugins/_legacyCopilotai.lua |
+
+### Usage
+
+```lua
+-- In vim.g.enable_extra_plugins (mydefault-nvim-config.lua or .nvim-config.lua)
+"xxMiniUi",          -- active by default: mute mini UI, use snacks instead
+-- "xxTest",          -- uncomment to mute test runners
+-- "xxRunner",        -- uncomment to mute task runners
+```
+
+### Design Rules
+
+- `xx` files only disable **unique** plugins from their source file (not shared ones like which-key)
+- `myUI.lua` keeps its own `enabled = false` entries as a redundant safety net
+- `vim.g.disabled_plugins` holds only single-file plugins with no group owner (e.g., tiny-term)
+- `disablePlugins.lua` must be LAST in `enable_extra_plugins` to act as final authority
+- Do NOT use `xxMini` together with `xxMiniUi`/`xxMiniCode` — pick one level
+
 ## Files
 
 | File | Role |
 |------|------|
 | `lua/plugins/extra/disablePlugins.lua` | Core mechanism: reads `vim.g.disabled_plugins`, returns `enabled=false` specs |
-| `lua/plugins/extra/myUI.lua` | UI overrides for `plugins/ui.lua` (mini.diff keymaps, etc.) |
+| `lua/plugins/extra/xxMiniUi.lua` | Group mute: mini UI/picker/starter plugins |
+| `lua/plugins/extra/xxMiniCode.lua` | Group mute: mini coding helpers |
+| `lua/plugins/extra/xxMini.lua` | Meta mute: all mini.* plugins |
+| `lua/plugins/extra/xxTest.lua` | Group mute: test runners |
+| `lua/plugins/extra/xxRunner.lua` | Group mute: task runners |
+| `lua/plugins/extra/xxLegacyCopilotAi.lua` | Group mute: legacy CopilotChat |
+| `lua/plugins/extra/myUI.lua` | UI overrides + redundant mini disables for its own scope |
 | `lua/config/mydefault-nvim-config.lua` | Global defaults with `or` guards |
 | `lua/plugins/extra/myproject.lua` | `:ProjectSettings` command with marker template |
 
@@ -108,8 +149,10 @@ Content outside the markers is preserved on regeneration.
 - `"disablePlugins"` must be in `vim.g.enable_extra_plugins` to be imported by lazy.lua.
 - Plugin names must match exactly (e.g., `"echasnovski/mini.pick"` not `"mini.pick"`).
 - Changes to `vim.g.disabled_plugins` require Neovim restart (lazy evaluates at startup).
+- Shared plugins (which-key, treesitter, render-markdown) appear in multiple core files — disabling them in any `xx` file would affect all files. Only disable **unique** plugins per group.
 
 ## Related
 
 - [lazy-nvim-config-merging.md](lazy-nvim-config-merging.md) — how lazy.nvim merges spec fragments
+- [rebase-safe-plugin-overrides.md](rebase-safe-plugin-overrides.md) — concise ownership and toggle layering guideline
 - `lua/utils/keyutil.lua` — `isSnackEnabled` flag used for keymap prefix switching
