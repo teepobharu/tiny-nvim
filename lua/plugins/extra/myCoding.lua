@@ -47,8 +47,7 @@ return {
     dependencies = { "fang2hou/blink-copilot" },
     opts = {
       sources = {
-        -- TODO: move from myeditor to here
-        -- default = { "copilot" }, -- dont show it but togglable with c-c
+        -- default = { "copilot" }, -- dont show it but togglable with c-c (see myEditor blink.cmp <C-c> keymap)
         providers = {
           copilot = {
             name = "copilot",

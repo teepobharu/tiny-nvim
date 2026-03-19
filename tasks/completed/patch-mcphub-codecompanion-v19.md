@@ -14,7 +14,7 @@ related:
 
 ## Objective
 
-Upgrade `codecompanion.nvim` from pinned `^18.7.0` to `^19` and patch
+Upgrade `codecompanion.nvim` from pinned `^18.7.0` to exact `v19.6.0` and patch
 `mcphub.nvim` locally using `lazy-local-patcher.nvim` to apply the fixes from
 [PR #279](https://github.com/ravitemer/mcphub.nvim/pull/279), which the
 upstream maintainer has not yet merged.
@@ -28,10 +28,10 @@ wait, we apply it as a local patch via `lazy-local-patcher.nvim`, which
 auto-applies patches before Lazy operations and reverts them before syncing so
 updates still work cleanly.
 
-Current state in `lua/plugins/extra/myAi.lua:217`:
+Current state in `lua/plugins/extra/myAi.lua`:
 
 ```lua
-version = "^18.7.0",  -- pinned to avoid v19 breakage
+version = "19.6.0",  -- exact pin for the patched mcphub integration
 ```
 
 ### v19 Breaking Changes (from PR #279)
@@ -41,7 +41,7 @@ version = "^18.7.0",  -- pinned to avoid v19 breakage
 | Tool callback       | `callback = { table }`               | `callback = function() return { table } end` |
 | Tool cmds handler   | `(agent, args, _, output_handler)`   | `(self, action, opts)`                       |
 | Tool output handler | `(self, agent, cmd, data)`           | `(self, data, meta)`                         |
-| Variables           | `config.interactions.chat.variables` | `config.interactions.chat.editor_context`    |
+| Variables / editor context | `config.interactions.chat.variables` | `v19.3.0`: `config.interactions.chat.editor_context`, `v19.6.0`: `config.interactions.shared.editor_context` |
 | Image helpers       | `helpers.add_image(chat, img)`       | `chat:add_image_message(img)`                |
 | System prompt       | `function(self)`                     | `function(group_config, ctx)`                |
 
@@ -60,7 +60,7 @@ version = "^18.7.0",  -- pinned to avoid v19 breakage
   - Fetched raw diff from `https://github.com/ravitemer/mcphub.nvim/pull/279.diff`
   - Saved as `patches/mcphub.nvim/01-codecompanion-v19-compat.patch` (355 lines)
 - [x] Configure `lazy-local-patcher.nvim` — defaults work correctly (`stdpath("config")/patches` = `~/.config/nvimwt3a/patches` for worktree profile)
-- [x] Update CodeCompanion version pin in `lua/plugins/extra/myAi.lua:216` from `^18.7.0` to `^19`
+- [x] Update CodeCompanion version pin in `lua/plugins/extra/myAi.lua` from `^18.7.0` to exact `19.6.0`
 - [x] Verified patch applies cleanly against mcphub.nvim HEAD (`7cd5db3`, tag `v6.2.0-18`)
 - [ ] Run `:Lazy sync` to upgrade CodeCompanion and verify patches apply cleanly
 - [x] Test MCPHub integration: tools (`@server__tool`), variables (`#mcp:resource`), slash commands (`/mcp:prompt`)
@@ -110,7 +110,7 @@ NVIM_APPNAME=nvimwt3a nvim
 ### Checklist
 
 - [x] No errors on Neovim startup related to mcphub or codecompanion
-- [x] `:Lazy log codecompanion.nvim` shows a v19.x.x version
+- [x] `:Lazy log codecompanion.nvim` shows the pinned target version after sync
 - [x] `:MCPHub` opens without errors
 - [x] In CodeCompanion chat, typing `@` shows MCP tool entries
 - [x] In CodeCompanion chat, typing `#mcp` shows MCP resource variables

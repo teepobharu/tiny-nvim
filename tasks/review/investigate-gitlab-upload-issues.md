@@ -175,7 +175,7 @@ Result: HTTP 201 Created ✅
 2. ⚠️ Working command/tool configuration - **Workaround needed** (use curl directly)
 3. 📝 Documentation updates for:
    - [~/dotfilesai/AI-docs.md](../../../dotfilesai/AI-docs.md)
-   - [~/dotfiles/claude/docs/tools/gitlab/glab-cli.md](../../../../claude/docs/tools/gitlab/glab-cli.md)
+   - [~/dotfiles/ai/agents/docs/tools/gitlab/glab-cli.md](../../../../ai/agents/docs/tools/gitlab/glab-cli.md)
 
 ## Cleanup
 
