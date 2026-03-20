@@ -1,7 +1,7 @@
-diff --git a/lua/mcphub/extensions/codecompanion/core.lua b/lua/mcphub/extensions/codecompanion/core.lua
-index 387f05e..28e9c57 100644
---- a/lua/mcphub/extensions/codecompanion/core.lua
-+++ b/lua/mcphub/extensions/codecompanion/core.lua
+diff --git i/lua/mcphub/extensions/codecompanion/core.lua w/lua/mcphub/extensions/codecompanion/core.lua
+index 93b27ab..28e9c57 100644
+--- i/lua/mcphub/extensions/codecompanion/core.lua
++++ w/lua/mcphub/extensions/codecompanion/core.lua
 @@ -8,7 +8,7 @@ local shared = require("mcphub.extensions.shared")
  ---@param output_handler function Callback for asynchronous calls
  ---@param context MCPHub.ToolCallContext
@@ -33,7 +33,7 @@ index 387f05e..28e9c57 100644
      images
  )
      local config = require("codecompanion.config")
--    local helpers = require("codecompanion.interactions.chat.helpers")
+-    local helpers = require("codecompanion.strategies.chat.helpers")
      local show_result_in_chat = opts.show_result_in_chat == true
      local text = llm_msg
      local formatted_name = opts.format_tool and opts.format_tool(display_name, tool) or display_name
@@ -111,12 +111,29 @@ index 387f05e..28e9c57 100644
                  to_llm or fallback_to_llm,
                  false,
                  has_function_calling,
-diff --git a/lua/mcphub/extensions/codecompanion/slash_commands.lua b/lua/mcphub/extensions/codecompanion/slash_commands.lua
-index 6444ab4..077c407 100644
---- a/lua/mcphub/extensions/codecompanion/slash_commands.lua
-+++ b/lua/mcphub/extensions/codecompanion/slash_commands.lua
-@@ -14,9 +14,8 @@ function M.register()
-     local slash_commands = config.interactions.chat.slash_commands
+diff --git i/lua/mcphub/extensions/codecompanion/init.lua w/lua/mcphub/extensions/codecompanion/init.lua
+index 4ec9cb6..2f780bc 100644
+--- i/lua/mcphub/extensions/codecompanion/init.lua
++++ w/lua/mcphub/extensions/codecompanion/init.lua
+@@ -24,7 +24,7 @@ function M.setup(opts)
+     local tools = require("mcphub.extensions.codecompanion.tools")
+     ---Add @mcp group with `use_mcp_tool` and `access_mcp_resource` tools
+     local static_tools = tools.create_static_tools(opts)
+-    cc_config.strategies.chat.tools = vim.tbl_deep_extend("force", cc_config.strategies.chat.tools, static_tools)
++    cc_config.interactions.chat.tools = vim.tbl_deep_extend("force", cc_config.interactions.chat.tools, static_tools)
+ 
+     ---Make each MCP server into groups and each tool from MCP server into function tools with proper namespacing
+     tools.setup_dynamic_tools(opts)
+diff --git i/lua/mcphub/extensions/codecompanion/slash_commands.lua w/lua/mcphub/extensions/codecompanion/slash_commands.lua
+index 407c783..077c407 100644
+--- i/lua/mcphub/extensions/codecompanion/slash_commands.lua
++++ w/lua/mcphub/extensions/codecompanion/slash_commands.lua
+@@ -11,12 +11,11 @@ function M.register()
+     end
+ 
+     local prompts = hub:get_prompts()
+-    local slash_commands = config.strategies.chat.slash_commands
++    local slash_commands = config.interactions.chat.slash_commands
  
      -- Remove existing MCP slash commands
 -    for key, value in pairs(slash_commands) do
@@ -139,7 +156,7 @@ index 6444ab4..077c407 100644
  
                          -- Handle images
                          if output.images and #output.images > 0 then
--                            local helpers = require("codecompanion.interactions.chat.helpers")
+-                            local helpers = require("codecompanion.strategies.chat.helpers")
                              for _, image in ipairs(output.images) do
                                  local id = string.format("mcp-%s", os.time())
 -                                helpers.add_image(self, {
@@ -147,10 +164,10 @@ index 6444ab4..077c407 100644
                                      id = id,
                                      base64 = image.data,
                                      mimetype = image.mimeType,
-diff --git a/lua/mcphub/extensions/codecompanion/tools.lua b/lua/mcphub/extensions/codecompanion/tools.lua
-index 7712c5d..7c9474d 100644
---- a/lua/mcphub/extensions/codecompanion/tools.lua
-+++ b/lua/mcphub/extensions/codecompanion/tools.lua
+diff --git i/lua/mcphub/extensions/codecompanion/tools.lua w/lua/mcphub/extensions/codecompanion/tools.lua
+index b61729b..7cee313 100644
+--- i/lua/mcphub/extensions/codecompanion/tools.lua
++++ w/lua/mcphub/extensions/codecompanion/tools.lua
 @@ -25,17 +25,17 @@ end
  ---@param has_function_calling boolean
  ---@param opts MCPHub.Extensions.CodeCompanionConfig
@@ -203,7 +220,7 @@ index 7712c5d..7c9474d 100644
      end
  end
  
-@@ -137,7 +137,7 @@ function M.create_static_tools(opts)
+@@ -136,7 +136,7 @@ function M.create_static_tools(opts)
                  id = "mcp_static:mcp",
                  description = " Call tools and resources from MCP servers with:\n\n - `use_mcp_tool`\n - `access_mcp_resource`\n",
                  hide_in_help_window = false,
@@ -212,7 +229,7 @@ index 7712c5d..7c9474d 100644
                      local hub = require("mcphub").get_hub_instance()
                      if not hub then
                          vim.notify("MCP Hub is not initialized", vim.log.levels.WARN)
-@@ -170,15 +170,21 @@ function M.create_static_tools(opts)
+@@ -169,15 +169,21 @@ function M.create_static_tools(opts)
              hide_in_help_window = true,
              visible = false,
              ---@class MCPHub.Extensions.CodeCompanionTool: CodeCompanion.Agent.Tool
@@ -243,7 +260,25 @@ index 7712c5d..7c9474d 100644
          }
          table.insert(tools.groups.mcp.tools, action_name)
      end
-@@ -277,19 +283,23 @@ function M.register(opts)
+@@ -187,7 +193,7 @@ end
+ 
+ -- Cleanup dynamic tools and groups
+ local function cleanup_dynamic_items(config)
+-    local tools = config.strategies.chat.tools
++    local tools = config.interactions.chat.tools
+     local groups = tools.groups or {}
+ 
+     -- Clean up existing MCP dynamic tools
+@@ -222,7 +228,7 @@ function M.register(opts)
+     -- Cleanup existing dynamic items
+     cleanup_dynamic_items(config)
+ 
+-    local tools = config.strategies.chat.tools
++    local tools = config.interactions.chat.tools
+     local groups = tools.groups or {}
+ 
+     -- Get servers and process in one go
+@@ -276,19 +282,23 @@ function M.register(opts)
                          description = tool.description,
                          hide_in_help_window = true,
                          visible = opts.show_server_tools_in_chat == true,
@@ -279,7 +314,7 @@ index 7712c5d..7c9474d 100644
                      }
                  end
              end
-@@ -328,7 +338,7 @@ function M.register(opts)
+@@ -327,7 +337,7 @@ function M.register(opts)
                          )
                      ),
                      tools = tool_names,
@@ -288,15 +323,15 @@ index 7712c5d..7c9474d 100644
                          if custom_instructions and custom_instructions ~= "" then
                              return custom_instructions
                          end
-diff --git a/lua/mcphub/extensions/codecompanion/variables.lua b/lua/mcphub/extensions/codecompanion/variables.lua
-index 2a15a55..75820e9 100644
---- a/lua/mcphub/extensions/codecompanion/variables.lua
-+++ b/lua/mcphub/extensions/codecompanion/variables.lua
+diff --git i/lua/mcphub/extensions/codecompanion/variables.lua w/lua/mcphub/extensions/codecompanion/variables.lua
+index 08f02a5..dff525f 100644
+--- i/lua/mcphub/extensions/codecompanion/variables.lua
++++ w/lua/mcphub/extensions/codecompanion/variables.lua
 @@ -14,18 +14,28 @@ function M.register(opts)
          return
      end
  
--    local cc_variables = config.interactions.chat.variables
+-    local cc_variables = config.strategies.chat.variables
 +    local interactions = config.interactions or {}
 +    local cc_editor_context = (interactions.shared and interactions.shared.editor_context)
 +        or (interactions.chat and interactions.chat.editor_context)
@@ -347,7 +382,7 @@ index 2a15a55..75820e9 100644
  
                  -- Handle images
                  if result.images and #result.images > 0 then
--                    local helpers = require("codecompanion.interactions.chat.helpers")
+-                    local helpers = require("codecompanion.strategies.chat.helpers")
                      for _, image in ipairs(result.images) do
                          local id = string.format("mcp-%s", os.time())
 -                        helpers.add_image(self.Chat, {
