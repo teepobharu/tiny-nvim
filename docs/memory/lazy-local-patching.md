@@ -47,7 +47,7 @@ Patches are applied in sorted order within a plugin directory.
 
 | #   | Patch file                                              | Plugin        | Applied on version      | Date       | Why                                                                               | Upstream                                                            |
 | --- | ------------------------------------------------------- | ------------- | ----------------------- | ---------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| 1   | `patches/mcphub.nvim/01-codecompanion-v19-compat.patch` | `mcphub.nvim` | `v6.2.0-18` (`7cd5db3`) | 2026-03-16 | CodeCompanion v19 renamed `variables` → `editor_context`, changed tool/image APIs | [PR #279](https://github.com/ravitemer/mcphub.nvim/pull/279) — Open |
+| 1   | `patches/mcphub.nvim/01-codecompanion-v19-compat.patch` | `mcphub.nvim` | `v6.2.0` (`163b3ad`) | 2026-03-21 | CodeCompanion v19 renamed `variables` → `editor_context`, changed tool/image APIs | [PR #279](https://github.com/ravitemer/mcphub.nvim/pull/279) — Open |
 
 ### Patch 1: mcphub.nvim CodeCompanion v19 compatibility
 
@@ -60,14 +60,14 @@ test message: @{mcp} what's available mcp
 
 | File                                          | Change                                                                                                                                                         |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `extensions/codecompanion/variables.lua`      | `config.interactions.chat.variables` → editor context registration; use `(config.interactions.shared and config.interactions.shared.editor_context) or config.interactions.chat.editor_context` for `v19.3.0`/`v19.6.0` compatibility |
+| `extensions/codecompanion/variables.lua`      | `config.strategies.chat.variables` → editor context registration; use `(config.strategies.shared and config.strategies.shared.editor_context) or config.strategies.chat.editor_context` for compatibility |
 | `extensions/codecompanion/tools.lua`          | Tool `callback` from table → function; `cmds` handler signature `(agent, args, _, output_handler)` → `(self, action, opts)`; `system_prompt` signature updated |
 | `extensions/codecompanion/core.lua`           | Output handler signature `(self, agent, cmd, data)` → `(self, data, meta)`; `helpers.add_image()` → `chat:add_image_message()`                                 |
 | `extensions/codecompanion/slash_commands.lua` | Remove `id` field from registrations; cleanup by key prefix; image helper update                                                                               |
 
 **Config change**: CodeCompanion is pinned to exact `v19.6.0` (`af7f1042a424e17ab49cef93442f33a55d514de6`) in [lua/plugins/extra/myAi.lua](lua/plugins/extra/myAi.lua).
 
-**v19.6.0 note**: CodeCompanion moved chat editor context modules under `interactions.shared.editor_context` and merges any user `interactions.chat.editor_context` overrides into that shared table. If mcphub writes MCP resources back into only `config.interactions.chat.editor_context`, CodeCompanion can later try resolving stale paths like `interactions.chat.editor_context.buffer` and fail. Use a compatibility fallback so the same patch works on both `v19.3.0` and `v19.6.0`.
+**v19.6.0 note**: CodeCompanion moved chat editor context modules under `strategies.shared.editor_context` and merges any user `strategies.chat.editor_context` overrides into that shared table. If mcphub writes MCP resources back into only `config.strategies.chat.editor_context`, CodeCompanion can later try resolving stale paths. Use a compatibility fallback so the same patch works on both paths.
 
 **Monitor task**: [tasks/open/monitor-mcphub-pr279-merge.md](tasks/open/monitor-mcphub-pr279-merge.md) — once PR #279 is merged upstream, remove this patch.
 
@@ -154,4 +154,4 @@ When the upstream fix is merged:
 
 ---
 
-**Last Updated**: 2026-03-16
+**Last Updated**: 2026-03-21

@@ -364,8 +364,8 @@ M.keymaps = {
       },
       {
         companion_prefix .. "mm",
-        "<cmd>CodeCompanion /short-staged-commit-msg<cr>",
-        desc = "Code Companion - Git commit (short staged)",
+        "<cmd>CodeCompanion /staged-commit<cr>",
+        desc = "Code Companion Jelly - Git staged commit message",
       },
       {
         companion_prefix .. "mM",

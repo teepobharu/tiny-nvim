@@ -25,7 +25,7 @@ return {
     "nvim-treesitter/nvim-treesitter",
     -- version = false, -- last release is way too old and doesn't work on Windows
     dependencies = {
-      "nvim-treesitter/nvim-treesitter-textobjects", -- nv2 has this : add selecting around (vaf : function) or sentence [], {} block
+      { "nvim-treesitter/nvim-treesitter-textobjects", branch = "main" }, -- nv2 has this : add selecting around (vaf : function) or sentence [], {} block
     },
   },
   { "nvimdev/dashboard-nvim", lazy = true, enabled = false },
