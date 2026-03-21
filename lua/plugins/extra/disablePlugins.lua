@@ -18,9 +18,11 @@
 --       <Tab>/<C-a>  select items     <CR>   copy selected names
 --       <C-y>        copy as config   <C-w>  write to .nvim-config.lua
 --       <C-e>        open config      <M-s>  switch mode
---       <C-d>/<C-n>  filter disabled/enabled  <C-x> reset filter
+--       <M-o>        open dir/file    <C-d>/<C-n>  filter disabled/enabled
+--       <C-x>        reset filter
 --     Mode 1 only:
---       <C-g>        open GitHub page   <C-r>  open GitHub releases
+--       <M-g>        open GitHub page   <M-r>  open GitHub releases
+--       <M-k>        open DeepWiki page
 
 local disabled = vim.g.disabled_plugins or {}
 
@@ -73,6 +75,12 @@ local function get_config_path()
   return vim.fn.getcwd() .. "/.nvim-config.lua"
 end
 
+--- Open .nvim-config.lua in a vertical split
+---@param filepath string
+local function open_config_in_vsplit(filepath)
+  vim.cmd("vsplit " .. vim.fn.fnameescape(filepath))
+end
+
 --- Write a vim.g assignment block into .nvim-config.lua
 --- Appends or replaces the vim.g.<var_name> block
 ---@param var_name string e.g. "disabled_plugins" or "enable_extra_plugins"
@@ -98,22 +106,38 @@ local function write_config_block(var_name, values)
   end
 
   local new_content
+  local initialized_via_project_settings = false
   if existing and existing ~= "" then
     -- Try to find and replace existing vim.g.<var_name> = { ... } block
     -- Pattern: vim.g.<var_name> = {\n...\n}
     local pattern = vim.pesc(full_var) .. "%s*=%s*%b{}"
-    local replaced = existing:gsub(pattern, function()
+    -- TODO: revise if still want this behavior to override whole block
+    -- does also modified commented block
+    local replaced = false and existing:gsub(pattern, function()
       return new_block
     end)
-    if replaced ~= existing then
+    if replaced and replaced ~= existing then
       new_content = replaced
     else
       -- Not found, append at end
       new_content = existing:gsub("%s*$", "") .. "\n\n" .. new_block .. "\n"
     end
   else
-    -- New file
-    new_content = "-- Project-specific Neovim configuration\n\n" .. new_block .. "\n"
+    -- New file: initialize with full ProjectSettings template, then append our block.
+    -- :ProjectSettings creates .nvim-config.lua with marker-based reference + opens it in edit + .ignore vsplit.
+    -- We run it first, then re-read and append the config block, then reload the buffer.
+    vim.cmd "ProjectSettings"
+    -- Re-read the file that ProjectSettings just created
+    local f2 = io.open(filepath, "r")
+    if f2 then
+      existing = f2:read "*a"
+      f2:close()
+      new_content = existing:gsub("%s*$", "") .. "\n\n" .. new_block .. "\n"
+    else
+      -- Fallback if ProjectSettings didn't create the file
+      new_content = "-- Project-specific Neovim configuration\n\n" .. new_block .. "\n"
+    end
+    initialized_via_project_settings = true
   end
 
   local out = io.open(filepath, "w")
@@ -123,6 +147,15 @@ local function write_config_block(var_name, values)
   end
   out:write(new_content)
   out:close()
+
+  if initialized_via_project_settings then
+    -- :ProjectSettings already opened the file + .ignore vsplit; just reload and go to end
+    vim.cmd("edit " .. vim.fn.fnameescape(filepath))
+    vim.cmd "normal! G"
+  else
+    open_config_in_vsplit(filepath)
+    vim.cmd "normal! G"
+  end
   return true
 end
 
@@ -156,6 +189,19 @@ local function github_url_for(plugin_name)
   return nil
 end
 
+--- Derive DeepWiki URL from a plugin name like "owner/repo"
+---@param plugin_name string e.g. "folke/snacks.nvim"
+---@return string|nil url e.g. "https://deepwiki.com/folke/snacks.nvim"
+local function deepwiki_url_for(plugin_name)
+  if not plugin_name then
+    return nil
+  end
+  if plugin_name:match "^[%w%-_.]+/[%w%-_.]+$" then
+    return "https://deepwiki.com/" .. plugin_name
+  end
+  return nil
+end
+
 -- Forward declaration for cross-referencing between the two pickers
 local open_extras_plugins_picker
 
@@ -170,7 +216,7 @@ local function open_disabled_plugins_picker()
     return
   end
 
-  -- Build disabled lookup
+  -- Build disabled lookup (vim.g.disabled_plugins uses owner/repo format)
   local disabled_set = {}
   for _, d in ipairs(disabled) do
     disabled_set[d] = true
@@ -182,21 +228,71 @@ local function open_disabled_plugins_picker()
     source = "project_setting_disabled",
     title = "vim.g.disabled_plugins",
     finder = function()
-      local plugins = lazy.plugins()
-      local plugin_names = {}
-      for _, p in ipairs(plugins) do
+      -- Collect all plugins: enabled (from lazy.plugins()) + disabled (from spec.disabled)
+      -- Three disable states:
+      --   "disabled"      = in vim.g.disabled_plugins (user-configurable via this picker)
+      --   "disabled(spec)"= disabled by spec `enabled = false` in plugin files (not user-configurable)
+      --   "enabled"       = active
+      local all_plugins = {} -- { name = owner/repo, short_name = short, dir = path, from_spec_disabled = bool }
+      local seen = {}
+
+      -- Enabled plugins from lazy.plugins()
+      for _, p in ipairs(lazy.plugins()) do
         local name = p[1] or p.name
-        if name then
-          table.insert(plugin_names, name)
+        if name and not seen[name] then
+          seen[name] = true
+          table.insert(all_plugins, { name = name, short_name = p.name, dir = p.dir, from_spec_disabled = false })
         end
       end
-      table.sort(plugin_names)
+
+      -- Disabled plugins from lazy spec (not in lazy.plugins())
+      -- This includes both vim.g.disabled_plugins entries AND plugins with `enabled = false` in their spec
+      local spec_disabled = require("lazy.core.config").spec
+      if spec_disabled and spec_disabled.disabled then
+        for _, p in pairs(spec_disabled.disabled) do
+          local name = p[1] or p.name
+          if name and not seen[name] then
+            seen[name] = true
+            table.insert(all_plugins, { name = name, short_name = p.name, dir = p.dir, from_spec_disabled = true })
+          end
+        end
+      end
+
+      table.sort(all_plugins, function(a, b)
+        return a.name < b.name
+      end)
 
       local items = {}
-      for _, name in ipairs(plugin_names) do
-        local is_disabled = disabled_set[name] ~= nil
-        local status_label = is_disabled and "disabled" or "enabled"
+      for _, plugin in ipairs(all_plugins) do
+        local name = plugin.name
+        local is_user_disabled = disabled_set[name] ~= nil
+        local is_spec_disabled = plugin.from_spec_disabled and not is_user_disabled
+        local is_disabled = is_user_disabled or is_spec_disabled
+        local dir_exists = plugin.dir and vim.loop.fs_stat(plugin.dir) ~= nil
+        local is_missing = not dir_exists
 
+        local status_label, status_hl
+        if is_user_disabled and is_missing then
+          status_label = "disabled ~missing"
+          status_hl = "DiagnosticWarn"
+        elseif is_user_disabled then
+          status_label = "disabled"
+          status_hl = "DiagnosticError"
+        elseif is_spec_disabled and is_missing then
+          status_label = "disabled(spec) ~missing"
+          status_hl = "DiagnosticWarn"
+        elseif is_spec_disabled then
+          status_label = "disabled(spec)"
+          status_hl = "DiagnosticHint"
+        elseif is_missing then
+          status_label = "enabled ~missing"
+          status_hl = "DiagnosticWarn"
+        else
+          status_label = "enabled"
+          status_hl = "DiagnosticOk"
+        end
+
+        -- Filter: "disabled" shows both user-disabled and spec-disabled
         local show = true
         if filter_mode == "disabled" then
           show = is_disabled
@@ -209,7 +305,13 @@ local function open_disabled_plugins_picker()
             text = name .. " -- " .. status_label,
             data = name,
             plugin_name = name,
+            plugin_dir = plugin.dir,
             is_disabled = is_disabled,
+            is_user_disabled = is_user_disabled,
+            is_spec_disabled = is_spec_disabled,
+            is_missing = is_missing,
+            status_label = status_label,
+            status_hl = status_hl,
           })
         end
       end
@@ -217,13 +319,10 @@ local function open_disabled_plugins_picker()
     end,
     format = function(item)
       local name = item.plugin_name or item.data or item.text
-      local is_disabled = item.is_disabled
-      local status_text = is_disabled and "disabled" or "enabled"
-      local status_hl = is_disabled and "DiagnosticError" or "DiagnosticOk"
       return {
         { name, "Normal" },
         { " -- ", "Comment" },
-        { status_text, status_hl },
+        { item.status_label, item.status_hl },
       }
     end,
     layout = {
@@ -299,6 +398,31 @@ local function open_disabled_plugins_picker()
           Snacks.notify("No GitHub URL for: " .. item.data, { title = "disabled_plugins", level = "WARN" })
         end
       end,
+      open_deepwiki = function(picker)
+        local item = picker:current()
+        if not item or not item.data then
+          return
+        end
+        local url = deepwiki_url_for(item.data)
+        if url then
+          vim.ui.open(url)
+        else
+          Snacks.notify("No DeepWiki URL for: " .. item.data, { title = "disabled_plugins", level = "WARN" })
+        end
+      end,
+      open_dir = function(picker)
+        local item = picker:current()
+        if not item or not item.plugin_dir then
+          Snacks.notify("No plugin directory available", { title = "disabled_plugins", level = "WARN" })
+          return
+        end
+        if not vim.loop.fs_stat(item.plugin_dir) then
+          Snacks.notify("Directory does not exist: " .. item.plugin_dir, { title = "disabled_plugins", level = "WARN" })
+          return
+        end
+        picker:close()
+        vim.cmd("edit " .. vim.fn.fnameescape(item.plugin_dir))
+      end,
       switch_mode = function(picker)
         picker:close()
         vim.schedule(open_extras_plugins_picker)
@@ -327,14 +451,16 @@ local function open_disabled_plugins_picker()
           ["<C-y>"] = { "copy_config", mode = { "n", "i" }, desc = "Copy as config block" },
           ["<C-w>"] = { "write_config", mode = { "n", "i" }, desc = "Write to .nvim-config.lua" },
           ["<C-e>"] = { "open_config", mode = { "n", "i" }, desc = "Open .nvim-config.lua" },
-          ["<C-g>"] = { "open_github", mode = { "n", "i" }, desc = "Open GitHub page" },
-          ["<C-r>"] = { "open_releases", mode = { "n", "i" }, desc = "Open GitHub releases" },
+          ["<M-o>"] = { "open_dir", mode = { "n", "i" }, desc = "Open plugin dir in editor" },
+          ["<M-g>"] = { "open_github", mode = { "n", "i" }, desc = "Open GitHub page" },
+          ["<M-r>"] = { "open_releases", mode = { "n", "i" }, desc = "Open GitHub releases" },
+          ["<M-k>"] = { "open_deepwiki", mode = { "n", "i" }, desc = "Open DeepWiki page" },
           ["<M-s>"] = { "switch_mode", mode = { "n", "i" }, desc = "Switch to extras mode" },
           ["<C-d>"] = { "filter_disabled", mode = { "n", "i" }, desc = "Filter: disabled" },
           ["<C-n>"] = { "filter_enabled", mode = { "n", "i" }, desc = "Filter: enabled" },
           ["<C-x>"] = { "filter_reset", mode = { "n", "i" }, desc = "Filter: reset" },
         },
-        footer = " vim.g.disabled_plugins │ C-w:write C-y:copy C-g:github C-r:releases M-s:switch ",
+        footer = "M-s switch, M-o dir, C-d/n/x filter, C-w write, C-y copy, M-g/r/k gh/rel/dws",
         footer_pos = "center",
       },
       list = {
@@ -342,8 +468,10 @@ local function open_disabled_plugins_picker()
           ["<C-y>"] = { "copy_config", mode = { "n" }, desc = "Copy as config block" },
           ["<C-w>"] = { "write_config", mode = { "n" }, desc = "Write to .nvim-config.lua" },
           ["<C-e>"] = { "open_config", mode = { "n" }, desc = "Open .nvim-config.lua" },
-          ["<C-g>"] = { "open_github", mode = { "n" }, desc = "Open GitHub page" },
-          ["<C-r>"] = { "open_releases", mode = { "n" }, desc = "Open GitHub releases" },
+          ["<M-o>"] = { "open_dir", mode = { "n" }, desc = "Open plugin dir in editor" },
+          ["<M-g>"] = { "open_github", mode = { "n" }, desc = "Open GitHub page" },
+          ["<M-r>"] = { "open_releases", mode = { "n" }, desc = "Open GitHub releases" },
+          ["<M-k>"] = { "open_deepwiki", mode = { "n" }, desc = "Open DeepWiki page" },
           ["<M-s>"] = { "switch_mode", mode = { "n" }, desc = "Switch to extras mode" },
           ["<C-d>"] = { "filter_disabled", mode = { "n" }, desc = "Filter: disabled" },
           ["<C-n>"] = { "filter_enabled", mode = { "n" }, desc = "Filter: enabled" },
@@ -498,6 +626,20 @@ open_extras_plugins_picker = function()
         picker:close()
         vim.cmd("edit " .. vim.fn.fnameescape(get_config_path()))
       end,
+      open_dir = function(picker)
+        local item = picker:current()
+        if not item or not item.data then
+          return
+        end
+        local extras_dir = vim.fn.stdpath "config" .. "/lua/plugins/extra"
+        local filepath = extras_dir .. "/" .. item.data .. ".lua"
+        if vim.loop.fs_stat(filepath) then
+          picker:close()
+          vim.cmd("edit " .. vim.fn.fnameescape(filepath))
+        else
+          Snacks.notify("File does not exist: " .. filepath, { title = "enable_extra_plugins", level = "WARN" })
+        end
+      end,
       switch_mode = function(picker)
         picker:close()
         vim.schedule(open_disabled_plugins_picker)
@@ -526,12 +668,13 @@ open_extras_plugins_picker = function()
           ["<C-y>"] = { "copy_config", mode = { "n", "i" }, desc = "Copy as config block" },
           ["<C-w>"] = { "write_config", mode = { "n", "i" }, desc = "Write to .nvim-config.lua" },
           ["<C-e>"] = { "open_config", mode = { "n", "i" }, desc = "Open .nvim-config.lua" },
+          ["<M-o>"] = { "open_dir", mode = { "n", "i" }, desc = "Open extra file in editor" },
           ["<M-s>"] = { "switch_mode", mode = { "n", "i" }, desc = "Switch to disabled mode" },
           ["<C-d>"] = { "filter_disabled", mode = { "n", "i" }, desc = "Filter: disabled" },
           ["<C-n>"] = { "filter_enabled", mode = { "n", "i" }, desc = "Filter: enabled" },
           ["<C-x>"] = { "filter_reset", mode = { "n", "i" }, desc = "Filter: reset" },
         },
-        footer = " vim.g.enable_extra_plugins │ C-w:write C-y:copy C-e:open M-s:switch C-d/n/x:filter ",
+        footer = "M-s switch, M-o open, C-w:write C-y:copy filter(C-d,n,x)",
         footer_pos = "center",
       },
       list = {
@@ -539,6 +682,7 @@ open_extras_plugins_picker = function()
           ["<C-y>"] = { "copy_config", mode = { "n" }, desc = "Copy as config block" },
           ["<C-w>"] = { "write_config", mode = { "n" }, desc = "Write to .nvim-config.lua" },
           ["<C-e>"] = { "open_config", mode = { "n" }, desc = "Open .nvim-config.lua" },
+          ["<M-o>"] = { "open_dir", mode = { "n" }, desc = "Open extra file in editor" },
           ["<M-s>"] = { "switch_mode", mode = { "n" }, desc = "Switch to disabled mode" },
           ["<C-d>"] = { "filter_disabled", mode = { "n" }, desc = "Filter: disabled" },
           ["<C-n>"] = { "filter_enabled", mode = { "n" }, desc = "Filter: enabled" },
@@ -562,5 +706,19 @@ end, { desc = "Browse plugins to disable/enable (snacks picker)" })
 vim.api.nvim_create_user_command("ProjectSettingEditPicker", function()
   vim.schedule(open_disabled_plugins_picker)
 end, { desc = "Edit project plugin settings (disabled/extras) via snacks picker" })
+
+-- Map localleader mappings (normal mode)
+vim.keymap.set(
+  "n",
+  "<localleader>rsd",
+  ":ProjectSettingEditPicker<CR>",
+  { noremap = true, silent = true, desc = "ProjectSettingEditPicker (disabled/extras)" }
+)
+vim.keymap.set(
+  "n",
+  "<localleader>rsN",
+  ":ProjectSettings<CR>",
+  { noremap = true, silent = true, desc = "ProjectSettings Init/Update" }
+)
 
 return specs

@@ -1,22 +1,22 @@
 ----- MY OVERRIDE SETTINGS ------
 -- Global defaults for personal Neovim config.
 -- Overridable per-project via .nvim-config.lua (loaded before this file).
--- All vim.g tables use `or` guard so .nvim-config.lua values take precedence.
+-- Use these commands to configure the project easily
+-- :ProjectSettings
+-- :ProjectSettingEditPicker
 
 -- Disabled plugins: single-file core plugins to disable via lazy.nvim spec merging
 -- Handled by plugins/extra/disablePlugins.lua which returns { name, enabled = false }
 -- For group-level disables, use xx<Name>.lua mute files instead (see enable_extra_plugins).
 -- Override per-project: set vim.g.disabled_plugins in .nvim-config.lua before this runs
-vim.g.disabled_plugins = vim.g.disabled_plugins
-  or {
+vim.g.disabled_plugins = vim.g.disabled_plugins or {
     -- Single-file core plugins with no group owner
     "jellydn/tiny-term.nvim", -- using snacks.terminal (plugins/tiny-term.lua)
   }
 
 -- Extra plugins to load from lua/plugins/extra/
 -- ⚠️ load ORDER follows the order defined here unless deps override it
-vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
-  or {
+vim.g.enable_extra_plugins = vim.g.enable_extra_plugins or {
     -- UI overrides
     "myUi", -- UI overrides for upstream plugins/ui.lua
     -- Mute switches for core plugin groups (uncomment to disable)
@@ -61,7 +61,10 @@ vim.lsp.enable {
   "gitlablsp",
   "markdown",
   "yamlls",
-  -- 'eslint'
+  -- 'eslint' -- oxlint --**disableInit
 }
-
+-- ~/.config/nvim3_jelly_tinynvim/lua/config/options.lua
+-- ~/.config/nvim3_jelly_tinynvim/lua/config/myopts.lua
+-- vim.opt.tabstop = 2 -- show tab as n<space> default 8 ?
+-- vim.opt.shiftwidth = 2 -- ts_ls format
 vim.g.disable_autoformat = true

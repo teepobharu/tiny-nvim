@@ -9,6 +9,7 @@ local project_setting = vim.fn.getcwd() .. "/.nvim-config.lua"
 if vim.loop.fs_stat(project_setting) then
   -- Read the file and run it with pcall to catch any errors
   local ok, err = pcall(dofile, project_setting)
+  vim.print("Loaded project setting: " .. project_setting)
   if not ok then
     vim.notify("Error loading project setting: " .. err, vim.log.levels.ERROR)
   end
