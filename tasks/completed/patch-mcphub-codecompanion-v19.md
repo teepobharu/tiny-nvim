@@ -3,7 +3,7 @@ title: "Patch mcphub.nvim for CodeCompanion v19 compatibility"
 status: review
 priority: high
 created: 2026-03-15
-updated: 2026-03-16
+updated: 2026-03-21
 related:
   - [MCPHub config](lua/plugins/extra/myAi.lua)
   - [MCPHub memory](docs/memory/mcphub.md)
@@ -47,6 +47,7 @@ version = "19.6.0",  -- exact pin for the patched mcphub integration
 
 ### Files to patch in mcphub.nvim
 
+- `lua/mcphub/extensions/codecompanion/init.lua` (strategies → interactions)
 - `lua/mcphub/extensions/codecompanion/tools.lua`
 - `lua/mcphub/extensions/codecompanion/core.lua`
 - `lua/mcphub/extensions/codecompanion/variables.lua`
@@ -89,22 +90,45 @@ accessible without errors. Also verify Lazy can still sync mcphub.nvim cleanly.
 ### Commands
 
 ```bash
-# Test in the worktree profile (isolated from main daily-driver)
-NVIM_APPNAME=nvimwt3a nvim
+# Start Neovim (main profile or worktree)
+NVIM_APPNAME=nvim3_jelly_tinynvim nvim
 ```
 
 ```vim
-" Check CodeCompanion version is v19+
+" 1. Check CodeCompanion version is v19+
 :Lazy log codecompanion.nvim
 
-" Check patch was applied
+" 2. Verify patch is applied (check mcphub plugin has local changes)
+:!git -C ~/.local/share/nvim3_jelly_tinynvim/lazy/mcphub.nvim diff --stat
+
+" 3. Verify the patched init.lua uses 'interactions' not 'strategies'
+:!grep -n 'interactions\|strategies' ~/.local/share/nvim3_jelly_tinynvim/lazy/mcphub.nvim/lua/mcphub/extensions/codecompanion/init.lua
+
+" 4. Force re-apply patch (if needed after Lazy sync)
 :lua require("lazy-local-patcher").apply_all()
 
-" Open MCPHub to confirm servers running
+" 5. Open MCPHub to confirm servers running
 :MCPHub
 
-" Open CodeCompanion chat and check for MCP tools
+" 6. Open CodeCompanion chat and test MCP integration
 :CodeCompanionChat
+" Then type: @{mcp} what's available mcp
+" Then type: # and look for mcp: entries
+" Then type: / and look for mcp: entries
+
+" 7. Verify no 'strategies' nil errors in messages
+:messages
+
+" 8. Test Lazy update cycle (should revert patch, update, re-apply)
+:lua require("lazy-local-patcher").restore_all()
+:!git -C ~/.local/share/nvim3_jelly_tinynvim/lazy/mcphub.nvim diff --stat
+" (should show no changes - clean state)
+:lua require("lazy-local-patcher").apply_all()
+:!git -C ~/.local/share/nvim3_jelly_tinynvim/lazy/mcphub.nvim diff --stat
+" (should show 5 files changed)
+
+" 9. Verify patch file applies cleanly from scratch
+:!git -C ~/.local/share/nvim3_jelly_tinynvim/lazy/mcphub.nvim stash && git -C ~/.local/share/nvim3_jelly_tinynvim/lazy/mcphub.nvim apply --check ~/.config/nvim3_jelly_tinynvim/patches/mcphub.nvim/01-codecompanion-v19-compat.patch && echo "PATCH OK" && git -C ~/.local/share/nvim3_jelly_tinynvim/lazy/mcphub.nvim stash pop
 ```
 
 ### Checklist

@@ -891,6 +891,10 @@ local function execute_selected_code(opts)
     end
     -- strip the leading ":" for vim.cmd
     local cmd = code:sub(2)
+    if not inputUtil.is_visual_mode() then
+      -- replace all initial space and '--''
+      cmd = cmd:gsub("^%s*%-*%s*", "")
+    end
     local ok, err = pcall(vim.cmd, cmd)
     if not ok then
       vim.notify("Vim cmd failed: " .. tostring(err), vim.log.levels.WARN)
