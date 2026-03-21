@@ -145,119 +145,261 @@ end
 
 --#region Session Picker (migrated from fzf-lua)
 
---- Session picker using snacks
---- Lists sessions from vim.g.startify_session_dir
---- Actions:
----   - confirm (Enter): SLoad <session>
----   - save_session (C-s): SSave! <session> using query or selection
----   - delete_session (C-x): SDelete! <session> with confirmation
-function M.session_picker()
-  local session_dir = vim.g.startify_session_dir or "~/.config/nvim/session"
-  -- Expand tilde before checking directory
-  session_dir = vim.fn.expand(session_dir)
+--- Session picker using snacks — supports two sources toggled with <M-s>:
+---   "startify"   (default): named sessions from vim.g.startify_session_dir
+---   "persistence": CWD-based sessions from persistence.nvim
+---
+--- Common actions (both sources):
+---   - confirm (Enter): load selected session
+---   - save_session (C-s): save session (startify: SSave! <name>; persistence: save current CWD)
+---   - delete_session (C-x): delete with confirmation
+---   - toggle_source (M-s): switch between startify / persistence sources
+---@param source? "startify"|"persistence"
+function M.session_picker(source)
+  source = source or "startify"
 
-  -- Ensure session directory exists
-  if vim.fn.isdirectory(session_dir) == 0 then
-    vim.notify("Session directory does not exist: " .. session_dir, vim.log.levels.WARN)
-    return
-  end
+  -- ── Startify source ──────────────────────────────────────────────────────
+  if source == "startify" then
+    local session_dir = vim.g.startify_session_dir or "~/.config/nvim/session"
+    -- Expand tilde before checking directory
+    session_dir = vim.fn.expand(session_dir)
 
-  -- Helper function to scan sessions
-  local function scan_sessions()
-    local sessions = {}
-    local handle = vim.loop.fs_scandir(session_dir)
-    if handle then
-      while true do
-        local name, type = vim.loop.fs_scandir_next(handle)
-        if not name then
-          break
-        end
-        if type == "file" and name:match "^[%a%d][%w_]*$" then
-          table.insert(sessions, {
-            text = name,
-            file = session_dir .. "/" .. name,
-          })
+    -- Ensure session directory exists
+    if vim.fn.isdirectory(session_dir) == 0 then
+      vim.notify("Session directory does not exist: " .. session_dir, vim.log.levels.WARN)
+      return
+    end
+
+    -- Helper function to scan sessions
+    local function scan_sessions()
+      local sessions = {}
+      local handle = vim.loop.fs_scandir(session_dir)
+      if handle then
+        while true do
+          local name, ftype = vim.loop.fs_scandir_next(handle)
+          if not name then
+            break
+          end
+          if ftype == "file" and name:match "^[%a%d][%w_]*$" then
+            table.insert(sessions, {
+              text = name,
+              file = session_dir .. "/" .. name,
+            })
+          end
         end
       end
-    end
-    return sessions
-  end
-
-  -- Initial scan
-  local initial_sessions = scan_sessions()
-  if #initial_sessions == 0 then
-    vim.notify("No sessions found in: " .. session_dir, vim.log.levels.INFO)
-    return
-  end
-
-  Snacks.picker.pick {
-    source = "sessions",
-    title = "Sessions (C-s: save, C-x: delete)",
-    finder = function(_opts, _ctx)
-      local sessions = scan_sessions()
       return sessions
-    end,
-    format = "text",
-    layout = {
-      preset = "select",
-    },
-    actions = {
-      save_session = function(picker, item)
-        local query = picker.input.filter and picker.input.filter.pattern or ""
-        local session_name = (query ~= "" and query) or (item and item.text) or ""
+    end
 
-        if session_name == "" then
-          vim.ui.input({ prompt = "Save Session As: " }, function(input)
-            if input and input ~= "" then
-              vim.cmd("SSave! " .. input)
-              vim.notify("Session Saved: " .. input, vim.log.levels.INFO)
+    -- Initial scan
+    local initial_sessions = scan_sessions()
+    if #initial_sessions == 0 then
+      vim.notify("No sessions found in: " .. session_dir, vim.log.levels.INFO)
+      return
+    end
+
+    Snacks.picker.pick {
+      source = "sessions",
+      title = "Sessions [Startify] (C-s: save, C-x: delete, M-s: persistence)",
+      finder = function(_opts, _ctx)
+        return scan_sessions()
+      end,
+      format = "text",
+      layout = { preset = "select" },
+      actions = {
+        save_session = function(picker, item)
+          local query = picker.input.filter and picker.input.filter.pattern or ""
+          local session_name = (query ~= "" and query) or (item and item.text) or ""
+
+          if session_name == "" then
+            vim.ui.input({ prompt = "Save Session As: " }, function(input)
+              if input and input ~= "" then
+                vim.cmd("SSave! " .. input)
+                vim.notify("Session Saved: " .. input, vim.log.levels.INFO)
+                vim.defer_fn(function()
+                  picker:refresh()
+                end, 100)
+              end
+            end)
+          else
+            vim.cmd("SSave! " .. session_name)
+            vim.notify("Session Saved: " .. session_name, vim.log.levels.INFO)
+            vim.defer_fn(function()
+              picker:refresh()
+            end, 100)
+          end
+        end,
+        delete_session = function(picker, item)
+          if not item then
+            vim.notify("No session selected", vim.log.levels.WARN)
+            return
+          end
+          local session = item.text
+          vim.ui.select({ "Yes", "No" }, {
+            prompt = "Delete session '" .. session .. "'?",
+          }, function(choice)
+            if choice == "Yes" then
+              vim.cmd("SDelete! " .. session)
+              vim.notify("Session Deleted: " .. session, vim.log.levels.INFO)
               vim.defer_fn(function()
                 picker:refresh()
               end, 100)
             end
           end)
-        else
-          vim.cmd("SSave! " .. session_name)
-          vim.notify("Session Saved: " .. session_name, vim.log.levels.INFO)
+        end,
+        toggle_source = function(picker, _item)
+          picker:close()
+          vim.defer_fn(function()
+            M.session_picker "persistence"
+          end, 50)
+        end,
+      },
+      win = {
+        input = {
+          keys = {
+            ["<C-s>"] = { "save_session", mode = { "n", "i" }, desc = "Save session" },
+            ["<C-x>"] = { "delete_session", mode = { "n", "i" }, desc = "Delete session" },
+            ["<M-s>"] = { "toggle_source", mode = { "n", "i" }, desc = "Switch to Persistence sessions" },
+          },
+        },
+      },
+      confirm = function(picker, item)
+        picker:close()
+        if item then
+          vim.cmd("SLoad " .. item.text)
+        end
+      end,
+    }
+
+  -- ── Persistence source ───────────────────────────────────────────────────
+  -- Decoding mirrors persistence.nvim's own select() logic (init.lua:106-135):
+  --   Filename encoding: cwd:gsub("[\\/:]+", "%%") → literal single "%" per separator
+  --   Branch separator:  "%%" (two literal percent signs) appended after CWD
+  --   vim.split(encoded, "%%", {plain=true}) → { dir_encoded, branch? }
+  --   dir_encoded:gsub("%%", "/") → readable path  (gsub pattern "%%" matches literal "%")
+  elseif source == "persistence" then
+    local ok, persistence = pcall(require, "persistence")
+    if not ok then
+      vim.notify("persistence.nvim is not available", vim.log.levels.ERROR)
+      return
+    end
+
+    local home = vim.fn.expand "~"
+    local config_dir = require("persistence.config").options.dir
+    local uv = vim.uv or vim.loop
+
+    --- Parse a persistence session file path into a display item.
+    --- Uses the same decode logic as persistence.nvim's select() (init.lua:112-114).
+    ---@param session_file string  absolute path to the .vim session file
+    ---@return {text: string, dir: string, branch: string|nil, session: string}|nil
+    local function parse_persistence_session(session_file)
+      if not uv.fs_stat(session_file) then
+        return nil
+      end
+      -- Strip leading config dir and trailing ".vim"
+      local encoded = session_file:sub(#config_dir + 1, -5)
+      -- Split on "%%" (two literal percent signs) — separator between CWD and branch
+      local dir_encoded, branch = unpack(vim.split(encoded, "%%", { plain = true }))
+      -- Replace each literal "%" (path separator) with "/"
+      local dir = dir_encoded:gsub("%%", "/")
+
+      local display = vim.fn.fnamemodify(dir, ":p:~")
+      -- Trim trailing slash for display
+      if display:sub(-1) == "/" then
+        display = display:sub(1, -2)
+      end
+
+      if branch then
+        branch = branch:gsub("%%", "/")
+        display = display .. "  [" .. branch .. "]"
+      end
+      return { text = display, dir = dir, branch = branch, session = session_file }
+    end
+
+    --- Build the list of persistence session items (sorted by mtime via persistence.list()).
+    local function list_persistence_sessions()
+      local items = {}
+      for _, session_file in ipairs(persistence.list()) do
+        local item = parse_persistence_session(session_file)
+        if item then
+          table.insert(items, item)
+        end
+      end
+      return items
+    end
+
+    local initial = list_persistence_sessions()
+    if #initial == 0 then
+      vim.notify("No persistence sessions found", vim.log.levels.INFO)
+      return
+    end
+
+    Snacks.picker.pick {
+      source = "sessions_persistence",
+      title = "Sessions [Persistence] (C-s: save cwd, C-x: delete, M-s: startify)",
+      finder = function(_opts, _ctx)
+        return list_persistence_sessions()
+      end,
+      format = "text",
+      layout = { preset = "select" },
+      actions = {
+        save_session = function(picker, _item)
+          persistence.save()
+          local display_cwd = vim.fn.fnamemodify(vim.fn.getcwd(), ":p:~")
+          vim.notify("Session saved: " .. display_cwd, vim.log.levels.INFO)
           vim.defer_fn(function()
             picker:refresh()
           end, 100)
-        end
-      end,
-      delete_session = function(picker, item)
-        if not item then
-          vim.notify("No session selected", vim.log.levels.WARN)
-          return
-        end
-        local session = item.text
-        vim.ui.select({ "Yes", "No" }, {
-          prompt = "Delete session '" .. session .. "'?",
-        }, function(choice)
-          if choice == "Yes" then
-            vim.cmd("SDelete! " .. session)
-            vim.notify("Session Deleted: " .. session, vim.log.levels.INFO)
-            vim.defer_fn(function()
-              picker:refresh()
-            end, 100)
+        end,
+        delete_session = function(picker, item)
+          if not item then
+            vim.notify("No session selected", vim.log.levels.WARN)
+            return
           end
-        end)
-      end,
-    },
-    win = {
-      input = {
-        keys = {
-          ["<C-s>"] = { "save_session", mode = { "n", "i" }, desc = "Save session" },
-          ["<C-x>"] = { "delete_session", mode = { "n", "i" }, desc = "Delete session" },
+          vim.ui.select({ "Yes", "No" }, {
+            prompt = "Delete persistence session '" .. item.text .. "'?",
+          }, function(choice)
+            if choice == "Yes" then
+              uv.fs_unlink(item.session, function(err)
+                vim.schedule(function()
+                  if err then
+                    vim.notify("Failed to delete session: " .. err, vim.log.levels.ERROR)
+                  else
+                    vim.notify("Session Deleted: " .. item.text, vim.log.levels.INFO)
+                    picker:refresh()
+                  end
+                end)
+              end)
+            end
+          end)
+        end,
+        toggle_source = function(picker, _item)
+          picker:close()
+          vim.defer_fn(function()
+            M.session_picker "startify"
+          end, 50)
+        end,
+      },
+      win = {
+        input = {
+          keys = {
+            ["<C-s>"] = { "save_session", mode = { "n", "i" }, desc = "Save current CWD session" },
+            ["<C-x>"] = { "delete_session", mode = { "n", "i" }, desc = "Delete session" },
+            ["<M-s>"] = { "toggle_source", mode = { "n", "i" }, desc = "Switch to Startify sessions" },
+          },
         },
       },
-    },
-    confirm = function(picker, item)
-      picker:close()
-      if item then
-        vim.cmd("SLoad " .. item.text)
-      end
-    end,
-  }
+      confirm = function(picker, item)
+        picker:close()
+        if item then
+          vim.fn.chdir(item.dir)
+          -- Source the specific session file directly instead of persistence.load()
+          -- which would re-derive the session path from CWD (may not match if branch differs)
+          vim.cmd("silent! source " .. vim.fn.fnameescape(item.session))
+        end
+      end,
+    }
+  end
 end
 
 --#endregion Session Picker
