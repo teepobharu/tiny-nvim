@@ -759,7 +759,7 @@ local function addNvimConfigInRoot()
   local git_dir = pathUtil.get_git_root() or vim.fn.getcwd()
   local nvim_config = git_dir .. "/.nvim-config.lua"
   if vim.fn.filereadable(nvim_config) == 1 then
-    vim.notify(nvim_config .. "already exists", vim.log.levels.WARN)
+    vim.notify(nvim_config .. " already exists", vim.log.levels.WARN)
     vim.cmd("edit " .. nvim_config)
     return
   end
@@ -857,7 +857,7 @@ keymap(
   require("utils.lsp_setup").copyBiomeConfigFromToCurrentGitRoot,
   { desc = "Setup biome config" }
 )
-keymap("n", "<localleader>rsn", addNvimConfigInRoot, { desc = "Setup nvim proj lang & plugin config" })
+keymap("n", "<localleader>rsn", addNvimConfigInRoot, { desc = "Edit / Setup nvim proj lang & plugin config" })
 keymap("n", "<localleader>rp", "", { desc = "Profile" })
 keymap("n", "<localleader>rF", ":luafile %<CR>", { desc = "Reload Lua file" })
 

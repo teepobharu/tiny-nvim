@@ -21,14 +21,14 @@ local function get_default_config_reference()
     return nil
   end
 
-  local commented_lines = {}
+  local existing_config_newlines = {}
   for line in f:lines() do
-    -- Prefix each line with "-- " to comment it out
-    if line == "" then
-      table.insert(commented_lines, "--")
-    else
-      table.insert(commented_lines, "-- " .. line)
-    end
+      -- TODO: do not enforce this yet since might require re update every time when not comment
+      -- if line:find "**disableInit" then
+      table.insert(existing_config_newlines, "-- " .. line)
+      -- else
+      --   table.insert(existing_config_newlines, line)
+      -- end
   end
   f:close()
 
@@ -44,7 +44,7 @@ local function get_default_config_reference()
 
   local result = {}
   vim.list_extend(result, header)
-  vim.list_extend(result, commented_lines)
+  vim.list_extend(result, existing_config_newlines)
   vim.list_extend(result, footer)
   return table.concat(result, "\n")
 end
