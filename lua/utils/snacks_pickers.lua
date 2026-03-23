@@ -2054,6 +2054,8 @@ end
 --#region Code Ref Picker
 
 --- Picker for current buffer code references (relative/absolute)
+--- another inside file picker : lua/utils/snacks_actions.lua:619
+--- this is mapped to ,crp
 function M.code_ref_picker(opts)
   opts = opts or {}
   local code_ref = require "utils.code_ref"

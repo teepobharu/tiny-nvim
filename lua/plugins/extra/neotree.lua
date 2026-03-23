@@ -113,7 +113,7 @@ return {
       {
         "<localleader>e",
         function()
-          require("neo-tree.command").execute { dir = Mypath.get_root_directory_current_buffer() }
+          require("neo-tree.command").execute({ action = "focus" }, { follow_current_file = { enabled = false } })
         end,
         desc = "Explorer NeoTree (Root)",
       },
@@ -213,7 +213,7 @@ return {
           filesystem = {
             bind_to_cwd = false,
             -- bind_to_cwd = true, -- true creates a 2-way binding between vim's cwd and neo-tree's root
-            follow_current_file = { enabled = true },
+            follow_current_file = { enabled = vim.g.follow_current_file_enabled ~= nil and vim.g.follow_current_file_enabled or true },
             use_libuv_file_watcher = true,
           },
           window = {
@@ -236,6 +236,35 @@ return {
                 desc = "Open with System Application",
               },
               ["P"] = { "toggle_preview", config = { use_float = false } },
+              ["X"] = {
+                function()
+                  vim.g.follow_current_file_enabled = not (vim.g.follow_current_file_enabled and true or false)
+                  vim.print("neo-tree follow_current_file.enabled = " .. tostring(vim.g.follow_current_file_enabled))
+
+                  require("neo-tree").setup({
+                    filesystem = {
+                      follow_current_file = {
+                        -- enabled = true, -- This is the key setting
+                        enabled = vim.g.follow_current_file_enabled,
+                      },
+                    },
+                  })
+
+                  -- below not work not sure why
+                  -- local ok, mgr = pcall(require, "neo-tree.sources.manager")
+                  -- if ok and mgr and mgr.get_state then
+                  --   local fs_state = mgr.get_state("filesystem")
+                  --   -- __AUTO_GENERATED_PRINT_VAR_START__
+                  --   print([==[opts#(anon)#if fs_state:]==], vim.inspect(fs_state)) -- __AUTO_GENERATED_PRINT_VAR_END__
+                  --   if fs_state and fs_state.follow_current_file then
+                  --     fs_state.follow_current_file.enabled = vim.g.follow_current_file_enabled
+                  --     -- __AUTO_GENERATED_PRINT_VAR_START__
+                  --     print([==[opts#(anon)#if#if fs_state.follow_current_file.enabled:]==], vim.inspect(fs_state.follow_current_file.enabled)) -- __AUTO_GENERATED_PRINT_VAR_END__
+                  --   end
+                  -- end
+                end,
+                desc = "Toggle follow current file",
+              },
             },
           },
           default_component_configs = {

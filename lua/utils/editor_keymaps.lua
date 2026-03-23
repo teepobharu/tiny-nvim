@@ -421,29 +421,33 @@ M.keymaps = {
   -- This provides a clear mapping structure and reduces duplication
   --
   -- Structure:
-  --   <leader>rsm - Select model (lean/copilot only)
-  --   <leader>rsM - Select model (all/with AGD)
-  --   <leader>rs[f|F|h|H|c|C] - Copilot models (visual=ask, normal=switch)
-  --     f/F = fast (GPT-4.1-mini, GPT-5-mini)
-  --     h/H = heavy (Claude Sonnet 4.5, Claude Opus 4.5)
-  --     c/C = codex (GPT-5.1-codex-max, GPT-5.1-codex-mini)
-  --   <leader>rS[f|F|h|H|c] - AGD models (visual=ask, normal=switch)
-  --     f/F = fast OpenAI AGD, h/H = Claude AGD, c = GPT-5.2 AGD
+  --   <leader>rsm - Select Copilot/default model picker
+  --   <leader>rSM - Select AGD model picker
+  --   <leader>rs[f|F|g|G|h|H|c|C|x|X] - Copilot models (visual=ask, normal=switch)
+  --   <leader>rS[f|F|g|G|h|H|c|C|x|X] - AGD models (visual=ask, normal=switch)
   avante = require("utils.my_avante_utils").generate_avante_keymaps {
     {
       "<leader>rsm",
       function()
         require("utils.my_avante_utils").select_model_lean()
       end,
-      desc = "Avante Models (lean/copilot)",
+      desc = "Avante Models (Copilot/default)",
       mode = "n",
     },
     {
-      "<leader>rsM",
+      "<leader>rSm",
       function()
-        require("utils.my_avante_utils").select_model_all()
+        require("utils.my_avante_utils").select_model_agd({ source = "top_choices"})
       end,
-      desc = "Avante Models (all/AGD)",
+      desc = "Avante Models (AGD top_choice)",
+      mode = "n",
+    },
+    {
+      "<leader>rSM",
+      function()
+        require("utils.my_avante_utils").select_model_agd()
+      end,
+      desc = "Avante Models (AGD All)",
       mode = "n",
     },
   },
@@ -608,13 +612,21 @@ M.keymaps = {
       end,
       desc = "Pick Tmux Win",
     },
-    {
-      "<leader>fG",
-      function()
-        require("utils.snacks_pickers").custom_git_pickers.git_diff_upstream()
-      end,
-      desc = "Git File Upstream",
-    },
+      {
+        "<leader>fD",
+        function()
+          require("utils.snacks_pickers").dotfiles_picker()
+        end,
+        desc = "Dotfiles Config",
+      },
+      {
+        "<leader>fG",
+        function()
+          require("utils.snacks_pickers").custom_git_pickers.git_diff_upstream()
+        end,
+        desc = "Git File Upstream",
+      },
+
     {
       "<leader>fL",
       function()
@@ -784,7 +796,12 @@ M.keymaps = {
       "<leader><space>",
       function()
         local snacks_actions = require "utils.snacks_actions"
-        Snacks.picker.buffers {
+        -- fabllack to files when empty 
+
+
+        local picker = Snacks.picker.buffers {
+          
+          
           -- win = {
           --   input = {
           --     keys = {
@@ -808,6 +825,14 @@ M.keymaps = {
           --   },
           -- },
         }
+
+        -- fallback to files when no buffer (make sure below is same as <leader><ff> mapping)
+        if not picker or picker.closed then
+                  Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state {
+          search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
+        })
+        end
+
       end,
     },
     {

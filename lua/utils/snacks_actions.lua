@@ -1515,7 +1515,7 @@ function M.toggle_files_buffers(picker, item)
 
   if preview_source == "files" then
     picker_params.hidden = false
-    Snacks.picker.buffers(picker_params)
+    Snacks.picker.buffers(vim.tbl_extend('force', picker_params, { show_empty = true }))
     vim.defer_fn(function()
       if vim.api.nvim_get_mode().mode == "n" then
         vim.cmd "startinsert"

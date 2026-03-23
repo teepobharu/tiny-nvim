@@ -61,9 +61,12 @@ local preview_ns = vim.api.nvim_create_namespace "prompts_helper_preview"
 
 -- Default configuration
 -- Support both a single prompt_dir (backwards compatible) and prompt_dirs (array)
+-- TODO: switcher between preconfigure groups 
+-- TODO: allow search to match the subdir path / label
+-- TODO: add custom label for each path
 M.config = {
   prompt_dirs = {
-    vim.fn.expand "$HOME/Personal/mynotes/Extras/Template/copilot-custom-prompts/",
+    { dir = vim.fn.expand "$HOME/Personal/mynotes/Extras/Template/copilot-custom-prompts/", patterns = { "**/*.md" } },
     vim.fn.expand "$HOME/AgodaGit/tools/trip-ai-tools/prompt/",
     vim.fn.expand "$HOME/AgodaGit/tools/trip-ai-tools/instruction/",
     -- per-dir override: match any markdown in these folders

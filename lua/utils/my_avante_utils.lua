@@ -7,8 +7,9 @@ local DEFAULT_PROVIDER = "copilot"
 local DEFAULT_MODEL = vim.env.DEFAULT_MODEL_COPILOT or AI.defaults.model
 -- Get Agoda-specific provider configurations
 -- Derived from M.providers.openai_agd in my_ai_constants
--- model_names: all available models filtered + remapped via AI.get_agd_model_names()
-function M.get_agoda_providers()
+-- model_names: filtered + remapped AGD provider models for Avante selector
+--- @param opts? AgdModelNameOpts
+function M.get_agoda_providers(opts)
   local p = AI.providers.openai_agd
   local avante = p.avante_opts
   return {
@@ -56,7 +57,7 @@ function M.get_agoda_providers()
       endpoint = avante.endpoint,
       model = p.top_choices.gpt.default.M, -- default to gpt default M tier
       timeout = AI.defaults.timeout,
-      model_names = AI.get_agd_model_names(),
+      model_names = AI.get_agd_model_names(opts),
       extra_request_body = avante.request_defaults,
     },
     -- TODO: fix avante warning later after enter mappings <leader-r>S+ any agoda models is it because initially not have ?
@@ -175,47 +176,46 @@ end
 
 -- Open AvanteModels with lean providers (without AGD)
 function M.select_model_lean()
-  -- Temporarily override to use only lean providers, does not seem to override why ?
-  local lean_providers = M.get_lean_providers()
-  -- print([==[M.select_model_lean lean_providers:]==], vim.inspect(lean_providers)) -- __AUTO_GENERATED_PRINT_VAR_END__
   local current_provider, current_model = M.current_provider_and_model()
-  -- TODO: revise if active provider / current model is not in lean provider switch to default provider
-  local override_config = {
-    providers = lean_providers,
-  }
-  if
-    not lean_providers[current_provider]
-    or lean_providers[current_provider].model == false
-    or lean_providers[current_provider].model ~= current_model
-  then
-    Snacks.notify.warn(
-      string.format(
-        "Current provider %s/%s not in lean providers, switch to default %s/%s",
-        current_provider,
-        current_model,
-        DEFAULT_PROVIDER,
-        DEFAULT_MODEL
-      ),
-      { title = "Avante Model Selection" }
-    )
-    override_config.provider = DEFAULT_PROVIDER
-  end
 
-  require("avante.config").override(override_config)
-  -- __AUTO_GENERATED_PRINT_VAR_START__
-  -- print(
-  --   [==[M.select_model_lean require('avante.config').get().providers:]==],
-  --   vim.inspect(require("avante.config").providers)
-  -- ) -- __AUTO_GENERATED_PRINT_VAR_END__
+  require("avante.config").override {
+    provider = DEFAULT_PROVIDER,
+    providers = {
+      [DEFAULT_PROVIDER] = {
+        model = current_provider == DEFAULT_PROVIDER and current_model or DEFAULT_MODEL,
+      },
+    },
+  }
+
+  -- Open model selection
+  vim.cmd "AvanteModels"
+end
+
+-- Open AvanteModels with AGD provider only
+--- @param opts? AgdModelNameOpts
+function M.select_model_agd(opts)
+  local current_provider, current_model = M.current_provider_and_model()
+  local agd_providers = M.get_agoda_providers(opts)
+  local default_agd_model = AI.providers.openai_agd.top_choices.gpt.default.M
+
+  require("avante.config").override {
+    provider = "openai_agd",
+    providers = {
+      openai_agd = vim.tbl_extend("force", agd_providers.openai_agd, {
+        model = current_provider == "openai_agd" and current_model or default_agd_model,
+      }),
+    },
+  }
 
   -- Open model selection
   vim.cmd "AvanteModels"
 end
 
 -- Open AvanteModels with all providers (including AGD)
-function M.select_model_all()
+--- @param opts? AgdModelNameSource 
+function M.select_model_all(opts)
   -- Restore full provider list including Agoda providers
-  local full_providers = vim.tbl_extend("force", M.get_lean_providers(), M.get_agoda_providers())
+  local full_providers = vim.tbl_extend("force", M.get_lean_providers(), M.get_agoda_providers(opts))
   require("avante.config").override {
     providers = full_providers,
   }

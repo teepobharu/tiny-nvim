@@ -272,15 +272,21 @@ function M.get_vertex_claude_agd_models_config()
   }
 end
 
--- Generate all CodeCompanion keymaps for model selection
+  -- Generate all CodeCompanion keymaps for model selection
 -- Returns a complete keymap table ready to use in editor_keymaps
 -- @param baseKeymap table Optional base keymap table to extend
 function M.generate_codecompanion_keymaps(baseKeymap)
   local keymaps = baseKeymap or {}
+  local mapping_prefix = vim.g.ai_prefix_key or "<leader>A"
+  local model_key = "m"
+  local copilot_prefix = mapping_prefix .. "s"
+  local copilot_picker_prefix = copilot_prefix .. model_key
+  local agd_prefix = mapping_prefix .. "S"
+  local agd_picker_prefix = agd_prefix .. model_key
 
-  -- Copilot models with <leader>AS prefix
+  -- Copilot models
   local copilot_keymaps = M.generate_model_keymaps {
-    prefix = "<leader>AS",
+    prefix = copilot_prefix,
     adapter = "copilot",
     label = "Copilot",
     models = M.get_copilot_models_config(),
@@ -288,14 +294,13 @@ function M.generate_codecompanion_keymaps(baseKeymap)
 
   vim.list_extend(keymaps, copilot_keymaps)
 
-  -- AGD models with <leader>ASS prefix (OpenAI + Vertex Claude combined)
-  local agd_models = vim.tbl_extend("force", M.get_openai_agd_models_config(), M.get_vertex_claude_agd_models_config())
+  -- AGD models
 
   local agd_keymaps = M.generate_model_keymaps {
-    prefix = "<leader>ASS",
+    prefix = agd_prefix,
     adapter = "openai_agd", -- Default adapter for AGD
     label = "AGD",
-    models = agd_models,
+    models = M.get_openai_agd_models_config(),
   }
 
   -- Fix adapter for Claude models in AGD keymaps
@@ -305,37 +310,36 @@ function M.generate_codecompanion_keymaps(baseKeymap)
 
   vim.list_extend(keymaps, agd_keymaps)
 
-  -- Picker keymaps
   table.insert(keymaps, {
-    "<leader>ASmm",
-    function()
-      M.toggle_inline_with_picker()
-    end,
-    desc = "CC Inline: Pick Adapter+Model",
-    mode = { "v", "x" },
-  })
-
-  table.insert(keymaps, {
-    "<leader>ASM",
+    copilot_picker_prefix,
     function()
       M.toggle_chat_with_picker()
     end,
-    desc = "CC Chat: Toggle with Model Picker",
+    desc = "CC Chat: Pick Copilot/Default Model",
     mode = "n",
   })
 
-  -- Dynamic fetch picker keymaps (requires VPN)
   table.insert(keymaps, {
-    "<leader>ASSMM",
+    copilot_picker_prefix,
+    function()
+      M.toggle_inline_with_picker()
+    end,
+    desc = "CC Inline: Pick Copilot/Default Model",
+    mode = { "v", "x" },
+  })
+
+  -- Dynamic model (fetched from endpoint)
+  table.insert(keymaps, {
+    agd_picker_prefix,
     function()
       M.toggle_inline_with_picker_dynamic()
     end,
-    desc = "CC Inline: Pick Adapter+Model (Dynamic)",
+    desc = "CC Inline: Pick All (Dynamic)",
     mode = { "v", "x" },
   })
 
   table.insert(keymaps, {
-    "<leader>ASSM",
+    agd_picker_prefix,
     function()
       M.toggle_chat_with_picker_dynamic()
     end,
@@ -345,7 +349,7 @@ function M.generate_codecompanion_keymaps(baseKeymap)
 
   -- Additional utility keymaps
   table.insert(keymaps, {
-    "<leader>ASi",
+    mapping_prefix .. "i",
     function()
       local adapter, model = M.current_adapter_and_model()
       local Snacks = require "snacks"
@@ -423,7 +427,14 @@ function M.toggle_inline_with_picker()
       return
     end
 
+
     local models = get_adapter_models(adapter_name)
+    -- TODO: check copilot model logic does not allow select from log and is #models check works ?:
+    -- 03:21:30 msg_show.lua_print M.toggle_inline_with_picker#(anon) models: {
+    --   ["gpt-4.1"] = {
+    --     opts = {}
+    --   }
+    -- }
     if #models == 0 then
       -- No model choices, use default
       M.inline_with_adapter(adapter_name, nil)

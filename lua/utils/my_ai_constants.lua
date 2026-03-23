@@ -75,6 +75,14 @@ M.models = {
 --- @alias ModelSize "S"|"M"|"L"
 --- @alias TierName "default"|"alt"|"max"
 
+--- @class FilterModelOpts
+--- @field additional_blacklist? string[]
+--- @field additional_keywords? string[]
+
+--- @class AgdModelNameOpts : FilterModelOpts
+--- @field source? AgdModelNameSource 
+--- @alias AgdModelNameSource '"all"' | '"top_choices"'
+
 --- Sparse size-indexed table (not every size is required)
 --- @class ModelSizeMap
 --- @field S? string
@@ -105,7 +113,7 @@ M.models = {
 --- @field copilot ProviderConfig
 
 --- @type ModelSizeMap
-M.models.sizing = {
+M.models_sizing = {
   S = "S",
   M = "M",
   L = "L",
@@ -137,7 +145,7 @@ M.providers = {
       gpt = {
         default = { S = M.models.gpt.GPT_5_MINI, M = M.models.gpt.GPT_5_2, L = M.models.gpt.GPT_5_4 },
         alt = { S = M.models.gpt.GPT_4_1_MINI },
-        max = { M = M.models.gpt.GPT_5_1_CODEX_MAX, L = M.models.gpt.GPT_5_1_CODEX_MINI },
+        max = { M = M.models.gpt.GPT_5_1_CODEX_MAX, L = M.models.gpt.GPT_5_3_CODEX }, -- avante works but all codex model not work in codecompanion /completions error (This is not a chat model and thus not supported in the v1/chat/completions endpoint. Did you mean to use v1/completions)
       },
       claude = {
         default = {
@@ -153,9 +161,10 @@ M.providers = {
           L = M.models.gemini.GEMINI_3_FLASH,
         },
       },
-      grok = {
-        default = { S = M.models.others.GROK_FAST_1 },
-      },
+      -- not exists
+      -- grok = { 
+      --   default = { S = M.models.others.GROK_FAST_1 },
+      -- },
     },
     avante_opts = {
       avante_inherited_from = "openai",
@@ -366,6 +375,10 @@ function M.contains_filtered_keyword(model_name, additional_keywords)
 end
 
 -- Filter models based on blacklist and keywords
+--- @param models string[]
+--- @param opts? FilterModelOpts
+--- @param provider? string
+--- @return string[]
 function M.filter_models(models, opts, provider)
   opts = opts or {}
   local filtered = {}
@@ -408,8 +421,8 @@ M.KEYMAP_SLOT_PATTERN = {
   { key = "H", family = "claude", tier = "default", size = "L" },
   { key = "c", family = "gpt", tier = "default", size = "M" },
   { key = "C", family = "gpt", tier = "default", size = "L" },
-  { key = "m", family = "gpt", tier = "max", size = "M" },
-  { key = "M", family = "gpt", tier = "max", size = "L" },
+  { key = "x", family = "gpt", tier = "max", size = "M" },
+  { key = "X", family = "gpt", tier = "max", size = "L" },
 }
 
 --- Build a key→{model,desc} mapping from a provider's top_choices using the
@@ -458,11 +471,19 @@ function M.get_top_choice_models(provider_name)
 end
 
 --- Return filtered + remapped model names for the openai_agd Avante provider.
---- Collects all models from M.models.*, applies filter_models with AGD remap.
+--- By default this uses provider top_choices instead of all models so Avante's
+--- selector only shows concrete model IDs, not size aliases like openai_agd/S.
+--- @param opts? AgdModelNameOpts
 --- @return string[]
-function M.get_agd_model_names()
-  local all = M.get_all_models()
-  return M.filter_models(all, {}, M.providers.openai_agd.adapter_name)
+function M.get_agd_model_names(opts)
+  opts = opts or {}
+  local source = opts.source or "all"
+  local models = source == 'top_choices' and M.get_top_choice_models "openai_agd" or M.get_all_models()
+
+  return M.filter_models(models, {
+    additional_blacklist = opts.additional_blacklist,
+    additional_keywords = opts.additional_keywords,
+  }, M.providers.openai_agd.adapter_name)
 end
 
 return M
