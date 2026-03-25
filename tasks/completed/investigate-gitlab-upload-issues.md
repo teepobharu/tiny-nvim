@@ -56,7 +56,7 @@ curl -s --request POST \
 
 ### Root Cause Identified
 
-The **406 Not Acceptable** error from the MCPHub `upload_markdown` tool is a known issue with the `@zereight/mcp-gitlab` package when sending multipart/form-data uploads. The exact same issue was reported in [GitHub Issue #330](https://github.com/zereight/gitlab-mcp/issues/330).
+- [x] ISSUE CLOSED - MR MERGED - The **406 Not Acceptable** error from the MCPHub `upload_markdown` tool is a known issue with the `@zereight/mcp-gitlab` package when sending multipart/form-data uploads. The exact same issue was reported in [GitHub Issue #330](https://github.com/zereight/gitlab-mcp/issues/330).
 
 ### Key Findings
 

@@ -3,6 +3,7 @@
 
 local editor_keymaps = require "utils.editor_keymaps"
 
+local CLAUDE_CODER_MAPPING_PREFIX = "<leader>C"
 -- caveat : might not updated when something changed until restart nvim ?
 local common_agent_env = {
   OPENAI_API_KEY = vim.env.GENAIAG,
@@ -88,6 +89,7 @@ return {
             env = common_agent_env,
           },
           claude = {
+            cmd = { "claude", "--allow-dangerously-skip-permissions" },
             env = common_agent_env,
           },
           debug_me = { -- https://github.com/folke/sidekick.nvim/issues/62
@@ -264,11 +266,16 @@ return {
         enabled = true,
         look_for = { ".mcphub/servers.json" },
         port_range = { min = 40000, max = 41000 }, -- Port range for generating unique workspace ports
-        get_port = function()
-          return 47474
-          -- return nil
-          -- Optional function returning custom port number. Called when generating ports to allow custom port assignment logic
-        end,
+        -- TODO: check if needed
+        -- get_port = function()
+        --   -- Derive unique port per profile to prevent multi-profile conflicts
+        --   -- (see tasks/open/mcphub-multi-profile-port-conflict.md)
+        --   local appname = vim.env.NVIM_APPNAME or "nvim"
+        --   if appname:find("nvimwt") then
+        --     return 47475 -- worktree profile
+        --   end
+        --   return 47474 -- main profile
+        -- end,
         -- more tried notes + config ./mypoc.lua
         -- mcp-hub --port 47474 --config ~/dotfiles/ai/mcp/mcphub.json --config ./.mcphub/project.json
       },
@@ -339,6 +346,8 @@ return {
       -- MCPHub integration for MCP tools/resources access
       { "ravitemer/mcphub.nvim", optional = true },
       "jellydn/spinner.nvim", -- Show loading spinner when request is started
+      -- Chat history persistence — save/restore sessions to disk
+      { "ravitemer/codecompanion-history.nvim" },
     },
     config = function(_, options)
       require("codecompanion").setup(options)
@@ -362,42 +371,9 @@ return {
       end
     end,
     keys = require("utils.editor_keymaps").keymaps.codecompanion(),
-    adapters = {
-      llama3_2 = function()
-        return require("codecompanion.adapters").extend("ollama", {
-          name = "llama3", -- Give this adapter a different name to differentiate it from the default ollama adapter
-          schema = {
-            model = {
-              default = "llama3.2:latest",
-            },
-            num_ctx = {
-              default = 16384,
-            },
-            num_predict = {
-              default = -1,
-            },
-          },
-        })
-      end,
-
-      -- https://github.com/olimorris/codecompanion.nvim/blob/main/lua/codecompanion/adapters/ollama.lua
-      llama3latest = function()
-        return require("codecompanion.adapters").extend("ollama", {
-          name = "llama3latest", -- Give this adapter a different name to differentiate it from the default ollama adapter
-          schema = {
-            model = {
-              default = "llama3:latest",
-            },
-            num_ctx = {
-              default = 16384,
-            },
-            num_predict = {
-              default = -1,
-            },
-          },
-        })
-      end,
-    },
+    -- NOTE: llama3_2 and llama3latest ollama adapters were removed — they were
+    -- at the plugin spec level (not inside opts) so Lazy.nvim ignored them.
+    -- To re-enable, move into opts.adapters.http below.
     opts = {
       system_prompt = require("utils.my_ai_prompts").COPILOT_SYSTEM_PROMPT,
       log_level = "DEBUG", -- TRACE|DEBUG|ERROR|INFO not work
@@ -459,6 +435,12 @@ return {
               index = 4,
               callback = "keymaps.stop",
               description = "Stop Request",
+            },
+            clear = {
+              modes = { n = "<C-x>" },
+              index = 6,
+              callback = "keymaps.clear",
+              description = "[Chat] Clear",
             },
           },
         },
@@ -526,6 +508,20 @@ return {
         },
       },
       extensions = {
+        history = {
+          enabled = true,
+          opts = {
+            keymap = "gh",
+            save_chat_keymap = "sc",
+            auto_save = true,
+            expiration_days = 30,
+            picker = "snacks",
+            auto_generate_title = true,
+            continue_last_chat = false,
+            delete_on_clearing_chat = false,
+            dir_to_save = vim.fn.stdpath "data" .. "/codecompanion-history",
+          },
+        },
         mcphub = {
           callback = "mcphub.extensions.codecompanion",
           opts = {
@@ -703,9 +699,9 @@ Your instructions here
                 context = context or {}
                 local bufnr = context.bufnr or vim.api.nvim_get_current_buf()
                 local start_line = context.start_line or context.start or (context.range and context.range.start_line)
-                local start_col = context.start_col or context.start_col
+                local start_col = context.start_col or (context.range and context.range.start_col)
                 local end_line = context.end_line or context.finish or (context.range and context.range.end_line)
-                local end_col = context.end_col or context.end_col
+                local end_col = context.end_col or (context.range and context.range.end_col)
 
                 -- Fallback to cursor if no range provided
                 if not start_line then
@@ -1102,14 +1098,14 @@ Your instructions here
             auto_submit = true,
             adapter = {
               name = "copilot",
-              model = "gpt-5-mini",
+              model = "gpt-4.1", -- lower max token (16k vs 50k) 5-mini get some error while 4.1 perform pull correctly
             },
             callbacks = { on_created = enable_yolo_on_created },
           },
           prompts = {
             {
               role = "user",
-              content = [[@{agent} @{mcp}
+              content = [[@{agent} @{mcp} @{gkg}
 
 Tool-call contract (MUST follow exactly every time):
 - Always call `use_mcp_tool` with exactly these top-level keys:
@@ -1121,13 +1117,13 @@ Tool-call contract (MUST follow exactly every time):
 - Make one tool call at a time and wait for result before next call.
 
 Step 0: Call use_mcp_tool with:
-{ "server_name": "mcphub", "tool_name": "get_current_servers", "tool_input": { "include_disabled": true, "format": "detailed" } }
+{ "server_name": "mcphub", "tool_name": "get_current_servers", "tool_input": { "include_disabled": true, "format": "summary" } }
 
 Step 1: If `gkg` is disabled/not connected, call use_mcp_tool with:
 { "server_name": "mcphub", "tool_name": "toggle_mcp_server", "tool_input": { "server_name": "gkg", "action": "start" } }
 Wait for success before proceeding.
 
-Step 2: Call use_mcp_tool with:
+Step 2: Directly use gkg tool if available or call use_mcp_tool with:
 { "server_name": "gkg", "tool_name": "list_projects", "tool_input": {} }
 
 For each project path listed:
@@ -1146,7 +1142,103 @@ Proceed autonomously without asking for confirmation between steps.]],
             },
           },
         },
+        -- Sourcegraph search link generator for Agoda internal codebase
+        -- Syntax: context:no-fork repo:^<regex> <term> file:<regex> (-content:<x> and -file:<x>)
+        -- URL-encoding: ^ → %5E, \ → %5C, ( → %28, ) → %29, | → %7C, space → +
+        -- MMB web fullstack template covers: devops/ci-templates, cart/, agoda-e2e/, full-stack/(mmb|a|tooling|host|mono)
+        ["Sourcegraph Search Link"] = {
+          interaction = "chat",
+          description = "Generate Sourcegraph search URL for Agoda codebase (MMB/fullstack and devops context)",
+          opts = {
+            alias = "sg-search",
+            is_slash_cmd = true,
+            auto_submit = false,
+            stop_context_insertion = true,
+            adapter = "copilot",
+          },
+          prompts = {
+            {
+              role = "user",
+              content = [=[You are a Sourcegraph query builder for Agoda's internal codebase at https://agoda.sourcegraphcloud.com.
+
+## Sourcegraph Syntax Reference
+
+**Filters:**
+- `context:no-fork` — exclude forked repos (always include this)
+- `repo:^<regex>` — filter repos by URL-anchored regex
+- `file:<regex>` — filter by filepath regex
+- `content:<pattern>` — match inside file content
+- `-content:<p>` / `-file:<p>` — exclusions (also written as `not content:p`)
+- `lang:<name>` — filter by language (e.g. `lang:typescript`)
+- Boolean: `and`, `or`, `not`; group with `()`
+
+**Pattern types (URL param):**
+- `patternType=keyword` — space-separated keyword (most flexible, default)
+- `patternType=regexp` — regex search term
+- `patternType=literal` — exact literal
+
+**Base URL:** `https://agoda.sourcegraphcloud.com/search?q=<encoded>&patternType=keyword&sm=0`
+
+**URL-encoding key chars:** `^`→`%5E`, `\`→`%5C`, `(`→`%28`, `)`→`%29`, `|`→`%7C`, space→`+`
+
+## Repo Regex Cheatsheet
+
+| Scope | Pattern |
+|-------|---------|
+| MMB Web (fullstack + devops + cart + e2e) | `^gitlab\.agodadev\.io\/(devops\/ci-templates)\|(cart\/)\|(agoda-e2e\/)\|((full-stack\/)(mmb\|a\|tooling\|host\|mono)).*` |
+| Full-stack only | `^gitlab\.agodadev\.io\/full-stack\/.*` |
+| DevOps only | `^gitlab\.agodadev\.io\/devops\/.*` |
+| Specific repo | `^gitlab\.agodadev\.io\/full-stack\/mmb\/mmbweb$` |
+
+## Pre-built: MMB Web Fullstack (broad context)
+Matches any MMB web content; filepath must contain `mmb` or `test`; excludes mock content/files.
+
+**Raw query:**
+```
+context:no-fork repo:^gitlab\.agodadev\.io\/(devops\/ci-templates)|(cart\/)|(agoda-e2e\/)|((full-stack\/)(mmb|a|tooling|host|mono)).* /mmbweb/ file:/mmb|test/ (-content:mock and -file:mock)
+```
+
+**URL:** https://agoda.sourcegraphcloud.com/search?q=context:no-fork++repo:%5Egitlab%5C.agodadev%5C.io%5C/%28devops%5C/ci-templates%29%7C%28cart%5C/%29%7C%28agoda-e2e%5C/%29%7C%28%28full-stack%5C/%29%28mmb%7Ca%7Ctooling%7Chost%7Cmono%29%29.*+/mmbweb/++file:/mmb%7Ctest/+%28-content:mock+and+-file:mock%29&patternType=keyword&sm=0
+
+---
+Given the search intent below, output:
+1. The raw Sourcegraph query (human-readable)
+2. The full URL-encoded search link
+
+Search intent: <!-- replace with what you want to search for, e.g. "find all usages of BookingService in MMB BFF code, exclude test files" -->
+]=],
+            },
+          },
+        },
       }, jellydn_prompts, prompt_lib_gen),
     },
   },
+  {
+    "greggh/claude-code.nvim",
+    dependencies = {
+      "nvim-lua/plenary.nvim",
+    },
+    opts = {
+      command = "claude --allow-dangerously-skip-permissions",
+    },
+  },
+  {
+    "coder/claudecode.nvim",
+    opts = {
+      -- terminal_cmd = "claude --allow-dangerously-skip-permissions",
+      terminal_cmd = "claude",
+    },
+    -- lua/plugins/extra/claude-code.lua:194
+    keys = {
+      { CLAUDE_CODER_MAPPING_PREFIX .. "C", "<cmd>ClaudeCode --continue --dangerously-skip-permissions <cr>", desc = "Toggle Claude Continue" },
+      { CLAUDE_CODER_MAPPING_PREFIX .. "M", "<cmd>ClaudeCodeSelectModel<cr>", desc = "Select Claude model" },
+      {
+        "<leader>as",
+        "<cmd>ClaudeCodeTreeAdd<cr>",
+        desc = "Add file",
+        ft = { "NvimTree", "neo-tree", "oil", "minifiles", "netrw" },
+      },
+    }
+  },
 }
+

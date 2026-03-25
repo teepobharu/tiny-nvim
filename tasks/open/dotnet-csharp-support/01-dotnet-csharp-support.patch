@@ -1,0 +1,262 @@
+### Patch: .NET/C# standalone script support
+### Scope: code runner fix, shebang fallback, output toggle, gated LSP, treesitter
+### This is a REFERENCE patch — apply changes manually or use as guide.
+### Files modified: 5 existing + 2 new
+
+# ============================================================
+# FILE 1 (MODIFY): lua/overseer/template/user/run_script_deterministic.lua
+# Changes:
+#   - Fix cs runner (dotnet run $file, not --project)
+#   - Merge orphaned cs_script into cs
+#   - Add shebang detection + fallback helpers
+#   - Add shebang to default fallback list
+#   - Add open_output component to builder
+# ============================================================
+
+--- a/lua/overseer/template/user/run_script_deterministic.lua
++++ b/lua/overseer/template/user/run_script_deterministic.lua
+
+## Section A: Replace cs + cs_script entries (lines 62-79) with:
+
+-  cs = {
+-    {
+-      name = "dotnet",
+-      cmd = { "dotnet", "run", "--project", "$file" },
+-      prerequisite = ".NET SDK must be installed and in PATH",
+-      executable_check = "dotnet",
+-      comment_syntax = "//",
+-    },
+-  },
+-  cs_script = {
+-    {
+-      name = "dotnet-script",
+-      cmd = { "dotnet", "script", "$file" },
+-      prerequisite = "dotnet-script tool must be installed (dotnet tool install -g dotnet-script)",
+-      executable_check = "dotnet", -- dotnet tool is run via dotnet exe
+-      comment_syntax = "//",
+-    },
+-  },
++  cs = {
++    {
++      name = "dotnet-run-file",
++      cmd = { "dotnet", "run", "$file" },
++      prerequisite = ".NET 10+ SDK (single-file execution via run-file feature)",
++      executable_check = "dotnet",
++      comment_syntax = "//",
++      content_patterns = { "#:package", "Console%." },
++      is_match_with_content_only = false,
++    },
++    {
++      name = "dotnet-script",
++      cmd = { "dotnet", "script", "$file" },
++      prerequisite = "dotnet-script tool (dotnet tool install -g dotnet-script)",
++      executable_check = "dotnet",
++      comment_syntax = "//",
++    },
++  },
+
+## Section B: Replace default fallback (lines 118-125) with:
+
+-  default = {
+-    {
+-      name = "fallback",
+-      cmd = { "sh", "$file" },
+-      prerequisite = "sh or bash must be installed and in PATH (used as a generic fallback)",
+-      executable_check = "sh",
+-    },
+-  },
++  default = {
++    {
++      name = "shebang",
++      is_shebang_fallback = true,
++      prerequisite = "File must have a valid shebang (#!) as first line",
++      executable_check = "sh", -- always available so it appears in choices
++      comment_syntax = "#",
++    },
++    {
++      name = "fallback",
++      cmd = { "sh", "$file" },
++      prerequisite = "sh or bash must be installed and in PATH (used as a generic fallback)",
++      executable_check = "sh",
++    },
++  },
+
+## Section C: Add shebang helpers AFTER the FiletypeConfigurations table (after line ~136, before get_best_runner):
+
++--- Detect shebang from first line of a file
++--- @param file string absolute file path
++--- @return table { has_shebang: boolean, interpreter: string|nil, args_table: table|nil, raw_line: string }
++local function detect_shebang(file)
++  local lines = vim.fn.readfile(file, "", 1)
++  if not lines or #lines == 0 then
++    return { has_shebang = false, raw_line = "" }
++  end
++  local first_line = lines[1]
++  if not first_line:match("^#!") then
++    return { has_shebang = false, raw_line = first_line }
++  end
++  local shebang_cmd = first_line:match("^#!%s*(.+)$") or ""
++  local args = {}
++  for arg in shebang_cmd:gmatch("[^%s]+") do
++    table.insert(args, arg)
++  end
++  return {
++    has_shebang = true,
++    interpreter = args[1],
++    args_table = args,
++    raw_line = first_line,
++  }
++end
++
++--- Build command from shebang info.
++--- /usr/bin/env style: chmod +x and run directly (kernel reads shebang).
++--- Absolute path: use interpreter + file.
++--- @param file string absolute file path
++--- @param shebang_info table from detect_shebang()
++--- @return table|nil command args table
++local function build_shebang_command(file, shebang_info)
++  if not shebang_info.has_shebang or not shebang_info.interpreter then
++    return nil
++  end
++  -- /usr/bin/env style: make executable and run directly (kernel handles shebang)
++  if shebang_info.interpreter == "/usr/bin/env" then
++    return { "sh", "-c", string.format("chmod +x %q && %q", file, file) }
++  end
++  -- Absolute path interpreter
++  if shebang_info.interpreter:match("^/") then
++    return { shebang_info.interpreter, file }
++  end
++  -- Command in PATH
++  if vim.fn.executable(shebang_info.interpreter) == 1 then
++    return { shebang_info.interpreter, file }
++  end
++  return nil
++end
+
+## Section D: In get_best_runner() — add shebang fallback after the for loop, before return:
+## (after the existing for loop, before `return best_runner`)
+
++  -- Shebang fallback: if no traditional runner matched, try detecting #! line
++  if not best_runner then
++    local shebang_info = detect_shebang(file)
++    if shebang_info.has_shebang then
++      best_runner = "shebang"
++    end
++  end
+
+## Section E: In builder() — handle shebang runner (replace lines ~218-224):
+
+-    local cmd = runner and runner.cmd or { ft, file }
+-    -- replace "strap dmc ni "elif$
+-    cmd = vim.tbl_map(function(part)
+-      return part:gsub("%$file", file)
+-    end, cmd)
++    local cmd
++    if params.chosen_runner == "shebang" then
++      -- Shebang execution: detect and build command from #! line
++      local shebang_info = detect_shebang(file)
++      cmd = build_shebang_command(file, shebang_info) or { "sh", file }
++    else
++      cmd = runner and runner.cmd or { ft, file }
++      -- replace $file placeholder with actual file path
++      cmd = vim.tbl_map(function(part)
++        return part:gsub("%$file", file)
++      end, cmd)
++    end
+
+## Section F: In builder() return — add open_output component (replace lines ~227-233):
+
+-    return {
+-      cmd = cmd,
+-      components = {
+-        { "on_output_quickfix", set_diagnostics = true },
+-        "default",
+-      },
+-    }
++    return {
++      cmd = cmd,
++      components = {
++        { "on_output_quickfix", set_diagnostics = true },
++        { "open_output", on_start = "always", direction = "dock", focus = false },
++        "default",
++      },
++    }
+
+## Section G: In params() — add shebang to runner choices (around line 279, after table.sort):
+
++    -- Always offer shebang as a runner choice if file has one
++    local shebang_info = detect_shebang(file)
++    if shebang_info.has_shebang then
++      table.insert(choicesRunnerForFt, 1, "shebang")
++    end
+
+
+# ============================================================
+# FILE 2 (NEW): lua/langs/csharp.lua
+# ============================================================
+
++return {
++  {
++    "nvim-treesitter/nvim-treesitter",
++    optional = true,
++    opts = { ensure_installed = { "c_sharp" } },
++  },
++}
+
+
+# ============================================================
+# FILE 3 (NEW): lsp/omnisharp.lua
+# Only used when vim.g.lsp_enable_csharp = true
+# ============================================================
+
++local Lsp = require("utils.lsp")
++-- Install: brew install omnisharp-mono
++-- Or:      :MasonInstall omnisharp
++-- Gated:   Only enabled when vim.g.lsp_enable_csharp = true
++--          Set in .nvim-config.lua for C# projects
++return {
++  cmd = { "omnisharp", "--languageserver" },
++  on_attach = Lsp.on_attach,
++  filetypes = { "cs" },
++  root_markers = { "*.sln", "*.csproj", "omnisharp.json", ".git" },
++  settings = {
++    FormattingOptions = {
++      EnableEditorConfigSupport = true,
++      OrganizeImports = true,
++    },
++    RoslynExtensionsOptions = {
++      EnableAnalyzersSupport = true,
++      EnableImportCompletion = true,
++    },
++  },
++}
+
+
+# ============================================================
+# FILE 4 (MODIFY): init.lua
+# Add conditional C# LSP to lsp_by_ft table
+# Insert after lsp_by_ft definition (after line ~62, before the pcall lines)
+# ============================================================
+
++    -- Gate C# LSP behind vim.g (default=false, opt-in per project via .nvim-config.lua)
++    -- Usage: vim.g.lsp_enable_csharp = true
++    -- Optional: vim.g.lsp_csharp_server = "csharp_ls" for lightweight alternative
++    if vim.g.lsp_enable_csharp then
++      lsp_by_ft.cs = { vim.g.lsp_csharp_server or "omnisharp" }
++    end
+
+
+# ============================================================
+# FILE 5 (MODIFY): lua/plugins/extra/myEditor.lua
+# Add cs to quick-code-runner file_types and global_files
+# ============================================================
+
+## In file_types (after sh = { "bash" }, around line 146):
+
++        cs = {
++          "dotnet run", -- dotnet 10+ single-file execution
++        },
+
+## In global_files (after sh = ..., around line 155):
+
++        cs = pathUtil.get_global_file_by_type "cs",

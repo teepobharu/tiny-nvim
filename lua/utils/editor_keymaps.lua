@@ -402,6 +402,13 @@ M.keymaps = {
         desc = "Code Companion - Better naming",
         mode = "v",
       },
+      -- History: browse and restore past chat sessions
+      {
+        companion_prefix .. "H",
+        "<cmd>CodeCompanionHistory<cr>",
+        desc = "Code Companion - Chat History",
+        mode = { "n" },
+      },
     }
     -- Merge model selection keymaps (inline picker, chat picker, adapter/model shortcuts)
     return require("utils.my_codecompanion_actions").generate_codecompanion_keymaps(base_keymaps)

@@ -594,6 +594,69 @@ See `tasks/review/codecompanion-code-review-actions.md` for complete implementat
 
 ---
 
+---
+
+## 13. Chat History Extension (`ravitemer/codecompanion-history.nvim`)
+
+**Date Added:** 2026-03-24
+
+### Overview
+
+Persists CodeCompanion chat sessions to disk and provides a picker to browse/restore them. Registered as a CodeCompanion extension under `extensions.history`.
+
+### Configuration (in `myAi.lua`)
+
+```lua
+-- dependency added to olimorris/codecompanion.nvim deps
+{ "ravitemer/codecompanion-history.nvim" }
+
+-- extension block
+extensions = {
+  history = {
+    enabled = true,
+    opts = {
+      keymap = "gh",              -- open history picker from chat buffer
+      save_chat_keymap = "sc",    -- manual save from chat buffer
+      auto_save = true,           -- auto-save all chats on close
+      expiration_days = 30,       -- delete chats older than 30 days (0 = never)
+      picker = "snacks",          -- snacks / telescope / fzf-lua / default
+      auto_generate_title = true,
+      continue_last_chat = false,
+      delete_on_clearing_chat = false,
+      dir_to_save = vim.fn.stdpath("data") .. "/codecompanion-history", -- ie: ~/.local/share/nvim3_jelly_tinynvim/codecompanion-history
+    },
+  },
+  -- mcphub = { ... }
+}
+```
+
+### Keymaps
+
+| Keymap | Scope | Action |
+|--------|-------|--------|
+| `<leader>AH` | Normal (global) | `:CodeCompanionHistory` — open history browser |
+| `gh` | Chat buffer | Open history picker |
+| `sc` | Chat buffer | Manually save current chat |
+
+### Browser Actions (in picker)
+
+| Key (normal) | Key (insert) | Action |
+|---|---|---|
+| `<CR>` | `<CR>` | Restore selected session |
+| `r` | `<M-r>` | Rename session |
+| `d` | `<M-d>` | Delete session |
+| `<C-y>` | `<C-y>` | Duplicate session |
+
+### Storage
+
+Saved to `~/.local/share/nvim3_jelly_tinynvim/codecompanion-history/` (stdpath data).
+
+### Compatibility Note
+
+This extension integrates with CodeCompanion's internal APIs. If pinned version `19.6.x` causes issues, check [ravitemer/codecompanion-history.nvim](https://github.com/ravitemer/codecompanion-history.nvim) for a compatible release.
+
+---
+
 ## References
 
 - **CodeCompanion Repo:** https://github.com/olimorris/codecompanion.nvim

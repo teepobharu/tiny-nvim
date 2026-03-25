@@ -239,17 +239,34 @@ return {
               ["X"] = {
                 function()
                   vim.g.follow_current_file_enabled = not (vim.g.follow_current_file_enabled and true or false)
-                  vim.print("neo-tree follow_current_file.enabled = " .. tostring(vim.g.follow_current_file_enabled))
 
-                  require("neo-tree").setup({
-                    filesystem = {
-                      follow_current_file = {
-                        -- enabled = true, -- This is the key setting
-                        enabled = vim.g.follow_current_file_enabled,
-                      },
-                    },
-                  })
 
+                  local config = require("neo-tree").ensure_config()
+                  if not config then
+                    vim.notify("Neo-tree config not found", vim.log.levels.ERROR)
+                    return
+                  end
+                  if config.filesystem and config.filesystem.follow_current_file then
+                    if vim.g.follow_current_file_enabled == config.filesystem.follow_current_file.enabled then
+                      vim.print("Follow current file is already " .. tostring(vim.g.follow_current_file_enabled) .. ", no need to update")
+                      return
+                    else
+                      -- notes: does require original config else keymap got rewritten to default
+                      require("neo-tree").setup(
+                        vim.tbl_deep_extend("force", config,
+                        {
+                          filesystem = {
+                            follow_current_file = {
+
+                              -- enabled = true, -- This is the key setting
+                              enabled = vim.g.follow_current_file_enabled,
+                            },
+                          },
+                      })
+                    )
+
+                    end
+                  end
                   -- below not work not sure why
                   -- local ok, mgr = pcall(require, "neo-tree.sources.manager")
                   -- if ok and mgr and mgr.get_state then
