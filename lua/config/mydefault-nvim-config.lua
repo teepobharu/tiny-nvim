@@ -70,6 +70,6 @@ vim.g.follow_current_file_enabled = true
 -- vim.opt.tabstop = 2 -- show tab as n<space> default 8 ?
 -- vim.opt.shiftwidth = 2 -- ts_ls format
 vim.g.disable_autoformat = true
-
+vim.g.snacks_debug_external_filter = true
 vim.opt.cmdheight = 2 -- Hide message continue prompt startup when has is <=2 line
 -- vim.opt.shortmess:append("IFc") -- remove "I" for startup message, "F" for file info, "c" for completion messages (e.g. "match 1 of 2")

@@ -9,23 +9,253 @@ local M = {}
 local pathUtil = require "utils.mypath"
 local gitUtil = require "utils.git"
 
+--#region Scope Traversal Helpers
+-- Shared helpers for subproject-based upward traversal used by:
+--   B (a-s): toggle_cwd_files_grep — cycle scope up subproject chain
+--   C (a-e): toggle_external — move cwd up one step + exclude initial cwd
+--   D (buffers): same patterns with separate persistence
+
+--- Sources that support cwd-based scope traversal and external toggling
+local scope_traversal_sources = {
+  files = true,
+  grep = true,
+  grep_word = true,
+}
+
+--- Build ordered traversal chain from initial_cwd upward through subproject markers to git root
+--- Returns: { initial_cwd, subproj_parent1, ..., git_root } (deduplicated, deepest first)
+--- @param initial_cwd string Starting directory
+--- @return string[] chain Ordered directories from initial_cwd to git root
+local function build_scope_traversal_chain(initial_cwd)
+  local path = require "utils.path"
+  local git_root = path.get_root_directory() or Snacks.git.get_root()
+
+  if not initial_cwd or initial_cwd == "" then
+    initial_cwd = vim.fn.getcwd()
+  end
+  initial_cwd = vim.fn.fnamemodify(initial_cwd, ":p"):gsub("/$", "")
+
+  -- Single-entry chain if no git root or cwd IS git root
+  if not git_root or git_root == "" then
+    return { initial_cwd }
+  end
+  git_root = vim.fn.fnamemodify(git_root, ":p"):gsub("/$", "")
+  if initial_cwd == git_root then
+    return { git_root }
+  end
+
+  -- Get all subprojects with metadata, sorted nearest-first
+  local subprojects = pathUtil.get_sub_project_dirs_from_root(git_root, initial_cwd, true, true, "nearest") or {}
+
+  -- Filter to in_cwd_traversal items (on the path from initial_cwd up to git_root)
+  local traversal_dirs = {}
+  local seen = {}
+
+  -- Always start with initial_cwd
+  seen[initial_cwd] = true
+  table.insert(traversal_dirs, initial_cwd)
+
+  for _, sp in ipairs(subprojects) do
+    if sp.in_cwd_traversal and sp.dir then
+      local normalized = vim.fn.fnamemodify(sp.dir, ":p"):gsub("/$", "")
+      if not seen[normalized] and normalized ~= initial_cwd then
+        seen[normalized] = true
+        table.insert(traversal_dirs, normalized)
+      end
+    end
+  end
+
+  -- Ensure git root is always last
+  if not seen[git_root] then
+    table.insert(traversal_dirs, git_root)
+  end
+
+  -- Sort by depth (deepest first = initial_cwd, shallowest last = git_root)
+  table.sort(traversal_dirs, function(a, b)
+    local depth_a = select(2, a:gsub("/", ""))
+    local depth_b = select(2, b:gsub("/", ""))
+    return depth_a > depth_b
+  end)
+
+  return traversal_dirs
+end
+
+--- Get or initialize traversal chain for a picker
+--- @param picker table Snacks picker instance
+--- @param persist_key string|nil vim.g key for persisted initial cwd (nil = use vim.fn.getcwd())
+--- @return string[] chain, number step_index
+local function get_picker_traversal_state(picker, persist_key)
+  if not picker.opts._scope_traversal_chain then
+    -- Prefer the picker's active cwd over persisted state so traversal/external always
+    -- follows the currently visible scope (important for non-persisted picker sessions).
+    local initial_cwd = picker.opts.cwd or (persist_key and vim.g[persist_key]) or vim.fn.getcwd()
+    picker.opts._scope_initial_cwd = initial_cwd
+    picker.opts._scope_traversal_chain = build_scope_traversal_chain(initial_cwd)
+    picker.opts._scope_step_index = 1 -- start at initial_cwd (index 1)
+  end
+  return picker.opts._scope_traversal_chain, picker.opts._scope_step_index
+end
+
+--- Reset traversal state on a picker (called when A-S selects new subproject or scope changes)
+--- @param picker table Snacks picker instance
+local function reset_picker_traversal_state(picker)
+  picker.opts._scope_traversal_chain = nil
+  picker.opts._scope_step_index = nil
+  picker.opts._scope_initial_cwd = nil
+  -- Also reset external state
+  picker.opts._external_step_index = nil
+  picker.opts._external_exclude_cwd = nil
+  picker.opts._external_original_exclude = nil
+  picker.opts.external = nil
+end
+
+--- Build a relative exclude pattern from exclude_cwd relative to search_cwd
+--- @param exclude_cwd string The directory to exclude from search
+--- @param search_cwd string The broader search cwd
+--- @return string|nil The relative path to exclude, or nil if not applicable
+local function build_cwd_exclude_pattern(exclude_cwd, search_cwd)
+  if not exclude_cwd or not search_cwd then
+    return nil
+  end
+  exclude_cwd = vim.fn.fnamemodify(exclude_cwd, ":p"):gsub("/$", "")
+  search_cwd = vim.fn.fnamemodify(search_cwd, ":p"):gsub("/$", "")
+
+  if exclude_cwd == search_cwd then
+    return nil
+  end
+  if exclude_cwd == "/" or exclude_cwd == vim.env.HOME then
+    return nil
+  end
+
+  local prefix = search_cwd .. "/"
+  if exclude_cwd:sub(1, #prefix) == prefix then
+    return exclude_cwd:sub(#prefix + 1)
+  end
+  return nil
+end
+
+-- Expose helpers for buffer actions in editor_keymaps
+M._build_scope_traversal_chain = build_scope_traversal_chain
+M._get_picker_traversal_state = get_picker_traversal_state
+M._reset_picker_traversal_state = reset_picker_traversal_state
+M._build_cwd_exclude_pattern = build_cwd_exclude_pattern
+
+--#endregion Scope Traversal Helpers
+
 --- Toggle picker external filter flag and re-run finder
+--- For files/grep pickers: steps cwd up one subproject level + excludes initial scope cwd
+--- For other pickers (buffers, git): toggles boolean flag checked in transform
 --- @param picker table Snacks picker instance
 function M.toggle_external(picker)
   if not picker then
     return
   end
-  if vim.g.snacks_debug_external_filter then
-    print(
-      string.format(
-        "toggle_external: source=%s -> %s",
-        picker.opts and picker.opts.source or "unknown",
-        tostring(not picker.opts.external)
-      )
-    )
+
+  local source = picker.opts and picker.opts.source or ""
+
+  -- For files/grep pickers: step-based external with exclude
+  if scope_traversal_sources[source] then
+    local chain, _ = get_picker_traversal_state(picker, "picker_cwd_cycle_state_value")
+
+    if #chain <= 1 then
+      vim.notify("No parent scope to expand to — already at top", vim.log.levels.INFO)
+      return
+    end
+
+    -- Initialize external state if needed
+    if not picker.opts._external_step_index then
+      local current_scope_idx = picker.opts._scope_step_index or 1
+      picker.opts._external_step_index = current_scope_idx
+      -- The cwd to exclude = the scope cwd when external was first activated
+      picker.opts._external_exclude_cwd = chain[current_scope_idx]
+      -- Save original exclude for restoration
+      picker.opts._external_original_exclude = picker.opts.exclude and vim.deepcopy(picker.opts.exclude) or nil
+    end
+
+    -- Advance external step (one up)
+    local ext_idx = picker.opts._external_step_index + 1
+
+    local title_source = type(source) == "string" and (source:sub(1, 1):upper() .. source:sub(2)) or "Picker"
+
+    -- Preserve search state across refresh (same pattern as toggle_cwd_files_grep)
+    local filter_pattern = picker.input.filter and (picker.input.filter.pattern ~= "" and picker.input.filter.pattern)
+    local filter_search = picker.input.filter and (picker.input.filter.search ~= "" and picker.input.filter.search)
+
+    if ext_idx > #chain then
+      -- Reached top — disable external mode, restore original state
+      vim.notify("External: reached top, disabling", vim.log.levels.INFO)
+      picker.opts._external_step_index = nil
+      picker.opts._external_exclude_cwd = nil
+      picker.opts.external = false
+
+      -- Restore to current scope position
+      local scope_idx = picker.opts._scope_step_index or 1
+      picker.opts.cwd = chain[scope_idx]
+      picker.opts.args = nil
+      picker.opts.show_empty = true
+
+      -- Restore exclude
+      if picker.opts._external_original_exclude ~= nil then
+        picker.opts.exclude = picker.opts._external_original_exclude
+      else
+        picker.opts.exclude = nil
+      end
+      picker.opts._external_original_exclude = nil
+
+      picker.title = title_source
+    else
+      -- Apply external: cwd = chain[ext_idx], exclude = initial scope cwd
+      picker.opts._external_step_index = ext_idx
+      picker.opts.external = true
+
+      local new_cwd = chain[ext_idx]
+      local exclude_cwd = picker.opts._external_exclude_cwd
+      local exclude_pattern = build_cwd_exclude_pattern(exclude_cwd, new_cwd)
+
+      picker.opts.cwd = new_cwd
+      picker.opts.args = nil
+      picker.opts.show_empty = true
+
+      -- Build exclude list: restore original + add our exclude
+      local base_exclude = picker.opts._external_original_exclude
+          and vim.deepcopy(picker.opts._external_original_exclude)
+        or {}
+      if exclude_pattern then
+        table.insert(base_exclude, exclude_pattern)
+      end
+      picker.opts.exclude = #base_exclude > 0 and base_exclude or nil
+
+      local short_cwd = vim.fn.fnamemodify(new_cwd, ":~")
+      local short_excl = exclude_pattern or "none"
+      picker.title = string.format("%s [ext: %s, excl: %s]", title_source, short_cwd, short_excl)
+
+      if ext_idx == #chain then
+        vim.notify(
+          string.format("External: git root — %s, excl: %s\nNext toggle disables", short_cwd, short_excl),
+          vim.log.levels.INFO
+        )
+      else
+        vim.notify(
+          string.format("External: %s, excl: %s (%d/%d)", short_cwd, short_excl, ext_idx, #chain),
+          vim.log.levels.INFO
+        )
+      end
+    end
+
+    -- Preserve search state
+    if filter_pattern then
+      picker.opts.pattern = filter_pattern
+    end
+    if filter_search then
+      picker.opts.search = filter_search
+    end
+
+    picker:refresh()
+  else
+    -- For other pickers (buffers, git): simple boolean toggle
+    picker.opts.external = not picker.opts.external
+    picker:refresh()
   end
-  picker.opts.external = not picker.opts.external
-  picker:find()
 end
 
 --#region Git Helper Functions for Pickers
@@ -301,7 +531,7 @@ local function generate_coderef_formats(path_formats, line, col)
       {
         format = "at",
         label = path_type_label .. " (@)",
-        path = hide_col and string.format("@%s %d", path, line) or string.format("@%s %d:%d", path, line, col),
+        path = hide_col and string.format("@%s:%d", path, line) or string.format("@%s:%d:%d", path, line, col),
       },
       {
         format = "at_caps",
@@ -683,7 +913,13 @@ function M.yank_sys(picker, item)
   clipboardUtil.copy_yank_to_system(true)
 end
 
-function M.select_subproject_cwd(picker)
+function M.select_subproject_cwd(picker, opts_or_item)
+  -- Support opts table with persist_key for buffer-specific persistence
+  local persist_key = "picker_cwd_cycle_state_value" -- default for files
+  if type(opts_or_item) == "table" and opts_or_item.persist_key then
+    persist_key = opts_or_item.persist_key
+  end
+
   local pathUtil = require "utils.mypath"
   local path = require "utils.path"
   local picker_util = require "snacks.picker.util"
@@ -873,13 +1109,11 @@ function M.select_subproject_cwd(picker)
       apply_filter = function(subpicker, item)
         vim.print("Applying CWD: " .. tostring(item.dir))
         vim.g.picker_cwd_cycle_state = "subproject_picker"
-        vim.g.picker_cwd_cycle_state_value = item.dir
+        vim.g[persist_key] = item.dir
         -- close seems to also close the parent picker as well
         subpicker:action "cancel"
-        -- vim.print(vim.inspect {
-        --   picker_cwd_cycle_state = vim.g.picker_cwd_cycle_state,
-        --   picker_cwd_cycle_state_value = vim.g.picker_cwd_cycle_state_value,
-        -- })
+        -- Reset traversal state on parent picker for fresh chain from new initial cwd
+        reset_picker_traversal_state(picker)
         local newOpts = require("utils.snacks_terminal").get_initial_picker_state {}
         picker.opts = vim.tbl_deep_extend("force", picker.opts, newOpts)
         -- vim.print(picker.opts.cwd)
@@ -941,248 +1175,61 @@ function M.select_subproject_cwd(picker)
 end
 
 --- Toggle CWD scope for pickers (files/grep/etc)
---- Cycles through: current dir -> git root -> sub-project dir -> previous buffer dir
+--- Traverses upward through subproject markers from initial scope cwd to git root
+--- Short-lived: does NOT persist across picker sessions (only A-S persists)
 function M.toggle_cwd_files_grep(picker, item)
-  local path = require "utils.path"
+  local chain, step_idx = get_picker_traversal_state(picker, "picker_cwd_cycle_state_value")
 
-  local current_dir = vim.fn.getcwd()
-  local git_root = path.get_root_directory()
-  local prev_buffer_dir = pathUtil.get_previous_buffer_dir()
-
-  local function calculate_relative_depth(from_dir, to_dir)
-    if not from_dir or not to_dir then
-      return nil
-    end
-    local depth = 0
-    local temp_dir = from_dir
-    while temp_dir and temp_dir ~= "/" and temp_dir ~= to_dir do
-      depth = depth + 1
-      local parent = vim.fn.fnamemodify(temp_dir, ":h")
-      if parent == temp_dir then
-        return nil
-      end
-      temp_dir = parent
-    end
-    return temp_dir == to_dir and depth or nil
-  end
-
-  local sub_projects = pathUtil.get_sub_project_dirs_from_root(nil, prev_buffer_dir, true, true, "nearest") or {}
-  local sub_project_results = {}
-  for i, sp in ipairs(sub_projects) do
-    if not sp.is_git_root then
-      sp.relative_depth = calculate_relative_depth(prev_buffer_dir, sp.dir)
-      table.insert(sub_project_results, sp)
-      if #sub_project_results >= 3 then
-        break
-      end
-    end
-  end
-
-  if not vim.g.picker_cwd_cycle_state then
-    vim.g.picker_cwd_cycle_state = "current"
-  end
-
-  local cycle_order = { "current", "gitroot" }
-
-  for i, _ in ipairs(sub_project_results) do
-    table.insert(cycle_order, "subproject" .. i)
-  end
-
-  table.insert(cycle_order, "prevbuffer")
-  table.insert(cycle_order, "current_d1")
-
-  local cwd_map = {
-    gitroot = git_root,
-    current = current_dir,
-    current_d1 = current_dir,
-    prevbuffer = prev_buffer_dir,
-  }
-
-  local subproject_metadata = {}
-
-  for i, sp_info in ipairs(sub_project_results) do
-    local state_key = "subproject" .. i
-    cwd_map[state_key] = sp_info.dir
-    subproject_metadata[state_key] = sp_info
-  end
-
-  local seen_dirs = {}
-  local unique_cycle_order = {}
-
-  for _, state in ipairs(cycle_order) do
-    local dir = cwd_map[state]
-    if dir and dir ~= "" and vim.fn.isdirectory(dir) == 1 then
-      local dir_key = (state == "current_d1") and "current_d1" or dir
-
-      if not seen_dirs[dir_key] then
-        seen_dirs[dir_key] = { state }
-        table.insert(unique_cycle_order, state)
-      else
-        table.insert(seen_dirs[dir_key], state)
-        cwd_map[state] = nil
-      end
-    else
-      cwd_map[state] = nil
-    end
-  end
-
-  cycle_order = unique_cycle_order
-
-  if #cycle_order == 0 then
-    cycle_order = { "current" }
-    cwd_map = { current = current_dir }
-  end
-
-  if #cycle_order == 1 then
-    vim.notify("Only one unique directory available - no other scopes to cycle to", vim.log.levels.INFO)
+  if #chain <= 1 then
+    vim.notify("Only one scope available — no other levels to traverse", vim.log.levels.INFO)
     return
   end
 
-  local current_state_idx = nil
-  for i, state in ipairs(cycle_order) do
-    if state == vim.g.picker_cwd_cycle_state then
-      current_state_idx = i
-      break
-    end
+  -- Advance to next step
+  local next_idx = step_idx + 1
+
+  if next_idx > #chain then
+    -- Was at top (git root) — wrap to initial
+    vim.notify("Returning to initial scope", vim.log.levels.INFO)
+    next_idx = 1
   end
 
-  if not current_state_idx then
-    current_state_idx = 0
-  end
+  picker.opts._scope_step_index = next_idx
+  local new_cwd = chain[next_idx]
 
-  local next_idx = (current_state_idx % #cycle_order) + 1
-  vim.g.picker_cwd_cycle_state = cycle_order[next_idx]
-  vim.g.picker_cwd_cycle_state_value = cwd_map[vim.g.picker_cwd_cycle_state]
-  Snacks.notify.info("CWD Cycle State changed to: " .. vim.g.picker_cwd_cycle_state)
-  local new_cwd = cwd_map[vim.g.picker_cwd_cycle_state]
+  -- Reset external state when scope changes
+  picker.opts._external_step_index = nil
+  picker.opts._external_exclude_cwd = nil
+  picker.opts._external_original_exclude = nil
+  picker.opts.external = nil
+  picker.opts.exclude = nil
 
-  local source = picker.init_opts and picker.init_opts.source
+  -- Apply new cwd
+  local source = picker.opts and picker.opts.source or "Picker"
+  local title_source = type(source) == "string" and (source:sub(1, 1):upper() .. source:sub(2)) or "Picker"
+  local short_cwd = vim.fn.fnamemodify(new_cwd, ":~")
+
+  picker.opts.cwd = new_cwd
+  picker.opts.args = nil -- clear any max-depth from previous state
+  picker.opts.show_empty = true
+  picker.title = string.format("%s [%s] (%d/%d)", title_source, short_cwd, next_idx, #chain)
+
+  -- Preserve search state
   local filter_pattern = picker.input.filter and (picker.input.filter.pattern ~= "" and picker.input.filter.pattern)
   local filter_search = picker.input.filter and (picker.input.filter.search ~= "" and picker.input.filter.search)
-
-  local state_labels = {
-    current = cwd_map.current == cwd_map.gitroot and "Default/Git" or "Default/current",
-    current_d1 = (cwd_map.current == cwd_map.gitroot and "Default/Git" or "Default/current") .. "(D=1)",
-    gitroot = "Git Root",
-    prevbuffer = "Previous Buf Dir",
-  }
-
-  local project_types = {}
-  local has_duplicate_types = false
-  for _, sp_info in pairs(subproject_metadata) do
-    local ptype = sp_info.project_type or "unknown"
-    if project_types[ptype] then
-      has_duplicate_types = true
-      break
-    end
-    project_types[ptype] = true
+  if filter_pattern then
+    picker.opts.pattern = filter_pattern
+  end
+  if filter_search then
+    picker.opts.search = filter_search
   end
 
-  for state_key, sp_info in pairs(subproject_metadata) do
-    local label = "Sub-Project"
-
-    if sp_info.project_type and sp_info.project_type ~= "gitroot" then
-      label = label .. " (" .. sp_info.project_type .. ")"
-    end
-
-    if has_duplicate_types then
-      local depth_parts = {}
-      if sp_info.depth then
-        table.insert(depth_parts, "d:" .. sp_info.depth)
-      end
-      if sp_info.relative_depth then
-        table.insert(depth_parts, "r:" .. sp_info.relative_depth)
-      end
-      if #depth_parts > 0 then
-        label = label .. " [" .. table.concat(depth_parts, ",") .. "]"
-      end
-    end
-
-    state_labels[state_key] = label
+  if next_idx == #chain then
+    vim.notify(string.format("Scope: git root — %s\nNext toggle returns to initial", short_cwd), vim.log.levels.INFO)
+  else
+    vim.notify(string.format("Scope: %s (%d/%d)", short_cwd, next_idx, #chain), vim.log.levels.INFO)
   end
 
-  local state_aliases = {
-    prevbuffer = "pbuf",
-    current = "cur",
-  }
-
-  for i, sp_info in ipairs(sub_project_results) do
-    state_aliases["subproject" .. i] = "s:" .. sp_info.project_type
-  end
-
-  local excluded_label_text = {
-    gitroot = true,
-    current_d1 = true,
-  }
-
-  vim.notify(string.format("CWD: %s\n%s", state_labels[vim.g.picker_cwd_cycle_state], new_cwd), vim.log.levels.INFO)
-
-  local scope_label = state_labels[vim.g.picker_cwd_cycle_state]
-
-  local current_state = vim.g.picker_cwd_cycle_state
-  local dir_key = (current_state == "current_d1") and "current_d1" or new_cwd
-
-  if seen_dirs[dir_key] and #seen_dirs[dir_key] > 1 then
-    local dup_states = {}
-    for _, state in ipairs(seen_dirs[dir_key]) do
-      if state ~= current_state and not excluded_label_text[state] then
-        local display_name = state_aliases[state] or state
-        table.insert(dup_states, display_name)
-      end
-    end
-
-    if #dup_states > 0 then
-      scope_label = scope_label .. " (=" .. table.concat(dup_states, ",") .. ")"
-    end
-  end
-
-  local picker_params = {
-    cwd = new_cwd,
-    pattern = filter_pattern or "",
-    search = filter_search or "",
-    live = picker.opts.supports_live and picker.opts.live,
-    show_empty = true,
-    title = string.format("%s [%s]", source or "Picker", scope_label),
-  }
-
-  local hidden_state = picker.opts.hidden
-  local ignored_state = picker.opts.ignored
-
-  if hidden_state == nil and picker.init_opts then
-    hidden_state = picker.init_opts.hidden
-  end
-  if ignored_state == nil and picker.init_opts then
-    ignored_state = picker.init_opts.ignored
-  end
-
-  if hidden_state ~= nil then
-    picker_params.hidden = hidden_state
-  end
-  if ignored_state ~= nil then
-    picker_params.ignored = ignored_state
-  end
-
-  if new_cwd == git_root and git_root and git_root ~= "" then
-    picker_params.git_cwd = true
-  end
-
-  if
-    vim.g.picker_cwd_cycle_state == "current_d1"
-    and type(source) == "string"
-    and (source:match "grep" or source:match "files")
-    and not source:match "^git"
-  then
-    picker_params.args = { "--max-depth", "1" }
-  end
-
-  picker.opts.cwd = picker_params.cwd
-  picker.opts.args = picker_params.args
-  picker.opts.pattern = picker_params.pattern
-  picker.opts.search = picker_params.search
-  picker.opts.live = picker_params.live
-  picker.opts.show_empty = true
-  picker.title = picker_params.title
-  picker.opts.git_cwd = picker_params.git_cwd
   picker:refresh()
 end
 
@@ -1515,7 +1562,7 @@ function M.toggle_files_buffers(picker, item)
 
   if preview_source == "files" then
     picker_params.hidden = false
-    Snacks.picker.buffers(vim.tbl_extend('force', picker_params, { show_empty = true }))
+    Snacks.picker.buffers(vim.tbl_extend("force", picker_params, { show_empty = true }))
     vim.defer_fn(function()
       if vim.api.nvim_get_mode().mode == "n" then
         vim.cmd "startinsert"

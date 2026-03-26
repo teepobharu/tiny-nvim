@@ -110,6 +110,51 @@ end
 
 **Reference**: lua/utils/snacks_pickers.lua:2190-2191 (LuaSnip snippets picker implementation)
 
+### 7. Scope Persistence vs Scope Toggle in Buffer Transforms
+
+**Problem**: Buffer picker scope looked unfiltered after selecting subproject scope (`<M-S>`), but external mode (`<M-e>`) still used that scope.
+
+**Root Cause**: Transform logic only treated transient `_buffer_scope_cwd` as "has scope". Persisted scope (`vim.g.picker_buffer_cwd_state_value`) was read later for path checks, but was not counted in the "scope active" gate.
+
+**Pattern**:
+
+```lua
+local scope_cwd = picker.opts._buffer_scope_cwd
+if scope_cwd == nil then
+  scope_cwd = vim.g.picker_buffer_cwd_state_value
+end
+local has_scope = type(scope_cwd) == "string" and scope_cwd ~= ""
+```
+
+If `has_scope` ignores persisted scope, non-external mode returns all buffers early.
+
+### 8. Traversal Chain Must Start From Active Picker CWD
+
+**Problem**: External/scope traversal used an old persisted directory instead of the picker's current scope.
+
+**Root Cause**: Traversal init prioritized global persisted cwd over `picker.opts.cwd`.
+
+**Pattern**:
+
+```lua
+local initial_cwd = picker.opts.cwd or vim.g[persist_key] or vim.fn.getcwd()
+```
+
+Always prefer active picker scope first; persisted state should be fallback.
+
+### 9. `toggle_<name>` Action Name Collision with Snacks Toggles
+
+**Problem**: Custom `toggle_external` action stops working for file pickers; keypress only flips a boolean and does not apply custom cwd/exclude logic.
+
+**Root Cause**: Snacks auto-generates `toggle_<toggle_name>` actions from `opts.toggles` during config init, and this overwrites user actions with the same key (e.g. `toggle_external`).
+
+**Pattern**:
+
+- Avoid naming custom actions as `toggle_<name>` when `<name>` exists in `opts.toggles`.
+- Use a non-colliding action name (e.g. `toggle_external_scope`) and map keys to that action.
+
+This keeps custom external traversal logic intact while still using the `external` toggle state for UI/title indicators.
+
 ## Actions
 
 https://github.com/folke/snacks.nvim/blob/main/lua/snacks/picker/actions.lua

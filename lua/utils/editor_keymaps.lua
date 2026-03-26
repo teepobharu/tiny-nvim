@@ -444,7 +444,7 @@ M.keymaps = {
     {
       "<leader>rSm",
       function()
-        require("utils.my_avante_utils").select_model_agd({ source = "top_choices"})
+        require("utils.my_avante_utils").select_model_agd { source = "top_choices" }
       end,
       desc = "Avante Models (AGD top_choice)",
       mode = "n",
@@ -619,20 +619,20 @@ M.keymaps = {
       end,
       desc = "Pick Tmux Win",
     },
-      {
-        "<leader>fD",
-        function()
-          require("utils.snacks_pickers").dotfiles_picker()
-        end,
-        desc = "Dotfiles Config",
-      },
-      {
-        "<leader>fG",
-        function()
-          require("utils.snacks_pickers").custom_git_pickers.git_diff_upstream()
-        end,
-        desc = "Git File Upstream",
-      },
+    {
+      "<leader>fD",
+      function()
+        require("utils.snacks_pickers").dotfiles_picker()
+      end,
+      desc = "Dotfiles Config",
+    },
+    {
+      "<leader>fG",
+      function()
+        require("utils.snacks_pickers").custom_git_pickers.git_diff_upstream()
+      end,
+      desc = "Git File Upstream",
+    },
 
     {
       "<leader>fL",
@@ -803,12 +803,10 @@ M.keymaps = {
       "<leader><space>",
       function()
         local snacks_actions = require "utils.snacks_actions"
-        -- fabllack to files when empty 
-
+        -- fabllack to files when empty
 
         local picker = Snacks.picker.buffers {
-          
-          
+
           -- win = {
           --   input = {
           --     keys = {
@@ -835,11 +833,10 @@ M.keymaps = {
 
         -- fallback to files when no buffer (make sure below is same as <leader><ff> mapping)
         if not picker or picker.closed then
-                  Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state {
-          search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
-        })
+          Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state {
+            search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
+          })
         end
-
       end,
     },
     {
@@ -1194,7 +1191,7 @@ M.snacks_common_actions = {
   copy_path_select = function(picker, item)
     require("utils.snacks_actions").copy_path_select(picker, item)
   end,
-  toggle_external = function(picker)
+  toggle_external_scope = function(picker)
     require("utils.snacks_actions").toggle_external(picker)
   end,
   yank_sys = function(picker, item)
@@ -1273,8 +1270,8 @@ local snacks_picker_shared_keys = {
   common_keys = {
     input = {
       ["<C-o>"] = { "open_file_remote", mode = { "n", "i" }, desc = "Open File Remote" },
-      ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
-      ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
+      ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle external filter" },
+      ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle external filter" },
     },
   },
   -- Copy path actions - applies to file/grep/explorer pickers
@@ -1332,8 +1329,8 @@ local snacks_picker_group_keys = {
       ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at ref" },
       ["<C-O>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
-      ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
-      ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+      ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle missing files" },
+      ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle missing files" },
       -- TODO: support git operations
       -- ["<M-S>"] = { "select_subproject_cwd", mode = { "n", "i" }, desc = "Pick Subproject CWD" },
     },
@@ -1342,8 +1339,8 @@ local snacks_picker_group_keys = {
       ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at ref" },
       ["<C-O>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
-      ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
-      ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+      ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle missing files" },
+      ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle missing files" },
     },
   },
 
@@ -1354,16 +1351,16 @@ local snacks_picker_group_keys = {
       ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at upstream ref" },
       ["<C-2>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
-      ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
-      ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+      ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle missing files" },
+      ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle missing files" },
     },
     list = {
       ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open remote compared ref" },
       ["<C-1>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open remote at HEAD" },
-      ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
-      ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+      ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle missing files" },
+      ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle missing files" },
     },
   },
 
@@ -1385,8 +1382,8 @@ local snacks_picker_group_keys = {
         ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
         ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at selected ref" },
         ["<M-o>"] = { "open_remote_at_head", mode = { "n", "i" }, desc = "Open file in remote at HEAD" },
-        ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
-        ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+        ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle missing files" },
+        ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle missing files" },
       },
       list = {
         ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
@@ -1402,8 +1399,8 @@ local snacks_picker_group_keys = {
           mode = { "n", "i" },
           desc = "Back to ref selection",
         },
-        ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
-        ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle missing files" },
+        ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle missing files" },
+        ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle missing files" },
       },
     }
   end,
@@ -1452,55 +1449,137 @@ M.sources_n_keys = {
     },
     -- Buffers picker: common + copy path + file-specific actions
     buffers = {
-      -- https://deepwiki.com/search/suggest-way-to-achieve-the-act_13b29d19-06dc-4383-bc2b-5871786b2b2e?mode=deep
+      -- External filter: show buffers outside the current scope CWD
+      -- Scope CWD comes from: persisted buffer subproject (a-S) > buffer scope toggle (a-s) > vim.fn.getcwd()
+      -- a-e: toggle external on/off
+      -- a-s: upward traversal through subproject chain (short-lived)
+      -- a-S: subproject picker with separate buffer persistence
       transform = function(item, ctx)
         local show_external = ctx and ctx.picker and ctx.picker.opts.external
+        -- Scope can come from:
+        -- 1) transient toggle state (_buffer_scope_cwd via a-s), or
+        -- 2) persisted buffer subproject (picker_buffer_cwd_state_value via a-S).
+        local scope_cwd = ctx and ctx.picker and ctx.picker.opts._buffer_scope_cwd
+        if scope_cwd == nil then
+          scope_cwd = vim.g.picker_buffer_cwd_state_value
+        end
+        local has_scope = type(scope_cwd) == "string" and scope_cwd ~= ""
+
+        -- No scope change and no external: show all buffers (default)
+        if not show_external and not has_scope then
+          return item
+        end
+
+        -- Resolve the effective scope cwd
+        scope_cwd = scope_cwd or (ctx and ctx.picker and ctx.picker.opts.cwd) or vim.fn.getcwd()
+
+        local item_path = nil
+        local ok, util = pcall(function()
+          return require("snacks").picker.util
+        end)
+        if ok and util then
+          item_path = util.path(item)
+        end
+
+        -- Check for missing (non-existent) files
         local missing = false
-        local path = nil
-        if show_external then
-          local ok, util = pcall(function()
-            return require("snacks").picker.util
-          end)
-          if ok and util then
-            path = util.path(item)
-          end
-          if path and path ~= "" then
-            missing = vim.fn.filereadable(path) == 0 and vim.fn.isdirectory(path) == 0
-          end
+        if item_path and item_path ~= "" then
+          missing = vim.fn.filereadable(item_path) == 0 and vim.fn.isdirectory(item_path) == 0
         end
 
         if vim.g.snacks_debug_external_filter then
           print(
             string.format(
-              "external_filter[buffers]: show_external=%s missing=%s file=%s",
+              "external_filter[buffers]: external=%s scope=%s missing=%s file=%s",
               tostring(show_external),
+              vim.fn.fnamemodify(scope_cwd, ":~"),
               tostring(missing),
               tostring(item and (item.file or item.text) or "nil")
             )
           )
         end
 
-        if not show_external then
-          return item
+        -- Path-based filtering
+        local is_inside_scope = true
+        if item_path then
+          local normalized_cwd = vim.fn.fnamemodify(scope_cwd, ":p"):gsub("/$", "") .. "/"
+          local normalized_path = vim.fn.fnamemodify(item_path, ":p")
+          is_inside_scope = normalized_path:sub(1, #normalized_cwd) == normalized_cwd
+        else
+          is_inside_scope = pathUtil.is_in_project_dir(item)
         end
 
-        if missing then
-          return true
+        if show_external then
+          -- External mode: show buffers OUTSIDE scope cwd + missing buffers
+          if missing then
+            return true
+          end
+          return not is_inside_scope
+        else
+          -- Scope mode (a-s changed scope but external off): show buffers INSIDE scope cwd
+          return is_inside_scope and item or false
         end
-
-        return not pathUtil.is_in_project_dir(item)
       end,
       actions = {
-        toggle_external = function(picker)
+        toggle_external_scope = function(picker)
           require("utils.snacks_actions").toggle_external(picker)
+        end,
+        toggle_buffer_scope = function(picker)
+          -- Buffer version of a-s: upward traversal through subproject chain
+          local snacks_actions = require "utils.snacks_actions"
+          local chain, step_idx = snacks_actions._get_picker_traversal_state(picker, "picker_buffer_cwd_state_value")
+
+          if #chain <= 1 then
+            vim.notify("Only one scope available for buffers", vim.log.levels.INFO)
+            return
+          end
+
+          local next_idx = step_idx + 1
+          if next_idx > #chain then
+            vim.notify("Returning to initial buffer scope", vim.log.levels.INFO)
+            next_idx = 1
+          end
+
+          picker.opts._scope_step_index = next_idx
+
+          -- When returning to initial position (index 1), clear scope to show all buffers
+          if next_idx == 1 then
+            picker.opts._buffer_scope_cwd = nil
+          else
+            picker.opts._buffer_scope_cwd = chain[next_idx]
+          end
+
+          -- Reset external when scope changes
+          picker.opts.external = nil
+
+          local short_cwd = vim.fn.fnamemodify(chain[next_idx], ":~")
+          if next_idx == 1 then
+            vim.notify("Buffer scope: all buffers (initial)", vim.log.levels.INFO)
+          elseif next_idx == #chain then
+            vim.notify(
+              string.format("Buffer scope: git root — %s\nNext toggle returns to initial", short_cwd),
+              vim.log.levels.INFO
+            )
+          else
+            vim.notify(string.format("Buffer scope: %s (%d/%d)", short_cwd, next_idx, #chain), vim.log.levels.INFO)
+          end
+          picker:refresh()
+        end,
+        select_buffer_subproject = function(picker)
+          -- Buffer version of a-S: open subproject picker, persist to buffer-specific state
+          require("utils.snacks_actions").select_subproject_cwd(picker, {
+            persist_key = "picker_buffer_cwd_state_value",
+          })
         end,
       },
       win = {
         input = {
-          footer = "filter external A-e/b",
+          footer = "a-e: external, a-s: scope, a-S: subproject",
           keys = vim.tbl_extend("force", snacks_picker_group_keys.files_keys.input, {
-            ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external buffers" },
-            ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external buffers" },
+            ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle external buffers" },
+            ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle external buffers" },
+            ["<A-s>"] = { "toggle_buffer_scope", mode = { "n", "i" }, desc = "Cycle buffer scope" },
+            ["<M-S>"] = { "select_buffer_subproject", mode = { "n", "i" }, desc = "Pick buffer subproject" },
           }),
         },
       },
@@ -1619,8 +1698,8 @@ M.sources_n_keys = {
         ["<c-q>"] = "cancel",
         -- ["<M-w>"] = default  is cycle_win but this will cycle back to input that can alreay be done with / or i
         ["<M-w>"] = "focus_preview",
-        ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
-        ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
+        ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle external filter" },
+        ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle external filter" },
         ["/"] = false, -- alow search to apply on list
       },
     },
@@ -1641,8 +1720,8 @@ M.sources_n_keys = {
         ["<a-a>"] = { "select_all", mode = { "n", "i" } },
         ["<a-q>"] = { "qflist", mode = { "n", "i" } },
         ["<C-q>"] = { "cancel", mode = { "n", "i" }, desc = "Cancel" },
-        ["<M-e>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
-        ["<M-b>"] = { "toggle_external", mode = { "n", "i" }, desc = "Toggle external filter" },
+        ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle external filter" },
+        ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle external filter" },
       },
     },
     preview = {
