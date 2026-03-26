@@ -1,0 +1,181 @@
+---
+title: "MCPHub multi-profile port conflict causes SIGTERM and bulk disconnects"
+status: open
+priority: high
+created: 2026-03-25
+updated: 2026-03-25
+related:
+  - [MCPHub config](lua/plugins/extra/myAi.lua)
+  - [MCPHub memory doc](docs/memory/mcphub.md)
+  - [MCPHub integration task](tasks/open/mcphub_integration.md)
+  - [Shared server config](~/dotfiles/ai/mcp/mcphub.json)
+---
+
+## Objective
+
+Fix MCPHub port conflicts when two Neovim profiles (main `nvim3_jelly_tinynvim` and worktree `nvimwt3a`) are open simultaneously, causing SIGTERM shutdowns, bulk client disconnects, and stale error states in the UI.
+
+## Context
+
+### Current Config (`myAi.lua:256-274`, identical in both profiles)
+
+```lua
+opts = {
+  port = 37373,
+  workspace = {
+    enabled = true,
+    look_for = { ".mcphub/servers.json" },
+    port_range = { min = 40000, max = 41000 },
+    get_port = function()
+      return 47474  -- PROBLEM: hardcoded same port for both profiles
+    end,
+  },
+}
+```
+
+Both profiles share the same `myAi.lua` (symlinked via worktree), so `get_port()` always returns `47474`.
+
+### Root Cause
+
+When profile A is running mcp-hub on port 47474 and profile B opens `:MCPHub`:
+
+1. Profile B calls `check_server()` on port 47474 — finds existing mcp-hub
+2. Config comparison detects **different config files** (profile B's `.mcphub/servers.json` resolves to a different CWD path)
+3. Profile B calls `handle_same_port_different_config()` → sends `POST /api/hard-restart` to port 47474
+4. Profile A's mcp-hub receives hard-restart → sends **SIGTERM** to itself
+5. All connected SSE clients (profile A's Neovim, CLI agents like OpenCode) get bulk-disconnected
+6. Profile B starts a new mcp-hub on 47474, but profile A's UI shows stale "Hard restart failed" error
+
+## Observed Error Cases
+
+### Case 1: SIGTERM Bulk Restart
+
+- **Trigger**: Open MCPHub UI in profile B while profile A is running
+- **Symptom**: Profile A's mcp-hub receives SIGTERM, all servers disconnect, all clients drop
+- **Logs**:
+  ```
+  [19:52:10] Received SIGTERM signal - initiating graceful shutdown
+  [19:52:10] Stopping HTTP server and closing all connections
+  [19:52:10] 'atlassian' transport closed
+  [19:52:10] 'gitlab_mr' transport closed
+  [19:52:10] 'gitlab_proj' transport closed
+  ```
+- **UI**: Profile A shows "Stopped" with no auto-recovery
+
+### Case 2: Excessive Client Disconnect Logs
+
+- **Trigger**: Same as Case 1
+- **Symptom**: 7x `'claude-code' client disconnected from MCP HUB` log spam
+- **Cause**: Each OpenCode SSE connection is a separate client; all drop simultaneously when mcp-hub is killed
+
+### Case 3: SSE Connection Failed (code 56)
+
+- **Trigger**: Hard Refresh (`R`) after the server has been killed
+- **Symptom**: `SSE connection failed with code 56` then shows `○ Stopped`
+- **Cause**: curl error 56 = connection reset — profile A's nvim tries to reconnect SSE to a port whose mcp-hub was killed and replaced by profile B
+
+### Case 4: Hard Restart Failed (exit code 7)
+
+- **Trigger**: Profile A tries to hard-restart after its mcp-hub was killed
+- **Symptom**: `curl error exit_code=7 stderr="Couldn't connect to server"` on port 37373
+- **Cause**: Profile A falls back to base port 37373 but nothing is listening there (workspace mode bypasses it). The mcp-hub on 47474 now belongs to profile B.
+
+## Key Source Code References
+
+| Logic | File | Lines |
+|-------|------|-------|
+| Startup / port check | `mcphub.nvim/lua/mcphub/hub.lua` | 312-388 |
+| Workspace port resolution | Same | 115-141 |
+| Config mismatch → hard-restart | Same | 1326-1342 |
+| SSE lifecycle | Same | 1199-1274 |
+| Workspace cache lookup | `mcphub/utils/workspace.lua` | 186-210 |
+| Plugin source | `~/.local/share/nvim3_jelly_tinynvim/lazy/mcphub.nvim/` | — |
+
+## Implementation Plan
+
+### Fix: Per-profile workspace ports using NVIM_APPNAME
+
+Change `get_port()` in `lua/plugins/extra/myAi.lua` to derive a unique port per profile:
+
+```lua
+get_port = function()
+  local appname = vim.env.NVIM_APPNAME or "nvim"
+  if appname:find("nvimwt") then
+    return 47475  -- worktree profile
+  end
+  return 47474    -- main profile
+end,
+```
+
+- Both profiles can run simultaneously without conflict
+- Each has a predictable fixed port for CLI agent access
+- Workspace mode stays enabled (`.mcphub/servers.json` still works)
+
+### Alternative Options Considered
+
+**Option B: Disable workspace mode entirely**
+```lua
+workspace = { enabled = false }
+```
+- Single port 37373 for everything, but `.mcphub/servers.json` per-workspace customization lost
+- Two profiles on same port 37373 would still share gracefully IF configs match (same `mcphub.json`, no workspace config diff)
+
+**Option C: Remove get_port, use hash-based ports**
+```lua
+-- get_port removed → mcphub.nvim generates port from CWD hash
+```
+- Each CWD gets unique port automatically, but CLI agents can't predict the port
+
+### Cleanup: Legacy flags in mcphub.json
+
+Servers still using `USE_PIPELINE`/`USE_GITLAB_WIKI`/`USE_MILESTONE` alongside `GITLAB_TOOLSETS`:
+- [x] `gitlab_mr`: Fixed — removed legacy flags, added `pipelines` to toolset
+- [ ] `gitlab_proj`: Has `USE_GITLAB_WIKI`, `USE_MILESTONE`, `USE_PIPELINE` (all false) — remove them
+- [ ] `gitlab_upload`: Same pattern (disabled server, low priority)
+- [ ] `gitlab_localupload`: Same pattern (disabled server, low priority)
+
+## Success Criteria
+
+- Two Neovim profiles can open `:MCPHub` simultaneously without killing each other
+- No SIGTERM or bulk client disconnect when second profile opens
+- CLI agents maintain stable SSE connections when multiple profiles are active
+- No `GITLAB_TOOLSETS` legacy flag warnings in startup logs
+
+## Verification
+
+### How to verify
+
+Open two terminal sessions, start both profiles, open MCPHub in each.
+
+### Commands
+
+```bash
+# Terminal 1: main profile
+NVIM_APPNAME=nvim3_jelly_tinynvim nvim
+# :MCPHub → wait for servers to start
+
+# Terminal 2: worktree profile
+NVIM_APPNAME=nvimwt3a nvim
+# :MCPHub → wait for servers to start
+
+# Terminal 3: check both ports
+lsof -i :47474 -i :47475
+curl http://localhost:47474/health
+curl http://localhost:47475/health
+```
+
+### Checklist
+
+- [ ] Profile A's MCPHub stays running when profile B opens MCPHub
+- [ ] No SIGTERM in profile A's MCPHub logs
+- [ ] No bulk `client disconnected` log spam
+- [ ] SSE connections remain stable (no code 56 errors)
+- [ ] Hard Refresh (`R`) works in both profiles independently
+- [ ] CLI agents connected to profile A remain connected after profile B starts
+- [ ] No `GITLAB_TOOLSETS` legacy flag warnings in startup logs
+
+## References
+
+- [MCPHub plugin source](~/.local/share/nvim3_jelly_tinynvim/lazy/mcphub.nvim/)
+- [MCPHub docs](https://ravitemer.github.io/mcphub.nvim/)
+- [Worktree testing guide](docs/memory/nvim-worktree-testing.md)

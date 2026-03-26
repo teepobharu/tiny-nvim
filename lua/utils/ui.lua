@@ -21,6 +21,36 @@ end
 
 ----- MY ADDED ------------
 
+--- Run a noice command after ensuring any existing split view is in the current tab.
+--- Noice caches view objects globally (View._views). A split window is bound to
+--- the tab where it was first created, so calling cmd() from a different tab
+--- silently does nothing. This helper destroys the stale cached view so noice
+--- recreates it in the current tab.
+---@param cmd string noice command name, e.g. "all", "history"
+function M.noice_cmd_tab_aware(cmd)
+  local ok, View = pcall(require, "noice.view")
+  if ok and View._views then
+    local cur_tab = vim.api.nvim_get_current_tabpage()
+    for i = #View._views, 1, -1 do
+      local v = View._views[i]
+      local nui = v.view and v.view._nui
+      if nui and nui.winid then
+        if not vim.api.nvim_win_is_valid(nui.winid) then
+          -- Stale entry with an invalid window — clean it up too.
+          v.view:destroy()
+          table.remove(View._views, i)
+        elseif vim.api.nvim_win_get_tabpage(nui.winid) ~= cur_tab then
+          -- Split lives in a different tab — destroy the cached view so it
+          -- gets recreated fresh in the current tab on the next cmd() call.
+          v.view:destroy()
+          table.remove(View._views, i)
+        end
+      end
+    end
+  end
+  require("noice").cmd(cmd)
+end
+
 ---@return {fg?:string}?
 function M.fg(name)
   local color = M.color(name)

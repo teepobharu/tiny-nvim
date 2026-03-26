@@ -14,6 +14,7 @@ related:
   - [init.lua LSP enable](init.lua:38-107)
   - [mydefault-nvim-config](lua/config/mydefault-nvim-config.lua)
   - [Suggested patch](tasks/open/dotnet-csharp-support/01-dotnet-csharp-support.patch)
+  - [overseer component loader](~/.local/share/nvim3_jelly_tinynvim/lazy/overseer.nvim/lua/overseer/component.lua:152)
 ---
 
 ## Objective
@@ -320,6 +321,103 @@ return {
 }
 ```
 
+### 6. Permission error handling — pre-emptive chmod + detection component
+
+**Problem**: When executing files via shebang (`./file`), users can hit "Permission denied" (exit code 126). Currently overseer shows a generic "FAILURE" notification — no actionable guidance. Also `chmod` itself could fail (read-only fs, ownership issues).
+
+**Approach**: Option A + B combined:
+- **A**: Pre-emptive `chmod +x` already built into `build_shebang_command()` above
+- **B**: Custom overseer component `on_permission_error` that pattern-matches output and shows actionable notification
+
+**Component placement**: `lua/overseer/component/on_permission_error.lua` — overseer auto-discovers components via `nvim_get_runtime_file("lua/overseer/component/*.lua", true)` (see `component.lua:152`), so placing it in the config's `lua/overseer/component/` directory works — same mechanism as custom templates.
+
+**Component design**:
+
+```lua
+-- lua/overseer/component/on_permission_error.lua
+---@type overseer.ComponentFileDefinition
+return {
+  desc = "Detect permission errors and notify with fix command",
+  params = {
+    auto_chmod = {
+      desc = "Auto chmod +x the file and notify (does not auto-retry)",
+      type = "boolean",
+      default = false,
+    },
+  },
+  constructor = function(params)
+    return {
+      detected = false,
+      on_output_lines = function(self, task, lines)
+        if self.detected then
+          return
+        end
+        for _, line in ipairs(lines) do
+          if line:match("Permission denied") or line:match("permission denied") or line:match("EACCES") then
+            self.detected = true
+            local denied_file = line:match(":%s*(.-):%s*[Pp]ermission denied")
+              or line:match("open '(.-)'")
+              or ""
+
+            if params.auto_chmod and denied_file ~= "" then
+              local chmod_ok = os.execute(string.format("chmod +x %q", denied_file))
+              if chmod_ok then
+                vim.notify(
+                  string.format("Auto-fixed: chmod +x %s\nRerun with <leader>or", denied_file),
+                  vim.log.levels.INFO
+                )
+              else
+                vim.notify(
+                  string.format(
+                    "Permission denied: %s\nchmod failed — check ownership:\n  ls -la %s\n  sudo chmod +x %s",
+                    denied_file, denied_file, denied_file
+                  ),
+                  vim.log.levels.ERROR
+                )
+              end
+            else
+              vim.notify(
+                string.format(
+                  "Permission denied%s\nFix: chmod +x <file> then rerun with <leader>or",
+                  denied_file ~= "" and (": " .. denied_file) or ""
+                ),
+                vim.log.levels.WARN
+              )
+            end
+            return
+          end
+          if line:match("command not found") or line:match("No such file or directory") then
+            self.detected = true
+            local missing_cmd = line:match("(%S+):%s*command not found")
+              or line:match("(%S+):%s*No such file")
+              or ""
+            vim.notify(
+              string.format(
+                "Command not found%s\nCheck: which %s\nOr install the required tool.",
+                missing_cmd ~= "" and (": " .. missing_cmd) or "",
+                missing_cmd
+              ),
+              vim.log.levels.WARN
+            )
+            return
+          end
+        end
+      end,
+    }
+  end,
+}
+```
+
+**Usage in builder** — add to the components list in `run_script_deterministic.lua`:
+```lua
+components = {
+  { "on_output_quickfix", set_diagnostics = true },
+  { "open_output", on_start = "always", direction = "dock", focus = false },
+  { "on_permission_error", auto_chmod = false },
+  "default",
+},
+```
+
 ---
 
 ## Implementation Plan
@@ -327,6 +425,8 @@ return {
 - [ ] Fix `cs` runner in `run_script_deterministic.lua` — merge `cs_script` into `cs`, use `dotnet run $file`
 - [ ] Add shebang fallback to `run_script_deterministic.lua` — `detect_shebang()` + `build_shebang_command()` helpers, add `shebang` to `default` runners
 - [ ] Add `open_output` component to builder return — `{ "open_output", on_start = "always", direction = "dock", focus = false }`
+- [ ] Create `lua/overseer/component/on_permission_error.lua` — detect permission/command-not-found errors, show actionable notification
+- [ ] Add `on_permission_error` component to builder return in `run_script_deterministic.lua`
 - [ ] Create `lua/langs/csharp.lua` — TreeSitter `c_sharp` parser
 - [ ] Create `lsp/omnisharp.lua` — OmniSharp config file
 - [ ] Gate LSP in `init.lua` — conditional `lsp_by_ft.cs` behind `vim.g.lsp_enable_csharp` (default=false)
@@ -338,6 +438,8 @@ return {
 - `test.cs` runs via overseer `run script - deterministic` using shebang or `dotnet run`
 - Output panel auto-opens docked when any `run script - deterministic` task starts
 - Shebang fallback works for ANY file with `#!` first line (not just `.cs`)
+- Permission errors show actionable notification (not just generic "FAILURE")
+- "Command not found" errors show notification with the missing command name
 - C# LSP does NOT start unless `vim.g.lsp_enable_csharp = true` is set
 - `.cs` files get syntax highlighting via TreeSitter `c_sharp` parser
 
@@ -384,6 +486,8 @@ NVIM_APPNAME=nvim3_jelly_tinynvim nvim tests/lang_coderun/test.cs
 - [ ] Focus stays in editor (not stolen by output panel)
 - [ ] Shebang fallback runs `test.cs` via its `#!/usr/bin/env mise exec dotnet@10 -- dotnet run` shebang
 - [ ] Shebang fallback works on non-cs files with `#!` lines
+- [ ] Running a non-executable file shows actionable "Permission denied" notification (not generic "FAILURE")
+- [ ] "Command not found" errors show the missing command name in notification
 - [ ] No LSP starts for `.cs` files by default
 - [ ] LSP starts when `vim.g.lsp_enable_csharp = true` is set in `.nvim-config.lua`
 - [ ] Existing `dotnet test` overseer template still works for `*Test.cs` files
@@ -392,6 +496,7 @@ NVIM_APPNAME=nvim3_jelly_tinynvim nvim tests/lang_coderun/test.cs
 ## References
 
 - [overseer open_output component](~/.local/share/nvim3_jelly_tinynvim/lazy/overseer.nvim/lua/overseer/component/open_output.lua)
+- [overseer component loader](~/.local/share/nvim3_jelly_tinynvim/lazy/overseer.nvim/lua/overseer/component.lua:152)
 - [overseer config aliases](~/.local/share/nvim3_jelly_tinynvim/lazy/overseer.nvim/lua/overseer/config.lua:88-106)
 - [dotnet 10 run-file feature](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-10#file-based-apps)
 - [OmniSharp releases](https://github.com/OmniSharp/omnisharp-roslyn/releases)

@@ -1,7 +1,7 @@
 ### Patch: .NET/C# standalone script support
-### Scope: code runner fix, shebang fallback, output toggle, gated LSP, treesitter
+### Scope: code runner fix, shebang fallback, output toggle, permission error component, gated LSP, treesitter
 ### This is a REFERENCE patch — apply changes manually or use as guide.
-### Files modified: 5 existing + 2 new
+### Files modified: 3 existing + 3 new
 
 # ============================================================
 # FILE 1 (MODIFY): lua/overseer/template/user/run_script_deterministic.lua
@@ -10,7 +10,7 @@
 #   - Merge orphaned cs_script into cs
 #   - Add shebang detection + fallback helpers
 #   - Add shebang to default fallback list
-#   - Add open_output component to builder
+#   - Add open_output + on_permission_error components to builder
 # ============================================================
 
 --- a/lua/overseer/template/user/run_script_deterministic.lua
@@ -164,7 +164,7 @@
 +      end, cmd)
 +    end
 
-## Section F: In builder() return — add open_output component (replace lines ~227-233):
+## Section F: In builder() return — add open_output + on_permission_error components (replace lines ~227-233):
 
 -    return {
 -      cmd = cmd,
@@ -178,6 +178,7 @@
 +      components = {
 +        { "on_output_quickfix", set_diagnostics = true },
 +        { "open_output", on_start = "always", direction = "dock", focus = false },
++        { "on_permission_error", auto_chmod = false },
 +        "default",
 +      },
 +    }
@@ -192,7 +193,97 @@
 
 
 # ============================================================
-# FILE 2 (NEW): lua/langs/csharp.lua
+# FILE 2 (NEW): lua/overseer/component/on_permission_error.lua
+# Auto-discovered by overseer via nvim_get_runtime_file
+# Detects "Permission denied" / "command not found" in output
+# and shows actionable vim.notify with fix instructions.
+# ============================================================
+
++---@type overseer.ComponentFileDefinition
++return {
++  desc = "Detect permission errors and notify with fix command",
++  params = {
++    auto_chmod = {
++      desc = "Auto chmod +x the file and notify (does not auto-retry)",
++      type = "boolean",
++      default = false,
++    },
++  },
++  constructor = function(params)
++    return {
++      detected = false,
++      on_output_lines = function(self, task, lines)
++        if self.detected then
++          return
++        end
++        for _, line in ipairs(lines) do
++          -- Match common permission error patterns
++          if
++            line:match("Permission denied")
++            or line:match("permission denied")
++            or line:match("EACCES")
++          then
++            self.detected = true
++            -- Try to extract the file path from the error
++            local denied_file = line:match(":%s*(.-):%s*[Pp]ermission denied")
++              or line:match("open '(.-)'")
++              or ""
++
++            if params.auto_chmod and denied_file ~= "" then
++              local chmod_ok = os.execute(string.format("chmod +x %q", denied_file))
++              if chmod_ok then
++                vim.notify(
++                  string.format("Auto-fixed: chmod +x %s\nRerun with <leader>or", denied_file),
++                  vim.log.levels.INFO
++                )
++              else
++                vim.notify(
++                  string.format(
++                    "Permission denied: %s\nchmod failed — check ownership:\n  ls -la %s\n  sudo chmod +x %s",
++                    denied_file,
++                    denied_file,
++                    denied_file
++                  ),
++                  vim.log.levels.ERROR
++                )
++              end
++            else
++              vim.notify(
++                string.format(
++                  "Permission denied%s\nFix: chmod +x <file> then rerun with <leader>or",
++                  denied_file ~= "" and (": " .. denied_file) or ""
++                ),
++                vim.log.levels.WARN
++              )
++            end
++            return
++          end
++
++          -- Also detect "command not found" (exit code 127)
++          if line:match("command not found") or line:match("No such file or directory") then
++            self.detected = true
++            local missing_cmd = line:match("(%S+):%s*command not found")
++              or line:match("(%S+):%s*No such file")
++              or ""
++            vim.notify(
++              string.format(
++                "Command not found%s\nCheck: which %s\nOr install the required tool.",
++                missing_cmd ~= "" and (": " .. missing_cmd) or "",
++                missing_cmd
++              ),
++              vim.log.levels.WARN
++            )
++            return
++          end
++        end
++      end,
++    }
++  end,
++}
+
+
+# ============================================================
+# FILE 3 (NEW): lua/langs/csharp.lua
 # ============================================================
 
 +return {
@@ -205,7 +296,7 @@
 
 
 # ============================================================
-# FILE 3 (NEW): lsp/omnisharp.lua
+# FILE 4 (NEW): lsp/omnisharp.lua
 # Only used when vim.g.lsp_enable_csharp = true
 # ============================================================
 
@@ -233,7 +324,7 @@
 
 
 # ============================================================
-# FILE 4 (MODIFY): init.lua
+# FILE 5 (MODIFY): init.lua
 # Add conditional C# LSP to lsp_by_ft table
 # Insert after lsp_by_ft definition (after line ~62, before the pcall lines)
 # ============================================================
@@ -247,7 +338,7 @@
 
 
 # ============================================================
-# FILE 5 (MODIFY): lua/plugins/extra/myEditor.lua
+# FILE 6 (MODIFY): lua/plugins/extra/myEditor.lua
 # Add cs to quick-code-runner file_types and global_files
 # ============================================================
 

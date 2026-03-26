@@ -235,8 +235,10 @@ function M.select_prompt(opts, callback)
     else
       last_two = dir
     end
+    -- Make searchable text include parent path + basename so Snacks matching considers both
+    local match_text = (last_two ~= "" and (last_two .. " " .. basename) or basename)
     -- store basename and parent; formatting will render parent separately
-    table.insert(items, { text = basename, name = basename, parent = last_two, file = f })
+    table.insert(items, { text = match_text, name = basename, parent = last_two, file = f })
   end
 
   -- sort by parent directory then name
@@ -252,14 +254,15 @@ function M.select_prompt(opts, callback)
     Snacks.picker.pick {
       source = "select",
       supports_live = true,
-      title = "Select Prompt File (c-y copy)",
+      title = "Select Prompt File <CR> paste, (c-y copy)",
       items = items,
       format = function(item, picker)
         -- Use the pre-computed parent directory (last 2 parts)
         local parent = item.parent or ""
+        local name = item.name or ""
         return {
           { parent .. " ", "Comment" },
-          { item.text or "", "SnacksPickerTitle" },
+          { name, "SnacksPickerTitle" },
         }
       end,
 
@@ -267,6 +270,7 @@ function M.select_prompt(opts, callback)
         preset = "default",
         -- preset = "vscode",
         hidden = false,
+        preview = { width = 0.5, height = 0.6 },
         layout = {
           backdrop = false,
           height = 0.9,

@@ -905,7 +905,7 @@ local function execute_selected_code(opts)
     local current_win = vim.api.nvim_get_current_win()
     -- some async delay then execute noice
     vim.defer_fn(function()
-      vim.cmd "NoiceAll"
+      require("utils.ui").noice_cmd_tab_aware "all"
       if vim.api.nvim_get_current_win() ~= current_win then
         vim.api.nvim_set_current_win(current_win)
       end

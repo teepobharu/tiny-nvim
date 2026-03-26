@@ -54,7 +54,7 @@ See [investigate-gitlab-upload-issues.md](tasks/review/investigate-gitlab-upload
 Added `gitlab_zz_local` to `~/dotfiles/ai/mcp/mcphub.json`:
 - **command**: `node`
 - **args**: `["/Users/tharutaipree/worktrees/zereight-mcp-gitlab/build/index.js"]`
-- Same env vars as `gitlab_z` (mirrors its config)
+- Same env vars as `gitlab_upload` (mirrors its config)
 
 ## Rebuild Command
 
@@ -68,7 +68,7 @@ cd ~/worktree/zereight-mcp-gitlab && npm run build
 ### How to verify
 
 1. Enable `gitlab_zz_local` in MCPHub (`:MCPHub` → toggle on)
-2. Disable `gitlab_z` to avoid confusion
+2. Disable `gitlab_upload` to avoid confusion
 3. Test `upload_markdown` tool with a file
 
 ### Commands

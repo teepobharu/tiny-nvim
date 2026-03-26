@@ -519,6 +519,15 @@ return {
             auto_generate_title = true,
             continue_last_chat = false,
             delete_on_clearing_chat = false,
+            title_generation_opts = {
+              ---Adapter for generating titles (defaults to current chat adapter) 
+              -- adapter = "copilot", -- nil to use current chat 
+              -- model = "gpt-4.1", -- nil to use current chat Error: {"error":{"message":"model gpt-4.1 is not supported via Responses API.","code":"unsupported_api_for_model"}}
+              ---Number of user prompts after which to refresh the title (0 to disable)
+              refresh_every_n_prompts = 0, -- e.g., 3 to refresh after every 3rd user prompt
+              max_refreshes = 1,
+            },
+            -- TODO: memory opts  require vector search
             dir_to_save = vim.fn.stdpath "data" .. "/codecompanion-history",
           },
         },
