@@ -15,6 +15,15 @@ related:
 
 Fix MCPHub port conflicts when two Neovim profiles (main `nvim3_jelly_tinynvim` and worktree `nvimwt3a`) are open simultaneously, causing SIGTERM shutdowns, bulk client disconnects, and stale error states in the UI.
 
+
+##  Other possible cause and work around by user observation?
+
+1. Some msg when mcphub version mismatch when open in diff profile
+- use same version
+
+2. quit nvim and reopen + restart 
+
+
 ## Context
 
 ### Current Config (`myAi.lua:256-274`, identical in both profiles)

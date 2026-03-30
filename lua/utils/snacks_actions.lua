@@ -1048,9 +1048,27 @@ function M.select_subproject_cwd(picker, opts_or_item)
 
   local show_all = true -- start in "root" (all) mode
 
+  -- Compute short CWD context label for title (relative from git root)
+  local from_dir_rel = "."
+  if git_root and from_dir then
+    local rel = from_dir:gsub("^" .. vim.pesc(git_root) .. "/?", "")
+    from_dir_rel = rel == "" and "." or rel
+  end
+
+  local scope_modes = { "root", "cwd" }
+  local function build_title()
+    local scope_idx = show_all and 1 or 2
+    local scope_label = scope_modes[scope_idx]
+    return "Subproj [" .. from_dir_rel .. "] [" .. scope_label .. " " .. scope_idx .. "/" .. #scope_modes .. "]"
+  end
+
+  local function build_list_footer()
+    return " cwd: " .. from_dir_rel .. " | git: " .. (git_root and vim.fn.fnamemodify(git_root, ":t") or "?")
+  end
+
   Snacks.picker.pick {
     source = "subproject_cwd",
-    title = "Subprojects [root]",
+    title = build_title(),
     items = items,
     format = function(item)
       local meta = item.meta or {}
@@ -1107,7 +1125,7 @@ function M.select_subproject_cwd(picker, opts_or_item)
     end,
     actions = {
       apply_filter = function(subpicker, item)
-        vim.print("Applying CWD: " .. tostring(item.dir))
+        vim.print("Persist CWD: " .. tostring(item.dir))
         vim.g.picker_cwd_cycle_state = "subproject_picker"
         vim.g[persist_key] = item.dir
         -- close seems to also close the parent picker as well
@@ -1116,13 +1134,18 @@ function M.select_subproject_cwd(picker, opts_or_item)
         reset_picker_traversal_state(picker)
         local newOpts = require("utils.snacks_terminal").get_initial_picker_state {}
         picker.opts = vim.tbl_deep_extend("force", picker.opts, newOpts)
-        -- vim.print(picker.opts.cwd)
+        picker:find()
+      end,
+      apply_temp = function(subpicker, item)
+        vim.print("Apply temp CWD: " .. tostring(item.dir))
+        subpicker:action "cancel"
+        reset_picker_traversal_state(picker)
+        picker.opts.cwd = item.dir
         picker:find()
       end,
       toggle_scope = function(subpicker)
         show_all = not show_all
-        local mode_label = show_all and "[root]" or "[cwd]"
-        subpicker.opts.title = "Subprojects " .. mode_label
+        subpicker.opts.title = build_title()
         subpicker.opts.items = show_all and all_items or cwd_items
         subpicker:find()
       end,
@@ -1132,8 +1155,7 @@ function M.select_subproject_cwd(picker, opts_or_item)
           vim.notify("No subprojects found for current context", vim.log.levels.WARN)
           return
         end
-        local mode_label = show_all and "[root]" or "[cwd]"
-        subpicker.opts.title = "Subprojects " .. mode_label
+        subpicker.opts.title = build_title()
         subpicker.opts.items = show_all and all_items or cwd_items
         vim.notify("Subproject cache refreshed", vim.log.levels.INFO)
         subpicker:find()
@@ -1144,18 +1166,23 @@ function M.select_subproject_cwd(picker, opts_or_item)
         width = 0.25,
         min_width = 20,
       },
+      list = {
+        border = "bottom",
+        footer = build_list_footer(),
+        footer_pos = "left",
+      },
       input = {
-        footer = "<CR/C-s> apply, <M-S> toggle scope, <C-r> refresh, <C-q> cancel",
+        footer = "CR:persist C-s:apply M-S:scope C-r:ref",
         keys = {
           ["<CR>"] = {
             "apply_filter",
             mode = { "n", "i" },
-            desc = "Apply subproject CWD",
+            desc = "Persist CWD",
           },
           ["<C-s>"] = {
-            "apply_filter",
+            "apply_temp",
             mode = { "n", "i" },
-            desc = "Apply subproject CWD",
+            desc = "Apply CWD (temp)",
           },
           ["<M-S>"] = {
             "toggle_scope",
@@ -1165,7 +1192,7 @@ function M.select_subproject_cwd(picker, opts_or_item)
           ["<C-r>"] = {
             "refresh_subprojects",
             mode = { "n", "i" },
-            desc = "Force refresh subprojects",
+            desc = "Refresh subprojects",
           },
           -- default cancel with c-q
         },

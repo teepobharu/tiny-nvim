@@ -181,7 +181,7 @@ M.providers = {
     top_choices = {
       gpt = {
         default = { S = M.models.gpt.GPT_5_MINI, M = M.models.gpt.GPT_5_3_CODEX },
-        alt = { S = M.models.gpt.GPT_4_1_MINI },
+        alt = { S = M.models.gpt.GPT_4_1 },
         max = { M = M.models.gpt.GPT_5_1_CODEX_MAX, L = M.models.gpt.GPT_5_1_CODEX_MINI },
       },
       claude = {

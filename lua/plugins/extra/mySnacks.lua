@@ -46,7 +46,7 @@ return {
         toggles = {
           -- Existing toggles...
           git_cwd = {
-            icon = "",
+            icon = "",
             value = true, -- Show when case_sensitive is true
           },
           external = {
@@ -54,7 +54,7 @@ return {
             value = true,
           },
           case_sensitive_custom = {
-            icon = "C", -- Icon to show in title
+            icon = "^", -- Icon to show in title
             value = true, -- Show when case_sensitive is true
           },
           case_nonsensitive_custom = {
@@ -62,7 +62,7 @@ return {
             value = true, -- Show when case_sensitive is true
           },
           custom_cwd = {
-            icon = ".", -- Icon to show in title
+            icon = "󰥠", -- Icon to show in title
             value = true, -- Show when case_sensitive is true
           },
         },

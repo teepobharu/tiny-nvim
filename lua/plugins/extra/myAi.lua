@@ -338,7 +338,7 @@ return {
   },
   {
     "olimorris/codecompanion.nvim",
-    version = "19.6.x", -- exact pin: v19.6.0 / af7f1042a424e17ab49cef93442f33a55d514de6
+    version = "19.7.x", -- exact pin: v19.7.0 / f76cd2598e1d4a5fd78e27c29e2e5f53c9a99c21
     dependencies = {
       -- "ibhagwan/fzf-lua", -- For fzf provider, file or buffer picker
       -- "nvim-lua/plenary.nvim",
@@ -351,6 +351,7 @@ return {
     },
     config = function(_, options)
       require("codecompanion").setup(options)
+      require("utils.my_codecompanion_inline_debug_demo").setup()
 
       -- Show loading spinner when request is started (from jellydn/tiny-nvim)
       local ok, spinner = pcall(require, "spinner")
@@ -1250,4 +1251,3 @@ Search intent: <!-- replace with what you want to search for, e.g. "find all usa
     }
   },
 }
-
