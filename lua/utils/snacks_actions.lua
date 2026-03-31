@@ -225,15 +225,17 @@ function M.toggle_external(picker)
       end
       picker.opts.exclude = #base_exclude > 0 and base_exclude or nil
 
-      local short_cwd = vim.fn.fnamemodify(new_cwd, ":~")
+      local short_cwd = new_cwd
+      local git_root = require("utils.path").get_root_directory() or Snacks.git.get_root()
+      if git_root then
+        local rel = new_cwd:gsub("^" .. vim.pesc(git_root) .. "/?", "")
+        short_cwd = rel == "" and "." or rel
+      end
       local short_excl = exclude_pattern or "none"
       picker.title = string.format("%s [ext: %s, excl: %s]", title_source, short_cwd, short_excl)
 
       if ext_idx == #chain then
-        vim.notify(
-          string.format("External: git root — %s, excl: %s\nNext toggle disables", short_cwd, short_excl),
-          vim.log.levels.INFO
-        )
+        vim.notify(string.format("External: git root, excl: %s\nNext toggle disables", short_excl), vim.log.levels.INFO)
       else
         vim.notify(
           string.format("External: %s, excl: %s (%d/%d)", short_cwd, short_excl, ext_idx, #chain),
@@ -1134,6 +1136,13 @@ function M.select_subproject_cwd(picker, opts_or_item)
         reset_picker_traversal_state(picker)
         local newOpts = require("utils.snacks_terminal").get_initial_picker_state {}
         picker.opts = vim.tbl_deep_extend("force", picker.opts, newOpts)
+        -- Update parent picker title (skip git root — has its own toggle)
+        local rel = item.dir:gsub("^" .. vim.pesc(git_root) .. "/?", "")
+        if rel ~= "" then
+          local source = picker.opts and picker.opts.source or "Picker"
+          local title_source = type(source) == "string" and (source:sub(1, 1):upper() .. source:sub(2)) or "Picker"
+          picker.title = string.format("%s [%s]", title_source, rel)
+        end
         picker:find()
       end,
       apply_temp = function(subpicker, item)
@@ -1141,6 +1150,13 @@ function M.select_subproject_cwd(picker, opts_or_item)
         subpicker:action "cancel"
         reset_picker_traversal_state(picker)
         picker.opts.cwd = item.dir
+        -- Update parent picker title (skip git root — has its own toggle)
+        local rel = item.dir:gsub("^" .. vim.pesc(git_root) .. "/?", "")
+        if rel ~= "" then
+          local source = picker.opts and picker.opts.source or "Picker"
+          local title_source = type(source) == "string" and (source:sub(1, 1):upper() .. source:sub(2)) or "Picker"
+          picker.title = string.format("%s [%s]", title_source, rel)
+        end
         picker:find()
       end,
       toggle_scope = function(subpicker)
@@ -1234,7 +1250,12 @@ function M.toggle_cwd_files_grep(picker, item)
   -- Apply new cwd
   local source = picker.opts and picker.opts.source or "Picker"
   local title_source = type(source) == "string" and (source:sub(1, 1):upper() .. source:sub(2)) or "Picker"
-  local short_cwd = vim.fn.fnamemodify(new_cwd, ":~")
+  local git_root = require("utils.path").get_root_directory() or Snacks.git.get_root()
+  local short_cwd = new_cwd
+  if git_root then
+    local rel = new_cwd:gsub("^" .. vim.pesc(git_root) .. "/?", "")
+    short_cwd = rel == "" and "." or rel
+  end
 
   picker.opts.cwd = new_cwd
   picker.opts.args = nil -- clear any max-depth from previous state
@@ -1252,7 +1273,7 @@ function M.toggle_cwd_files_grep(picker, item)
   end
 
   if next_idx == #chain then
-    vim.notify(string.format("Scope: git root — %s\nNext toggle returns to initial", short_cwd), vim.log.levels.INFO)
+    vim.notify(string.format("Scope: git root\nNext toggle returns to initial", short_cwd), vim.log.levels.INFO)
   else
     vim.notify(string.format("Scope: %s (%d/%d)", short_cwd, next_idx, #chain), vim.log.levels.INFO)
   end
