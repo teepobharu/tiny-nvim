@@ -67,6 +67,9 @@ function M.get_agoda_adapters(use_dynamic_fetch)
     -- Uses dynamic model fetching via fetch_model_helper from my_codecompanion_actions
     [myAiC.providers.openai_agd.adapter_name] = function()
       return require("codecompanion.adapters").extend("openai", {
+        -- Override name so logs/notifications show "openai_agd" not the parent "openai"
+        name = myAiC.providers.openai_agd.adapter_name,
+        formatted_name = "OpenAI AGD",
         env = {
           api_key = "OPENAI_API_KEY",
           url = "AG_OPENAIPROXY", -- Base URL from env var
@@ -78,6 +81,11 @@ function M.get_agoda_adapters(use_dynamic_fetch)
           model = {
             default = MODELS.gpt.GPT_5_2,
             choices = function(self, opts)
+              -- use_dynamic_fetch is captured from the outer get_agoda_adapters(use_dynamic_fetch) argument.
+              -- merge_agoda_adapters() always calls get_agoda_adapters(true), so this closure
+              -- always has use_dynamic_fetch=true at runtime — meaning it always hits the internal
+              -- HTTP endpoint (http://openai-proxy.agoda.is/v1/models) via Curl.get(sync=true).
+              -- The `async` param in opts is ignored by openai_compatible.get_models().
               local finalOpt = vim.tbl_deep_extend("force", {}, opts or {})
               finalOpt.use_dynamic_fetch = use_dynamic_fetch
               return require("utils.my_codecompanion_actions").fetch_model_helper(
