@@ -5,10 +5,11 @@ local M = {}
 -- Used by both get_sub_project_dir and get_sub_project_dirs_from_root
 --
 -- Flags:
---   git_ignored  = true  -> file is in global/local gitignore, scanned via fd/find with timeout
---   is_directory = true  -> target is a directory, needs **/<name>/** pattern for git ls-files
---   skip_scan   = true  -> skip pipeline scan, detected via candidate_dirs (e.g. root always added)
---   match_from_within    -> only matches when current buffer is inside the marker directory
+--   git_ignored    = true   -> file is in global/local gitignore, scanned via fd/find with timeout
+--   is_directory   = true   -> target is a directory, needs **/<name>/** pattern for git ls-files
+--   skip_scan      = true   -> skip pipeline scan, detected via candidate_dirs (e.g. root always added)
+--   go_up          = N      -> adjust effective_dir after match: >0 walk up N levels, <0 descend into matched subdir
+--   git_root_only  = true   -> only match when effective subdir is a direct child of the git root
 
 M.SUBPROJECT_MARKERS = {
   { name = ".nvim-config.lua", type = "path", project_type = ".nv", git_ignored = true },
@@ -19,10 +20,28 @@ M.SUBPROJECT_MARKERS = {
   { name = "pom.xml", type = "path", project_type = "maven" },
   { name = "build.gradle", type = "path", project_type = "gradle" },
   { name = "%.sln$", type = "pattern", project_type = "dotnet" },
-  { name = { "Clientside", "Serverside" }, type = "path", project_type = "cronos", is_directory = true },
-  -- Special marker: only matches when browsing INSIDE .gitlab directory
-  -- match_from_within: the .gitlab dir itself becomes the subproject dir
-  { name = ".gitlab", type = "path", project_type = ".glab", match_from_within = true, is_directory = true },
+  -- Playwright: matches dirs that contain playwright.config.ts/js
+  { name = { "playwright.config.ts", "playwright.config.js" }, type = "path", project_type = "playwright" },
+  -- Cronos: go_up=1 — pipeline B finds src/Clientside & src/Serverside, candidate is src/;
+  -- validation checks both exist under src/, then go_up walks to the real project root.
+  {
+    name = { "Clientside", "Serverside" },
+    type = "path",
+    project_type = "cronos",
+    is_directory = true,
+    go_up = 1,
+  },
+  -- .gitlab: go_up=-1 — effective dir descends INTO the matched .gitlab subdir.
+  -- git_root_only: only matches <git_root>/.gitlab, not nested .gitlab dirs.
+  -- Always visible in the picker (no fromdir restriction).
+  {
+    name = ".gitlab",
+    type = "path",
+    project_type = ".glab",
+    is_directory = true,
+    go_up = -1,
+    git_root_only = true,
+  },
   -- .git: skip Pipeline B scan — root is always added as candidate via candidate_dirs[root_dir]
   { name = ".git", type = "path", project_type = "git", is_directory = true, skip_scan = true },
 }
@@ -494,44 +513,6 @@ function M.get_sub_project_dirs_from_root(root_dir, fromdir, return_metadata, re
     local matched_files = {}
     local is_dir_marker = marker.is_directory or false
 
-    -- For match_from_within markers, check if dir itself IS the marker directory
-    -- e.g. dir=/root/.gitlab and marker.name=".gitlab" → dir IS the marker, not its parent
-    if marker.match_from_within and type(marker.name) == "string" then
-      local clean_name = marker.name:gsub("/$", "")
-      local dir_basename = vim.fn.fnamemodify(dir, ":t")
-      if dir_basename == clean_name then
-        -- dir IS the marker directory itself — validate fromdir is inside
-        local is_inside = fromdir:match("^" .. vim.pesc(dir) .. "/") or fromdir == dir
-        if not is_inside then
-          return nil
-        end
-
-        -- Determine project_type
-        local project_type = marker.project_type
-
-        -- Detect submodule info
-        local in_submodule = gitUtil.is_in_submodule(dir)
-        local submodule_root = in_submodule and gitUtil.get_submodule_root(dir) or nil
-
-        local scan_source = (marker.git_ignored and "ignored") or (is_dir_marker and "dir") or "tracked"
-
-        return {
-          dir = dir,
-          matched_file = clean_name,
-          project_type = project_type,
-          marker_type = marker.type,
-          depth = calculate_depth_from_ref(dir, root_dir),
-          depth_from_start = calculate_depth_from_ref(dir, fromdir),
-          marker_index = marker_idx,
-          is_git_root = (dir == root_dir),
-          in_cwd_traversal = is_in_traversal_path(dir, fromdir, root_dir),
-          in_submodule = in_submodule,
-          submodule_root = submodule_root,
-          scan_source = scan_source,
-        }
-      end
-    end
-
     for _, raw_name in ipairs(names) do
       local name = raw_name:gsub("/$", "") -- strip trailing /
       local found = false
@@ -564,17 +545,38 @@ function M.get_sub_project_dirs_from_root(root_dir, fromdir, return_metadata, re
       end
     end
 
-    -- Resolve the effective subproject directory
-    -- match_from_within: the marker dir itself is the subproject (e.g. .gitlab/ not its parent)
+    -- Resolve the effective subproject directory via go_up:
+    --   go_up > 0: walk up N levels (cronos: src/ candidate → project root)
+    --   go_up = -1: descend into the first matched subdir (.gitlab: root/ → root/.gitlab)
+    --   go_up = nil/0: effective_dir is dir itself
     local effective_dir = dir
-    if marker.match_from_within and #matched_files > 0 then
-      local marker_dir = dir .. "/" .. matched_files[1]
-      local is_inside = fromdir:match("^" .. vim.pesc(marker_dir) .. "/") or fromdir == marker_dir
-      if not is_inside then
+    if marker.go_up and marker.go_up ~= 0 then
+      if marker.go_up > 0 then
+        for _ = 1, marker.go_up do
+          local parent = vim.fn.fnamemodify(effective_dir, ":h")
+          if parent == effective_dir then
+            break
+          end
+          effective_dir = parent
+        end
+      else
+        -- go_up < 0: descend into the matched subdir (first matched name)
+        if #matched_files > 0 then
+          local subdir = effective_dir .. "/" .. matched_files[1]
+          if vim.fn.isdirectory(subdir) == 1 then
+            -- git_root_only: the descended subdir must be a direct child of git root
+            if marker.git_root_only and vim.fn.fnamemodify(subdir, ":h") ~= root_dir then
+              return nil
+            end
+            effective_dir = subdir
+          end
+        end
+      end
+    elseif marker.git_root_only then
+      -- git_root_only without go_up: the candidate dir itself must be a direct child of git root
+      if vim.fn.fnamemodify(dir, ":h") ~= root_dir then
         return nil
       end
-      -- The marker directory itself is the subproject
-      effective_dir = marker_dir
     end
 
     -- Determine project_type
@@ -702,7 +704,7 @@ function M.get_sub_project_dirs_from_root(root_dir, fromdir, return_metadata, re
           if not seen_dir_candidates[key] then
             seen_dir_candidates[key] = true
             candidate_dirs[parent_dir] = true
-            -- Also add the marker dir itself as candidate (for match_from_within markers)
+            -- Also add the marker dir itself as candidate (for go_up=-1 markers like .gitlab)
             candidate_dirs[parent_dir .. "/" .. match] = true
           end
           break -- first marker match wins for this file, skip remaining markers

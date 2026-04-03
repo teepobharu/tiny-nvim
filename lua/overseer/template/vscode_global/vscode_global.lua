@@ -2,6 +2,14 @@
 local vscode = require "overseer.vscode"
 local vs_util = require "overseer.vscode.vs_util"
 
+local function get_git_root(path)
+  local git_entry = vim.fs.find(".git", { upward = true, path = path })[1]
+  if git_entry then
+    return vim.fs.dirname(git_entry)
+  end
+  return nil
+end
+
 ---@type overseer.TemplateFileProvider
 return {
   name = "global_vscode",
@@ -25,6 +33,16 @@ return {
     -- Convert tasks using existing VS Code converter
     local ret = {}
     local precalculated_vars = require("overseer.vscode.variables").precalculate_vars()
+
+    -- Fix bug when in mmbweb proj it get $HOME as workspaceDir
+    --  local cwd = vim.fn.getcwd()
+    local cwd = vim.fn.getcwd()
+    precalculated_vars.workspaceFolder = cwd
+    precalculated_vars.workspaceFolderBasename = vim.fs.basename(cwd)
+    -- Custom variable for global tasks: nearest git root from current file/cwd.
+    local file_dir = vim.fn.expand("%:p:h")
+    precalculated_vars.workspaceGitDir = get_git_root(file_dir) or get_git_root(cwd) or cwd
+    _G.userdbg([==[generator precalculated_vars:]==], vim.inspect(precalculated_vars))
 
     for _, task in ipairs(content.tasks) do
       local tmpl = vscode.convert_vscode_task(task, precalculated_vars)

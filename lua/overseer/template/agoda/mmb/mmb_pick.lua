@@ -1,6 +1,6 @@
 ---@return overseer.TemplateDefinition
 return {
-  name = "Run Mmb pick",
+  name = "Run Mmb SV (nobuild)",
   tags = vim.tbl_extend("force", {
     require("overseer").TAG.BUILD,
     require("overseer").TAG.RUN,

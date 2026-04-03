@@ -1,6 +1,6 @@
 ---@return overseer.TemplateDefinition
 return {
-  name = "Run TW Tripviewbff pick",
+  name = "Run TW Tripviewbff/MMBA pick",
   tags = vim.list_extend({ "agoda", "custom" }, require("overseer").TAG.values),
   description = "run android test on current file",
   builder = function(params)

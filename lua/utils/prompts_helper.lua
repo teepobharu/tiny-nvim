@@ -61,7 +61,7 @@ local preview_ns = vim.api.nvim_create_namespace "prompts_helper_preview"
 
 -- Default configuration
 -- Support both a single prompt_dir (backwards compatible) and prompt_dirs (array)
--- TODO: switcher between preconfigure groups 
+-- TODO: switcher between preconfigure groups
 -- TODO: allow search to match the subdir path / label
 -- TODO: add custom label for each path
 M.config = {
@@ -71,6 +71,7 @@ M.config = {
     vim.fn.expand "$HOME/AgodaGit/tools/trip-ai-tools/instruction/",
     -- per-dir override: match any markdown in these folders
     { dir = vim.fn.expand "$HOME/dotfiles/ai/agents/commands/", patterns = { "*.md" } },
+    { dir = vim.fn.expand "$HOME/dotfiles/ai/agents/commands/codecompanion/", patterns = { "*.md" } },
     { dir = vim.fn.expand "$HOME/dotfiles/ai/agents/docs/", patterns = { "*.md" } },
     { dir = vim.fn.expand "$HOME/dotfiles/ai/agents/agents/", patterns = { "*.md" } },
     { dir = vim.fn.expand "$HOME/dotfiles/ai/agents/skills/", patterns = { "**/skill*.md" } }, -- works with SKILL files (non case sensitive),
@@ -158,19 +159,11 @@ function M.get_prompt_files(opts)
 
     local patterns = entry_patterns or patterns_global
 
-    -- Debug: print path and patterns
-    -- print(string.format("[DEBUG] Processing path: %s", vim.inspect(path)))
-    -- print(string.format("[DEBUG] Patterns: %s", vim.inspect(patterns)))
-    -- print(string.format("[DEBUG] isdirectory result: %s", vim.inspect(vim.fn.isdirectory(path))))
-
     -- If path is a directory, use globpath to find pattern matches
     if vim.fn.isdirectory(path) == 1 then
-      print(string.format "[DEBUG] Path is directory, globbing...")
       for _, pat in ipairs(patterns) do
         local ok = vim.fn.globpath(path, pat, false, true)
-        print(string.format("[DEBUG] Pattern '%s' found %d files", pat, (ok and type(ok) == "table") and #ok or 0))
         if ok and type(ok) == "table" and #ok > 0 then
-          print(string.format("[DEBUG] Adding files: %s", vim.inspect(ok)))
           vim.list_extend(files, ok)
         end
       end
@@ -193,8 +186,6 @@ function M.get_prompt_files(opts)
     ::continue::
   end
 
-  -- print(string.format("[DEBUG] Total files found: %d", #files))
-  -- print(string.format("[DEBUG] Files: %s", vim.inspect(files)))
   return files
 end
 
@@ -254,7 +245,7 @@ function M.select_prompt(opts, callback)
     Snacks.picker.pick {
       source = "select",
       supports_live = true,
-      title = "Select Prompt File <CR> paste, (c-y copy)",
+      title = "Select Prompt File <CR> paste, (⌥-y copy content, c-y copy path)",
       items = items,
       format = function(item, picker)
         -- Use the pre-computed parent directory (last 2 parts)
@@ -343,7 +334,15 @@ function M.select_prompt(opts, callback)
         },
         input = {
           keys = {
-            ["<C-y>"] = { "copy_content", mode = { "n", "i" }, desc = "Copy Prompt Content" },
+            ["<C-y>"] = {
+              -- Reuse snacks_actions copy_path_select for consistent path-copy behavior
+              function(picker, item)
+                require("utils.snacks_actions").copy_path_select(picker, item)
+              end,
+              mode = { "n", "i" },
+              desc = "Copy File Path",
+            },
+            ["<A-y>"] = { "copy_content", mode = { "n", "i" }, desc = "Copy Prompt Content" },
             ["<CR>"] = { "paste_content", mode = { "n", "i" }, desc = "Paste Prompt Content" },
           },
         },

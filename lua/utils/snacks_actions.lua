@@ -1068,6 +1068,13 @@ function M.select_subproject_cwd(picker, opts_or_item)
     return " cwd: " .. from_dir_rel .. " | git: " .. (git_root and vim.fn.fnamemodify(git_root, ":t") or "?")
   end
 
+  -- Determine the current marker: persisted path, or cwd if none persisted
+  local current_marker_dir = vim.g[persist_key]
+  if not current_marker_dir or current_marker_dir == "" then
+    current_marker_dir = vim.fn.getcwd()
+  end
+  current_marker_dir = vim.fn.fnamemodify(current_marker_dir, ":p"):gsub("/$", "")
+
   Snacks.picker.pick {
     source = "subproject_cwd",
     title = build_title(),
@@ -1078,6 +1085,9 @@ function M.select_subproject_cwd(picker, opts_or_item)
 
       -- CWD traversal indicator
       local cwd_prefix = info.in_cwd_traversal and "↑ " or "  "
+      -- Active/persisted state marker
+      local item_dir = vim.fn.fnamemodify(item.dir or "", ":p"):gsub("/$", "")
+      local active_marker = item_dir == current_marker_dir and "* " or "  "
 
       -- Submodule indicator
       local submod_indicator = info.in_submodule and "[sub] " or ""
@@ -1085,6 +1095,7 @@ function M.select_subproject_cwd(picker, opts_or_item)
       if meta.is_git_root then
         local root_path = meta.display_dir ~= "" and meta.display_dir or (meta.full_path or "")
         return {
+          { active_marker, "DiagnosticOk" },
           { cwd_prefix, "Comment" },
           { "Git ", "SnacksPickerLabel" },
           { root_path, "SnacksPickerFile" },
@@ -1092,6 +1103,7 @@ function M.select_subproject_cwd(picker, opts_or_item)
       end
 
       return {
+        { active_marker, "DiagnosticOk" },
         { cwd_prefix, "Comment" },
         { submod_indicator, "Special" },
         { meta.sub_type or "subproj", "SnacksPickerLabel" },
