@@ -457,6 +457,13 @@ M.keymaps = {
       desc = "Avante Models (AGD All)",
       mode = "n",
     },
+    {
+      "<leader>rc", -- if not map not show not sure why unsafe key ?
+      function()
+        require("avante.api").add_selected_file(vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':p'))
+      end,
+      desc = "Avante - Add current to chat",
+    },
   },
 
   -- Quick code runner

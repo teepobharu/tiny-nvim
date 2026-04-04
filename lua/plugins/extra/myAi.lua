@@ -2,6 +2,7 @@
 -- put all related ai agents additional plugins options and configs here
 
 local editor_keymaps = require "utils.editor_keymaps"
+local AI_CONST = require "utils.my_ai_constants"
 
 local CLAUDE_CODER_MAPPING_PREFIX = "<leader>C"
 -- caveat : might not updated when something changed until restart nvim ?
@@ -185,7 +186,7 @@ return {
       -- See lua/utils/my_avante_utils.lua for Agoda provider configurations
       providers = vim.tbl_extend("force", {
         copilot = {
-          model = "gpt-5-mini",
+          model = AI_CONST.DEFAULT_COPILOT_MODEL,
         },
       }, {}), -- default = no custom provider
       -- avante_utils.get_agoda_providers()),
@@ -200,11 +201,13 @@ return {
         allow_access_to_git_ignored_files = true, -- still not allow outside repo / root how ?
       },
       mappings = { -- https://github.com/yetone/avante.nvim/blob/5df39b480d438a46afa1571db6480210bccea21b/lua/avante/config.lua#L641
+        ---@class AvanteConflictMappings
         sidebar = {
           switch_windows = "<C-Tab>", -- not work
         },
         files = {
-          add_current = "<leader>aC",
+          add_current = "<leader>rc", -- wil get map after avante is show
+          add_all_buffers = "<leader>rC",
         },
         toggle = {
           debug = "<leader>rd", -- discard to some random key
@@ -267,15 +270,15 @@ return {
         look_for = { ".mcphub/servers.json" },
         port_range = { min = 40000, max = 41000 }, -- Port range for generating unique workspace ports
         -- TODO: check if needed
-        -- get_port = function()
-        --   -- Derive unique port per profile to prevent multi-profile conflicts
-        --   -- (see tasks/open/mcphub-multi-profile-port-conflict.md)
-        --   local appname = vim.env.NVIM_APPNAME or "nvim"
-        --   if appname:find("nvimwt") then
-        --     return 47475 -- worktree profile
-        --   end
-        --   return 47474 -- main profile
-        -- end,
+        get_port = function()
+          -- Derive unique port per profile to prevent multi-profile conflicts
+          -- (see tasks/open/mcphub-multi-profile-port-conflict.md)
+          -- local appname = vim.env.NVIM_APPNAME or "nvim"
+          -- if appname:find("nvimwt") then
+          --   return 47475 -- worktree profile
+          -- end
+          return 47474 -- main profile
+        end,
         -- more tried notes + config ./mypoc.lua
         -- mcp-hub --port 47474 --config ~/dotfiles/ai/mcp/mcphub.json --config ./.mcphub/project.json
       },
@@ -370,6 +373,30 @@ return {
           end,
         })
       end
+
+      -- Filter out empty-content messages before submit to avoid
+      -- litellm/Vertex AI BadRequestError: "text content blocks must be non-empty"
+      -- Uses on_submitted (not on_before_submit) because the blank message is added
+      -- AFTER on_before_submit fires (chat/init.lua:1185) but BEFORE _submit_http (line 1226).
+      -- on_submitted fires at line 1223 with the payload table, and since payload is passed
+      -- by reference to _submit_http, mutating payload.messages here takes effect.
+      vim.api.nvim_create_autocmd("User", {
+        pattern = "CodeCompanionChatCreated",
+        group = group,
+        callback = function(event)
+          local chat = require("codecompanion.interactions.chat").buf_get_chat(event.data.bufnr)
+          if not chat then
+            return
+          end
+          chat:add_callback("on_submitted", function(_, args)
+            if args and args.payload and args.payload.messages then
+              args.payload.messages = vim.tbl_filter(function(m)
+                return not (type(m.content) == "string" and vim.trim(m.content) == "")
+              end, args.payload.messages)
+            end
+          end)
+        end,
+      })
     end,
     keys = require("utils.editor_keymaps").keymaps.codecompanion(),
     -- NOTE: llama3_2 and llama3latest ollama adapters were removed — they were
@@ -521,8 +548,8 @@ return {
             continue_last_chat = false,
             delete_on_clearing_chat = false,
             title_generation_opts = {
-              ---Adapter for generating titles (defaults to current chat adapter) 
-              -- adapter = "copilot", -- nil to use current chat 
+              ---Adapter for generating titles (defaults to current chat adapter)
+              -- adapter = "copilot", -- nil to use current chat
               -- model = "gpt-4.1", -- nil to use current chat Error: {"error":{"message":"model gpt-4.1 is not supported via Responses API.","code":"unsupported_api_for_model"}}
               ---Number of user prompts after which to refresh the title (0 to disable)
               refresh_every_n_prompts = 0, -- e.g., 3 to refresh after every 3rd user prompt
@@ -804,8 +831,13 @@ Documentation and Tracking:
             {
               role = "user",
               content = function()
-                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (use only 1 line break between title and body description). Important: keep the text clean no formatting (bad: **, '') keep plaintext with shortlist/dash prefix in body description. Only output the commit message. Do not output more than 5 bullet points. Do use acronym to save space and each point not too long. Don't include filepath, specific code changes or variables name"
+                local last_commits = vim.fn.system [[git log -n 10 --pretty=format:%s]]
+
+                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (use only 1 line break between title and body description). Important: keep the text clean no formatting (bad: **, '') keep plaintext with shortlist/dash prefix in body description. Only output the commit message. Do not output more than 5 bullet points. Do use acronym to save space and each point not too long. Don't include filepath, specific code changes or variables name. Use the sample commit subjects below to match the existing style and format (scope, tense, abbreviations)."
+                  .. "\n\nSample recent commit subjects (last 10):\n"
+                  .. last_commits
                   .. [[
+
 Example commit message:
 feat(release): add slack msg and create release after deploy
 - enhance GL CI release job
@@ -848,8 +880,13 @@ feat(release): add slack msg and create release after deploy
                     { pattern = ".*", skip_diff_threshold = 100, trim_diff = true }, -- default: trim if >100 lines
                   },
                 })
-                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (use only 1 line break between title and body description). Important: keep the text clean no formatting (bad: **, '') keep plaintext with shortlist/dash prefix in body description. Only output the commit message. Do not output more than 5 bullet points. Do use acronym to save space and each point not too long. Don't include filepath, specific code changes or variables name.\n\nNote: If total changes ≤700 lines, full diff shown. Otherwise: FILES CHANGED lists all files; LARGE FILES (>50 lines) shows summary only; SMALL FILES shows diff (trimmed to 100 lines if exceeded). Markdown files excluded from diff sections. Binary files marked with (binary)."
+                local last_commits = vim.fn.system [[git log -n 10 --pretty=format:%s]]
+
+                return "Write commit message for the change with commitizen convention. Write concise and clear, informative commit messages that explain the 'what' and 'why' behind changes, not just the 'how'. Add bullet points of changes in description of commit message under the main commit message (use only 1 line break between title and body description). Important: keep the text clean no formatting (bad: **, '') keep plaintext with shortlist/dash prefix in body description. Only output the commit message. Do not output more than 5 bullet points. Do use acronym to save space and each point not too long. Don't include filepath, specific code changes or variables name. Use the sample commit subjects below to match the existing style and format (scope, tense, abbreviations).\n\nNote: If total changes ≤700 lines, full diff shown. Otherwise: FILES CHANGED lists all files; LARGE FILES (>50 lines) shows summary only; SMALL FILES shows diff (trimmed to 100 lines if exceeded). Markdown files excluded from diff sections. Binary files marked with (binary)."
+                  .. "\n\nSample recent commit subjects (last 10):\n"
+                  .. last_commits
                   .. [[
+
 Example commit message:
 feat(release): add slack msg and create release after deploy
 - enhance GL CI release job
@@ -1236,11 +1273,16 @@ Search intent: <!-- replace with what you want to search for, e.g. "find all usa
     "coder/claudecode.nvim",
     opts = {
       -- terminal_cmd = "claude --allow-dangerously-skip-permissions",
-      terminal_cmd = "claude",
+      terminal_cmd = vim.env.HOME .. "/dotfiles/ai/claude/cc-agd/cag.sh --allow-dangerously-skip-permissions",
+      -- terminal_cmd = "claude",
     },
     -- lua/plugins/extra/claude-code.lua:194
     keys = {
-      { CLAUDE_CODER_MAPPING_PREFIX .. "C", "<cmd>ClaudeCode --continue --dangerously-skip-permissions <cr>", desc = "Toggle Claude Continue" },
+      {
+        CLAUDE_CODER_MAPPING_PREFIX .. "C",
+        "<cmd>ClaudeCode --continue <cr>",
+        desc = "Toggle Claude Continue",
+      },
       { CLAUDE_CODER_MAPPING_PREFIX .. "M", "<cmd>ClaudeCodeSelectModel<cr>", desc = "Select Claude model" },
       {
         "<leader>as",
@@ -1248,6 +1290,6 @@ Search intent: <!-- replace with what you want to search for, e.g. "find all usa
         desc = "Add file",
         ft = { "NvimTree", "neo-tree", "oil", "minifiles", "netrw" },
       },
-    }
+    },
   },
 }
