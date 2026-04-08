@@ -695,15 +695,11 @@ M.keymaps = {
       function()
         local search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection" or nil
         local snacks_util = require "utils.snacks_terminal"
-        local picker_opts = snacks_util.get_initial_picker_state {
+        local picker_opts = snacks_util.get_initial_picker_state({
           show_empty = true,
-          smartcase = false,
-          ignorecase = true,
-          hidden = true,
           search = search,
           live = not (search and search:match "%S" ~= nil), -- force in live mode only when search has non-whitespace content
-          -- args = { "--ignore-case" },
-        }
+        }, { source = "grep" })
 
         Snacks.picker.grep(picker_opts)
       end,
@@ -714,14 +710,10 @@ M.keymaps = {
       "<leader>fw",
       function()
         local snacks_util = require "utils.snacks_terminal"
-        local picker_opts = snacks_util.get_initial_picker_state {
+        local picker_opts = snacks_util.get_initial_picker_state({
           show_empty = true,
-          smartcase = false,
-          ignorecase = true,
-          hidden = true,
           live = true, -- force in live mode (normally it switch to non live mode)
-          args = { "--ignore-case" },
-        }
+        }, { source = "grep_word" })
 
         Snacks.picker.grep_word(picker_opts)
       end,
@@ -732,12 +724,11 @@ M.keymaps = {
       "<leader>fW",
       function()
         local snacks_util = require "utils.snacks_terminal"
-        local picker_opts = snacks_util.get_initial_picker_state {
+        local picker_opts = snacks_util.get_initial_picker_state({
           show_empty = true,
           need_search = false,
           live = true,
-          hidden = true,
-        }
+        }, { source = "grep_word" })
 
         Snacks.picker.grep_word(picker_opts)
       end,
@@ -797,7 +788,7 @@ M.keymaps = {
           win = {
             input = {
               keys = {
-                ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
+                ["<C-space>"] = { "toggle_picker_source", mode = { "n", "i" }, desc = "Cycle File/Buffer/Grep" },
               },
             },
           },
@@ -840,9 +831,9 @@ M.keymaps = {
 
         -- fallback to files when no buffer (make sure below is same as <leader><ff> mapping)
         if not picker or picker.closed then
-          Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state {
+          Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state({
             search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
-          })
+          }, { source = "files" }))
         end
       end,
     },
@@ -906,16 +897,16 @@ M.keymaps = {
       function()
         Snacks.picker.grep(require("utils.snacks_terminal").get_initial_picker_state({
           title = "Grep Monorepo Files",
-        }, { cwd_default = "subproject", use_previous_cwd_state = false }))
+        }, { cwd_default = "subproject", use_previous_cwd_state = false, source = "grep" }))
       end,
       desc = "Grep Dir Monorepo",
     },
     {
       "<leader>ff",
       function()
-        Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state {
+        Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state({
           search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
-        })
+        }, { source = "files" }))
       end,
       desc = "Find Files",
       mode = { "n", "v" },
@@ -929,6 +920,26 @@ M.keymaps = {
       end,
       desc = "Help Pages",
       mode = { "n", "x" },
+    },
+    {
+      "<leader>st",
+      function()
+        Snacks.picker.todo_comments(require("utils.snacks_terminal").get_initial_picker_state {
+          show_empty = true,
+        })
+      end,
+      desc = "Todo (scoped)",
+    },
+    {
+      "<leader>sT",
+      function()
+        Snacks.picker.todo_comments(require("utils.snacks_terminal").get_initial_picker_state {
+          -- TODO check why scope not persist
+          show_empty = true,
+          keywords = { "TODO", "FIX", "FIXME" },
+        })
+      end,
+      desc = "Todo/Fix/Fixme (scoped)",
     },
     {
       "<leader>sb",
@@ -975,7 +986,7 @@ M.keymaps = {
         Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state({
           search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
           title = "Find Files Monorepo/Subproject",
-        }, { cwd_default = "subproject", use_previous_cwd_state = false }))
+        }, { cwd_default = "subproject", use_previous_cwd_state = false, source = "files" }))
       end,
       desc = "Find Files monorepo",
       mode = { "n", "x" },
@@ -1238,7 +1249,10 @@ M.snacks_common_actions = {
     require("utils.snacks_actions").select_subproject_cwd(picker, item)
   end,
   toggle_files_buffers = function(picker, item)
-    require("utils.snacks_actions").toggle_files_buffers(picker, item)
+    require("utils.snacks_actions").toggle_picker_source(picker, item)
+  end,
+  toggle_picker_source = function(picker, item)
+    require("utils.snacks_actions").toggle_picker_source(picker, item)
   end,
   increase_picker_depth = function(picker, item)
     require("utils.snacks_actions").adjust_picker_depth(picker, item, 1)
@@ -1308,7 +1322,7 @@ local snacks_picker_group_keys = {
       snacks_picker_shared_keys.copy_path_keys.input,
       snacks_picker_shared_keys.files_and_grep.input,
       {
-        ["<C-space>"] = { "toggle_files_buffers", mode = { "n", "i" }, desc = "Toggle File/Buffer" },
+        ["<C-space>"] = { "toggle_picker_source", mode = { "n", "i" }, desc = "Cycle File/Buffer/Grep" },
         ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
         ["<M-S>"] = { "select_subproject_cwd", mode = { "n", "i" }, desc = "Pick Subproject CWD" },
       }
@@ -1322,6 +1336,7 @@ local snacks_picker_group_keys = {
       snacks_picker_shared_keys.copy_path_keys.input,
       snacks_picker_shared_keys.files_and_grep.input,
       {
+        ["<C-space>"] = { "toggle_picker_source", mode = { "n", "i" }, desc = "Cycle File/Buffer/Grep" },
         ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove QF Item" },
         ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
         ["<M-S>"] = { "select_subproject_cwd", mode = { "n", "i" }, desc = "Pick Subproject CWD" },
@@ -1425,6 +1440,73 @@ local snacks_picker_group_keys = {
 -- MERGE PATTERN:
 --   Each picker merges keys in order: common_keys → copy_path_keys/files_keys/grep_keys → custom
 --   Later keys override earlier ones (vim.tbl_extend("force", ...))
+--- Factory for inline key functions that persist toggle opts per source.
+--- These MUST be inline functions (not named action strings) because Snacks
+--- unconditionally overwrites toggle_* actions after all config merging
+--- (snacks/picker/config/init.lua:93-105).
+---
+--- IMPORTANT: Inline key functions in win.input.keys receive the snacks.win
+--- object as their first argument, NOT the picker (snacks/win.lua:994-996).
+--- We retrieve the real picker via Snacks.picker.get({ source = source }).
+---
+--- Toggle keys: <a-h> hidden, <a-i> ignored, <a-f> follow, <a-r> regex (grep only)
+--- @param source string  picker source name ("files" | "grep" | "grep_word")
+--- @param has_regex boolean  whether to include the regex toggle key
+local function make_persist_toggle_keys(source, has_regex)
+  local sa = require "utils.snacks_actions"
+
+  local function wrap(opt_name, desc)
+    return {
+      function(_win) -- _win is snacks.win (input window), NOT the picker
+        -- Retrieve the real picker instance for this source
+        local pickers = Snacks.picker.get { source = source }
+        local picker = pickers and pickers[1]
+        if not picker then
+          sa.log_picker_persist("toggle_" .. opt_name .. ":ERROR_no_picker", {
+            source = source,
+            win_type = type(_win),
+            win_has_buf = _win and _win.buf ~= nil,
+            active_pickers = vim.tbl_map(function(p)
+              return p.opts and p.opts.source or "?"
+            end, Snacks.picker.get {} or {}),
+          })
+          vim.notify(
+            ("[picker-persist] toggle_%s: no active picker for source=%s"):format(opt_name, source),
+            vim.log.levels.WARN
+          )
+          return
+        end
+        local before = picker.opts[opt_name]
+        picker.opts[opt_name] = not picker.opts[opt_name]
+        if picker.list then
+          picker.list:set_target()
+        end
+        sa.log_picker_persist("toggle_" .. opt_name, {
+          source = source,
+          before = before,
+          after = picker.opts[opt_name],
+          picker_id = picker.id,
+          pattern = picker.input and picker.input.filter and picker.input.filter.pattern,
+        })
+        sa.save_source_opt(source, opt_name, picker.opts[opt_name])
+        picker:find()
+      end,
+      mode = { "i", "n" },
+      desc = desc,
+    }
+  end
+
+  local keys = {
+    ["<a-h>"] = wrap("hidden", "Toggle Hidden"),
+    ["<a-i>"] = wrap("ignored", "Toggle Ignored"),
+    ["<a-f>"] = wrap("follow", "Toggle Follow"),
+  }
+  if has_regex then
+    keys["<a-r>"] = wrap("regex", "Toggle Regex")
+  end
+  return keys
+end
+
 local source_n_snacks = {}
 M.sources_n_keys = {
   sources = {
@@ -1450,7 +1532,13 @@ M.sources_n_keys = {
     files = {
       win = {
         input = {
-          keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.files_keys.input),
+          -- Inline persist wrappers override <a-h>/<a-i>/<a-f> after Snacks auto-generates
+          -- toggle_* actions (which run last in config merge and cannot be overridden via actions table).
+          keys = vim.tbl_extend(
+            "force",
+            snacks_picker_group_keys.files_keys.input,
+            make_persist_toggle_keys("files", false)
+          ),
         },
       },
     },
@@ -1646,7 +1734,11 @@ M.sources_n_keys = {
     grep = {
       win = {
         input = {
-          keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.grep_keys.input),
+          keys = vim.tbl_extend(
+            "force",
+            snacks_picker_group_keys.grep_keys.input,
+            make_persist_toggle_keys("grep", true)
+          ),
         },
       },
     },
@@ -1655,8 +1747,20 @@ M.sources_n_keys = {
     grep_word = {
       win = {
         input = {
+          keys = vim.tbl_extend(
+            "force",
+            snacks_picker_group_keys.grep_keys.input,
+            make_persist_toggle_keys("grep_word", true)
+          ),
+        },
+      },
+    },
+
+    -- Todo comments picker: grep-based, supports scope traversal (a-s, a-S, a-e)
+    todo_comments = {
+      win = {
+        input = {
           keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.grep_keys.input),
-          -- keys = snacks_picker_group_keys.grep_keys.input,
         },
       },
     },

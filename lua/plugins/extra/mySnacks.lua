@@ -37,9 +37,7 @@ return {
         -- Import pre-configured picker sources from editor_keymaps
         sources = vim.tbl_deep_extend("force", editor_keymaps.sources_n_keys.sources, {
           -- Source-specific overrides (if needed)
-          files = {
-            hidden = true, -- files picker specific setting
-          },
+          -- NOTE: hidden defaults to false; user toggles on with <a-h>, persisted per-source via vim.g.picker_source_opts
           -- https://deepwiki.com/search/how-can-i-customize-explorer-k_06a6e33a-6125-418e-bd05-d979f1420178?mode=fast
           -- TODO: check does not realy work why ?
         }),

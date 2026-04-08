@@ -1989,13 +1989,15 @@ end
 
 --#region Picker State Utilities
 
---- Get initial picker state with persistent cwd
+--- Get initial picker state with persistent cwd and per-source opts
 --- @param pickerOpts table Base picker options to merge with
 --- @param opts table Options for state initialization
 ---   - cwd_default: "git"|"current"|"subproject" Default cwd type
 ---   - use_previous_cwd_state: boolean Whether to use persisted cwd state
+---   - source: string Picker source name for per-source opts persistence (e.g. "files", "grep")
 --- @return table Merged picker options with cwd state
 function M.get_initial_picker_state(pickerOpts, opts)
+  pickerOpts = pickerOpts or {}
   opts = opts or {}
   local cwd_default = opts.cwd_default
 
@@ -2019,6 +2021,84 @@ function M.get_initial_picker_state(pickerOpts, opts)
 
   local result = vim.deepcopy(pickerOpts) or {}
 
+  -- Apply per-source defaults from vim.g first, then persisted overrides
+  -- (explicit pickerOpts still take precedence)
+  if opts.source then
+    local snacks_actions = require "utils.snacks_actions"
+    local default_all = vim.g.picker_source_default_opts
+    local source_defaults = type(default_all) == "table" and default_all[opts.source] or nil
+    local persisted = snacks_actions.get_persisted_source_opts(opts.source)
+    snacks_actions.log_picker_persist("get_initial_picker_state:start", {
+      source = opts.source,
+      picker_opts = pickerOpts,
+      defaults = source_defaults,
+      persisted = persisted,
+    })
+
+    -- 1) Apply source defaults from vim.g (only when not explicitly set)
+    if source_defaults then
+      for _, key in ipairs { "hidden", "ignored", "follow", "regex" } do
+        if source_defaults[key] ~= nil and pickerOpts[key] == nil then
+          result[key] = source_defaults[key]
+        end
+      end
+      if source_defaults.case_mode and not pickerOpts.args then
+        if source_defaults.case_mode == "ignore" then
+          result.args = result.args or {}
+          if not vim.tbl_contains(result.args, "--ignore-case") and not vim.tbl_contains(result.args, "-i") then
+            table.insert(result.args, "--ignore-case")
+          end
+          result.case_nonsensitive_custom = true
+        elseif source_defaults.case_mode == "sensitive" then
+          result.args = result.args or {}
+          if not vim.tbl_contains(result.args, "--case-sensitive") and not vim.tbl_contains(result.args, "-s") then
+            table.insert(result.args, "--case-sensitive")
+          end
+          result.case_sensitive_custom = true
+        end
+      end
+    end
+
+    -- 2) Apply persisted per-source opts (override defaults)
+    if persisted then
+      -- Apply persisted toggle opts only if not explicitly set in pickerOpts
+      for _, key in ipairs { "hidden", "ignored", "follow", "regex" } do
+        if persisted[key] ~= nil and pickerOpts[key] == nil then
+          result[key] = persisted[key]
+        end
+      end
+      -- Apply persisted case mode to args
+      if persisted.case_mode and not pickerOpts.args then
+        if persisted.case_mode == "ignore" then
+          result.args = result.args or {}
+          -- Only add if not already present
+          if not vim.tbl_contains(result.args, "--ignore-case") and not vim.tbl_contains(result.args, "-i") then
+            table.insert(result.args, "--ignore-case")
+          end
+          result.case_nonsensitive_custom = true
+        elseif persisted.case_mode == "sensitive" then
+          result.args = result.args or {}
+          if not vim.tbl_contains(result.args, "--case-sensitive") and not vim.tbl_contains(result.args, "-s") then
+            table.insert(result.args, "--case-sensitive")
+          end
+          result.case_sensitive_custom = true
+        end
+        -- "smart" = default, no args needed
+      end
+    end
+
+    snacks_actions.log_picker_persist("get_initial_picker_state:resolved", {
+      source = opts.source,
+      resolved = {
+        hidden = result.hidden,
+        ignored = result.ignored,
+        follow = result.follow,
+        regex = result.regex,
+        args = result.args,
+      },
+    })
+  end
+
   if cwd_state and opts.use_previous_cwd_state ~= false then
     cwd = cwd_state
   else
@@ -2040,7 +2120,7 @@ function M.get_initial_picker_state(pickerOpts, opts)
     result.custom_cwd = result.cwd and true or nil
   end
 
-  local args = pickerOpts.args or {}
+  local args = result.args or {}
   local has_ignore_case = vim.tbl_contains(args, "-i") or vim.tbl_contains(args, "--ignore-case")
   if has_ignore_case then
     result.case_nonsensitive_custom = true

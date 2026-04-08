@@ -6,10 +6,25 @@
 ---@field [string] snacks.picker.Action.spec
 local M = {}
 
+--- Debug logger for picker persistence flow.
+--- Enable with: vim.g.snacks_debug_picker_persist = true
+--- @param event string
+--- @param data table|nil
+function M.log_picker_persist(event, data)
+  if not vim.g.snacks_debug_picker_persist then
+    return
+  end
+  local ok, payload = pcall(vim.inspect, data or {})
+  local msg = string.format("[picker-persist] %s %s", event, ok and payload or "{}")
+  vim.schedule(function()
+    vim.notify(msg, vim.log.levels.INFO)
+  end)
+end
+
 local pathUtil = require "utils.mypath"
 local gitUtil = require "utils.git"
 
---#region Scope Traversal Helpers
+--#region Scope Traversal Sources
 -- Shared helpers for subproject-based upward traversal used by:
 --   B (a-s): toggle_cwd_files_grep — cycle scope up subproject chain
 --   C (a-e): toggle_external — move cwd up one step + exclude initial cwd
@@ -20,7 +35,98 @@ local scope_traversal_sources = {
   files = true,
   grep = true,
   grep_word = true,
+  todo_comments = true,
 }
+
+--#endregion Scope Traversal Sources
+
+--#region Per-Source Opts Persistence
+-- Persist toggle opts (hidden, ignored, follow, regex, case_args) per picker source type
+-- across picker sessions within a single Neovim session using vim.g.
+-- Key pattern: vim.g.picker_source_opts = { files = { hidden = false, ... }, grep = { ... } }
+
+--- Sources that support per-source opts persistence
+local persisted_opt_keys = { "hidden", "ignored", "follow", "regex" }
+
+--- Get persisted opts for a source type
+--- @param source string Picker source name (e.g. "files", "grep")
+--- @return table|nil Persisted opts or nil if none
+function M.get_persisted_source_opts(source)
+  local all_opts = vim.g.picker_source_opts
+  if not all_opts or not all_opts[source] then
+    M.log_picker_persist("get_persisted_source_opts:miss", { source = source })
+    return nil
+  end
+  local ret = vim.deepcopy(all_opts[source])
+  M.log_picker_persist("get_persisted_source_opts:hit", { source = source, opts = ret })
+  return ret
+end
+
+--- Save a single opt value for a source type
+--- @param source string Picker source name
+--- @param key string Opt key (e.g. "hidden", "ignored")
+--- @param value any Opt value
+function M.save_source_opt(source, key, value)
+  local all_opts = vim.g.picker_source_opts and vim.deepcopy(vim.g.picker_source_opts) or {}
+  local before = all_opts[source] and all_opts[source][key] or nil
+  if not all_opts[source] then
+    all_opts[source] = {}
+  end
+  all_opts[source][key] = value
+  vim.g.picker_source_opts = all_opts
+  M.log_picker_persist("save_source_opt", {
+    source = source,
+    key = key,
+    before = before,
+    after = value,
+  })
+end
+
+--- Save all relevant toggle opts from a picker's current state
+--- @param picker table Snacks picker instance
+function M.save_picker_source_opts(picker)
+  local source = picker.opts and picker.opts.source
+  if not source then
+    M.log_picker_persist("save_picker_source_opts:skip_no_source", {})
+    return
+  end
+  -- Only persist for sources that support these toggles
+  if not (source == "files" or source == "grep" or source == "grep_word") then
+    M.log_picker_persist("save_picker_source_opts:skip_source", { source = source })
+    return
+  end
+  for _, key in ipairs(persisted_opt_keys) do
+    if picker.opts[key] ~= nil then
+      M.save_source_opt(source, key, picker.opts[key])
+    end
+  end
+  -- Persist case sensitivity args separately
+  if picker.opts.args then
+    local has_ignore_case = vim.tbl_contains(picker.opts.args, "-i")
+      or vim.tbl_contains(picker.opts.args, "--ignore-case")
+    local has_casesens = vim.tbl_contains(picker.opts.args, "-s")
+      or vim.tbl_contains(picker.opts.args, "--case-sensitive")
+    if has_ignore_case then
+      M.save_source_opt(source, "case_mode", "ignore")
+    elseif has_casesens then
+      M.save_source_opt(source, "case_mode", "sensitive")
+    else
+      M.save_source_opt(source, "case_mode", "smart")
+    end
+  end
+  M.log_picker_persist("save_picker_source_opts:done", {
+    source = source,
+    hidden = picker.opts.hidden,
+    ignored = picker.opts.ignored,
+    follow = picker.opts.follow,
+    regex = picker.opts.regex,
+    args = picker.opts.args,
+  })
+end
+
+--#endregion Per-Source Opts Persistence
+
+--#region Scope Traversal Chain Builder
 
 --- Build ordered traversal chain from initial_cwd upward through subproject markers to git root
 --- Returns: { initial_cwd, subproj_parent1, ..., git_root } (deduplicated, deepest first)
@@ -140,7 +246,7 @@ M._get_picker_traversal_state = get_picker_traversal_state
 M._reset_picker_traversal_state = reset_picker_traversal_state
 M._build_cwd_exclude_pattern = build_cwd_exclude_pattern
 
---#endregion Scope Traversal Helpers
+--#endregion Scope Traversal Chain Builder
 
 --- Toggle picker external filter flag and re-run finder
 --- For files/grep pickers: steps cwd up one subproject level + excludes initial scope cwd
@@ -1590,59 +1696,94 @@ end
 
 --#region Picker Switching Actions
 
---- Toggle between files and buffers picker
---- Preserves search state and toggle states (hidden, ignored)
+--- 3-way cycle: files → buffers → grep → files
+--- Preserves search pattern, saves current picker's toggle opts before switching,
+--- and loads destination source's persisted opts.
+--- Closes the current picker before opening the next to avoid orphan pickers
+--- that cause double-press and focus issues.
 --- @param picker table Snacks picker instance
 --- @param item table Current item (unused)
-function M.toggle_files_buffers(picker, item)
-  local preview_source = picker.init_opts and picker.init_opts.source
-  if not preview_source then
-    vim.notify("Error: picker.init_opts is nil", vim.log.levels.ERROR)
+function M.toggle_picker_source(picker, item)
+  local current_source = picker.opts and picker.opts.source
+  if not current_source then
+    -- Fallback: try init_opts.source
+    current_source = picker.init_opts and picker.init_opts.source
+  end
+  if not current_source then
+    vim.notify("toggle_picker_source: cannot determine current source", vim.log.levels.ERROR)
     return
   end
 
-  local current_search = picker.input.filter and picker.input.filter.pattern
-  ---@type snacks.picker.Config
-  local picker_params = {
-    pattern = current_search or "",
-  }
+  -- Save current picker's toggle opts before switching away
+  M.save_picker_source_opts(picker)
 
-  -- Helper to get toggle state (clean, no override logic)
-  local function get_toggle_state(name)
-    -- First check picker.opts (runtime state)
-    if picker.opts[name] ~= nil then
-      return picker.opts[name]
-    end
-    -- Fall back to init_opts (initial state)
-    if picker.init_opts and picker.init_opts[name] ~= nil then
-      return picker.init_opts[name]
-    end
-    return nil
-  end
-
-  if preview_source == "files" then
-    picker_params.hidden = false
-    Snacks.picker.buffers(vim.tbl_extend("force", picker_params, { show_empty = true }))
-    vim.defer_fn(function()
-      if vim.api.nvim_get_mode().mode == "n" then
-        vim.cmd "startinsert"
-      end
-    end, 50)
+  -- Read the correct search text based on current source:
+  -- - For grep/grep_word: the user's query is in filter.search (pattern is the result filter)
+  -- - For files/buffers: the user's input is in filter.pattern
+  local current_search
+  if current_source == "grep" or current_source == "grep_word" then
+    current_search = picker.input.filter and picker.input.filter.search or ""
   else
-    -- Switching from buffers to files
-    -- For files: persist both hidden and ignored states
-    local hidden_state = get_toggle_state "hidden"
-    local ignored_state = get_toggle_state "ignored"
-
-    if hidden_state ~= nil then
-      picker_params.hidden = hidden_state
-    end
-    if ignored_state ~= nil then
-      picker_params.ignored = ignored_state
-    end
-
-    Snacks.picker.files(picker_params)
+    current_search = picker.input.filter and picker.input.filter.pattern or ""
   end
+
+  -- Determine the next source in the cycle: files → buffers → grep → files
+  -- grep_word is treated the same as grep in the cycle
+  local next_source
+  if current_source == "files" then
+    next_source = "buffers"
+  elseif current_source == "buffers" then
+    next_source = "grep"
+  elseif current_source == "grep" or current_source == "grep_word" then
+    next_source = "files"
+  else
+    -- Unknown source (smart, etc.) — default: cycle to files
+    next_source = "files"
+  end
+
+  -- Close the current picker before opening the next one.
+  -- Without this, orphaned pickers stack up and intercept keypresses,
+  -- causing the "double-press required after full cycle" bug.
+  picker:close()
+
+  -- Open the destination picker (deferred to let close complete cleanly)
+  vim.schedule(function()
+    if next_source == "buffers" then
+      Snacks.picker.buffers {
+        pattern = current_search ~= "" and current_search or nil,
+        show_empty = true,
+        hidden = false, -- buffers don't use hidden/ignored toggles
+      }
+      -- Ensure insert mode (buffers picker sometimes lands in normal)
+      vim.defer_fn(function()
+        if vim.api.nvim_get_mode().mode == "n" then
+          vim.cmd "startinsert"
+        end
+      end, 50)
+    elseif next_source == "grep" then
+      local carry_search = current_search ~= "" and current_search or nil
+      -- For grep: use get_initial_picker_state to load persisted per-source opts
+      local snacks_util = require "utils.snacks_terminal"
+      local picker_opts = snacks_util.get_initial_picker_state({
+        show_empty = true,
+        search = carry_search,
+        live = true,
+      }, { source = "grep" })
+      Snacks.picker.grep(picker_opts)
+    elseif next_source == "files" then
+      -- Use get_initial_picker_state to load persisted per-source opts
+      local snacks_util = require "utils.snacks_terminal"
+      local picker_opts = snacks_util.get_initial_picker_state({
+        pattern = current_search ~= "" and current_search or nil,
+      }, { source = "files" })
+      Snacks.picker.files(picker_opts)
+    end
+  end)
+end
+
+--- Legacy alias for backwards compatibility (if referenced elsewhere)
+function M.toggle_files_buffers(picker, item)
+  M.toggle_picker_source(picker, item)
 end
 
 --#endregion Picker Switching Actions
@@ -1788,6 +1929,7 @@ end
 --- @param item table Current item (unused)
 function M.toggle_case_sensitivity(picker, item)
   local current_args = vim.deepcopy(picker.opts.args) or {}
+  local before_args = vim.deepcopy(current_args)
   local has_ignore_case = vim.tbl_contains(current_args, "-i") or vim.tbl_contains(current_args, "--ignore-case")
   local has_casesens = vim.tbl_contains(current_args, "-s") or vim.tbl_contains(current_args, "--case-sensitive")
   local current_search = picker.input.filter and picker.input.filter.search
@@ -1858,6 +2000,18 @@ function M.toggle_case_sensitivity(picker, item)
 
   picker.opts.case_sensitive_custom = is_next_sensitive
   picker.opts.case_nonsensitive_custom = is_next_sensitive == false
+
+  M.log_picker_persist("toggle_case_sensitivity", {
+    source = source,
+    before_args = before_args,
+    after_args = picker.opts.args,
+    case_sensitive_custom = picker.opts.case_sensitive_custom,
+    case_nonsensitive_custom = picker.opts.case_nonsensitive_custom,
+  })
+
+  -- Persist case mode per source
+  M.save_picker_source_opts(picker)
+
   picker:find()
 end
 
