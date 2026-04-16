@@ -80,6 +80,14 @@ cursor-migration/
    - `agentic.nvim` - Multi-provider ACP client
 3. **Container approach** allows testing without polluting host config
 
+## Tools compatability
+- opencode (requires local sv run) : https://github.com/Nomadcxx/opencode-cursor
+
+## Quota comparison
+Agoda License:
+- Copilot - 300 interactions / mo
+- Cursor - 500 interactions + 250$ credit / mo 
+
 ## Success Criteria
 
 - [ ] Container builds and runs successfully

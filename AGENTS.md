@@ -121,11 +121,10 @@ See **[tasks/AGENTS.md](tasks/AGENTS.md)** for the full workflow.
 
 ## Documentation (Living Memory)
 
-Update `docs/memory/<plugin>.md` whenever you find a non-obvious pattern or fix. Key files:
-
-- `codecompanion.md` · `avante.md` · `mcphub.md` · `mcphub-nvim-integrations.md`
-- `gitsigns.md` · `neotree.md` · `lazy-nvim-config-merging.md` · `keybindings_conflicts.md`
+- **[docs/memory/index.md](docs/memory/index.md)** — full catalog of all 32 memory docs, grouped by plugin/topic
+- Update `docs/memory/<plugin>.md` whenever you find a non-obvious pattern or fix
+- `docs/archive/` — old investigation logs kept for reference; merge useful bits into memory/ during related work
 
 ---
 
-**Last Updated**: 2026-03-16
+**Last Updated**: 2026-04-17
