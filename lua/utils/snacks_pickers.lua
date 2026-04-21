@@ -2134,20 +2134,35 @@ end
 --#region Code Ref Picker
 
 --- Picker for current buffer code references (relative/absolute)
---- another inside file picker : lua/utils/snacks_actions.lua:619
---- this is mapped to ,crp
+--- Uses shared code_ref_picker_builder for unified UI with copy_path_select (<M-y>)
+--- Mapped to <localleader>crp
 function M.code_ref_picker(opts)
   opts = opts or {}
   local code_ref = require "utils.code_ref"
+  local builder = require "utils.code_ref_picker_builder"
   local use_visual = opts.visual or false
   local show_char = vim.g.code_ref_show_char_range or false
 
-  local items = code_ref.current_options(show_char, use_visual)
-  if not items or #items == 0 then
+  local bufpath = vim.api.nvim_buf_get_name(0)
+  if not bufpath or bufpath == "" then
     vim.notify("No code reference available (missing file path)", vim.log.levels.WARN)
     return
   end
 
+  local line, col = unpack(vim.api.nvim_win_get_cursor(0))
+  col = col + 1
+  local range = code_ref.get_visual_range(use_visual)
+
+  -- Generate unified path variants and code-ref items
+  local path_variants = code_ref.generate_path_variants(bufpath)
+  local items = code_ref.generate_coderef_items(path_variants, line, col, range, show_char)
+
+  if not items or #items == 0 then
+    vim.notify("No code reference available", vim.log.levels.WARN)
+    return
+  end
+
+  -- Build title with toggle state indicator
   local hide_col = vim.g.code_ref_hide_col or false
   local char_label
   if use_visual then
@@ -2157,62 +2172,16 @@ function M.code_ref_picker(opts)
   end
   local title = (opts.title or "Code Reference (Enter: copy)") .. char_label
 
-  Snacks.picker.pick {
+  builder.build {
+    items = items,
     source = "code_ref",
     title = title,
-    layout = {
-      preview = false, -- Hide preview by default
-    },
-    items = items,
-    format = function(item)
-      return {
-        { item.label, "SnacksPickerTitle" },
-        { ": ", "Comment" },
-        { item.text or item.path, "Normal" },
-      }
-    end,
-    win = {
-      input = {
-        keys = {
-          ["<A-c>"] = {
-            function()
-              -- In range mode: toggle char range; in non-range mode: toggle hide col
-              if use_visual then
-                vim.g.code_ref_show_char_range = not (vim.g.code_ref_show_char_range or false)
-                vim.notify(
-                  "Char range: " .. (vim.g.code_ref_show_char_range and "enabled" or "disabled"),
-                  vim.log.levels.INFO
-                )
-              else
-                vim.g.code_ref_hide_col = not (vim.g.code_ref_hide_col or false)
-                vim.notify("Column: " .. (vim.g.code_ref_hide_col and "hidden" or "shown"), vim.log.levels.INFO)
-              end
-
-              local pickers = Snacks.picker.get { source = "code_ref" }
-              local cur_picker = pickers and pickers[1]
-              if cur_picker then
-                cur_picker:close()
-              end
-
-              -- Reopen with updated items (reads fresh global state)
-              vim.schedule(function()
-                M.code_ref_picker { visual = use_visual, title = opts.title }
-              end)
-            end,
-            mode = { "n", "i" },
-            desc = "Toggle char/col in references",
-          },
-        },
-      },
-    },
-    confirm = function(picker, item)
-      if not item then
-        Snacks.notify("No code reference selected", vim.log.levels.WARN)
-        return
-      end
-      local ref = item.text or item.path
-      clipboardUtil.copy_and_notify(ref, "plus", "copied: " .. ref)
-      picker:close()
+    parent_picker = nil,
+    confirm_mode = "copy",
+    show_preview = false,
+    use_visual = use_visual,
+    on_refresh = function()
+      M.code_ref_picker { visual = use_visual, title = opts.title }
     end,
   }
 end

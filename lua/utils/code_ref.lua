@@ -5,27 +5,6 @@ local M = {}
 local pathUtil = require "utils.path"
 local clipboardUtil = require "utils.myinput"
 
-local function get_path_parts()
-  local bufpath = vim.api.nvim_buf_get_name(0)
-  if not bufpath or bufpath == "" then
-    return nil
-  end
-
-  local abs_path = vim.fn.fnamemodify(bufpath, ":p")
-  local rel_path = abs_path
-  local git_root = pathUtil.get_git_root()
-  if git_root and git_root ~= "" and abs_path:sub(1, #git_root) == git_root then
-    rel_path = abs_path:sub(#git_root + 2)
-  else
-    rel_path = vim.fn.fnamemodify(abs_path, ":.")
-  end
-
-  return {
-    abs = abs_path,
-    rel = rel_path,
-  }
-end
-
 local function format_ref(path_part, start_line, start_col, format, range, show_char_range)
   -- When range exists, use its normalized start position instead of cursor position
   if range then
@@ -109,7 +88,7 @@ end
 --- Uses nvim_buf_get_mark (like sidekick.nvim) for reliable mark reading after mode exit.
 ---@param use_visual boolean whether the caller was invoked from visual mode
 ---@return table|nil range {start_line, start_col, end_line, end_col} or nil
-local function get_visual_range(use_visual)
+function M.get_visual_range(use_visual)
   if not use_visual then
     return nil
   end
@@ -117,7 +96,7 @@ local function get_visual_range(use_visual)
   -- Exit visual mode first to flush current selection into '< '> marks
   -- Without this, marks still hold the PREVIOUS selection's values
   local mode = vim.fn.mode()
-  if mode:match("[vV\x16]") then
+  if mode:match "[vV\x16]" then
     vim.cmd("normal! " .. vim.api.nvim_replace_termcodes("<Esc>", true, false, true))
   end
 
@@ -186,7 +165,7 @@ function M.current(opts)
   local abs_path = vim.fn.fnamemodify(bufpath, ":p")
   local line, col = unpack(vim.api.nvim_win_get_cursor(0))
   col = col + 1 -- make 1-based
-  local range = get_visual_range(use_visual)
+  local range = M.get_visual_range(use_visual)
 
   local rel_path = abs_path
   local git_root = pathUtil.get_git_root()
@@ -207,54 +186,123 @@ function M.current(opts)
   return ref
 end
 
---- Build current ref options for pickers with unified path variants
----@param show_char_range? boolean whether to show char positions in ranges
----@param use_visual? boolean whether to include visual range
----@return table|nil
-function M.current_options(show_char_range, use_visual)
-  local parts = get_path_parts()
-  if not parts then
-    return nil
+--- Generate unified path variants for a given file path.
+--- Single source of truth for path variant generation used by both
+--- the keymap code_ref_picker and the sub-picker copy_path_select.
+---@param file_path string absolute file path to generate variants for
+---@param opts? { ref_buf_path?: string, include_dirs?: boolean }
+---@return table[] path_variants array of { label, path, key } (deduplicated)
+function M.generate_path_variants(file_path, opts)
+  opts = opts or {}
+  local include_dirs = opts.include_dirs ~= false -- default true
+
+  -- Determine reference buffer for relative path calculation
+  local ref_buf_path = opts.ref_buf_path
+  if not ref_buf_path then
+    local prev_buf = vim.api.nvim_buf_get_name(vim.fn.bufnr "#")
+    local current_buf = vim.api.nvim_buf_get_name(0)
+    ref_buf_path = (prev_buf ~= "" and prev_buf) or current_buf
   end
 
-  local line, col = unpack(vim.api.nvim_win_get_cursor(0))
-  col = col + 1
-  local range = get_visual_range(use_visual or false)
+  -- Use Snacks.git.get_root() if available, fallback to pathUtil
+  local git_root
+  local snacks_ok, snacks_git = pcall(function()
+    return Snacks.git.get_root()
+  end)
+  if snacks_ok and snacks_git then
+    git_root = snacks_git
+  else
+    git_root = pathUtil.get_git_root()
+  end
 
-  -- Get path variants (uses same logic as snacks_actions)
-  local bufpath = vim.api.nvim_buf_get_name(0)
-  local git_root = pathUtil.get_git_root()
-  local cwd = vim.fn.getcwd()
-  
-  local path_variants = {}
-  
-  -- Relative to git root
-  if git_root and git_root ~= "" and bufpath:sub(1, #git_root) == git_root then
-    table.insert(path_variants, {
-      label = "Git",
-      path = bufpath:sub(#git_root + 2),
-      key = "git",
-    })
-  end
-  
-  -- Relative to CWD
-  local rel_cwd = vim.fn.fnamemodify(bufpath, ":.")
-  if rel_cwd ~= bufpath then -- Only add if different from absolute
-    table.insert(path_variants, {
-      label = "Relative CWD",
-      path = rel_cwd,
-      key = "cwd",
-    })
-  end
-  
-  -- Absolute
-  table.insert(path_variants, {
-    label = "Absolute",
-    path = parts.abs,
-    key = "absolute",
-  })
+  local dir_path = vim.fn.fnamemodify(file_path, ":h")
+  local ref_buf_dir = vim.fn.fnamemodify(ref_buf_path, ":h")
 
   local formats = {
+    {
+      label = "Relative",
+      path = pathUtil.get_relative_path_with_parent(file_path, ref_buf_path),
+      key = "buffer",
+    },
+    {
+      label = "Git",
+      path = git_root and file_path:gsub("^" .. vim.pesc(git_root) .. "/?", "") or nil,
+      key = "git",
+    },
+    {
+      label = "Relative CWD",
+      path = vim.fn.fnamemodify(file_path, ":."),
+      key = "cwd",
+    },
+    {
+      label = "Absolute",
+      path = vim.fn.fnamemodify(file_path, ":p"),
+      key = "absolute",
+    },
+  }
+
+  if include_dirs then
+    local dir_formats = {
+      {
+        label = "Dir Relative",
+        path = pathUtil.get_relative_path_with_parent(dir_path, ref_buf_dir),
+        key = "dir_buffer",
+      },
+      {
+        label = "Dir Git",
+        path = git_root and dir_path:gsub("^" .. vim.pesc(git_root) .. "/?", "") or nil,
+        key = "dir_git",
+      },
+      {
+        label = "Dir Relative CWD",
+        path = vim.fn.fnamemodify(dir_path, ":."),
+        key = "dir_cwd",
+      },
+      {
+        label = "Dir Absolute",
+        path = vim.fn.fnamemodify(dir_path, ":p"),
+        key = "dir_absolute",
+      },
+    }
+    for _, f in ipairs(dir_formats) do
+      table.insert(formats, f)
+    end
+  end
+
+  -- Deduplicate by path value, merging labels when paths are identical
+  local seen_paths = {}
+  local deduplicated = {}
+
+  for _, format in ipairs(formats) do
+    if format.path and format.path ~= "" then
+      local existing = seen_paths[format.path]
+      if existing then
+        existing.label = existing.label .. "/" .. format.label
+        existing.key = existing.key .. "," .. format.key
+      else
+        seen_paths[format.path] = format
+        table.insert(deduplicated, format)
+      end
+    end
+  end
+
+  return deduplicated
+end
+
+--- Generate picker-ready code-ref items from path variants.
+--- Uses format_ref() as the single source of truth for all formatting.
+---@param path_variants table[] from generate_path_variants()
+---@param line number|nil line number (1-based)
+---@param col number|nil column number (1-based)
+---@param range? table visual range { start_line, start_col, end_line, end_col }
+---@param show_char_range? boolean whether to show char positions in ranges
+---@return table[] items array of { label, text, path, key, is_coderef, line, col }
+function M.generate_coderef_items(path_variants, line, col, range, show_char_range)
+  if not line or not col then
+    return {}
+  end
+
+  local format_keys = {
     { key = "colon", label = "colon" },
     { key = "space", label = "space" },
     { key = "at", label = "@" },
@@ -263,20 +311,53 @@ function M.current_options(show_char_range, use_visual)
   }
 
   local items = {}
-  
-  -- Generate code-ref for each path variant × format combination
+
   for _, path_variant in ipairs(path_variants) do
-    for _, fmt in ipairs(formats) do
-      local ref_text = format_ref(path_variant.path, line, col, fmt.key, range, show_char_range)
+    local path = path_variant.path
+    if not path or path == "" then
+      goto continue
+    end
+
+    -- Skip directory variants (only process file paths)
+    if path_variant.key:match "^dir_" then
+      goto continue
+    end
+
+    for _, fmt in ipairs(format_keys) do
+      local ref_text = format_ref(path, line, col, fmt.key, range, show_char_range)
       table.insert(items, {
-        format = fmt.key,
-        path_type = path_variant.key,
         label = path_variant.label .. " (" .. fmt.label .. ")",
         text = ref_text,
         path = ref_text,
+        key = path_variant.key .. "_" .. fmt.key,
+        is_coderef = true,
+        line = line,
+        col = col,
       })
     end
+
+    ::continue::
   end
+
+  return items
+end
+
+--- Build current ref options for pickers with unified path variants
+---@param show_char_range? boolean whether to show char positions in ranges
+---@param use_visual? boolean whether to include visual range
+---@return table|nil
+function M.current_options(show_char_range, use_visual)
+  local bufpath = vim.api.nvim_buf_get_name(0)
+  if not bufpath or bufpath == "" then
+    return nil
+  end
+
+  local line, col = unpack(vim.api.nvim_win_get_cursor(0))
+  col = col + 1
+  local range = M.get_visual_range(use_visual or false)
+
+  local path_variants = M.generate_path_variants(bufpath)
+  local items = M.generate_coderef_items(path_variants, line, col, range, show_char_range)
 
   return items
 end
