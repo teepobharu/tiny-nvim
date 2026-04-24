@@ -526,6 +526,51 @@ Server customization (tools, resources, instructions) is a powerful way to tailo
 `In the server_to_text function, custom instructions are added after the server description but before the tools and resources sections prompt.lua:232-233`
 ask:
 
+## OAuth — Stale DCR Client ID
+
+### Symptom
+
+Browser consent page shows:
+
+> The client ID `<uuid>` was not found in the server's client registry.
+
+This happens because `mcp-hub` uses Dynamic Client Registration (DCR). If the
+upstream MCP OAuth server loses its registry (e.g. pod restart, in-memory only),
+it forgets the client ID that MCPHub registered, but MCPHub keeps sending it.
+
+### Root cause
+
+`~/.local/share/mcp-hub/oauth-storage.json` holds the registered `clientInfo`
+(including `client_id`) and active `tokens` per server URL. When the server-side
+registry is reset, those values become stale.
+
+`mcp-hub` exposes no clear-auth API endpoint — clearing must be done by resetting
+the JSON entry to `{clientInfo: null, tokens: null, codeVerifier: null}`.
+
+### Fix — built-in command
+
+```vim
+:MCPHubClearAuth                          " picker: select from authed servers
+:MCPHubClearAuth <url>                    " clear specific server non-interactively
+```
+
+After clearing, press `R` on the server row in `:MCPHub` to reconnect and
+trigger fresh DCR → new consent page → new valid client_id stored.
+
+Keymap: `<leader>ahx` (under MCPHub which-key group).
+
+Implementation: `lua/utils/mcphub_auth.lua` — `pick_and_clear()` / `clear_notify()`.
+Registered in `lua/plugins/extra/myAi.lua` as an optional `ravitemer/mcphub.nvim` spec.
+
+### Manual fallback (if Neovim isn't open)
+
+```bash
+SERVER_URL="https://slack-mcp-qa.privatecloud.sg.agoda.is/mcp"
+jq --arg u "$SERVER_URL" '.[$u] = {clientInfo:null, tokens:null, codeVerifier:null}' \
+  ~/.local/share/mcp-hub/oauth-storage.json \
+  > /tmp/oauth.json && mv /tmp/oauth.json ~/.local/share/mcp-hub/oauth-storage.json
+```
+
 ## Troubleshooting
 
 ### mcp-hub not starting

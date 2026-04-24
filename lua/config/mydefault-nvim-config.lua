@@ -32,7 +32,7 @@ vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
     "harpoon",
     "wakatime",
     "avante",
-    -- "codecompanion", -- TODO: after refactor out to myAi should we remove this ?
+    -- "codecompanion", -- TODO: not being used migrated to: myAi
     -- "blink",
     "claude-code", -- "extras.claudecode" looks config also same not sure why
     "greggh-claude", -- simple claude code

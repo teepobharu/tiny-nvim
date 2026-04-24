@@ -373,6 +373,11 @@ M.keymaps = {
         desc = "Code Companion - Git commit (large files summary)",
       },
       {
+        companion_prefix .. "mf",
+        "<cmd>CodeCompanion /review-staged-commit-fast<cr>",
+        desc = "Code Companion - Git Review staged commit (fast, gpt-4.1)",
+      },
+      {
         companion_prefix .. "d",
         "<cmd>CodeCompanion /inline-doc<cr>",
         desc = "Code Companion - Inline document code",

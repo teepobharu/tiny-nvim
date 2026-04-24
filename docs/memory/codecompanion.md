@@ -6,6 +6,42 @@
 
 ---
 
+## Orphaned `tool_use` Error (Vertex AI / Anthropic via OpenAI Proxy)
+
+**Date Added:** 2026-04-24
+
+**Error:**
+```
+litellm.BadRequestError: Vertex_aiException BadRequestError -
+"messages.N: `tool_use` ids were found without `tool_result` blocks immediately after"
+```
+
+**Root Cause:**
+Anthropic's API (and Vertex AI Claude via the Agoda OpenAI proxy) enforces strict message pairing:
+every assistant `tool_use` block must be **immediately followed** by a user message containing `tool_result`.
+When the user types a new message while a tool call is in flight (interrupting the cycle), the chat history
+contains an orphaned `tool_use` without a corresponding `tool_result` in the next message.
+
+**Fix:**
+An `on_submitted` callback in `myAi.lua` (around line 445) sanitizes the payload before it is sent:
+1. Strips empty-content messages (`"text content blocks must be non-empty"` guard).
+2. Strips orphaned tool_use assistant messages — any assistant message whose `tools.calls` are not
+   answered by consecutive following tool result messages (`role="tool"` with matching `tools.call_id`).
+
+**CRITICAL: Internal vs Wire Format:**
+At `on_submitted` time, `payload.messages` uses the **internal** CC format, NOT the OpenAI wire format:
+- Tool calls: `{ role = "assistant", tools = { calls = [{id, function, type}, ...] } }` (NOT `tool_calls`)
+- Tool results: `{ role = "tool", tools = { call_id = "tooluse_xxx" } }` (NOT `tool_call_id`)
+- The `form_messages` handler (which converts to `tool_calls`/`tool_call_id`) runs LATER inside `http.lua`
+  at the `build_messages` step, AFTER `on_submitted` has already fired.
+
+**Workaround (in-session):**
+Press `<C-c>` (stop keymap) to cancel the current tool-calling request before typing a follow-up message.
+
+**Fix location:** `lua/plugins/extra/myAi.lua` → `on_submitted` callback inside `CodeCompanionChatCreated` autocmd.
+
+---
+
 ## ⚠️ IMPORTANT: Configuration Location
 
 **All CodeCompanion configuration is newer and more updated in `lua/plugins/extra/myAi.lua`**

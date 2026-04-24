@@ -36,6 +36,7 @@ M.models = {
     CLAUDE_SONNET_4_6 = "claude-sonnet-4-6",
     CLAUDE_OPUS_4_5 = "claude-opus-4-5",
     CLAUDE_OPUS_4_6 = "claude-opus-4-6",
+    CLAUDE_OPUS_4_7 = "claude-opus-4-7",
   },
 
   gemini = {
@@ -46,6 +47,7 @@ M.models = {
     GEMINI_2_5_PRO = "gemini-2.5-pro",
     GEMINI_2_5_FLASH = "gemini-2.5-flash",
     GEMINI_2_5_FLASH_LITE = "gemini-2.5-flash-lite",
+    GEMMA_4 = "gemma4",
   },
 
   -- O-series reasoning models
@@ -63,7 +65,7 @@ M.models = {
 
   -- Qwen models (AGD proxy IDs)
   qwen = {
-    QWQ_32B = "qwq-32b",
+    -- QWQ_32B = "qwq-32b", -- does not seem to work/support chat 
     QWEN_3_5_27B = "qwen-3.5-27b",
   },
 
@@ -151,6 +153,9 @@ M.providers = {
         default = {
           S = M.models.claude.CLAUDE_HAIKU_4_5,
           M = M.models.claude.CLAUDE_SONNET_4_6,
+          L = M.models.claude.CLAUDE_OPUS_4_7,
+        },
+        alt = {
           L = M.models.claude.CLAUDE_OPUS_4_6,
         },
       },
@@ -161,6 +166,11 @@ M.providers = {
           L = M.models.gemini.GEMINI_3_FLASH,
         },
       },
+      inhouse = { -- cost 0 / free
+        default = {
+          S = M.models.qwen.QWEN_3_5_27B,
+        }
+      }
       -- not exists
       -- grok = { 
       --   default = { S = M.models.others.GROK_FAST_1 },
@@ -188,6 +198,9 @@ M.providers = {
         default = {
           S = M.models.claude.CLAUDE_HAIKU_4_5,
           M = M.models.claude.CLAUDE_SONNET_4_6,
+          L = M.models.claude.CLAUDE_OPUS_4_7,
+        },
+        alt = {
           L = M.models.claude.CLAUDE_OPUS_4_6,
         },
       },
@@ -268,6 +281,7 @@ M.static_models = { -- Fast models (for quick operations)
 
   -- Heavy models (for complex operations)
   heavy = {
+    M.models.claude.CLAUDE_OPUS_4_7,
     M.models.claude.CLAUDE_SONNET_4_6,
     M.models.claude.CLAUDE_SONNET_4_5,
     M.models.claude.CLAUDE_SONNET_4,

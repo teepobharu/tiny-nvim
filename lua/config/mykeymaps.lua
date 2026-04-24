@@ -1666,7 +1666,8 @@ vim.api.nvim_create_user_command("DotfilesWorkspace", function()
   vim.cmd "tabnew"
   vim.cmd("edit " .. vim.fn.expand "~/dotfiles/tasks/open")
   vim.cmd("vsplit " .. vim.fn.expand "~/dotfiles/ai/mcp/mcphub.json")
-  vim.cmd("split " .. vim.fn.expand "~/dotfiles/.config/nvim3_jelly_tinynvim/.mcphub/servers.json")
+  vim.cmd("split " .. vim.fn.expand "~/dotfiles/ai/mcp/MCP.md")
+  -- vim.cmd("split " .. vim.fn.expand "~/dotfiles/.config/nvim3_jelly_tinynvim/.mcphub/servers.json")
   vim.cmd "wincmd h"
   vim.cmd("split " .. vim.fn.expand "~/dotfiles/README.md")
   local tabnum = vim.api.nvim_get_current_tabpage()

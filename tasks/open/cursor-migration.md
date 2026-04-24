@@ -37,6 +37,15 @@ cursor-migration/
     └── avante-enhanced.lua
 ```
 
+## Investigation scope
+
+*New*
+- Find alternatives for nvim plugins copilot.vim auto completion suggestion for cursor
+  - compare completion free usage on copilot vs cursor
+- code companion cursor integration and model selection for the cursor adapater / provider vs copilot
+
+*Done*
+
 ## Checklist
 
 ### Setup Phase
@@ -83,11 +92,6 @@ cursor-migration/
 ## Tools compatability
 - opencode (requires local sv run) : https://github.com/Nomadcxx/opencode-cursor
 
-## Quota comparison
-Agoda License:
-- Copilot - 300 interactions / mo
-- Cursor - 500 interactions + 250$ credit / mo 
-
 ## Success Criteria
 
 - [ ] Container builds and runs successfully
@@ -95,3 +99,20 @@ Agoda License:
 - [ ] AI tools (goose, aider) work inside container
 - [ ] Plugin overlay system correctly merges extra plugins
 - [ ] Sessions persist between container restarts
+
+## User notes (DO NOT EDIT) 
+### Refs
+- https://cursor.com/docs/cli/acp#ide-integrations
+
+### Quota comparison
+Agoda License:
+- Copilot - 300 interactions / mo
+- Cursor - 500 interactions + 250$ credit / mo 
+
+### Findings
+- Sidekick NES only integrates copilot
+
+### Alternatives for completion
+https://github.com/cursortab/cursortab.nvim#providers
+- allow llama.cpp local models qwen 0.8B local fast (not sure about multiple instances RAM perf)
+

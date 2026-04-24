@@ -1,4 +1,4 @@
--- Only contains modifications to default configs
+-- Only contains modifications to default configs
 -- put all related ai agents additional plugins options and configs here
 
 local editor_keymaps = require "utils.editor_keymaps"
@@ -13,6 +13,8 @@ local common_agent_env = {
   GLEAN_API_TOKEN = vim.env.GLEAN_API_TOKEN,
   GITLAB_TOKEN = vim.env.GITLAB_TOKEN,
   GEMINI_API_KEY = vim.env.GEMINI_API_KEY,
+  CLAUDE_CODE_USE_BEDROCK = vim.env.CLAUDE_CODE_USE_BEDROCK or "0",
+  CLAUDE_CODE_NO_FLICKER = "1", -- render only viz part save mem ? add fn search / and c-u/d , but sidekick terminal normal mode can scroll up easily not like term for vim / claude
 }
 
 -- Enable per-chat yolo mode (auto-approve all tool calls) via v19 approvals API
@@ -91,6 +93,22 @@ return {
           },
           claude = {
             cmd = { "claude", "--allow-dangerously-skip-permissions" },
+            env = common_agent_env,
+          },
+          claudeF = {
+            cmd = { "claude", "--allow-dangerously-skip-permissions" },
+            env = vim.tbl_extend("force", common_agent_env, { CLAUDE_CODE_NO_FLICKER = "0" }),
+          },
+          claude_Agd = {
+            cmd = { vim.env.DOTFILES_DIR .. "/ai/claude/cc-agd/cag.sh" },
+            env = common_agent_env,
+          },
+          claude_AgdOm = {
+            cmd = { vim.env.DOTFILES_DIR .. "/ai/claude/cc-agd/cag.sh", "--om" },
+            env = common_agent_env,
+          },
+          claude_AgdOmD = {
+            cmd = { vim.env.DOTFILES_DIR .. "/ai/claude/cc-agd/cag.sh", "--omd" },
             env = common_agent_env,
           },
           debug_me = { -- https://github.com/folke/sidekick.nvim/issues/62
@@ -227,6 +245,9 @@ return {
       spec = {
         { "<leader>ah", group = "MCPHub", mode = { "n" } },
         { "<leader>Am", group = "Commit Message", mode = { "n" } },
+        { "<leader>Amm", desc = "Git staged commit msg", mode = { "n" } },
+        { "<leader>AmM", desc = "Git staged commit msg (large files)", mode = { "n" } },
+        { "<leader>Amf", desc = "Review staged commit (fast, gpt-4.1)", mode = { "n" } },
         { "<leader>C", group = "Claude Code", mode = { "n", "v" }, icon = "🤖" },
       },
     },
@@ -258,6 +279,31 @@ return {
     --   #{mcp:resource}  - Resource as variable
     --   /mcp:prompt      - MCP prompt as slash command
     --
+    config = function(_, opts)
+      local auth = require "utils.mcphub_auth"
+      -- MCPHubClearAuth user command
+      -- Clears stale OAuth credentials from ~/.local/share/mcp-hub/oauth-storage.json.
+      -- Use when an upstream MCP server resets its client registry (pod restart / DCR eviction)
+      -- causing "client ID not found in server's client registry" on the consent page.
+      -- After clearing, restart the server from :MCPHub UI (press R on the server row).
+      -- See: lua/utils/mcphub_auth.lua, docs/memory/mcphub.md
+
+      vim.api.nvim_create_user_command("MCPHubClearAuth", function(cmdopts)
+        local url = vim.trim(cmdopts.args or "")
+        if url == "" then
+          auth.pick_and_clear()
+        else
+          auth.clear_notify(url)
+        end
+      end, {
+        nargs = "?",
+        desc = "Clear MCPHub OAuth credentials (no arg = picker, arg = server URL)",
+        complete = function(_, _, _)
+          return require("utils.mcphub_auth").list_all_urls()
+        end,
+      })
+      require("mcphub").setup(opts)
+    end,
     opts = {
       use_bundled_binary = true,
       config = vim.fn.expand "~/dotfiles/ai/mcp/mcphub.json",
@@ -308,8 +354,16 @@ return {
     },
     keys = {
       { "<leader>ah", "<cmd>MCPHub<cr>", desc = "MCPHub" },
+      {
+        "<leader>aHx",
+        function()
+          require("utils.mcphub_auth").pick_and_clear()
+        end,
+        desc = "Clear MCPHub OAuth (picker)",
+      },
     },
   },
+
   -- Blink.cmp integration for Avante completion
   -- Provides autocomplete for MCP prompts, tools, and resources in Avante chat
   -- does rank lower than custom settings in lua/plugins/extra/myEditor.lua:1275
@@ -390,9 +444,59 @@ return {
           end
           chat:add_callback("on_submitted", function(_, args)
             if args and args.payload and args.payload.messages then
+              -- Filter 1: Remove empty-content messages to avoid
+              -- litellm BadRequestError: "text content blocks must be non-empty"
               args.payload.messages = vim.tbl_filter(function(m)
                 return not (type(m.content) == "string" and vim.trim(m.content) == "")
               end, args.payload.messages)
+
+              -- Filter 2: Remove orphaned tool_use messages.
+              -- At on_submitted time, messages use the INTERNAL format (pre-form_messages):
+              --   assistant tool call: { role = "assistant", tools = { calls = [{id, ...}, ...] } }
+              --   tool result:         { role = "tool", tools = { call_id = "tooluse_xxx" } }
+              -- NOT the OpenAI wire format (tool_calls / tool_call_id) — form_messages converts later.
+              -- This prevents Vertex AI / Anthropic BadRequestError:
+              -- "`tool_use` ids were found without `tool_result` blocks immediately after"
+              -- which happens when the user sends a new message while tool calls are pending.
+              local msgs = args.payload.messages
+              local clean = {}
+              local i = 1
+              while i <= #msgs do
+                local m = msgs[i]
+                local calls = m.tools and m.tools.calls
+                local has_tool_calls = calls and #calls > 0
+                if has_tool_calls then
+                  -- Collect the set of expected tool_call ids
+                  local expected_ids = {}
+                  for _, tc in ipairs(calls) do
+                    if tc.id then
+                      expected_ids[tc.id] = true
+                    end
+                  end
+                  -- Look ahead: all following tool-result messages must cover each call_id.
+                  -- Tool results are consecutive messages with role="tool" and tools.call_id set.
+                  local j = i + 1
+                  while msgs[j] and msgs[j].role == "tool" and msgs[j].tools and msgs[j].tools.call_id do
+                    expected_ids[msgs[j].tools.call_id] = nil
+                    j = j + 1
+                  end
+                  local all_resolved = vim.tbl_isempty(expected_ids)
+                  if not all_resolved then
+                    -- Orphaned tool_use: skip this assistant message AND any partial tool results
+                    i = j
+                  else
+                    -- All tool calls are resolved: keep the assistant message and its results
+                    for k = i, j - 1 do
+                      table.insert(clean, msgs[k])
+                    end
+                    i = j
+                  end
+                else
+                  table.insert(clean, m)
+                  i = i + 1
+                end
+              end
+              args.payload.messages = clean
             end
           end)
         end,
@@ -899,6 +1003,76 @@ feat(release): add slack msg and create release after deploy
                   .. "\n\n```\n"
                   .. filtered_diff
                   .. "\n```"
+              end,
+              opts = {
+                contains_code = true,
+              },
+            },
+          },
+        },
+        ["Review a Staged Commit Message (Fast)"] = {
+          interaction = "chat",
+          description = "Review a staged commit message — fast via gpt-4.1",
+          opts = {
+            alias = "review-staged-commit-fast",
+            auto_submit = true,
+            is_slash_cmd = true,
+            adapter = {
+              name = "copilot",
+              model = "gpt-4.1",
+            },
+          },
+          prompts = {
+            {
+              role = "user",
+              content = function()
+                return [[Help me review the following staged commit message for clarity, conciseness, and adherence to best practices.
+Part 1: Review & Feedback
+Analyze the commit message and organize feedback into the following sections, ordered by severity:
+
+Bugs
+Identify any inaccurate, incorrect, or misleading statements.
+Call out contradictions between the message and the implied change.
+Provide concrete examples or corrected wording.
+Potential Improvements
+
+Suggest ways to improve clarity, completeness, or intent.
+Recommend additional context when helpful (especially why the change exists).
+Propose improved phrasing where applicable.
+Style Suggestions
+
+Recommend improvements based on commit message conventions (e.g., imperative mood, tense, length).
+Fix grammar, structure, or readability issues.
+Flag deviations from common standards (e.g., Conventional Commits).
+For each section, provide:
+
+A short, concise numbered list of findings
+Specific examples or reworded alternatives
+A reference to the relevant file path when applicable
+                ]] .. [[Part 2: Final Commit Message (Strict Output Rules)
+After the review, compose a final commit message following Commitizen / Conventional Commits conventions.
+
+Rules for the final output:
+
+✅ Explain both what and why (not just how)
+✅ Use imperative, present tense
+✅ Keep text plain text only
+Do NOT use markdown, bold, quotes, or special formatting
+✅ Structure:
+Title line
+Exactly 1 blank line
+Body with bullet points using -
+✅ Maximum 5 bullet points
+✅ Keep bullet points short and concise
+✅ Use common acronyms to save space where appropriate
+❌ Do NOT mention file paths
+❌ Do NOT mention specific variable names or code details
+❌ Do NOT exceed one blank line between title and body
+---
+staged-commits
+---
+
+                  ]] .. "\n\n```\n" .. vim.fn.system "git diff --staged" .. "\n```"
               end,
               opts = {
                 contains_code = true,
