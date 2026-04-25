@@ -105,6 +105,17 @@ require("mcphub").setup({
 | `shutdown_delay`    | 5 minutes | Time to wait after last client disconnects                              |
 | `server_url`        | nil       | Override endpoint (for remote mcp-hub)                                  |
 
+### Forked mcp-hub backend
+
+`myAi.lua` supports switching from bundled `mcp-hub` to your fork via env vars:
+
+- `MCP_HUB_FORK_CLI=/abs/path/to/mcp-hub/dist/cli.js` -> starts fork with `node <cli.js>`
+- `MCP_HUB_FORK_REPO=/abs/path/to/mcp-hub` -> auto-detects `dist/cli.js` or `src/utils/cli.js`
+- `MCP_HUB_SERVER_URL=http://host:port` -> connect to external hub endpoint instead of spawning local
+- If env is omitted, `myAi.lua` also auto-detects local fork repos at `~/projects/mcp-hub` and `~/worktree/mcp-hub`
+
+Resolution order is `MCP_HUB_SERVER_URL` -> `MCP_HUB_FORK_CLI` -> `MCP_HUB_FORK_REPO` -> default local fork paths -> bundled binary.
+
 ### Workspace Mode Warning
 
 **If CLI agents can't connect to port 37373:**
@@ -344,6 +355,24 @@ require("mcphub").setup({
 | `e`           | Edit server                |
 | `d`           | Delete server              |
 
+### Tool Form Navigation Keys (Capability Mode)
+
+When a tool capability form is open (input fields + submit line), you can jump between fields without using `j`/`k`.
+
+- Default: `<C-j>` moves to next input/submit line, `<C-k>` moves to previous.
+- Configurable through `mcphub.setup({ ui = { input_navigation = { ... } } })`.
+
+```lua
+require("mcphub").setup({
+  ui = {
+    input_navigation = {
+      next_field = "<A-j>",
+      prev_field = "<A-k>",
+    },
+  },
+})
+```
+
 ---
 
 ## Configuration Files
@@ -413,10 +442,45 @@ MCPHub supports per-server customization for tools, resources, and custom instru
 | ---------------------------- | ------------------- | --------------------------------------- |
 | `disabled`                   | boolean             | Disable server entirely                 |
 | `disabled_tools`             | string[]            | Tools to hide from LLMs                 |
+| `removed_tools`              | string[]            | Tools to hard-hide and block execution  |
 | `disabled_resources`         | string[]            | Resources to hide                       |
 | `disabled_resourceTemplates` | string[]            | Resource templates to hide              |
 | `autoApprove`                | boolean \| string[] | Auto-approve tools without confirmation |
 | `custom_instructions`        | object              | Per-server instructions for LLMs        |
+
+### Env-based Tool Filters (Patch)
+
+For servers that expose an env regex to control visible tools (for example `GITLAB_DENIED_TOOLS_REGEX`),
+the local MCPHub patch can map those env values into MCPHub-side tool filtering.
+
+- `*_DENIED_TOOLS_REGEX` or `*_DISABLED_TOOLS_REGEX`: hide matching tool names
+- `*_ALLOWED_TOOLS_REGEX` or `*_ENABLED_TOOLS_REGEX`: only keep matching tool names
+- Explicit keys are also supported: `DENIED_TOOLS_REGEX`, `ALLOWED_TOOLS_REGEX`, `ENABLED_TOOLS_REGEX`, plus `MCPHUB_*` and `GITLAB_*` variants
+
+This affects both:
+
+- Tool exposure in MCP system prompts / chat integrations
+- MCPHub UI disabled state rendering for tool lists
+
+### Strict Hidden Tools (`removed_tools`)
+
+`removed_tools` is a stricter layer than `disabled_tools`:
+
+- Hidden from mcphub.nvim integration capability exposure (`get_servers` / generated prompts)
+- Still shown in MCPHub UI as removed (for local visibility)
+- Blocked at execution time for tool calls routed through `MCPHub:call_tool`
+
+Protocol scope:
+
+- Upstream bundled `mcp-hub` still does not enforce `removed_tools` / `disabled_tools` for raw `/mcp` protocol clients
+- Forked backend at `~/projects/mcp-hub` now enforces tool policy at transport level:
+  - disallowed tools are removed from `/mcp` `tools/list`
+  - disallowed tool names are rejected for `/mcp` `tools/call`
+
+In MCPHub UI main view:
+
+- `x` toggles strict hide for the selected tool (`removed_tools`)
+- `t` keeps the existing soft toggle (`disabled_tools`)
 
 ### Auto-Approve Options
 
@@ -606,6 +670,33 @@ require("mcphub").setup({
 
 1. Connect fail SSE
    try kill the port and restart mcphub (in this case 37373)
+
+### Log spam freezing Neovim UI ("Unknown client disconnected" ×40+)
+
+**Symptom**: On startup or when a second Neovim profile opens `:MCPHub`, dozens
+of `'Unknown' client disconnected from MCP HUB` log lines flood the UI and
+cause Neovim to freeze/stutter.
+
+**Root cause** (three compounding issues):
+- Multi-profile port conflict triggers a `hard-restart`, disconnecting all SSE
+  clients simultaneously — one `LOG` event per client in milliseconds.
+- No dedup or throttle: every LOG event calls `State:add_server_output()` →
+  `notify_subscribers()` synchronously, queueing 40 `vim.schedule` callbacks.
+- `log.level = WARN` config did NOT suppress INFO-level SSE events — it only
+  filtered `vim.notify` calls.
+
+**Fix**: Local patch `patches/mcphub.nvim/03-log-dedup-throttle.patch` (v6.2.0):
+- **handlers.lua**: SSE log events below `log.level` are dropped before state.
+  With `log.level = WARN`, INFO "client disconnected" events never reach state.
+- **state.lua**: Consecutive identical messages (same type+text, within 2 s)
+  collapse into one entry; `count` is incremented. Subscriber notification is
+  debounced 50 ms so a burst produces exactly one UI refresh.
+- **renderer.lua**: Collapsed entries show ` ×N` count badge in the Logs tab.
+
+**Passive verification**: Open `:MCPHub` → Logs tab after startup — should show
+at most 1 line per unique message (with `×N` badge) instead of 40 identical lines.
+
+See `tasks/review/mcphub-log-spam-fix.md` for full investigation and checklist.
 
 ### Environment variables not loaded
 

@@ -1,0 +1,506 @@
+diff --git i/lua/mcphub/hub.lua w/lua/mcphub/hub.lua
+index 2b5245d..d81e80f 100644
+--- i/lua/mcphub/hub.lua
++++ w/lua/mcphub/hub.lua
+@@ -14,6 +14,95 @@ local native = require("mcphub.native")
+ local prompt_utils = require("mcphub.utils.prompt")
+ local utils = require("mcphub.utils")
+ 
++local tool_regex_cache = {}
++
++--- Resolve a regex value from server env keys.
++---@param env table<string, any>
++---@param preferred_keys string[]
++---@param suffixes string[]
++---@return string|nil
++local function get_env_regex(env, preferred_keys, suffixes)
++    if type(env) ~= "table" then
++        return nil
++    end
++
++    for _, key in ipairs(preferred_keys) do
++        local value = env[key]
++        if type(value) == "string" and vim.trim(value) ~= "" then
++            return vim.trim(value)
++        end
++    end
++
++    local env_keys = {}
++    for key in pairs(env) do
++        if type(key) == "string" then
++            table.insert(env_keys, key)
++        end
++    end
++    table.sort(env_keys)
++
++    for _, key in ipairs(env_keys) do
++        for _, suffix in ipairs(suffixes) do
++            if key == suffix or key:sub(-#suffix) == suffix then
++                local value = env[key]
++                if type(value) == "string" and vim.trim(value) ~= "" then
++                    return vim.trim(value)
++                end
++            end
++        end
++    end
++
++    return nil
++end
++
++---@param pattern string|nil
++---@return vim.regex|nil
++local function compile_tool_regex(pattern)
++    if type(pattern) ~= "string" or vim.trim(pattern) == "" then
++        return nil
++    end
++
++    local normalized = vim.trim(pattern)
++    local cached = tool_regex_cache[normalized]
++    if cached ~= nil then
++        return cached or nil
++    end
++
++    local ok, regex = pcall(vim.regex, "\\v" .. normalized)
++    if not ok then
++        log.warn("Ignoring invalid tool filter regex", {
++            pattern = normalized,
++            error = regex,
++        })
++        tool_regex_cache[normalized] = false
++        return nil
++    end
++
++    tool_regex_cache[normalized] = regex
++    return regex
++end
++
++---@param server_config table
++---@return { denied: vim.regex|nil, enabled: vim.regex|nil }
++local function get_tool_filter_matchers(server_config)
++    local env = type(server_config.env) == "table" and server_config.env or {}
++    local denied_regex = get_env_regex(
++        env,
++        { "MCPHUB_DENIED_TOOLS_REGEX", "MCPHUB_DISABLED_TOOLS_REGEX", "DENIED_TOOLS_REGEX", "GITLAB_DENIED_TOOLS_REGEX" },
++        { "DENIED_TOOLS_REGEX", "DISABLED_TOOLS_REGEX" }
++    )
++    local enabled_regex = get_env_regex(
++        env,
++        { "MCPHUB_ALLOWED_TOOLS_REGEX", "MCPHUB_ENABLED_TOOLS_REGEX", "ALLOWED_TOOLS_REGEX", "ENABLED_TOOLS_REGEX", "GITLAB_ALLOWED_TOOLS_REGEX" },
++        { "ALLOWED_TOOLS_REGEX", "ENABLED_TOOLS_REGEX" }
++    )
++
++    return {
++        denied = compile_tool_regex(denied_regex),
++        enabled = compile_tool_regex(enabled_regex),
++    }
++end
++
+ -- Default timeouts
+ local CONNECT_TIMEOUT = 1000 -- 1s for curl to connect to localhost
+ local TOOL_TIMEOUT = 60000 -- 60s for tool calls
+@@ -759,6 +848,18 @@ end
+ --- @return MCPResponseOutput?, string? If no callback is provided, returns response and error
+ function MCPHub:call_tool(server_name, tool_name, args, opts)
+     opts = opts or {}
++
++    local server_config = config_manager.get_server_config(server_name) or {}
++    if vim.tbl_contains(server_config.removed_tools or {}, tool_name) then
++        local err = string.format("Tool '%s' is removed for server '%s' and cannot be called", tool_name, server_name)
++        log.warn(err)
++        if opts.callback then
++            opts.callback(nil, err)
++            return
++        end
++        return nil, err
++    end
++
+     if opts.callback then
+         local original_callback = opts.callback
+         opts.callback = function(response, err)
+@@ -1381,18 +1482,35 @@ function MCPHub:ensure_ready()
+     return true
+ end
+ 
+---- Get servers with their tools filtered based on server config
++--- Get servers with their capabilities filtered based on server config
+ --- @param server MCPServer The server object to filter
+ ---@return table[] Array of connected servers with disabled tools filtered out
+ local function filter_server_capabilities(server)
+     local config = config_manager.get_server_config(server) or {}
+     local filtered_server = vim.deepcopy(server)
++    local tool_matchers = get_tool_filter_matchers(config)
+ 
+     if filtered_server.capabilities then
+         -- Common function to filter capabilities
+         local function filter_capabilities(capabilities, disabled_list, id_field)
+             return vim.tbl_filter(function(item)
+-                return not vim.tbl_contains(disabled_list, item[id_field])
++                local item_id = item[id_field]
++                if vim.tbl_contains(disabled_list, item_id) then
++                    return false
++                end
++
++                if id_field == "name" then
++                    if vim.tbl_contains(config.removed_tools or {}, item_id) then
++                        return false
++                    end
++                    if tool_matchers.enabled and not tool_matchers.enabled:match_str(item_id) then
++                        return false
++                    end
++                    if tool_matchers.denied and tool_matchers.denied:match_str(item_id) then
++                        return false
++                    end
++                end
++                return true
+             end, capabilities)
+         end
+ 
+diff --git i/lua/mcphub/ui/views/main.lua w/lua/mcphub/ui/views/main.lua
+index 9639866..e275e30 100644
+--- i/lua/mcphub/ui/views/main.lua
++++ w/lua/mcphub/ui/views/main.lua
+@@ -438,7 +438,7 @@ function MainView:handle_action(line_override, context_override)
+             vim.api.nvim_win_set_cursor(0, cap_pos)
+         end
+     elseif (type == "tool" or type == "resource" or type == "resourceTemplate" or type == "prompt") and context then
+-        if context.disabled then
++        if context.disabled or context.removed then
+             return
+         end
+         -- Store browse mode position before entering capability
+@@ -589,6 +589,12 @@ function MainView:setup_active_mode()
+                 end,
+                 desc = "Auto-approve",
+             },
++            ["x"] = {
++                action = function()
++                    self:handle_removed_tool_toggle()
++                end,
++                desc = "Strict hide tool",
++            },
+             ["h"] = {
+                 action = function()
+                     self:handle_collapse()
+@@ -638,28 +644,21 @@ end
+ 
+ -- Helper function to get all tool names for a server
+ local function get_server_tool_names(server_name)
+-    local tools = {}
+-
+-    -- Check if it's a native server
+-    local is_native = native.is_native_server(server_name)
+-    if is_native then
+-        local native_server = is_native
+-        for _, tool in ipairs(native_server.capabilities.tools or {}) do
+-            table.insert(tools, tool.name)
+-        end
+-    else
+-        -- Regular MCP server
+-        for _, server in ipairs(State.server_state.servers) do
+-            if server.name == server_name and server.capabilities then
+-                for _, tool in ipairs(server.capabilities.tools or {}) do
+-                    table.insert(tools, tool.name)
+-                end
+-                break
++    if not State.hub_instance or not State.hub_instance:is_ready() then
++        return {}
++    end
++
++    for _, server in ipairs(State.hub_instance:get_servers(true) or {}) do
++        if server.name == server_name and server.capabilities then
++            local tools = {}
++            for _, tool in ipairs(server.capabilities.tools or {}) do
++                table.insert(tools, tool.name)
+             end
++            return tools
+         end
+     end
+ 
+-    return tools
++    return {}
+ end
+ 
+ -- Helper function to determine actual auto-approval status
+@@ -719,7 +718,7 @@ function MainView:handle_auto_approve_toggle()
+         })
+     elseif type == "tool" and context then
+         -- Check if tool is enabled
+-        if context.disabled then
++        if context.disabled or context.removed then
+             return
+         end
+ 
+@@ -761,6 +760,43 @@ function MainView:handle_auto_approve_toggle()
+         })
+     end
+ end
++
++function MainView:handle_removed_tool_toggle()
++    local cursor = vim.api.nvim_win_get_cursor(0)
++    local line = cursor[1]
++    local type, context = self:get_line_info(line)
++    if type ~= "tool" or not context or not State.hub_instance then
++        return
++    end
++
++    local server_name = context.server_name
++    local tool_name = context.def.name
++    if not tool_name or tool_name == "" then
++        return
++    end
++
++    local server_config = config_manager.get_server_config(server_name) or {}
++    local removed_tools = vim.deepcopy(server_config.removed_tools or {})
++    local is_removed = vim.tbl_contains(removed_tools, tool_name)
++
++    if is_removed then
++        removed_tools = vim.tbl_filter(function(name)
++            return name ~= tool_name
++        end, removed_tools)
++    else
++        table.insert(removed_tools, tool_name)
++    end
++
++    State.hub_instance:update_server_config(server_name, {
++        removed_tools = removed_tools,
++    })
++    State:emit("tool_list_changed", {
++        server_name = server_name,
++        config_field = "removed_tools",
++        removed_tools = removed_tools,
++    })
++end
++
+ function MainView:handle_server_toggle()
+     -- Get current line
+     local cursor = vim.api.nvim_win_get_cursor(0)
+@@ -795,6 +831,10 @@ function MainView:handle_server_toggle()
+         and context
+         and State.hub_instance
+     then
++        if type == "tool" and context.removed then
++            return
++        end
++
+         local server_name = context.server_name
+         local server_config = config_manager.get_server_config(server_name) or {}
+ 
+diff --git i/lua/mcphub/utils/renderer.lua w/lua/mcphub/utils/renderer.lua
+index d8263e0..9b9ca44 100644
+--- i/lua/mcphub/utils/renderer.lua
++++ w/lua/mcphub/utils/renderer.lua
+@@ -6,6 +6,107 @@ local constants = require("mcphub.utils.constants")
+ local utils = require("mcphub.utils")
+ 
+ local M = {}
++local tool_regex_cache = {}
++
++---@param env table<string, any>
++---@param preferred_keys string[]
++---@param suffixes string[]
++---@return string|nil
++local function get_env_regex(env, preferred_keys, suffixes)
++    if type(env) ~= "table" then
++        return nil
++    end
++
++    for _, key in ipairs(preferred_keys) do
++        local value = env[key]
++        if type(value) == "string" and vim.trim(value) ~= "" then
++            return vim.trim(value)
++        end
++    end
++
++    local env_keys = {}
++    for key in pairs(env) do
++        if type(key) == "string" then
++            table.insert(env_keys, key)
++        end
++    end
++    table.sort(env_keys)
++
++    for _, key in ipairs(env_keys) do
++        for _, suffix in ipairs(suffixes) do
++            if key == suffix or key:sub(-#suffix) == suffix then
++                local value = env[key]
++                if type(value) == "string" and vim.trim(value) ~= "" then
++                    return vim.trim(value)
++                end
++            end
++        end
++    end
++
++    return nil
++end
++
++---@param pattern string|nil
++---@return vim.regex|nil
++local function compile_tool_regex(pattern)
++    if type(pattern) ~= "string" or vim.trim(pattern) == "" then
++        return nil
++    end
++
++    local normalized = vim.trim(pattern)
++    local cached = tool_regex_cache[normalized]
++    if cached ~= nil then
++        return cached or nil
++    end
++
++    local ok, regex = pcall(vim.regex, "\\v" .. normalized)
++    if not ok then
++        tool_regex_cache[normalized] = false
++        return nil
++    end
++
++    tool_regex_cache[normalized] = regex
++    return regex
++end
++
++---@param server_config table
++---@return { denied: vim.regex|nil, enabled: vim.regex|nil }
++local function get_tool_filter_matchers(server_config)
++    local env = type(server_config.env) == "table" and server_config.env or {}
++    return {
++        denied = compile_tool_regex(get_env_regex(
++            env,
++            { "MCPHUB_DENIED_TOOLS_REGEX", "MCPHUB_DISABLED_TOOLS_REGEX", "DENIED_TOOLS_REGEX", "GITLAB_DENIED_TOOLS_REGEX" },
++            { "DENIED_TOOLS_REGEX", "DISABLED_TOOLS_REGEX" }
++        )),
++        enabled = compile_tool_regex(get_env_regex(
++            env,
++            { "MCPHUB_ALLOWED_TOOLS_REGEX", "MCPHUB_ENABLED_TOOLS_REGEX", "ALLOWED_TOOLS_REGEX", "ENABLED_TOOLS_REGEX", "GITLAB_ALLOWED_TOOLS_REGEX" },
++            { "ALLOWED_TOOLS_REGEX", "ENABLED_TOOLS_REGEX" }
++        )),
++    }
++end
++
++---@param server_config table
++---@param tool_name string
++---@param tool_matchers { denied: vim.regex|nil, enabled: vim.regex|nil }
++---@return boolean, boolean
++local function get_tool_visibility_flags(server_config, tool_name, tool_matchers)
++    local is_removed = vim.tbl_contains(server_config.removed_tools or {}, tool_name)
++    if is_removed then
++        return true, true
++    end
++
++    local is_disabled = vim.tbl_contains(server_config.disabled_tools or {}, tool_name)
++    if not is_disabled and tool_matchers.enabled and not tool_matchers.enabled:match_str(tool_name) then
++        is_disabled = true
++    end
++    if not is_disabled and tool_matchers.denied and tool_matchers.denied:match_str(tool_name) then
++        is_disabled = true
++    end
++
++    return is_disabled, false
++end
+ 
+ --- Get display name for a config source
+ ---@param config_source string Path to config file
+@@ -213,15 +314,39 @@ function M.render_cap_section(items, title, server_name, line_type, current_line
+         Text.pad_line(NuiLine():append(" " .. icons[line_type] .. " " .. title .. ": ", Text.highlights.muted), nil, 4)
+     )
+ 
+-    local disabled_tools = server_config.disabled_tools or {}
++    local disabled_tools = {}
++    local removed_tools = {}
++    if line_type == "tool" then
++        local tool_matchers = get_tool_filter_matchers(server_config)
++        for _, item in ipairs(items) do
++            local is_disabled, is_removed = get_tool_visibility_flags(server_config, item.name, tool_matchers)
++            if is_disabled then
++                disabled_tools[item.name] = true
++            end
++            if is_removed then
++                removed_tools[item.name] = true
++            end
++        end
++    end
++
+     if line_type == "tool" then
+         -- For tools, sort by name and move disabled ones to end
+         local sorted_items = vim.deepcopy(items)
+         table.sort(sorted_items, function(a, b)
+-            local a_disabled = vim.tbl_contains(disabled_tools, a.name)
+-            local b_disabled = vim.tbl_contains(disabled_tools, b.name)
+-            if a_disabled ~= b_disabled then
+-                return not a_disabled
++            local function tool_rank(name)
++                if removed_tools[name] == true then
++                    return 3
++                end
++                if disabled_tools[name] == true then
++                    return 2
++                end
++                return 1
++            end
++
++            local a_rank = tool_rank(a.name)
++            local b_rank = tool_rank(b.name)
++            if a_rank ~= b_rank then
++                return a_rank < b_rank
+             end
+             return a.name < b.name
+         end)
+@@ -231,8 +356,10 @@ function M.render_cap_section(items, title, server_name, line_type, current_line
+     for _, item in ipairs(items) do
+         local name = item.name or item.uri or item.uriTemplate or "NO NAME"
+         local is_disabled = false
++        local is_removed = false
+         if line_type == "tool" then
+-            is_disabled = vim.tbl_contains(disabled_tools, item.name)
++            is_disabled = disabled_tools[item.name] == true
++            is_removed = removed_tools[item.name] == true
+         elseif line_type == "resource" then
+             is_disabled = vim.tbl_contains(server_config.disabled_resources or {}, item.uri)
+         elseif line_type == "resourceTemplate" then
+@@ -242,7 +369,9 @@ function M.render_cap_section(items, title, server_name, line_type, current_line
+         end
+ 
+         local line = NuiLine()
+-        if is_disabled then
++        if is_removed then
++            line:append(Text.icons.uninstall .. " ", Text.highlights.error):append(name, Text.highlights.error)
++        elseif is_disabled then
+             line:append(Text.icons.circle .. " ", Text.highlights.muted):append(name, Text.highlights.muted)
+         else
+             line:append(Text.icons.arrowRight .. " ", Text.highlights.muted):append(name, Text.highlights.info)
+@@ -271,10 +400,12 @@ function M.render_cap_section(items, title, server_name, line_type, current_line
+         table.insert(lines, Text.pad_line(line, nil, 6))
+ 
+         local hint
+-        if is_disabled then
++        if is_removed then
++            hint = "[<x> Toggle strict hide]"
++        elseif is_disabled then
+             hint = "[<t> Toggle]"
+         elseif line_type == "tool" then
+-            hint = string.format("[<l> open %s, <t> Toggle, <a> Auto-approve]", line_type)
++            hint = string.format("[<l> open %s, <t> Toggle, <x> Strict hide, <a> Auto-approve]", line_type)
+         else
+             hint = string.format("[<l> open %s, <t> Toggle]", line_type)
+         end
+@@ -285,6 +416,7 @@ function M.render_cap_section(items, title, server_name, line_type, current_line
+                 def = item,
+                 server_name = server_name,
+                 disabled = is_disabled,
++                removed = is_removed,
+                 hint = hint,
+             },
+         })
+@@ -483,9 +615,14 @@ function M.render_server_line(server, active)
+             )
+         end
+         -- Show auto-approve status for server using smart detection
++        local tool_matchers = get_tool_filter_matchers(server_config)
+         local all_tools = {}
+         for _, tool in ipairs(server.capabilities.tools or {}) do
+-            table.insert(all_tools, tool.name)
++            local is_disabled, is_removed = get_tool_visibility_flags(server_config, tool.name, tool_matchers)
++
++            if not is_disabled and not is_removed then
++                table.insert(all_tools, tool.name)
++            end
+         end
+ 
+         local auto_approve = server_config.autoApprove

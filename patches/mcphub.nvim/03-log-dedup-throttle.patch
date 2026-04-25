@@ -1,0 +1,131 @@
+# Patch: log dedup + debounce + SSE level filtering
+# Plugin: ravitemer/mcphub.nvim
+# Tested against: 163b3ad [v6.2.0] @2025-07-31
+#
+# Problem: Startup bursts of identical log messages ("'Unknown' client
+# disconnected from MCP HUB" x40+) caused by multi-profile port conflicts or
+# rapid SSE reconnects flood State.server_output and trigger one subscriber
+# notification per message, saturating Neovim's event loop and freezing the UI.
+#
+# Fix (three cooperating changes):
+#   1. state.lua  — Dedup: consecutive identical messages (same type+text,
+#      within 2 s) collapse into one entry with an incrementing `count` field.
+#      Debounce: subscriber notification is deferred 50 ms and restarted on
+#      every new entry so rapid bursts produce exactly one UI refresh.
+#
+#   2. handlers.lua — Level filter: SSE log events below the configured
+#      `log.level` are dropped before reaching State, making the existing
+#      `log = { level = vim.log.levels.WARN }` config option actually suppress
+#      INFO-level server chatter in the UI (previously it only filtered
+#      vim.notify calls). Errors are always stored regardless of level.
+#
+#   3. renderer.lua — Count badge: entries with count > 1 show " ×N" suffix
+#      (muted highlight) so the user can see how many messages were collapsed.
+#
+diff --git i/lua/mcphub/state.lua w/lua/mcphub/state.lua
+--- i/lua/mcphub/state.lua
++++ w/lua/mcphub/state.lua
+@@ -292,11 +292,38 @@
+     -- Ensure entry has timestamp
+     entry.timestamp = entry.timestamp or vim.loop.now()
+ 
++    -- Dedup: collapse consecutive identical messages within 2 seconds into a
++    -- single entry with an incrementing count. This prevents bursts of repeated
++    -- log lines (e.g. "Unknown client disconnected" x40) from flooding state
++    -- and triggering dozens of UI re-renders.
++    local last = self.server_output.entries[#self.server_output.entries]
++    if last and last.message == entry.message and last.type == entry.type then
++        local age_ms = entry.timestamp - last.timestamp
++        if age_ms < 2000 then
++            last.count = (last.count or 1) + 1
++            -- Debounce: restart the 50ms notify timer instead of firing now.
++            -- This merges rapid-fire updates into a single UI refresh.
++            if not self._log_notify_timer then
++                self._log_notify_timer = (vim.uv or vim.loop).new_timer()
++            end
++            self._log_notify_timer:stop()
++            self._log_notify_timer:start(
++                50,
++                0,
++                vim.schedule_wrap(function()
++                    self:notify_subscribers({ logs = true }, "logs")
++                end)
++            )
++            return
++        end
++    end
++
+     table.insert(self.server_output.entries, {
+         type = entry.type, -- info/warn/error/debug
+         message = entry.message, -- The actual message
+         timestamp = entry.timestamp,
+         data = entry.data, -- Optional extra data
++        count = 1, -- Track repetitions for dedup display
+     })
+ 
+     -- Keep reasonable history
+@@ -304,9 +331,19 @@
+         table.remove(self.server_output.entries, 1)
+     end
+ 
+-    self:notify_subscribers({
+-        logs = true,
+-    }, "logs")
++    -- Debounce the subscriber notification to batch rapid log bursts into a
++    -- single UI update after 50ms of quiet.
++    if not self._log_notify_timer then
++        self._log_notify_timer = (vim.uv or vim.loop).new_timer()
++    end
++    self._log_notify_timer:stop()
++    self._log_notify_timer:start(
++        50,
++        0,
++        vim.schedule_wrap(function()
++            self:notify_subscribers({ logs = true }, "logs")
++        end)
++    )
+ end
+ 
+ ---@param status string
+diff --git i/lua/mcphub/utils/handlers.lua w/lua/mcphub/utils/handlers.lua
+--- i/lua/mcphub/utils/handlers.lua
++++ w/lua/mcphub/utils/handlers.lua
+@@ -101,6 +101,23 @@
+                 hub:refresh()
+             end
+         elseif event == constants.EventTypes.LOG then
++            -- Map server log type strings to vim.log.levels for comparison
++            local server_level_map = {
++                debug = vim.log.levels.DEBUG,
++                info = vim.log.levels.INFO,
++                warn = vim.log.levels.WARN,
++                error = vim.log.levels.ERROR,
++            }
++            local msg_level = server_level_map[data.type] or vim.log.levels.INFO
++            local cfg_level = (State.config.log or {}).level or vim.log.levels.INFO
++            -- Drop SSE log messages below the configured log level. This makes
++            -- the `log.level` option apply to the full server output stream, not
++            -- just vim.notify calls (which was the previous behaviour).
++            -- Errors are always stored regardless of level.
++            if msg_level < cfg_level and data.type ~= "error" then
++                return
++            end
++
+             -- Use message timestamp if valid ISO string, otherwise system time
+             local timestamp = vim.loop.now()
+             if data.timestamp then
+diff --git i/lua/mcphub/utils/renderer.lua w/lua/mcphub/utils/renderer.lua
+--- i/lua/mcphub/utils/renderer.lua
++++ w/lua/mcphub/utils/renderer.lua
+@@ -629,6 +629,11 @@
+                 -- Add main message
+                 line:append(entry.message, Text.highlights[entry.type] or Text.highlights.muted)
+ 
++                -- Show repeat count badge when dedup has collapsed multiple identical messages
++                if (entry.count or 1) > 1 then
++                    line:append(string.format(" ×%d", entry.count), Text.highlights.muted)
++                end
++
+                 table.insert(lines, Text.pad_line(line))
+             end
+         end

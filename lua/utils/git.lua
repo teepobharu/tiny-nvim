@@ -2,6 +2,20 @@ local M = {}
 
 local pathUtil = require "utils.path"
 
+local function trim_system_output(cmd)
+  local result = vim.fn.systemlist(cmd)
+  if vim.v.shell_error ~= 0 then
+    return nil
+  end
+
+  local value = result[1]
+  if not value or value == "" then
+    return nil
+  end
+
+  return value
+end
+
 function M.git_main_branch()
   local git_dir = vim.fn.system "git rev-parse --git-dir 2> /dev/null"
   if vim.v.shell_error ~= 0 then
@@ -498,6 +512,41 @@ function M.get_superproject_root(dir)
   local cmd = string.format("git -C %s rev-parse --show-superproject-working-tree 2>/dev/null", vim.fn.shellescape(dir))
   local result = vim.fn.systemlist(cmd)[1]
   return result and result ~= "" and result or nil
+end
+
+--- Get git working tree metadata for a directory
+--- @param dir string|nil Directory to inspect (default: cwd)
+--- @return { git_dir: string, common_dir: string, toplevel: string }|nil
+function M.get_worktree_metadata(dir)
+  dir = dir or vim.fn.getcwd()
+
+  local git_dir = trim_system_output({ "git", "-C", dir, "rev-parse", "--absolute-git-dir" })
+  local common_dir = trim_system_output({ "git", "-C", dir, "rev-parse", "--git-common-dir" })
+  local toplevel = trim_system_output({ "git", "-C", dir, "rev-parse", "--show-toplevel" })
+
+  if not git_dir or not common_dir or not toplevel then
+    return nil
+  end
+
+  local metadata = {
+    git_dir = vim.fs.normalize(git_dir),
+    common_dir = vim.fs.normalize(common_dir),
+    toplevel = vim.fs.normalize(toplevel),
+  }
+  return metadata
+end
+
+--- Check whether a directory is using a linked git worktree checkout
+--- Returns true for linked worktrees and false for the main checkout or non-git dirs.
+--- @param dir string|nil Directory to inspect (default: cwd)
+--- @return boolean
+function M.is_worktree_dir(dir)
+  local metadata = M.get_worktree_metadata(dir)
+  if not metadata then
+    return false
+  end
+
+  return metadata.git_dir ~= metadata.common_dir
 end
 
 --- Check if a directory is inside a git submodule

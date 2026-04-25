@@ -3,8 +3,8 @@
 ## Metadata
 
 - **Created**: 2025-01-27
-- **Updated**: 2025-01-29
-- **Status**: open
+- **Updated**: 2026-04-26
+- **Status**: review
 - **Priority**: medium
 - **Tags**: ai, mcp, codecompanion, avante, copilot
 
@@ -235,7 +235,42 @@ mcphub.nvim handles port conflicts gracefully:
 - [ ] Test `autoApprove: true` skips confirmation
 - [ ] Test `autoApprove: ["tool"]` for specific tools
 - [ ] Test `disabled_tools` hides tools from LLMs
+- [ ] Test `ALLOWED_TOOLS_REGEX` / `DISABLED_TOOLS_REGEX` in `mcpServers.<name>.env` filters exposed tools
+- [ ] Test `removed_tools` strict hide: shown as removed in UI, not exposed to clients, blocked on execution
 - [ ] Test `auto_toggle_mcp_servers` allows LLM to start servers
+
+## Verification
+
+### How to verify
+
+Use the forked `mcp-hub` backend (`~/projects/mcp-hub`) through the existing `myAi.lua` fork selector.
+Start Neovim with the worktree profile, ensure MCPHub is running on the configured port, then verify both direct MCP
+protocol visibility (inspector or MCP SDK client) and CodeCompanion tool exposure.
+
+### Commands
+
+```bash
+cd ~/projects/mcp-hub
+npm test -- tests/tool-policy.test.js tests/mcp-server-endpoint.test.js tests/mcp-hub-tool-policy.test.js tests/config.test.js
+npm run build
+```
+
+```bash
+NVIM_APPNAME=nvimwt3a nvim
+```
+
+```bash
+# Optional direct protocol check with inspector
+npx @modelcontextprotocol/inspector http://localhost:37374/mcp --transport sse --method tools/list
+```
+
+### Checklist
+
+- [ ] `removed_tools` entries are absent from raw `/mcp` `tools/list` output.
+- [ ] Direct `/mcp` `tools/call` for a removed tool is rejected.
+- [ ] CodeCompanion no longer shows removed tools in MCP tool lists.
+- [ ] Existing non-removed tools remain available and callable.
+- [ ] Policy-only config updates apply without reconnect churn.
 
 ---
 
@@ -251,3 +286,19 @@ mcphub.nvim handles port conflicts gracefully:
 - External agents get custom instructions via system prompt injection
 - `autoApprove` can be `true`, array of tool names, or omitted
 - LLMs can toggle servers via `toggle_mcp_server` tool (controlled by `auto_toggle_mcp_servers`)
+- `removed_tools` is strict hide/block; `disabled_tools` remains soft-hide in UI/config behavior
+- MCPHub UI key `x` toggles strict hide (`removed_tools`) for tool entries
+- Patch ordering validated: `01 -> 02 -> 03` applies cleanly in a fresh mcphub worktree
+- Fixed `02-env-tool-filters.patch` stale `hub.lua` hunk context so it no longer reports false apply failures
+- Scope caveat: bundled upstream `mcp-hub` still only enforces `disabled_tools` / `removed_tools` in mcphub.nvim integration paths; fork backend now enforces raw `/mcp` `tools/list` and `tools/call`
+- Fork-ready backend switching in `myAi.lua` via env: `MCP_HUB_FORK_CLI` / `MCP_HUB_FORK_REPO` / `MCP_HUB_SERVER_URL`
+- Forked backend implementation in `~/projects/mcp-hub` now filters disallowed tools from raw `/mcp` `tools/list` and blocks disallowed `tools/call` in `src/mcp/server.js`
+- Config diff now tracks policy fields (`disabled_tools`/`removed_tools`/related fields) in `src/utils/config.js`, and policy-only updates avoid reconnect in `src/MCPHub.js`
+- Added backend tests in `~/projects/mcp-hub/tests/`: `tool-policy.test.js`, `mcp-server-endpoint.test.js`, `mcp-hub-tool-policy.test.js`
+- Fork remote setup completed in `~/projects/mcp-hub`:
+  - `origin`: `git@github.com:teepobharu/mcp-hub.git`
+  - `upstream`: `https://github.com/ravitemer/mcp-hub.git`
+  - pushed with SSH (`git push -u origin HEAD`) after switching origin URL
+- Added local patch `patches/mcphub.nvim/04-tool-input-nav-keys.patch`:
+  - default active tool form navigation keys: `<C-j>` next field / `<C-k>` previous field
+  - configurable via `mcphub.setup({ ui = { input_navigation = { next_field, prev_field } } })`
