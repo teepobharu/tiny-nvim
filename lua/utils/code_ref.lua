@@ -23,6 +23,17 @@ local function format_ref(path_part, start_line, start_col, format, range, show_
   -- Check if we should hide column entirely
   local hide_col = vim.g.code_ref_hide_col or false
 
+  -- Check if we should hide line entirely (path-only mode; implies hide_col)
+  local hide_line = vim.g.code_ref_hide_line or false
+
+  -- Path-only shortcut: ignore line/col and range formatting
+  if hide_line then
+    if format == "at" or format == "at_caps" then
+      return "@" .. path_part
+    end
+    return path_part
+  end
+
   local has_range = end_line and end_line ~= start_line
 
   if format == "hash" then
@@ -325,9 +336,11 @@ function M.generate_coderef_items(path_variants, line, col, range, show_char_ran
 
     for _, fmt in ipairs(format_keys) do
       local ref_text = format_ref(path, line, col, fmt.key, range, show_char_range)
+      local item_label = path_variant.label .. " (" .. fmt.label .. ")"
       table.insert(items, {
-        label = path_variant.label .. " (" .. fmt.label .. ")",
-        text = ref_text,
+        label = item_label,
+        -- Prefix label into text so Snacks fuzzy-filter matches on label words (e.g. "abs" → "Absolute")
+        text = item_label .. " " .. ref_text,
         path = ref_text,
         key = path_variant.key .. "_" .. fmt.key,
         is_coderef = true,
@@ -389,6 +402,14 @@ function M.toggle_hide_col()
   local status = vim.g.code_ref_hide_col and "hidden" or "shown"
   vim.notify("Code ref column: " .. status, vim.log.levels.INFO)
   return vim.g.code_ref_hide_col
+end
+
+--- Toggle hiding line entirely (path-only mode)
+function M.toggle_hide_line()
+  vim.g.code_ref_hide_line = not vim.g.code_ref_hide_line
+  local status = vim.g.code_ref_hide_line and "hidden" or "shown"
+  vim.notify("Code ref line: " .. status, vim.log.levels.INFO)
+  return vim.g.code_ref_hide_line
 end
 
 return M

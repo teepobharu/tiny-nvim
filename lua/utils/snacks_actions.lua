@@ -570,6 +570,37 @@ function M.copy_path_absolute(picker, item)
   end
 end
 
+--- Picker action: Copy absolute path(s) — supports multi-selection.
+--- With no selection uses the current item. With multi-select copies all paths
+--- newline-separated. Bound to <C-y> across file/buffer/git pickers.
+function M.copy_path_abs_multi(picker, _item)
+  local selected = picker:selected { fallback = true }
+  if not selected or #selected == 0 then
+    vim.notify("No item under cursor", vim.log.levels.WARN)
+    return
+  end
+
+  local paths = {}
+  for _, sel_item in ipairs(selected) do
+    local file_path = get_item_path(sel_item)
+    if file_path and file_path ~= "" then
+      table.insert(paths, vim.fn.fnamemodify(file_path, ":p"))
+    end
+  end
+
+  if #paths == 0 then
+    vim.notify("No file path found in selection", vim.log.levels.WARN)
+    return
+  end
+
+  local result = table.concat(paths, "\n")
+  if copy_to_clipboard(result, "absolute path") then
+    local label = #paths == 1 and vim.fn.fnamemodify(paths[1], ":~") or string.format("%d paths", #paths)
+    vim.notify(string.format("Copied: %s", label), vim.log.levels.INFO)
+    picker:close()
+  end
+end
+
 --- Picker action: Open sub-picker to choose path/code-ref format with preview.
 --- Uses shared code_ref_picker_builder for unified UI with code_ref_picker (<localleader>crp).
 function M.copy_path_select(picker, item)
@@ -593,7 +624,8 @@ function M.copy_path_select(picker, item)
   for _, pv in ipairs(path_variants) do
     if pv.path and pv.path ~= "" then
       table.insert(picker_items, {
-        text = pv.path,
+        -- Prefix label into text so Snacks fuzzy-filter matches on label words (e.g. "abs" → "Absolute")
+        text = pv.label .. " " .. pv.path,
         path = pv.path,
         label = pv.label,
         key = pv.key,
@@ -614,13 +646,23 @@ function M.copy_path_select(picker, item)
 
   local parent_picker = picker
 
-  -- Title shows if code-refs are available
+  -- Title shows if code-refs are available with current toggle state
   local hide_col = vim.g.code_ref_hide_col or false
-  local title = "Select Path Format (C-y: copy, Enter: paste)"
+  local hide_line = vim.g.code_ref_hide_line or false
+  local title = "Select Path Format (Enter: paste)"
   if #coderef_items > 0 then
-    local col_label = hide_col and " [col: hidden]" or " [col: shown]"
-    title = title .. " [+" .. #coderef_items .. " code-refs]" .. col_label
+    local state_parts = {}
+    if hide_line then
+      table.insert(state_parts, "line:hidden")
+    elseif hide_col then
+      table.insert(state_parts, "col:hidden")
+    end
+    local state_label = (#state_parts > 0) and (" [" .. table.concat(state_parts, " ") .. "]") or ""
+    title = title .. " [+" .. #coderef_items .. " code-refs]" .. state_label
   end
+
+  -- Footer: actions + toggles (visible in input window)
+  local footer = "<CR> paste • <C-y> copy • <C-n> md • <A-c> col • <A-l> line"
 
   builder.build {
     items = picker_items,
@@ -630,6 +672,7 @@ function M.copy_path_select(picker, item)
     confirm_mode = "paste",
     show_preview = true,
     use_visual = false,
+    footer = footer,
     on_refresh = function()
       M.copy_path_select(parent_picker, item)
     end,
@@ -1436,17 +1479,25 @@ end
 
 --#region Picker Switching Actions
 
---- 3-way cycle: files → buffers → grep → files
---- Preserves search pattern, saves current picker's toggle opts before switching,
---- and loads destination source's persisted opts.
---- Closes the current picker before opening the next to avoid orphan pickers
---- that cause double-press and focus issues.
+--- Per-source 3-step cycles between files / buffers / git_files pickers.
+--- Each starting source has its own custom 3-step cycle:
+---   files     → buffers   → git_files → files
+---   buffers   → files     → git_files → buffers
+---   git_files → files     → buffers   → git_files
+--- The cycle is stateful per picker via picker.opts._cycle_chain + _cycle_index,
+--- so the user keeps seeing the same predictable sequence regardless of which
+--- source they happened to land on mid-cycle.
+---
+--- Search query is preserved across switches via filter.pattern.
+--- Toggle opts (hidden/ignored/follow/regex) are saved to per-source persistence
+--- before switching, and reloaded on the destination via get_initial_picker_state.
+---
+--- Note: grep is NOT part of this cycle — use <M-g> (toggle_grep_picker) for that.
 --- @param picker table Snacks picker instance
 --- @param item table Current item (unused)
 function M.toggle_picker_source(picker, item)
   local current_source = picker.opts and picker.opts.source
   if not current_source then
-    -- Fallback: try init_opts.source
     current_source = picker.init_opts and picker.init_opts.source
   end
   if not current_source then
@@ -1457,9 +1508,8 @@ function M.toggle_picker_source(picker, item)
   -- Save current picker's toggle opts before switching away
   M.save_picker_source_opts(picker)
 
-  -- Read the correct search text based on current source:
-  -- - For grep/grep_word: the user's query is in filter.search (pattern is the result filter)
-  -- - For files/buffers: the user's input is in filter.pattern
+  -- Read the correct search text based on current source.
+  -- grep/grep_word are not part of this cycle, but defensively handle them.
   local current_search
   if current_source == "grep" or current_source == "grep_word" then
     current_search = picker.input.filter and picker.input.filter.search or ""
@@ -1467,56 +1517,193 @@ function M.toggle_picker_source(picker, item)
     current_search = picker.input.filter and picker.input.filter.pattern or ""
   end
 
-  -- Determine the next source in the cycle: files → buffers → grep → files
-  -- grep_word is treated the same as grep in the cycle
-  local next_source
-  if current_source == "files" then
-    next_source = "buffers"
-  elseif current_source == "buffers" then
-    next_source = "grep"
-  elseif current_source == "grep" or current_source == "grep_word" then
-    next_source = "files"
-  else
-    -- Unknown source (smart, etc.) — default: cycle to files
-    next_source = "files"
+  -- Per-starting-source cycle definitions.
+  -- The cycle is anchored to whichever source the user FIRST invoked C-space on,
+  -- and persisted via picker.opts._cycle_chain so subsequent presses follow the
+  -- same predictable sequence (rather than re-anchoring on every keypress).
+  local cycles = {
+    files = { "files", "buffers", "git_files" },
+    buffers = { "buffers", "files", "git_files" },
+    git_files = { "git_files", "files", "buffers" },
+  }
+
+  local chain = picker.opts._cycle_chain
+  local idx = picker.opts._cycle_index
+  if not chain or not idx then
+    -- First C-space press — anchor the cycle to the current source
+    chain = cycles[current_source] or cycles.files
+    -- Find current source position in the chain
+    idx = 1
+    for i, src in ipairs(chain) do
+      if src == current_source then
+        idx = i
+        break
+      end
+    end
   end
 
+  -- Advance to next step in the cycle (wrap around)
+  local next_idx = (idx % #chain) + 1
+  local next_source = chain[next_idx]
+
   -- Close the current picker before opening the next one.
-  -- Without this, orphaned pickers stack up and intercept keypresses,
-  -- causing the "double-press required after full cycle" bug.
+  -- Without this, orphaned pickers stack up and intercept keypresses.
   picker:close()
 
-  -- Open the destination picker (deferred to let close complete cleanly)
+  -- Preserve the grep round-trip carry slot across C-space hops, so that a
+  -- previously-stashed grep secondary filter survives even if the user moves
+  -- through several non-grep pickers before returning to grep.
+  local pending_grep_pattern_carry = picker.opts._grep_pattern_carry
+
+  -- Carry the cycle anchor forward so subsequent presses stay on the same chain
+  local function carry_cycle_state(opts)
+    opts._cycle_chain = chain
+    opts._cycle_index = next_idx
+    if pending_grep_pattern_carry ~= nil then
+      opts._grep_pattern_carry = pending_grep_pattern_carry
+    end
+    return opts
+  end
+
   vim.schedule(function()
     if next_source == "buffers" then
-      Snacks.picker.buffers {
+      Snacks.picker.buffers(carry_cycle_state {
         pattern = current_search ~= "" and current_search or nil,
         show_empty = true,
         hidden = false, -- buffers don't use hidden/ignored toggles
-      }
-      -- Ensure insert mode (buffers picker sometimes lands in normal)
+      })
       vim.defer_fn(function()
         if vim.api.nvim_get_mode().mode == "n" then
           vim.cmd "startinsert"
         end
       end, 50)
-    elseif next_source == "grep" then
-      local carry_search = current_search ~= "" and current_search or nil
-      -- For grep: use get_initial_picker_state to load persisted per-source opts
-      local snacks_util = require "utils.snacks_terminal"
-      local picker_opts = snacks_util.get_initial_picker_state({
-        show_empty = true,
-        search = carry_search,
-        live = true,
-      }, { source = "grep" })
-      Snacks.picker.grep(picker_opts)
     elseif next_source == "files" then
-      -- Use get_initial_picker_state to load persisted per-source opts
       local snacks_util = require "utils.snacks_terminal"
       local picker_opts = snacks_util.get_initial_picker_state({
         pattern = current_search ~= "" and current_search or nil,
       }, { source = "files" })
-      Snacks.picker.files(picker_opts)
+      Snacks.picker.files(carry_cycle_state(picker_opts))
+    elseif next_source == "git_files" then
+      Snacks.picker.git_files(carry_cycle_state {
+        pattern = current_search ~= "" and current_search or nil,
+        show_empty = true,
+      })
+    end
+  end)
+end
+
+--- Toggle between grep and the picker source it was invoked from.
+---
+--- Snacks distinguishes two filter fields (see snacks/picker/core/filter.lua):
+---   - filter.pattern: matcher-side fuzzy filter (the "input" in non-live pickers,
+---     a secondary refinement filter shown in statuscolumn for live pickers)
+---   - filter.search:  finder-side query (the "input" in live pickers like grep,
+---     shown in statuscolumn for non-live pickers)
+---
+--- Carry strategy (preserves maximum context):
+---
+--- Entering grep (from files/buffers/git_files):
+---   - source `filter.pattern` → grep `search`         (live query becomes user's intent)
+---   - if `_grep_pattern_carry` exists on source opts → grep `pattern` (round-trip restore
+---     of grep's previous secondary filter)
+---   - stash `_grep_origin` = current_source so return knows where to go
+---
+--- Leaving grep (back to origin):
+---   - grep `filter.search`  → destination `pattern`   (the live query was primary intent)
+---   - grep `filter.pattern` → destination `_grep_pattern_carry` (preserved for next M-g
+---     back to grep, so grep's secondary filter survives the round-trip)
+---   - destination derived from `_grep_origin` (defaults to "files")
+---
+--- @param picker table Snacks picker instance
+--- @param item table Current item (unused)
+function M.toggle_grep_picker(picker, item)
+  local current_source = picker.opts and picker.opts.source
+  if not current_source then
+    current_source = picker.init_opts and picker.init_opts.source
+  end
+  if not current_source then
+    vim.notify("toggle_grep_picker: cannot determine current source", vim.log.levels.ERROR)
+    return
+  end
+
+  -- Save toggle opts before switching
+  M.save_picker_source_opts(picker)
+
+  local is_grep = current_source == "grep" or current_source == "grep_word"
+
+  -- Read BOTH filter fields. Their semantics differ per source type:
+  --   live pickers (grep):  filter.search = visible query, filter.pattern = secondary refine
+  --   non-live (files/...): filter.pattern = visible input, filter.search usually empty
+  local cur_pattern = picker.input.filter and picker.input.filter.pattern or ""
+  local cur_search = picker.input.filter and picker.input.filter.search or ""
+
+  -- Determine destination
+  local next_source
+  if is_grep then
+    next_source = picker.opts._grep_origin or "files"
+  else
+    next_source = "grep"
+  end
+
+  -- Round-trip carry slots (preserved across a non-grep ↔ grep round-trip)
+  local pending_grep_pattern_carry = picker.opts._grep_pattern_carry
+
+  M.log_picker_persist("toggle_grep_picker:enter", {
+    current_source = current_source,
+    next_source = next_source,
+    cur_pattern = cur_pattern,
+    cur_search = cur_search,
+    has_carry = pending_grep_pattern_carry ~= nil,
+  })
+
+  picker:close()
+
+  vim.schedule(function()
+    if next_source == "grep" then
+      -- ENTERING grep: source's visible input (pattern) → grep's search (live query).
+      -- If we previously stashed grep's secondary filter when leaving, restore it now.
+      local snacks_util = require "utils.snacks_terminal"
+      local picker_opts = snacks_util.get_initial_picker_state({
+        show_empty = true,
+        search = cur_pattern ~= "" and cur_pattern or nil,
+        pattern = pending_grep_pattern_carry and pending_grep_pattern_carry ~= "" and pending_grep_pattern_carry or nil,
+        live = true,
+      }, { source = "grep" })
+      picker_opts._grep_origin = current_source
+      Snacks.picker.grep(picker_opts)
+    else
+      -- LEAVING grep: grep's live query (search) → destination's pattern (visible input).
+      -- Stash grep's secondary filter (pattern) on destination so a future M-g back to
+      -- grep restores it.
+      local dest_pattern = cur_search ~= "" and cur_search or nil
+      local carry = cur_pattern ~= "" and cur_pattern or nil
+
+      if next_source == "buffers" then
+        Snacks.picker.buffers {
+          pattern = dest_pattern,
+          show_empty = true,
+          hidden = false,
+          _grep_pattern_carry = carry,
+        }
+        vim.defer_fn(function()
+          if vim.api.nvim_get_mode().mode == "n" then
+            vim.cmd "startinsert"
+          end
+        end, 50)
+      elseif next_source == "git_files" then
+        Snacks.picker.git_files {
+          pattern = dest_pattern,
+          show_empty = true,
+          _grep_pattern_carry = carry,
+        }
+      else -- files (default fallback)
+        local snacks_util = require "utils.snacks_terminal"
+        local picker_opts = snacks_util.get_initial_picker_state({
+          pattern = dest_pattern,
+        }, { source = "files" })
+        picker_opts._grep_pattern_carry = carry
+        Snacks.picker.files(picker_opts)
+      end
     end
   end)
 end
@@ -1836,6 +2023,7 @@ M.path_copy_actions = {
   copy_path_relative_git = M.copy_path_relative_git,
   copy_path_relative_cwd = M.copy_path_relative_cwd,
   copy_path_absolute = M.copy_path_absolute,
+  copy_path_abs_multi = M.copy_path_abs_multi,
   copy_path_select = M.copy_path_select,
 }
 

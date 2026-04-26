@@ -114,10 +114,11 @@ end
 ---
 --- Both the keymap picker and the sub-picker use this builder, which provides:
 --- - Unified format function (label: path)
---- - Shared keybindings: <C-y> copy, <C-p> paste, <C-n> markdown, <A-c> toggle
+--- - Shared keybindings: <C-y> copy, <C-p> paste, <C-n> markdown, <A-c>/<A-l> toggle
 --- - Configurable confirm behavior (copy vs paste)
 --- - Optional preview pane with file stats
 --- - Optional parent picker reference for sub-picker close chaining
+--- - Optional footer string shown in the input window
 ---
 ---@param opts {
 ---  items: table[],
@@ -128,6 +129,7 @@ end
 ---  show_preview?: boolean,
 ---  use_visual?: boolean,
 ---  on_refresh: fun(),
+---  footer?: string,
 ---}
 function M.build(opts)
   local parent_picker = opts.parent_picker
@@ -135,11 +137,12 @@ function M.build(opts)
   local show_preview = opts.show_preview ~= false -- default true
 
   -- Shared format function: { label: path }
+  -- item.path holds the display value; item.text = label + path for Snacks fuzzy filtering
   local format_fn = function(item)
     return {
       { item.label, "SnacksPickerTitle" },
       { ": ", "Comment" },
-      { item.text or item.path, "Normal" },
+      { item.path, "Normal" },
     }
   end
 
@@ -201,7 +204,7 @@ function M.build(opts)
         vim.notify("No item selected", vim.log.levels.WARN)
         return
       end
-      local ref = item.text or item.path
+      local ref = item.path
       clipboardUtil.copy_and_notify(ref, "plus", "copied: " .. ref)
       picker:close()
     end
@@ -211,7 +214,7 @@ function M.build(opts)
         vim.notify("No item selected", vim.log.levels.WARN)
         return
       end
-      insert_at_cursor(item.text or item.path, parent_picker, picker)
+      insert_at_cursor(item.path, parent_picker, picker)
     end
   end
 
@@ -219,6 +222,20 @@ function M.build(opts)
   local layout = nil
   if not show_preview then
     layout = { preview = false }
+  end
+
+  -- Helper: close current picker and refresh via opts.on_refresh
+  local function refresh_picker()
+    local pickers = Snacks.picker.get { source = opts.source }
+    local cur_picker = pickers and pickers[1]
+    if cur_picker then
+      cur_picker:close()
+    end
+    vim.schedule(function()
+      if opts.on_refresh then
+        opts.on_refresh()
+      end
+    end)
   end
 
   Snacks.picker.pick {
@@ -237,22 +254,23 @@ function M.build(opts)
       end,
       copy_to_clipboard = function(_format_picker, selected_item)
         if selected_item then
-          copy_to_clipboard(selected_item.text or selected_item.path)
+          copy_to_clipboard(selected_item.path)
         end
       end,
       paste_to_buffer = function(format_picker, selected_item)
         if selected_item then
-          insert_at_cursor(selected_item.text or selected_item.path, parent_picker, format_picker)
+          insert_at_cursor(selected_item.path, parent_picker, format_picker)
         end
       end,
       paste_to_buffer_markdown = function(format_picker, selected_item)
         if selected_item then
-          insert_markdown_link(selected_item.text or selected_item.path, parent_picker, format_picker)
+          insert_markdown_link(selected_item.path, parent_picker, format_picker)
         end
       end,
     },
     win = {
       input = {
+        footer = opts.footer,
         keys = {
           ["<C-p>"] = {
             "paste_to_buffer",
@@ -283,22 +301,20 @@ function M.build(opts)
                 vim.g.code_ref_hide_col = not (vim.g.code_ref_hide_col or false)
                 vim.notify("Column: " .. (vim.g.code_ref_hide_col and "hidden" or "shown"), vim.log.levels.INFO)
               end
-
-              -- Close current picker and reopen with fresh state
-              local pickers = Snacks.picker.get { source = opts.source }
-              local cur_picker = pickers and pickers[1]
-              if cur_picker then
-                cur_picker:close()
-              end
-
-              vim.schedule(function()
-                if opts.on_refresh then
-                  opts.on_refresh()
-                end
-              end)
+              refresh_picker()
             end,
             mode = { "n", "i" },
             desc = "Toggle char/col in references",
+          },
+          ["<A-l>"] = {
+            function()
+              -- Toggle line visibility (path-only when hidden)
+              vim.g.code_ref_hide_line = not (vim.g.code_ref_hide_line or false)
+              vim.notify("Line: " .. (vim.g.code_ref_hide_line and "hidden" or "shown"), vim.log.levels.INFO)
+              refresh_picker()
+            end,
+            mode = { "n", "i" },
+            desc = "Toggle line visibility",
           },
         },
       },

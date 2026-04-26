@@ -55,17 +55,18 @@ local function with_external_actions(actions)
   })
 end
 
-local function build_git_status_map(base_ref)
+local function build_git_status_map(base_ref, head_ref)
   local file_status_map = {}
   if not base_ref or base_ref == "" then
     return file_status_map
   end
+  head_ref = (head_ref and head_ref ~= "") and head_ref or "HEAD"
 
   local status_output = vim.fn.systemlist {
     "git",
     "diff",
     "--name-status",
-    base_ref .. "..HEAD",
+    base_ref .. ".." .. head_ref,
   }
 
   if vim.v.shell_error == 0 then
@@ -109,7 +110,8 @@ local function git_status_formatter(file_status_map)
   end
 end
 
-local function preview_git_diff_with_base(base_ref)
+local function preview_git_diff_with_base(base_ref, head_ref)
+  head_ref = (head_ref and head_ref ~= "") and head_ref or "HEAD"
   return function(ctx)
     if not base_ref or base_ref == "" then
       return require("snacks.picker.preview").git_diff(ctx)
@@ -129,7 +131,7 @@ local function preview_git_diff_with_base(base_ref)
       vim.list_extend(cmd, extra_args)
     end
 
-    vim.list_extend(cmd, { "diff", base_ref .. "..HEAD", "--", ctx.item.file })
+    vim.list_extend(cmd, { "diff", base_ref .. ".." .. head_ref, "--", ctx.item.file })
     return require("snacks.picker.preview").cmd(cmd, ctx, { ft = "diff" })
   end
 end
@@ -441,6 +443,201 @@ end
 
 --#region Git Pickers
 
+--#region Ref File Picker Factory (unified builder for all ref-based file pickers)
+
+--- Create actions table for a ref-based file picker.
+--- All actions dynamically call get_ref() so navigation (C-j/C-k) is respected.
+--- @param get_ref fun(): string Function returning the current base ref
+--- @return table actions { open_file_diff, open_remote_at_ref, open_remote_at_head }
+local function make_ref_file_actions(get_ref)
+  return {
+    open_file_diff = function(picker, item)
+      if not item or not item.file then
+        vim.notify("No file selected", vim.log.levels.WARN)
+        return
+      end
+      picker:close()
+      git_util.open_file_with_gitsigns_diff(item.file, get_ref())
+    end,
+    open_remote_at_ref = function(picker, item)
+      if not item or not item.file then
+        vim.notify("No file selected", vim.log.levels.WARN)
+        return
+      end
+      git_util.open_file_in_remote(item.file, get_ref())
+    end,
+    open_remote_at_head = function(picker, item)
+      if not item or not item.file then
+        vim.notify("No file selected", vim.log.levels.WARN)
+        return
+      end
+      git_util.open_file_in_remote(item.file, "HEAD")
+    end,
+  }
+end
+
+--- Create a finder function for a ref-based file picker.
+--- @param get_ref fun(): string Function returning the current base ref
+--- @param git_root string Git root path
+--- @param git_args_fn? fun(ref: string, head_ref: string): table Custom git diff args builder (for staged/workdir modes)
+--- @param get_head? fun(): string Function returning the current head ref (defaults to "HEAD")
+--- @return fun(opts: table, ctx: table): table finder function
+local function make_ref_file_finder(get_ref, git_root, git_args_fn, get_head)
+  return function(opts, ctx)
+    local show_missing = opts.external == true
+    local ref = get_ref()
+    local head_ref = (get_head and get_head()) or "HEAD"
+    local args = git_args_fn and git_args_fn(ref, head_ref)
+      or { "diff", "--name-only", "--diff-filter=d", ref .. ".." .. head_ref }
+
+    local proc_opts = vim.tbl_extend("force", opts, {
+      cmd = "git",
+      args = args,
+      cwd = git_root,
+      transform = function(item)
+        item.cwd = git_root
+        item.file = item.text
+        local missing = is_missing_file(item, git_root)
+        local keep = should_keep_item(item, git_root, true, show_missing)
+        debug_external_filter(
+          ctx,
+          item,
+          string.format("show_missing=%s missing=%s keep=%s", tostring(show_missing), tostring(missing), tostring(keep))
+        )
+        if not keep then
+          return false
+        end
+        return item
+      end,
+    })
+    return require("snacks.picker.source.proc").proc(proc_opts, ctx)
+  end
+end
+
+--- Create a format function for a ref-based file picker.
+--- @param get_ref fun(): string Function returning the current base ref
+--- @param get_head? fun(): string Function returning the current head ref (defaults to "HEAD")
+--- @return fun(item: table): table format function
+local function make_ref_file_format(get_ref, get_head)
+  return function(item)
+    local head_ref = (get_head and get_head()) or "HEAD"
+    local file_status_map = build_git_status_map(get_ref(), head_ref)
+    return git_status_formatter(file_status_map)(item)
+  end
+end
+
+--- Apply a keytable to both win.input.keys and win.list.keys.
+--- Eliminates the common pattern of duplicating keys across both windows.
+--- @param base_keys table Key definitions to apply
+--- @param extra_keys? table Additional keys to merge on top
+--- @return table win { input = { keys = ... }, list = { keys = ... } }
+local function apply_keys_to_both_windows(base_keys, extra_keys)
+  local merged = extra_keys and vim.tbl_extend("force", base_keys, extra_keys) or base_keys
+  return {
+    input = { keys = vim.deepcopy(merged) },
+    list = { keys = vim.deepcopy(merged) },
+  }
+end
+
+--- Refresh a picker's title and items after navigation.
+--- Common pattern used by all navigable ref-based pickers.
+--- @param source string Picker source ID
+--- @param get_title fun(): string Function returning the new title
+local function refresh_ref_picker(source, get_title)
+  local pickers = Snacks.picker.get { source = source }
+  local picker = pickers[1]
+  if picker then
+    vim.schedule(function()
+      picker.title = get_title()
+      picker:update_titles()
+      picker:refresh()
+    end)
+  end
+end
+
+--- Unified factory for ref-based file pickers.
+--- All 4 git file pickers (last-commit, upstream, merge-base, change-list sub-picker)
+--- use this factory with different ref strategies and optional navigation keys.
+---
+--- @param config table
+---   - source: string - picker source ID
+---   - title: string|fun(): string - picker title (or fn returning title)
+---   - get_ref: fun(): string - returns current base ref
+---   - get_head?: fun(): string - returns current head ref (defaults to "HEAD")
+---   - git_root: string - git root path
+---   - extra_actions?: table - additional actions to merge
+---   - extra_keys?: table - additional keys (applied to both windows)
+---   - on_back?: fun() - back navigation callback (adds <C-q> key)
+---   - footer?: string - input footer text
+---   - git_args_fn?: fun(ref: string, head_ref: string): table - custom git diff args builder
+---   - confirm?: fun(picker, item) - custom confirm handler
+---   - key_group?: string - which git_file_keys variant: "default"|"upstream"|nil
+local function create_ref_file_picker(config)
+  local editor_keymaps = require "utils.editor_keymaps"
+
+  -- Resolve title
+  local title = type(config.title) == "function" and config.title() or config.title
+
+  -- Build actions
+  local actions = make_ref_file_actions(config.get_ref)
+  if config.extra_actions then
+    actions = vim.tbl_extend("force", actions, config.extra_actions)
+  end
+
+  -- Resolve base key group
+  local base_git_keys = {}
+  if config.key_group == "upstream" then
+    local gk = editor_keymaps.snacks_picker_group_keys.git_file_keys_upstream
+    base_git_keys = vim.tbl_extend("force", gk.input or {}, gk.list or {})
+  elseif config.on_back then
+    -- Build back keys inline (use <C-q> to free up <C-h> for HEAD navigation)
+    local back_key = {
+      function(picker)
+        picker:close()
+        config.on_back()
+      end,
+      mode = { "n", "i" },
+      desc = "Back to ref selection",
+    }
+    local gk = editor_keymaps.snacks_picker_group_keys.git_file_keys
+    base_git_keys = vim.tbl_extend("force", gk.input or {}, {
+      ["<C-q>"] = back_key,
+    })
+  else
+    local gk = editor_keymaps.snacks_picker_group_keys.git_file_keys
+    base_git_keys = vim.deepcopy(gk.input or {})
+  end
+
+  -- Build window keys
+  local win = apply_keys_to_both_windows(base_git_keys, config.extra_keys)
+  if config.footer then
+    win.input.footer = config.footer
+  end
+
+  -- Build picker opts
+  local pick_opts = {
+    source = config.source,
+    title = title,
+    external = false,
+    finder = make_ref_file_finder(config.get_ref, config.git_root, config.git_args_fn, config.get_head),
+    format = make_ref_file_format(config.get_ref, config.get_head),
+    preview = function(ctx)
+      local head_ref = (config.get_head and config.get_head()) or "HEAD"
+      return preview_git_diff_with_base(config.get_ref(), head_ref)(ctx)
+    end,
+    actions = with_external_actions(actions),
+    win = win,
+  }
+
+  if config.confirm then
+    pick_opts.confirm = config.confirm
+  end
+
+  Snacks.picker.pick(pick_opts)
+end
+
+--#endregion Ref File Picker Factory
+
 --- Generic command result picker factory
 --- @param picker_opts table Configuration for the picker
 ---   - cmd: string Command to run
@@ -514,189 +711,118 @@ M.custom_git_pickers = {}
 --- Use <C-j>/<C-k> to adjust the base ref (never goes below HEAD~1)
 --- Example: HEAD~1..HEAD -> <C-k> -> HEAD~2..HEAD -> <C-k> -> HEAD~3..HEAD
 function M.custom_git_pickers.git_last_commit_show()
-  local editor_keymaps = require "utils.editor_keymaps"
   local git_root = Snacks.git.get_root()
+  local source = "git_show"
 
   -- State management for range navigation
-  -- base_offset represents N in HEAD~N, minimum is 1
-  local state = {
-    base_offset = 1, -- Start at HEAD~1..HEAD
-    max_offset = 100, -- Maximum history depth
-  }
+  -- Range is HEAD~base_offset..HEAD~head_offset (head_offset < base_offset)
+  local state = { base_offset = 1, head_offset = 0, max_offset = 100 }
 
-  -- Get the base ref string (e.g., "HEAD~3")
   local function get_base_ref()
     return "HEAD~" .. state.base_offset
   end
 
-  -- Get formatted display for the range
-  -- Format: <[branch]:shorthash>..<HEAD:shorthash> (N commits)
+  local function get_head_ref()
+    return state.head_offset == 0 and "HEAD" or ("HEAD~" .. state.head_offset)
+  end
+
   local function get_range_display()
     local base_ref = get_base_ref()
     local base_short = git_util.get_short_hash(base_ref)
     local base_branch = git_util.get_ref_branch_name(base_ref)
-    local head_short = git_util.get_short_hash "HEAD"
-
-    -- Build base display: branch:hash or just hash
+    local head_short = git_util.get_short_hash(get_head_ref())
     local base_display = base_branch ~= "" and (base_branch .. ":" .. base_short) or base_short
-    local head_display = head_short ~= "" and head_short or "HEAD"
-    local commit_count = state.base_offset
-
-    return base_display .. ".." .. head_display .. " (" .. commit_count .. " commits)"
+    local head_display = head_short ~= "" and head_short or get_head_ref()
+    local range_size = state.base_offset - state.head_offset
+    local head_suffix = state.head_offset > 0 and (" @HEAD~" .. state.head_offset) or ""
+    return base_display .. ".." .. head_display .. " (" .. range_size .. " commits" .. head_suffix .. ")"
   end
 
-  -- Get file count for current range
-  local function get_file_count()
-    local cmd = "git diff --name-only --diff-filter=d " .. get_base_ref() .. "..HEAD | wc -l"
-    return vim.fn.system(cmd):gsub("\n", "")
-  end
-
-  -- Navigate forward (decrease offset, closer to HEAD, but never below 1)
   local function move_range_forward()
-    if state.base_offset <= 1 then
-      vim.notify("Already at HEAD~1 (minimum range)", vim.log.levels.WARN)
+    if state.base_offset <= state.head_offset + 1 then
+      vim.notify("Already at minimum range (1 commit)", vim.log.levels.WARN)
       return
     end
-
     state.base_offset = state.base_offset - 1
-    local display = get_range_display()
-    local file_count = get_file_count()
-    vim.notify("Range: " .. display .. " (" .. file_count .. " changed files)", vim.log.levels.INFO)
-
-    -- Get the real picker using Snacks.picker.get() since key callbacks receive snacks.win, not picker
-    local pickers = Snacks.picker.get { source = "git_show" }
-    local picker = pickers[1]
-    if picker then
-      vim.schedule(function()
-        picker.title = display
-        picker:update_titles()
-        picker:refresh()
-      end)
-    end
+    refresh_ref_picker(source, get_range_display)
   end
 
-  -- Navigate backward (increase offset, further from HEAD)
   local function move_range_backward()
     if state.base_offset >= state.max_offset then
       vim.notify("Already at maximum history depth", vim.log.levels.WARN)
       return
     end
-
-    -- Verify the commit exists before incrementing
     local next_ref = "HEAD~" .. (state.base_offset + 1)
     vim.fn.system("git rev-parse --verify " .. next_ref .. " 2>/dev/null")
     if vim.v.shell_error ~= 0 then
       vim.notify("No more commits in history", vim.log.levels.WARN)
       return
     end
-
     state.base_offset = state.base_offset + 1
-    local display = get_range_display()
-    local file_count = get_file_count()
-    vim.notify("Range: " .. display .. " (" .. file_count .. " changed files)", vim.log.levels.INFO)
-
-    -- Get the real picker using Snacks.picker.get() since key callbacks receive snacks.win, not picker
-    local pickers = Snacks.picker.get { source = "git_show" }
-    local picker = pickers[1]
-    if picker then
-      vim.schedule(function()
-        picker.title = display
-        picker:update_titles()
-        picker:refresh()
-      end)
-    end
+    refresh_ref_picker(source, get_range_display)
   end
 
-  -- Custom actions for this range
-  local custom_actions = {
-    open_file_diff = function(picker, item)
-      if not item or not item.file then
-        vim.notify("No file selected", vim.log.levels.WARN)
-        return
-      end
-      local base_ref = get_base_ref()
-      vim.notify("DEBUG: open_file_diff - file=" .. item.file .. ", base_ref=" .. base_ref, vim.log.levels.INFO)
-      picker:close()
-      git_util.open_file_with_gitsigns_diff(item.file, base_ref)
-    end,
-    open_remote_at_ref = function(picker, item)
-      if not item or not item.file then
-        vim.notify("No file selected", vim.log.levels.WARN)
-        return
-      end
-      git_util.open_file_in_remote(item.file, "HEAD")
-    end,
-  }
+  local function move_head_backward()
+    -- <C-h>: move HEAD left (older). head_offset grows; must stay < base_offset
+    if state.head_offset + 1 >= state.base_offset then
+      vim.notify("HEAD cannot cross base ref", vim.log.levels.WARN)
+      return
+    end
+    local next_ref = "HEAD~" .. (state.head_offset + 1)
+    vim.fn.system("git rev-parse --verify " .. next_ref .. " 2>/dev/null")
+    if vim.v.shell_error ~= 0 then
+      vim.notify("No more commits in history", vim.log.levels.WARN)
+      return
+    end
+    state.head_offset = state.head_offset + 1
+    refresh_ref_picker(source, get_range_display)
+  end
 
-  local git_keys = editor_keymaps.snacks_picker_group_keys.git_file_keys
+  local function move_head_forward()
+    -- <C-l>: move HEAD right (newer, toward actual HEAD). head_offset shrinks toward 0.
+    if state.head_offset <= 0 then
+      vim.notify("Already at HEAD", vim.log.levels.WARN)
+      return
+    end
+    state.head_offset = state.head_offset - 1
+    refresh_ref_picker(source, get_range_display)
+  end
 
-  Snacks.picker.pick {
-    source = "git_show",
-    title = get_range_display(),
-    finder = function(opts, ctx)
-      local base_ref = get_base_ref()
-      local file_status_map = build_git_status_map(base_ref)
-      local proc_opts = vim.tbl_extend("force", opts, {
-        cmd = "git",
-        args = { "diff", "--name-only", "--diff-filter=d", base_ref .. "..HEAD" },
-        cwd = git_root,
-        transform = function(item)
-          item.cwd = git_root
-          item.file = item.text
-          local keep = should_keep_item(item, git_root, true, false)
-          if not keep then
-            return false
-          end
-          return item
+  create_ref_file_picker {
+    source = source,
+    title = get_range_display,
+    get_ref = get_base_ref,
+    get_head = get_head_ref,
+    git_root = git_root,
+    footer = "<C-j> base← • <C-k> base→ • <C-h> HEAD← • <C-l> HEAD→",
+    extra_keys = {
+      ["<C-k>"] = {
+        function()
+          move_range_forward()
         end,
-      })
-      return require("snacks.picker.source.proc").proc(proc_opts, ctx)
-    end,
-    format = function(item)
-      local file_status_map = build_git_status_map(get_base_ref())
-      return git_status_formatter(file_status_map)(item)
-    end,
-    preview = function(ctx)
-      return preview_git_diff_with_base(get_base_ref())(ctx)
-    end,
-    actions = with_external_actions(custom_actions),
-    win = {
-      input = {
-        footer = "<ESC> back <C-j> shrink range • <C-k> expand range",
-        keys = vim.tbl_extend("force", git_keys.input, {
-          ["<C-k>"] = {
-            function()
-              move_range_forward()
-            end,
-            mode = { "n", "i" },
-            desc = "Shrink range (closer to HEAD)",
-          },
-          ["<C-j>"] = {
-            function()
-              move_range_backward()
-            end,
-            mode = { "n", "i" },
-            desc = "Expand range (further from HEAD)",
-          },
-        }),
+        mode = { "n", "i" },
+        desc = "Base ref → (closer to HEAD)",
       },
-      list = {
-        keys = vim.tbl_extend("force", git_keys.list, {
-          ["<C-k>"] = {
-            function()
-              move_range_forward()
-            end,
-            mode = { "n", "i" },
-            desc = "Shrink range (closer to HEAD)",
-          },
-          ["<C-j>"] = {
-            function()
-              move_range_backward()
-            end,
-            mode = { "n", "i" },
-            desc = "Expand range (further from HEAD)",
-          },
-        }),
+      ["<C-j>"] = {
+        function()
+          move_range_backward()
+        end,
+        mode = { "n", "i" },
+        desc = "Base ref ← (further from HEAD)",
+      },
+      ["<C-h>"] = {
+        function()
+          move_head_backward()
+        end,
+        mode = { "n", "i" },
+        desc = "HEAD ref ← (older)",
+      },
+      ["<C-l>"] = {
+        function()
+          move_head_forward()
+        end,
+        mode = { "n", "i" },
+        desc = "HEAD ref → (toward actual HEAD)",
       },
     },
   }
@@ -706,7 +832,7 @@ end
 --- Shows files changed between upstream and HEAD
 --- Automatically detects upstream reference
 function M.custom_git_pickers.git_diff_upstream()
-  local editor_keymaps = require "utils.editor_keymaps"
+  local git_root = Snacks.git.get_root()
   local upstream_ref = nil
 
   -- Step 1: Check if branch has an upstream (HEAD@{u})
@@ -714,8 +840,6 @@ function M.custom_git_pickers.git_diff_upstream()
   local has_upstream = (vim.v.shell_error == 0)
 
   if has_upstream then
-    -- git diff-tree --no-commit-id --name-only --diff-filter=d HEAD@{u}..HEAD -r
-    -- git diff --no-commit-id --diff-filter=d HEAD@{u}..HEAD -r
     local diff_output = vim.fn.systemlist {
       "git",
       "diff-tree",
@@ -726,7 +850,6 @@ function M.custom_git_pickers.git_diff_upstream()
       "-r",
     }
     local has_changes = (vim.v.shell_error == 0 and #diff_output > 0 and diff_output[1] ~= "")
-
     if has_changes then
       upstream_ref = "HEAD@{u}"
     end
@@ -795,29 +918,17 @@ function M.custom_git_pickers.git_diff_upstream()
     end
   end
 
-  local captured_ref = upstream_ref
-  local actions = editor_keymaps.snacks_action_factories.create_git_file_actions(captured_ref, false)
-  local git_keys = editor_keymaps.snacks_picker_group_keys.git_file_keys_upstream
   local ref_metadata = git_util.get_ref_metadata(upstream_ref)
   local base_ref = ref_metadata and ref_metadata.resolved_with_remote or upstream_ref
-  local file_status_map = build_git_status_map(base_ref)
 
-  pick_cmd_result {
-    cmd = "git",
-    args = { "diff-tree", "--no-commit-id", "--name-only", "--diff-filter=d", base_ref .. "..HEAD", "-r" },
-    name = "git_diff_upstream",
+  create_ref_file_picker {
+    source = "git_diff_upstream",
     title = "Git Branch Changed Files (vs " .. base_ref .. ")",
-    preview = preview_git_diff_with_base(base_ref),
-    actions = actions,
-    win = {
-      input = {
-        keys = git_keys.input,
-      },
-      list = {
-        keys = git_keys.list,
-      },
-    },
-    format = git_status_formatter(file_status_map),
+    get_ref = function()
+      return base_ref
+    end,
+    git_root = git_root,
+    key_group = "upstream",
   }
 end
 
@@ -828,44 +939,41 @@ end
 --- Falls back to HEAD (staged) when merge-base equals HEAD
 --- Supports workdir diff toggle when comparing with HEAD
 function M.custom_git_pickers.git_diff_merge_base()
-  local editor_keymaps = require "utils.editor_keymaps"
   local git_root = Snacks.git.get_root()
+  local source = "git_diff_merge_base"
 
   -- Determine the target branch for merge-base
   local current_branch = vim.fn.systemlist({ "git", "branch", "--show-current" })[1] or "HEAD"
   local merge_base_target = nil
   local origin_default = vim.fn.systemlist({ "git", "symbolic-ref", "refs/remotes/origin/HEAD", "--short" })[1]
 
-  if not merge_base_target or merge_base_target == "" then
-    if origin_default then
-      merge_base_target = origin_default
+  if origin_default then
+    merge_base_target = origin_default
+  else
+    vim.fn.systemlist { "git", "rev-parse", "--verify", "origin/main" }
+    if vim.v.shell_error == 0 then
+      merge_base_target = "origin/main"
     else
-      vim.fn.systemlist { "git", "rev-parse", "--verify", "origin/main" }
+      vim.fn.systemlist { "git", "rev-parse", "--verify", "origin/master" }
       if vim.v.shell_error == 0 then
-        merge_base_target = "origin/main"
+        merge_base_target = "origin/master"
       else
-        vim.fn.systemlist { "git", "rev-parse", "--verify", "origin/master" }
-        if vim.v.shell_error == 0 then
-          merge_base_target = "origin/master"
-        else
-          vim.notify("No origin branch found for merge-base comparison", vim.log.levels.WARN)
-          return
-        end
+        vim.notify("No origin branch found for merge-base comparison", vim.log.levels.WARN)
+        return
       end
     end
   end
 
   -- State management for base ref navigation with merge-base
   local state = {
-    base_offset = 0, -- Index in the merge-base history
-    max_offset = 50, -- Maximum history depth from merge-base
+    base_offset = 0,
+    head_offset = 0,
+    max_offset = 50,
     merge_base_target = merge_base_target,
-    commits_history = nil,
-    workdir_diff = false, -- Toggle for including working directory changes
-    fallback_to_head = false, -- Flag indicating we're using HEAD fallback
+    workdir_diff = false,
+    fallback_to_head = false,
   }
 
-  -- Get the initial merge-base
   local function get_merge_base()
     local merge_base_sha = vim.fn.systemlist({ "git", "merge-base", current_branch, state.merge_base_target })[1]
     if vim.v.shell_error == 0 and merge_base_sha and merge_base_sha ~= "" then
@@ -874,7 +982,6 @@ function M.custom_git_pickers.git_diff_merge_base()
     return nil
   end
 
-  -- Check if base ref is same as HEAD
   local function is_base_ref_head(base_ref)
     if not base_ref then
       return false
@@ -884,7 +991,6 @@ function M.custom_git_pickers.git_diff_merge_base()
     return head_sha == base_sha
   end
 
-  -- Get the base ref at current offset (walk history from merge-base)
   local function get_current_base_ref()
     local merge_base = get_merge_base()
     if not merge_base then
@@ -895,71 +1001,24 @@ function M.custom_git_pickers.git_diff_merge_base()
     if state.base_offset == 0 then
       base_ref = merge_base
     else
-      -- Walk history from merge-base forward
       local ref = merge_base .. "~" .. state.base_offset
       vim.fn.systemlist { "git", "rev-parse", "--verify", ref }
-      if vim.v.shell_error == 0 then
-        base_ref = ref
-      else
-        base_ref = merge_base
-      end
+      base_ref = vim.v.shell_error == 0 and ref or merge_base
     end
 
-    -- Check if merge-base is same as HEAD (no commits ahead)
     if is_base_ref_head(base_ref) then
       state.fallback_to_head = true
-      return "HEAD" -- Fallback to staged changes
+      return "HEAD"
     end
 
     state.fallback_to_head = false
     return base_ref
   end
 
-  -- Get formatted display for merge-base
-  local function get_base_ref_display()
-    local base_ref = get_current_base_ref()
-    if not base_ref then
-      return "merge-base (invalid)"
-    end
-
-    if state.fallback_to_head then
-      return state.workdir_diff and "HEAD (workdir)" or "HEAD (staged)"
-    end
-
-    local short_hash = git_util.get_short_hash(base_ref)
-    local branch = git_util.get_ref_branch_name(base_ref)
-
-    if branch and branch ~= "" then
-      return branch .. " (" .. short_hash .. ")"
-    else
-      return short_hash
-    end
+  local function get_head_ref()
+    return state.head_offset == 0 and "HEAD" or ("HEAD~" .. state.head_offset)
   end
 
-  -- Get file count for current state
-  local function get_file_count(base_ref)
-    if not base_ref then
-      return "0"
-    end
-
-    local cmd
-    if state.fallback_to_head then
-      if state.workdir_diff then
-        -- Count all changes from base_ref to working directory
-        cmd = "git diff --name-only --diff-filter=d " .. base_ref .. " | wc -l"
-      else
-        -- Count only staged changes
-        cmd = "git diff --name-only --diff-filter=d --cached " .. base_ref .. " | wc -l"
-      end
-    else
-      -- Normal case: count committed changes
-      cmd = "git diff --name-only --diff-filter=d " .. base_ref .. "..HEAD | wc -l"
-    end
-
-    return vim.fn.system(cmd):gsub("\n", "")
-  end
-
-  -- Get range display
   local function get_range_display()
     local base_ref = get_current_base_ref()
     if not base_ref then
@@ -971,237 +1030,145 @@ function M.custom_git_pickers.git_diff_merge_base()
       return "HEAD" .. workdir_label
     end
 
+    local head_ref = get_head_ref()
     local base_short = git_util.get_short_hash(base_ref)
-    local head_short = git_util.get_short_hash "HEAD"
-
-    local commit_count = vim.fn.system("git rev-list --count " .. base_ref .. "..HEAD"):gsub("\n", "")
+    local head_short = git_util.get_short_hash(head_ref)
+    local commit_count = vim.fn.system("git rev-list --count " .. base_ref .. ".." .. head_ref):gsub("\n", "")
     commit_count = tonumber(commit_count) or 0
-
-    return "[merge-base]:" .. base_short .. "..HEAD:" .. head_short .. " (" .. commit_count .. " commits)"
+    local head_suffix = state.head_offset > 0 and (" @HEAD~" .. state.head_offset) or ""
+    return "[merge-base]:"
+      .. base_short
+      .. ".."
+      .. (state.head_offset == 0 and "HEAD:" or "")
+      .. head_short
+      .. " ("
+      .. commit_count
+      .. " commits"
+      .. head_suffix
+      .. ")"
   end
 
-  -- Toggle workdir diff (only when comparing with HEAD)
+  local function get_title()
+    return "Changed files (" .. get_range_display() .. ")"
+  end
+
   local function toggle_workdir_diff()
     if not state.fallback_to_head then
       vim.notify("Workdir diff only available when comparing with HEAD", vim.log.levels.WARN)
       return
     end
-
     state.workdir_diff = not state.workdir_diff
     local status = state.workdir_diff and "enabled (all changes)" or "disabled (staged only)"
     vim.notify("Workdir diff: " .. status, vim.log.levels.INFO)
-
-    local pickers = Snacks.picker.get { source = "git_diff_merge_base" }
-    local picker = pickers[1]
-    if picker then
-      vim.schedule(function()
-        picker.title = "Changed files (" .. get_range_display() .. ")"
-        picker:update_titles()
-        picker:refresh()
-      end)
-    end
+    refresh_ref_picker(source, get_title)
   end
 
-  -- Navigate forward (closer to merge-base)
   local function move_base_ref_forward()
     if state.base_offset <= 0 then
       vim.notify("Already at merge-base", vim.log.levels.WARN)
       return
     end
-
     state.base_offset = state.base_offset - 1
-    local base_ref = get_current_base_ref()
-    local display = get_base_ref_display()
-    local file_count = get_file_count(base_ref)
-    vim.notify("Ref: " .. display .. " (" .. file_count .. " changed files)", vim.log.levels.INFO)
-
-    local pickers = Snacks.picker.get { source = "git_diff_merge_base" }
-    local picker = pickers[1]
-    if picker then
-      vim.schedule(function()
-        picker.title = "Changed files (" .. get_range_display() .. ")"
-        picker:update_titles()
-        picker:refresh()
-      end)
-    end
+    refresh_ref_picker(source, get_title)
   end
 
-  -- Navigate backward (further from merge-base)
   local function move_base_ref_backward()
     if state.base_offset >= state.max_offset then
       vim.notify("Already at maximum history depth", vim.log.levels.WARN)
       return
     end
-
-    -- Verify the commit exists
     local next_ref = get_merge_base() .. "~" .. (state.base_offset + 1)
     vim.fn.systemlist { "git", "rev-parse", "--verify", next_ref }
     if vim.v.shell_error ~= 0 then
       vim.notify("No more commits in history", vim.log.levels.WARN)
       return
     end
-
     state.base_offset = state.base_offset + 1
-    local base_ref = get_current_base_ref()
-    local display = get_base_ref_display()
-    local file_count = get_file_count(base_ref)
-    vim.notify("Ref: " .. display .. " (" .. file_count .. " changed files)", vim.log.levels.INFO)
-
-    local pickers = Snacks.picker.get { source = "git_diff_merge_base" }
-    local picker = pickers[1]
-    if picker then
-      vim.schedule(function()
-        picker.title = "Changed files (" .. get_range_display() .. ")"
-        picker:update_titles()
-        picker:refresh()
-      end)
-    end
+    refresh_ref_picker(source, get_title)
   end
 
-  local custom_actions = {
-    open_file_diff = function(picker, item)
-      if not item or not item.file then
-        vim.notify("No file selected", vim.log.levels.WARN)
-        return
-      end
-      local base_ref = get_current_base_ref()
-      if not base_ref then
-        vim.notify("Invalid merge-base reference", vim.log.levels.WARN)
-        return
-      end
-      picker:close()
-      git_util.open_file_with_gitsigns_diff(item.file, base_ref)
-    end,
-    open_remote_at_ref = function(picker, item)
-      if not item or not item.file then
-        vim.notify("No file selected", vim.log.levels.WARN)
-        return
-      end
-      git_util.open_file_in_remote(item.file, "HEAD")
-    end,
-  }
+  local function move_head_backward()
+    -- <C-h>: HEAD ref moves older (head_offset increases)
+    if state.fallback_to_head then
+      vim.notify("HEAD navigation unavailable in HEAD-fallback mode", vim.log.levels.WARN)
+      return
+    end
+    local next_ref = "HEAD~" .. (state.head_offset + 1)
+    vim.fn.systemlist { "git", "rev-parse", "--verify", next_ref }
+    if vim.v.shell_error ~= 0 then
+      vim.notify("No more commits in history", vim.log.levels.WARN)
+      return
+    end
+    state.head_offset = state.head_offset + 1
+    refresh_ref_picker(source, get_title)
+  end
 
-  local git_keys = editor_keymaps.snacks_picker_group_keys.git_file_keys
+  local function move_head_forward()
+    -- <C-l>: HEAD ref moves newer (head_offset decreases toward 0 = actual HEAD)
+    if state.head_offset <= 0 then
+      vim.notify("Already at HEAD", vim.log.levels.WARN)
+      return
+    end
+    state.head_offset = state.head_offset - 1
+    refresh_ref_picker(source, get_title)
+  end
 
-  Snacks.picker.pick {
-    source = "git_diff_merge_base",
-    title = "Changed files (" .. get_range_display() .. ")",
-    finder = function(opts, ctx)
-      local show_missing = opts.external == true
-      local base_ref = get_current_base_ref()
-      if not base_ref then
-        vim.notify("Invalid merge-base reference", vim.log.levels.WARN)
-        return {}
-      end
-
-      -- Build git command based on state
-      -- When merge-base equals HEAD, we need different comparison logic
-      local git_cmd = "git"
-      local git_args
-
-      if state.fallback_to_head then
-        -- Merge-base equals HEAD (no commits ahead)
-        if state.workdir_diff then
-          -- Show all changes from base_ref to working directory (staged + unstaged)
-          git_args = { "diff", "--name-only", "--diff-filter=d", base_ref }
-        else
-          -- Show only staged changes (base_ref is HEAD here)
-          git_args = { "diff", "--name-only", "--diff-filter=d", "--cached", base_ref }
-        end
+  -- Custom git_args_fn for merge-base's staged/workdir fallback modes
+  local function merge_base_git_args(ref, head_ref)
+    head_ref = head_ref or "HEAD"
+    if state.fallback_to_head then
+      if state.workdir_diff then
+        return { "diff", "--name-only", "--diff-filter=d", ref }
       else
-        -- Normal case: commits exist between base_ref and HEAD
-        git_args = { "diff", "--name-only", "--diff-filter=d", base_ref .. "..HEAD" }
+        return { "diff", "--name-only", "--diff-filter=d", "--cached", ref }
       end
+    end
+    return { "diff", "--name-only", "--diff-filter=d", ref .. ".." .. head_ref }
+  end
 
-      local file_status_map = build_git_status_map(base_ref)
-      local proc_opts = vim.tbl_extend("force", opts, {
-        cmd = git_cmd,
-        args = git_args,
-        cwd = git_root,
-        transform = function(item)
-          item.cwd = git_root
-          item.file = item.text
-          local missing = is_missing_file(item, git_root)
-          local keep = should_keep_item(item, git_root, true, show_missing)
-          debug_external_filter(
-            ctx,
-            item,
-            string.format(
-              "show_missing=%s missing=%s keep=%s",
-              tostring(show_missing),
-              tostring(missing),
-              tostring(keep)
-            )
-          )
-          if not keep then
-            return false
-          end
-          return item
+  create_ref_file_picker {
+    source = source,
+    title = get_title,
+    get_ref = get_current_base_ref,
+    get_head = get_head_ref,
+    git_root = git_root,
+    git_args_fn = merge_base_git_args,
+    footer = "<C-j> base← • <C-k> base→ • <C-h> HEAD← • <C-l> HEAD→ • <C-w> toggle workdir (HEAD only)",
+    extra_keys = {
+      ["<C-k>"] = {
+        function()
+          move_base_ref_forward()
         end,
-      })
-      return require("snacks.picker.source.proc").proc(proc_opts, ctx)
-    end,
-    format = function(item)
-      local base_ref = get_current_base_ref()
-      local file_status_map = build_git_status_map(base_ref or "")
-      return git_status_formatter(file_status_map)(item)
-    end,
-    preview = function(ctx)
-      local base_ref = get_current_base_ref()
-      return preview_git_diff_with_base(base_ref or "")(ctx)
-    end,
-    actions = with_external_actions(custom_actions),
-    win = {
-      input = {
-        footer = "<C-k> closer • <C-j> further • <C-w> toggle workdir (HEAD only)",
-        keys = vim.tbl_extend("force", git_keys.input, {
-          ["<C-k>"] = {
-            function()
-              move_base_ref_forward()
-            end,
-            mode = { "n", "i" },
-            desc = "Closer to merge-base",
-          },
-          ["<C-j>"] = {
-            function()
-              move_base_ref_backward()
-            end,
-            mode = { "n", "i" },
-            desc = "Further from merge-base",
-          },
-          ["<C-w>"] = {
-            function()
-              toggle_workdir_diff()
-            end,
-            mode = { "n", "i" },
-            desc = "Toggle workdir diff (HEAD only)",
-          },
-        }),
+        mode = { "n", "i" },
+        desc = "Base ref → (closer to merge-base/HEAD)",
       },
-      list = {
-        keys = vim.tbl_extend("force", git_keys.list, {
-          ["<C-k>"] = {
-            function()
-              move_base_ref_forward()
-            end,
-            mode = { "n", "i" },
-            desc = "Closer to merge-base",
-          },
-          ["<C-j>"] = {
-            function()
-              move_base_ref_backward()
-            end,
-            mode = { "n", "i" },
-            desc = "Further from merge-base",
-          },
-          ["<C-w>"] = {
-            function()
-              toggle_workdir_diff()
-            end,
-            mode = { "n", "i" },
-            desc = "Toggle workdir diff (HEAD only)",
-          },
-        }),
+      ["<C-j>"] = {
+        function()
+          move_base_ref_backward()
+        end,
+        mode = { "n", "i" },
+        desc = "Base ref ← (further from merge-base)",
+      },
+      ["<C-h>"] = {
+        function()
+          move_head_backward()
+        end,
+        mode = { "n", "i" },
+        desc = "HEAD ref ← (older)",
+      },
+      ["<C-l>"] = {
+        function()
+          move_head_forward()
+        end,
+        mode = { "n", "i" },
+        desc = "HEAD ref → (toward actual HEAD)",
+      },
+      ["<C-w>"] = {
+        function()
+          toggle_workdir_diff()
+        end,
+        mode = { "n", "i" },
+        desc = "Toggle workdir diff (HEAD only)",
       },
     },
   }
@@ -1419,272 +1386,185 @@ end
 
 -- Step 2: File list picker for selected ref with increment/decrement base ref
 local function show_file_list_picker(selected_ref_stats, on_back)
-  local editor_keymaps = require "utils.editor_keymaps"
   local git_root = Snacks.git.get_root()
+  local source = "git_diff_files"
   local ref_metadata = git_util.get_ref_metadata(selected_ref_stats.ref)
   local initial_base_ref = ref_metadata and ref_metadata.resolved_with_remote or selected_ref_stats.ref
 
-  -- State management for base_ref navigation
+  -- State management for SHA-walking navigation
+  -- current_head_ref defaults to "HEAD" (index 0 in commits list walked from HEAD back).
   local state = {
     current_base_ref = initial_base_ref,
+    current_head_ref = "HEAD",
     initial_base_ref = initial_base_ref,
-    commits_history = nil, -- Will be populated lazily
+    commits_history = nil,
   }
 
-  -- Utility: Update commit history cache
   local function update_commits_history()
     state.commits_history = git_util.get_commits_between(state.initial_base_ref, "HEAD")
   end
 
-  -- Utility: Get formatted display string for base ref (branch or short hash)
-  local function get_base_ref_display()
-    local display = git_util.format_ref_display(state.current_base_ref)
-    local short_hash = git_util.get_short_hash(state.current_base_ref)
-    if short_hash and short_hash ~= "" then
-      local branch = git_util.get_ref_branch_name(state.current_base_ref)
-      if branch and branch ~= "" then
-        return branch .. " (" .. short_hash .. ")"
-      else
-        return short_hash
-      end
-    end
-    return display
-  end
-
-  -- Utility: Get range display for titles: [branch]:hash..HEAD:hash (N commits)
-  local function get_range_display(from_ref)
-    local from_short = git_util.get_short_hash(from_ref)
-    local from_branch = git_util.get_ref_branch_name(from_ref)
-    local head_short = git_util.get_short_hash "HEAD"
-
-    -- Build from_display: [branch]:hash or just hash
-    local from_display = from_branch ~= "" and ("[" .. from_branch .. "]:" .. from_short) or from_short
-    -- Always include HEAD: prefix for consistency
-    local head_display = "HEAD:" .. head_short
-
-    -- Get commit count between refs
-    local commit_count = vim.fn.system("git rev-list --count " .. from_ref .. "..HEAD"):gsub("\n", "")
-    commit_count = tonumber(commit_count) or 0
-
-    return from_display .. ".." .. head_display .. " (" .. commit_count .. " commits)"
-  end
-
-  -- Utility: Move base_ref forward (towards HEAD, closer commits)
-  local function move_base_ref_forward()
+  -- Find index of a specific ref in the commit history (1 = HEAD, #commits = oldest in range)
+  local function find_commit_idx(ref)
     if not state.commits_history then
       update_commits_history()
     end
-
     local commits = state.commits_history
+    if not commits or #commits == 0 then
+      return nil, commits
+    end
+
+    local sha = vim.fn.system("git rev-parse " .. ref):gsub("\n", "")
+    for i, commit in ipairs(commits) do
+      if commit:sub(1, #sha) == sha then
+        return i, commits
+      end
+    end
+    return nil, commits
+  end
+
+  local function find_current_commit_idx()
+    return find_commit_idx(state.current_base_ref)
+  end
+
+  local function find_current_head_idx()
+    return find_commit_idx(state.current_head_ref)
+  end
+
+  local function get_range_display()
+    local from_ref = state.current_base_ref
+    local head_ref = state.current_head_ref
+    local from_short = git_util.get_short_hash(from_ref)
+    local from_branch = git_util.get_ref_branch_name(from_ref)
+    local head_short = git_util.get_short_hash(head_ref)
+    local from_display = from_branch ~= "" and ("[" .. from_branch .. "]:" .. from_short) or from_short
+    local head_display = head_ref == "HEAD" and ("HEAD:" .. head_short) or head_short
+    local commit_count = vim.fn.system("git rev-list --count " .. from_ref .. ".." .. head_ref):gsub("\n", "")
+    commit_count = tonumber(commit_count) or 0
+    return from_display .. ".." .. head_display .. " (" .. commit_count .. " commits)"
+  end
+
+  local function get_title()
+    local range_display = get_range_display()
+    local ref_type_label = ref_metadata
+        and ref_metadata.resolve_ref_type ~= "unknown"
+        and " (" .. ref_metadata.resolve_ref_type .. ")"
+      or ""
+    local ref_alias_label = selected_ref_stats.refAlias ~= selected_ref_stats.ref
+        and " [" .. selected_ref_stats.refAlias .. "]"
+      or ""
+    return "Changed files (" .. range_display .. ")" .. ref_type_label .. ref_alias_label
+  end
+
+  -- Base ref walks from index toward 1 (closer to HEAD) or toward #commits (further).
+  local function move_base_ref_forward()
+    local current_idx, commits = find_current_commit_idx()
     if not commits or #commits == 0 then
       vim.notify("No commits to move forward", vim.log.levels.WARN)
       return
     end
-
-    -- Find current base_ref in the commits history
-    local current_idx = nil
-    local current_sha = vim.fn.system("git rev-parse " .. state.current_base_ref):gsub("\n", "")
-
-    for i, commit in ipairs(commits) do
-      if commit:sub(1, #current_sha) == current_sha then
-        current_idx = i
-        break
-      end
+    current_idx = current_idx or #commits
+    -- Base ref must stay strictly older than head_ref
+    local head_idx = find_current_head_idx() or 1
+    if current_idx - 1 <= head_idx then
+      vim.notify("Base cannot cross HEAD ref", vim.log.levels.WARN)
+      return
     end
-
-    if not current_idx then
-      -- Base ref not in history, start from the end (closest to HEAD)
-      current_idx = #commits
-    end
-
-    -- Move forward (decrease index, closer to HEAD)
-    if current_idx > 1 then
-      state.current_base_ref = commits[current_idx - 1]
-      local new_display = get_base_ref_display()
-      local cmd = "git diff --name-only --diff-filter=d " .. state.current_base_ref .. "..HEAD"
-      local file_count = vim.fn.system(cmd .. " | wc -l"):gsub("\n", "")
-      vim.notify("Ref: " .. new_display .. " (" .. file_count .. " changed files)", vim.log.levels.INFO)
-      -- Get the real picker using Snacks.picker.get() since key callbacks receive snacks.win, not picker
-      local pickers = Snacks.picker.get { source = "git_diff_files" }
-      local picker = pickers[1]
-      if picker then
-        vim.schedule(function()
-          picker.title = "Changed files (" .. get_range_display(state.current_base_ref) .. ")"
-          picker:update_titles()
-          picker:refresh()
-        end)
-      end
-    else
-      vim.notify("Already at HEAD", vim.log.levels.WARN)
-    end
+    state.current_base_ref = commits[current_idx - 1]
+    refresh_ref_picker(source, get_title)
   end
 
-  -- Utility: Move base_ref backward (away from HEAD, further commits)
   local function move_base_ref_backward()
-    if not state.commits_history then
-      update_commits_history()
-    end
-
-    local commits = state.commits_history
+    local current_idx, commits = find_current_commit_idx()
     if not commits or #commits == 0 then
       vim.notify("No commits to move backward", vim.log.levels.WARN)
       return
     end
-
-    -- Find current base_ref in the commits history
-    local current_idx = nil
-    local current_sha = vim.fn.system("git rev-parse " .. state.current_base_ref):gsub("\n", "")
-
-    for i, commit in ipairs(commits) do
-      if commit:sub(1, #current_sha) == current_sha then
-        current_idx = i
-        break
-      end
-    end
-
-    if not current_idx then
-      -- Base ref not in history, start from beginning
-      current_idx = 1
-    end
-
-    -- Move backward (increase index, further from HEAD)
+    current_idx = current_idx or 1
     if current_idx < #commits then
       state.current_base_ref = commits[current_idx + 1]
-      local new_display = get_base_ref_display()
-      local cmd = "git diff --name-only --diff-filter=d " .. state.current_base_ref .. "..HEAD"
-      local file_count = vim.fn.system(cmd .. " | wc -l"):gsub("\n", "")
-      vim.notify("Ref: " .. new_display .. " (" .. file_count .. " changed files)", vim.log.levels.INFO)
-      -- Get the real picker using Snacks.picker.get() since key callbacks receive snacks.win, not picker
-      local pickers = Snacks.picker.get { source = "git_diff_files" }
-      local picker = pickers[1]
-      if picker then
-        vim.schedule(function()
-          picker.title = "Changed files (" .. get_range_display(state.current_base_ref) .. ")"
-          picker:update_titles()
-          picker:refresh()
-        end)
-      end
+      refresh_ref_picker(source, get_title)
     else
       vim.notify("Already at base ref", vim.log.levels.WARN)
     end
   end
 
-  -- Custom actions that dynamically reference current base_ref
-  local custom_actions = {
-    open_file_diff = function(picker, item)
-      if not item or not item.file then
-        vim.notify("No file selected", vim.log.levels.WARN)
-        return
-      end
-      picker:close()
-      git_util.open_file_with_gitsigns_diff(item.file, state.current_base_ref)
-    end,
-    open_remote_at_ref = function(picker, item)
-      if not item or not item.file then
-        vim.notify("No file selected", vim.log.levels.WARN)
-        return
-      end
-      git_util.open_file_in_remote(item.file, state.current_base_ref)
-    end,
-    open_remote_at_head = function(picker, item)
-      if not item or not item.file then
-        vim.notify("No file selected", vim.log.levels.WARN)
-        return
-      end
-      git_util.open_file_in_remote(item.file, "HEAD")
-    end,
-  }
+  -- HEAD ref walks similarly: index 1 = HEAD (newest), #commits = oldest.
+  local function move_head_backward()
+    -- <C-h>: HEAD ref moves older (index grows)
+    local current_idx, commits = find_current_head_idx()
+    if not commits or #commits == 0 then
+      vim.notify("No commits available", vim.log.levels.WARN)
+      return
+    end
+    current_idx = current_idx or 1
+    local base_idx = find_current_commit_idx() or #commits
+    if current_idx + 1 >= base_idx then
+      vim.notify("HEAD cannot cross base ref", vim.log.levels.WARN)
+      return
+    end
+    state.current_head_ref = commits[current_idx + 1]
+    refresh_ref_picker(source, get_title)
+  end
 
-  local git_keys = editor_keymaps.snacks_picker_group_keys.git_file_keys_with_back(on_back)
+  local function move_head_forward()
+    -- <C-l>: HEAD ref moves newer (index shrinks toward 1 = HEAD)
+    local current_idx, commits = find_current_head_idx()
+    if not commits or #commits == 0 then
+      vim.notify("No commits available", vim.log.levels.WARN)
+      return
+    end
+    current_idx = current_idx or 1
+    if current_idx > 1 then
+      state.current_head_ref = commits[current_idx - 1]
+    else
+      state.current_head_ref = "HEAD"
+      vim.notify("Already at HEAD", vim.log.levels.WARN)
+      return
+    end
+    refresh_ref_picker(source, get_title)
+  end
 
-  local range_display = get_range_display(initial_base_ref)
-  local ref_type_label = ref_metadata
-      and ref_metadata.resolve_ref_type ~= "unknown"
-      and " (" .. ref_metadata.resolve_ref_type .. ")"
-    or ""
-  local ref_alias_label = selected_ref_stats.refAlias ~= selected_ref_stats.ref
-      and " [" .. selected_ref_stats.refAlias .. "]"
-    or ""
-
-  Snacks.picker.pick {
-    source = "git_diff_files",
-    title = "Changed files (" .. range_display .. ")" .. ref_type_label .. ref_alias_label,
-    external = false,
-    finder = function(opts, ctx)
-      local show_missing = opts.external == true
-      local file_status_map = build_git_status_map(state.current_base_ref)
-      local proc_opts = vim.tbl_extend("force", opts, {
-        cmd = "git",
-        args = { "diff", "--name-only", "--diff-filter=d", state.current_base_ref .. "..HEAD" },
-        cwd = git_root,
-        transform = function(item)
-          item.cwd = git_root
-          item.file = item.text
-          local missing = is_missing_file(item, git_root)
-          local keep = should_keep_item(item, git_root, true, show_missing)
-          debug_external_filter(
-            ctx,
-            item,
-            string.format(
-              "show_missing=%s missing=%s keep=%s",
-              tostring(show_missing),
-              tostring(missing),
-              tostring(keep)
-            )
-          )
-          if not keep then
-            return false
-          end
-          return item
+  create_ref_file_picker {
+    source = source,
+    title = get_title,
+    get_ref = function()
+      return state.current_base_ref
+    end,
+    get_head = function()
+      return state.current_head_ref
+    end,
+    git_root = git_root,
+    on_back = on_back,
+    footer = "<C-q> back • <C-j> base← • <C-k> base→ • <C-h> HEAD← • <C-l> HEAD→",
+    extra_keys = {
+      ["<C-j>"] = {
+        function()
+          move_base_ref_backward()
         end,
-      })
-      return require("snacks.picker.source.proc").proc(proc_opts, ctx)
-    end,
-    format = function(item)
-      local file_status_map = build_git_status_map(state.current_base_ref)
-      return git_status_formatter(file_status_map)(item)
-    end,
-    preview = function(ctx)
-      return preview_git_diff_with_base(state.current_base_ref)(ctx)
-    end,
-    actions = with_external_actions(custom_actions),
-    win = {
-      input = {
-        footer = "<C-h> back • <C-j> next ref • <C-k> prev ref",
-        keys = vim.tbl_extend("force", git_keys.input, {
-          ["<C-j>"] = {
-            function()
-              move_base_ref_forward()
-            end,
-            mode = { "n", "i" },
-            desc = "Next commit (closer to HEAD)",
-          },
-          ["<C-k>"] = {
-            function()
-              move_base_ref_backward()
-            end,
-            mode = { "n", "i" },
-            desc = "Previous commit (away from HEAD)",
-          },
-        }),
+        mode = { "n", "i" },
+        desc = "Base ref ← (further from HEAD)",
       },
-      list = {
-        keys = vim.tbl_extend("force", git_keys.list, {
-          ["<C-j>"] = {
-            function()
-              move_base_ref_forward()
-            end,
-            mode = { "n", "i" },
-            desc = "Next commit (closer to HEAD)",
-          },
-          ["<C-k>"] = {
-            function()
-              move_base_ref_backward()
-            end,
-            mode = { "n", "i" },
-            desc = "Previous commit (away from HEAD)",
-          },
-        }),
+      ["<C-k>"] = {
+        function()
+          move_base_ref_forward()
+        end,
+        mode = { "n", "i" },
+        desc = "Base ref → (closer to HEAD)",
+      },
+      ["<C-h>"] = {
+        function()
+          move_head_backward()
+        end,
+        mode = { "n", "i" },
+        desc = "HEAD ref ← (older)",
+      },
+      ["<C-l>"] = {
+        function()
+          move_head_forward()
+        end,
+        mode = { "n", "i" },
+        desc = "HEAD ref → (toward actual HEAD)",
       },
     },
   }
@@ -1697,8 +1577,7 @@ function M.custom_change_list_picker()
   local candidates = collect_candidate_refs()
 
   if #candidates == 0 then
-    vim.notify("No valid refs found for comparison", vim.log.levels.WARN)
-    return
+    vim.notify("No valid refs found for comparison — opening empty picker", vim.log.levels.INFO)
   end
 
   local picker_items = {}
@@ -1758,6 +1637,7 @@ function M.custom_change_list_picker()
     source = "git_refs",
     title = "Select Reference to Compare vs (" .. current_branch_ref .. ")",
     items = picker_items,
+    show_empty = true,
     format = function(item)
       local meta_text = getMetaText(item)
       local refShow = nil
@@ -2162,24 +2042,34 @@ function M.code_ref_picker(opts)
     return
   end
 
-  -- Build title with toggle state indicator
+  -- Build title with toggle state indicators (line, col, char)
   local hide_col = vim.g.code_ref_hide_col or false
-  local char_label
-  if use_visual then
-    char_label = show_char and " [char: on]" or " [char: off]"
-  else
-    char_label = hide_col and " [col: hidden]" or " [col: shown]"
+  local hide_line = vim.g.code_ref_hide_line or false
+  local state_parts = {}
+  if hide_line then
+    table.insert(state_parts, "line:hidden")
   end
-  local title = (opts.title or "Code Reference (Enter: copy)") .. char_label
+  if hide_col and not hide_line then
+    table.insert(state_parts, "col:hidden")
+  end
+  if use_visual then
+    table.insert(state_parts, show_char and "char:on" or "char:off")
+  end
+  local state_label = (#state_parts > 0) and (" [" .. table.concat(state_parts, " ") .. "]") or ""
+  local title = (opts.title or "Code Reference (Enter: paste)") .. state_label
+
+  -- Footer: actions + toggles (visible in input window)
+  local footer = "<CR> paste • <C-y> copy • <C-n> md • <A-c> col/char • <A-l> line"
 
   builder.build {
     items = items,
     source = "code_ref",
     title = title,
     parent_picker = nil,
-    confirm_mode = "copy",
+    confirm_mode = "paste",
     show_preview = false,
     use_visual = use_visual,
+    footer = footer,
     on_refresh = function()
       M.code_ref_picker { visual = use_visual, title = opts.title }
     end,

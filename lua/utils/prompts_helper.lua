@@ -245,7 +245,7 @@ function M.select_prompt(opts, callback)
     Snacks.picker.pick {
       source = "select",
       supports_live = true,
-      title = "Select Prompt File <CR> paste, (⌥-y copy content, c-y copy path)",
+      title = "Select Prompt File <CR> paste, (c-l copy content, c-y copy path, ⌥-y path select)",
       items = items,
       format = function(item, picker)
         -- Use the pre-computed parent directory (last 2 parts)
@@ -334,15 +334,9 @@ function M.select_prompt(opts, callback)
         },
         input = {
           keys = {
-            ["<C-y>"] = {
-              -- Reuse snacks_actions copy_path_select for consistent path-copy behavior
-              function(picker, item)
-                require("utils.snacks_actions").copy_path_select(picker, item)
-              end,
-              mode = { "n", "i" },
-              desc = "Copy File Path",
-            },
-            ["<A-y>"] = { "copy_content", mode = { "n", "i" }, desc = "Copy Prompt Content" },
+            ["<C-y>"] = { "copy_path_absolute", mode = { "n", "i" }, desc = "Copy Absolute Path" },
+            ["<C-l>"] = { "copy_content", mode = { "n", "i" }, desc = "Copy Prompt Content" },
+            ["<A-y>"] = { "copy_path_select", mode = { "n", "i" }, desc = "Copy Path Select" },
             ["<CR>"] = { "paste_content", mode = { "n", "i" }, desc = "Paste Prompt Content" },
           },
         },
@@ -350,6 +344,12 @@ function M.select_prompt(opts, callback)
       actions = {
         -- confirm = function(picker, item)
         -- __AUTO_GENERATED_PRINT_VAR_START__
+        copy_path_absolute = function(picker, item)
+          require("utils.snacks_actions").copy_path_absolute(picker, item)
+        end,
+        copy_path_select = function(picker, item)
+          require("utils.snacks_actions").copy_path_select(picker, item)
+        end,
         copy_content = function(picker, item)
           -- Copy the selected prompt (without frontmatter) to system clipboard and unnamed register
           if not item or not item.file then

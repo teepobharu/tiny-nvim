@@ -1153,7 +1153,7 @@ M.fzf_opts = {
 
 --#region Snacks other maps
 -- Snacks picker action factories
--- These create reusable actions for git operations, file operations, etc.
+-- Delegates to utils/snacks_actions.lua (canonical source)
 M.snacks_action_factories = {
   --- Create git file actions with ref resolution
   --- @param ref_provider string
@@ -1163,36 +1163,7 @@ M.snacks_action_factories = {
   ---   - open_remote_at_ref: function(picker, item) - Open file in remote at ref
   ---   - open_remote_at_head: function(picker, item) - Open file in remote at HEAD
   create_git_file_actions = function(ref_provider, no_resolve)
-    local ref = ref_provider
-    if not no_resolve and ref_provider then
-      ref = ref_provider and gitUtil.get_ref_metadata(ref_provider).resolved_ref or ref_provider
-    end
-    return {
-
-      -- Action functions
-      open_file_diff = function(picker, item)
-        if not item or not item.file then
-          vim.notify("No file selected", vim.log.levels.WARN)
-          return
-        end
-        picker:close()
-        open_file_with_gitsigns_diff(item.file, ref)
-      end,
-      open_remote_at_ref = function(picker, item)
-        if not item or not item.file then
-          vim.notify("No file selected", vim.log.levels.WARN)
-          return
-        end
-        open_file_in_remote(item.file, ref)
-      end,
-      open_remote_at_head = function(picker, item)
-        if not item or not item.file then
-          vim.notify("No file selected", vim.log.levels.WARN)
-          return
-        end
-        open_file_in_remote(item.file, "HEAD")
-      end,
-    }
+    return require("utils.snacks_actions").action_factories.create_git_file_actions(ref_provider, no_resolve)
   end,
 }
 
@@ -1210,6 +1181,9 @@ M.snacks_common_actions = {
   end,
   copy_path_absolute = function(picker, item)
     require("utils.snacks_actions").copy_path_absolute(picker, item)
+  end,
+  copy_path_abs_multi = function(picker, item)
+    require("utils.snacks_actions").copy_path_abs_multi(picker, item)
   end,
   copy_path_select = function(picker, item)
     require("utils.snacks_actions").copy_path_select(picker, item)
@@ -1259,6 +1233,9 @@ M.snacks_common_actions = {
   toggle_picker_source = function(picker, item)
     require("utils.snacks_actions").toggle_picker_source(picker, item)
   end,
+  toggle_grep_picker = function(picker, item)
+    require("utils.snacks_actions").toggle_grep_picker(picker, item)
+  end,
   increase_picker_depth = function(picker, item)
     require("utils.snacks_actions").adjust_picker_depth(picker, item, 1)
   end,
@@ -1290,6 +1267,7 @@ local snacks_picker_shared_keys = {
       ["<M-=>"] = { "increase_picker_depth", mode = { "n", "i" }, desc = "Increase search depth" },
       ["<M-->"] = { "decrease_picker_depth", mode = { "n", "i" }, desc = "Decrease search depth" },
       ["<M-0>"] = { "reset_picker_depth", mode = { "n", "i" }, desc = "Reset search depth" },
+      ["<M-g>"] = { "toggle_grep_picker", mode = { "n", "i" }, desc = "Toggle Grep <-> Source" },
     },
   },
   -- Common keys used across multiple pickers
@@ -1303,6 +1281,7 @@ local snacks_picker_shared_keys = {
   -- Copy path actions - applies to file/grep/explorer pickers
   copy_path_keys = {
     input = {
+      ["<C-y>"] = { "copy_path_abs_multi", mode = { "n", "i" }, desc = "Copy Absolute Path(s)" },
       ["Yy"] = { "copy_path_relative_buffer", mode = { "n" }, desc = "Copy Relative Path (Buffer)" },
       ["Yg"] = { "copy_path_relative_git", mode = { "n" }, desc = "Copy Relative Path (Git)" },
       ["Yp"] = { "copy_path_relative_cwd", mode = { "n" }, desc = "Copy Relative Path (CWD)" },
@@ -1352,6 +1331,7 @@ local snacks_picker_group_keys = {
   -- Git diff & remote actions - for git file pickers
   git_file_keys = {
     input = {
+      ["<C-y>"] = { "copy_path_abs_multi", mode = { "n", "i" }, desc = "Copy Absolute Path(s)" },
       ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at ref" },
@@ -1362,6 +1342,7 @@ local snacks_picker_group_keys = {
       -- ["<M-S>"] = { "select_subproject_cwd", mode = { "n", "i" }, desc = "Pick Subproject CWD" },
     },
     list = {
+      ["<C-y>"] = { "copy_path_abs_multi", mode = { "n", "i" }, desc = "Copy Absolute Path(s)" },
       ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at ref" },
@@ -1695,14 +1676,18 @@ M.sources_n_keys = {
         },
       },
     },
-    -- Git files picker: common + copy path keys
+    -- Git files picker: common + copy path keys + source cycle/grep toggle
     git_files = {
       win = {
         input = {
           keys = vim.tbl_extend(
             "force",
             snacks_picker_shared_keys.common_keys.input,
-            snacks_picker_shared_keys.copy_path_keys.input
+            snacks_picker_shared_keys.copy_path_keys.input,
+            {
+              ["<C-space>"] = { "toggle_picker_source", mode = { "n", "i" }, desc = "Cycle File/Buffer/Grep" },
+              ["<M-g>"] = { "toggle_grep_picker", mode = { "n", "i" }, desc = "Toggle Grep <-> Source" },
+            }
           ),
         },
       },

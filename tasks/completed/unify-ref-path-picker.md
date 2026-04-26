@@ -3,7 +3,7 @@ title: "Unify ref path picker — shared logic for keymap and sub-picker flows"
 status: review
 priority: high
 created: 2026-04-20
-updated: 2026-04-20
+updated: 2026-04-21
 related:
   - [code_ref.lua](lua/utils/code_ref.lua)
   - [code_ref_picker_builder.lua](lua/utils/code_ref_picker_builder.lua)
@@ -58,6 +58,13 @@ Both flows now share a single source of truth for:
 - Keymap picker now shows all 8 path variants with dedup (previously only git + cwd + absolute)
 - Both pickers use `format_ref()` for consistent formatting (sub-picker previously used inline `string.format`)
 
+### Follow-up adjustments (2026-04-21)
+
+- Keymap picker `<CR>` now **pastes** (was copy) — parity with sub-picker flow
+- New `<A-l>` toggle in both pickers — hides line/col entirely (path-only mode); respected via new `vim.g.code_ref_hide_line` + `format_ref()` path-only shortcut
+- Footer added to both pickers showing action + toggle keys
+- Title now shows `[line:hidden]` / `[col:hidden]` / `[char:on]` state indicators
+
 ## Verification
 
 ### How to verify
@@ -72,21 +79,24 @@ NVIM_APPNAME=nvimwt3a nvim lua/utils/code_ref.lua
 
 ### Checklist
 
-- [ ] `<localleader>crp` in normal mode opens code ref picker with path variants (Relative, Git, CWD, Absolute + dirs)
-- [ ] Selecting an item in `<localleader>crp` and pressing Enter copies to clipboard
-- [ ] `<C-p>` in `<localleader>crp` pastes the selected ref into buffer
-- [ ] `<C-n>` in `<localleader>crp` pastes as markdown link
-- [ ] `<C-y>` in `<localleader>crp` copies without closing picker
-- [ ] `<A-c>` in `<localleader>crp` toggles col visibility and refreshes items
-- [ ] `<localleader>crp` in visual mode (multi-line selection) shows range format and `<A-c>` toggles char range
-- [ ] Files picker (`<leader>ff` or equivalent) → navigate to a file → press `<M-y>` → sub-picker opens with path + code-ref formats
-- [ ] Grep picker → navigate to a result → press `<M-y>` → sub-picker shows code-ref items with line/col
-- [ ] Enter in sub-picker pastes into buffer (closes both pickers)
-- [ ] `<C-y>` in sub-picker copies to clipboard (stays open for multiple copies)
-- [ ] `<A-c>` in sub-picker toggles col visibility and refreshes
-- [ ] Direct copy keymaps still work: `<localleader>crr`, `<localleader>crs`, `<localleader>cra`, `<localleader>crb`, `<localleader>crh`
-- [ ] Direct copy keymaps in visual mode capture the range correctly
-- [ ] No errors on startup (`:messages` is clean)
+- [x] `<localleader>crp` in normal mode opens code ref picker with path variants (Relative, Git, CWD, Absolute + dirs)
+- [x] Footer shows `<CR> paste • <C-y> copy • <C-n> md • <A-c> col/char • <A-l> line`
+- [x] Selecting an item in `<localleader>crp` and pressing `<CR>` **pastes** the ref into buffer (both pickers close)
+- [x] `<C-y>` in `<localleader>crp` copies without closing picker
+- [x] `<C-p>` in `<localleader>crp` pastes the selected ref into buffer
+- [x] `<C-n>` in `<localleader>crp` pastes as markdown link
+- [x] `<A-c>` in `<localleader>crp` toggles col visibility (title shows `[col:hidden]`) and refreshes items
+- [x] `<A-l>` in `<localleader>crp` toggles line visibility (title shows `[line:hidden]`, items become path-only) and refreshes
+- [x] `<localleader>crp` in visual mode (multi-line selection) shows range format; `<A-c>` toggles char range (title shows `[char:on]`/`[char:off]`)
+- [x] Files picker (`<leader>ff` or equivalent) → navigate to a file → press `<M-y>` → sub-picker opens with path + code-ref formats and same footer
+- [x] Grep picker → navigate to a result → press `<M-y>` → sub-picker shows code-ref items with line/col
+- [x] `<CR>` in sub-picker pastes into buffer (closes both pickers)
+- [x] `<C-y>` in sub-picker copies to clipboard (stays open for multiple copies)
+- [x] `<A-c>` / `<A-l>` in sub-picker toggle col/line visibility and refresh
+- [x] Direct copy keymaps still work: `<localleader>crr`, `<localleader>crs`, `<localleader>cra`, `<localleader>crb`, `<localleader>crh`
+- [x] Direct copy keymaps in visual mode capture the range correctly
+- [x] No errors on startup (`:messages` is clean)
+- [x] filter in picker with abs will filter the result for Absolute items label
 
 ## References
 
