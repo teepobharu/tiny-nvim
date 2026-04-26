@@ -65,7 +65,7 @@ M.models = {
 
   -- Qwen models (AGD proxy IDs)
   qwen = {
-    -- QWQ_32B = "qwq-32b", -- does not seem to work/support chat 
+    -- QWQ_32B = "qwq-32b", -- does not seem to work/support chat
     QWEN_3_5_27B = "qwen-3.5-27b",
   },
 
@@ -82,7 +82,7 @@ M.models = {
 --- @field additional_keywords? string[]
 
 --- @class AgdModelNameOpts : FilterModelOpts
---- @field source? AgdModelNameSource 
+--- @field source? AgdModelNameSource
 --- @alias AgdModelNameSource '"all"' | '"top_choices"'
 
 --- Sparse size-indexed table (not every size is required)
@@ -169,10 +169,10 @@ M.providers = {
       inhouse = { -- cost 0 / free
         default = {
           S = M.models.qwen.QWEN_3_5_27B,
-        }
-      }
+        },
+      },
       -- not exists
-      -- grok = { 
+      -- grok = {
       --   default = { S = M.models.others.GROK_FAST_1 },
       -- },
     },
@@ -316,9 +316,8 @@ M.static_models = { -- Fast models (for quick operations)
 -- ============================================================================
 
 M.defaults = {
-  adapter = "copilot",
+  adapter = M.providers.openai_agd.adapter_name,
   model = M.models.gpt.GPT_5_MINI,
-
   -- Default parameters
   temperature = 0.75,
   max_tokens = 20480,
@@ -417,6 +416,7 @@ end
 
 -- M.DEFAULT_COPILOT_MODEL = M.models.others.GROK_FAST_1 -- x0.33
 M.DEFAULT_COPILOT_MODEL = M.models.gpt.GPT_5_MINI
+M.DEFAULT_AGD_MODEL = M.models.gpt.GPT_5_2
 
 -- ============================================================================
 -- Provider Keymap Slot Pattern
@@ -492,7 +492,7 @@ end
 function M.get_agd_model_names(opts)
   opts = opts or {}
   local source = opts.source or "all"
-  local models = source == 'top_choices' and M.get_top_choice_models "openai_agd" or M.get_all_models()
+  local models = source == "top_choices" and M.get_top_choice_models "openai_agd" or M.get_all_models()
 
   return M.filter_models(models, {
     additional_blacklist = opts.additional_blacklist,

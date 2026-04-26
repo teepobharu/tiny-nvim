@@ -1,5 +1,6 @@
 # AGENTS.md — Neovim Config Agent Guide
 
+Skip formatting stylua
 ## Project Overview
 
 Lightweight Neovim 0.11+ config forked from `jellydn/tiny-nvim`. Focus: minimal plugins, built-in LSP, fast startup, AI tool integration (CodeCompanion, Avante, CopilotChat, MCPHub).

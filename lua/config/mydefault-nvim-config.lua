@@ -31,7 +31,6 @@ vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
     -- Plugin-level extras
     "harpoon",
     "wakatime",
-    "avante",
     -- "codecompanion", -- TODO: not being used migrated to: myAi
     -- "blink",
     "claude-code", -- "extras.claudecode" looks config also same not sure why
@@ -96,5 +95,9 @@ vim.g.picker_source_default_opts = vim.g.picker_source_default_opts
 vim.g.disable_autoformat = true
 vim.g.snacks_debug_external_filter = true
 -- vim.g.snacks_debug_picker_persist = true
+-- vim.g.ai_default_family = "gpt"
+-- vim.g.ai_default_tier = "gpt"
+vim.g.ai_default_provider = "openai_agd" -- copilot , openai_agd
+-- vim.g.ai_default_provider = "copilot" -- copilot , openai_agd
 vim.opt.cmdheight = 2 -- Hide message continue prompt startup when has is <=2 line
 -- vim.opt.shortmess:append("IFc") -- remove "I" for startup message, "F" for file info, "c" for completion messages (e.g. "match 1 of 2")

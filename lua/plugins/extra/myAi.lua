@@ -3,6 +3,14 @@
 
 local editor_keymaps = require "utils.editor_keymaps"
 local AI_CONST = require "utils.my_ai_constants"
+local avante_utils = require "utils.my_avante_utils"
+local AI_CFG = require "utils.my_ai_default_config"
+
+local DEFAULT_ADAPTER = AI_CFG.DEFAULT_ADAPTER
+local DEFAULT_PROVIDER = AI_CFG.DEFAULT_PROVIDER
+local DEFAULT_MODEL = AI_CFG.preferred_model()
+local FAST_MODEL = AI_CFG.fast_model()
+local ENABLE_COPILOT = AI_CFG.ENABLE_COPILOT
 
 local CLAUDE_CODER_MAPPING_PREFIX = "<leader>C"
 -- caveat : might not updated when something changed until restart nvim ?
@@ -160,6 +168,9 @@ return {
         prompt_for_file_name = false,
         template = "[Image$CURSOR]($FILE_PATH)",
         use_absolute_path = false,
+        drag_and_drop = {
+          insert_mode = false,
+        },
       },
       filetypes = {
         codecompanion = {
@@ -177,6 +188,7 @@ return {
     "github/copilot.vim",
     -- v1.58.0 has issue errors 2026-01-26 02:58
     version = "1.57.0",
+    enabled = false, -- no Copilot license: use AGD (openai_agd) in CodeCompanion / Avante
   },
   {
     "CopilotC-Nvim/CopilotChat.nvim",
@@ -184,7 +196,7 @@ return {
       { "github/copilot.vim" },
       { "nvim-lua/plenary.nvim" },
     },
-    enabled = true,
+    enabled = false,
     keys = editor_keymaps.keymaps.copilot_chat,
     opts = {
       model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL,
@@ -192,22 +204,47 @@ return {
   },
   {
     "yetone/avante.nvim",
+    -- Override `enabled = false` set in lua/plugins/extra/avante.lua (migrated here).
+    -- Without this, lazy.nvim merges fragments and the disabled flag wins, dropping ALL
+    -- avante keymaps/opts/setup → `<leader>r{a,A,r,s,S,...}` stop working.
+    enabled = true,
     -- https://github.com/yetone/avante.nvim?tab=readme-ov-file#default-setup-configuration
+    config = function(_, opts)
+      require("avante").setup(opts)
+
+      -- Avante model selector iterates over `avante.config.providers` keys and will
+      -- try to list models for each provider. Avante defaults include `copilot`,
+      -- so remove it entirely when Copilot is disabled to avoid 403/suspended errors.
+      if not ENABLE_COPILOT then
+        local cfg = require "avante.config"
+        cfg.providers.copilot = nil
+      end
+
+      -- Group descriptions for which-key (the originals lived in
+      -- lua/plugins/extra/avante.lua's config; restore here since this config wins).
+      local ok, wk = pcall(require, "which-key")
+      if ok then
+        wk.add {
+          { "<leader>r", group = "AI / Avante" },
+          { "<leader>rs", group = "Avante models (default)" },
+          { "<leader>rS", group = "Avante models (AGD)" },
+        }
+      end
+    end,
     opts = {
-      provider = "copilot", -- You can then change this provider here
-      -- provider = "openai_agd", -- You can then change this provider here
+      -- provider = "copilot", -- You can then change this provider here
+      provider = DEFAULT_PROVIDER, -- You can then change this provider here
       web_search_engine = {
         -- provider = "tavily", -- tavily, serpapi, google, kagi, brave, or searxng
         provider = "google",
       },
-      -- Providers: base providers merged with Agoda-specific providers from utils
-      -- See lua/utils/my_avante_utils.lua for Agoda provider configurations
-      providers = vim.tbl_extend("force", {
-        copilot = {
-          model = AI_CONST.DEFAULT_COPILOT_MODEL,
-        },
-      }, {}), -- default = no custom provider
-      -- avante_utils.get_agoda_providers()),
+      -- Providers: register openai_agd (AGD proxy); optional copilot block if you re-enable Copilot
+      -- See lua/utils/my_avante_utils.lua
+      providers = vim.tbl_extend(
+        "force",
+        avante_utils.get_agoda_providers(),
+        ENABLE_COPILOT and { copilot = { model = AI_CONST.DEFAULT_COPILOT_MODEL } } or {}
+      ),
 
       acp_follow_agent_locations = false,
       selection = {
@@ -308,6 +345,7 @@ return {
       use_bundled_binary = true,
       config = vim.fn.expand "~/dotfiles/ai/mcp/mcphub.json",
       port = 37373,
+      shutdown_delay = 60 * 60 * 000, -- 60min ~ Delay in ms before shutting down the server when last instance closes (default: 5 minutes)
       -- Disable workspace mode for consistent port 37373 access by CLI agents
       -- Without this, workspace mode creates per-directory hubs on random ports (40000-41000)
       workspace = {
@@ -332,10 +370,10 @@ return {
       auto_toggle_mcp_servers = true,
       extensions = {
         copilotchat = {
-          enabled = true,
-          convert_tools_to_functions = true, -- Convert MCP tools to CopilotChat functions
-          convert_resources_to_functions = true, -- Convert MCP resources to CopilotChat functions
-          add_mcp_prefix = false, -- Add "mcp_" prefix to function names
+          enabled = false, -- CopilotChat.nvim disabled without Copilot license
+          convert_tools_to_functions = true,
+          convert_resources_to_functions = true,
+          add_mcp_prefix = false,
         },
         avante = {
           make_slash_commands = true,
@@ -527,13 +565,13 @@ return {
       --     }
       interactions = {
         chat = {
-          -- adapter = "openai_agd",
-          adapter = "copilot",
+          adapter = DEFAULT_ADAPTER,
+          model = DEFAULT_MODEL,
           -- adapter = {
           -- dont know why override model in interaction not work need replace in adpaters schema
           -- https://codecompanion.olimorris.dev/configuration/adapters-http#changing-the-default-model
           -- model default here not working ?
-          -- name = "copilot",
+          -- name = DEFAULT_ADAPTER,
           -- model = "grok-code-fast-1",
           -- model = "gpt-5-mini",
           -- model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
@@ -578,13 +616,13 @@ return {
         },
         -- Or, just specify the adapter by name
         inline = {
-          adapter = "copilot",
+          adapter = DEFAULT_ADAPTER,
         },
         cmd = {
-          adapter = "copilot",
+          adapter = DEFAULT_ADAPTER,
         },
         background = {
-          --adapter = "copilot",
+          adapter = DEFAULT_ADAPTER,
         },
       },
       adapters = {
@@ -653,8 +691,10 @@ return {
             delete_on_clearing_chat = false,
             title_generation_opts = {
               ---Adapter for generating titles (defaults to current chat adapter)
-              -- adapter = "copilot", -- nil to use current chat
-              -- model = "gpt-4.1", -- nil to use current chat Error: {"error":{"message":"model gpt-4.1 is not supported via Responses API.","code":"unsupported_api_for_model"}}
+              adapter = DEFAULT_ADAPTER, -- nil to use current chat adapter
+              model = AI_CONST.static_models.fast[1],
+              -- model = AI_CONST.providers.openai_agd.top_choices.gpt.default.S
+              -- "gpt-4.1", -- nil to use current chat Error: {"error":{"message":"model gpt-4.1 is not supported via Responses API.","code":"unsupported_api_for_model"}}
               ---Number of user prompts after which to refresh the title (0 to disable)
               refresh_every_n_prompts = 0, -- e.g., 3 to refresh after every 3rd user prompt
               max_refreshes = 1,
@@ -693,7 +733,7 @@ return {
           description = "Write documentation for me",
           opts = {
             index = 11,
-            adapter = "copilot", -- ✅ Fixed: simplified to string
+            adapter = DEFAULT_ADAPTER,
             is_slash_cmd = true,
             auto_submit = false,
             alias = "codecompanion_nvim_context", -- ✅ Fixed: short_name → alias
@@ -734,7 +774,7 @@ Your instructions here
           description = "Write documentation for me",
           opts = {
             index = 11,
-            adapter = "copilot", -- ✅ Fixed: simplified to string
+            adapter = DEFAULT_ADAPTER,
             is_slash_cmd = true,
             auto_submit = false,
             alias = "snacks_nvim_context", -- ✅ Fixed: short_name → alias
@@ -779,7 +819,7 @@ Your instructions here
           description = "Write documentation for me",
           opts = {
             index = 11,
-            adapter = "copilot", -- ✅ Fixed: simplified to string
+            adapter = DEFAULT_ADAPTER,
             is_slash_cmd = true,
             auto_submit = false,
             alias = "fzf_context", -- ✅ Fixed: short_name → alias (also changed alias to match prompt name)
@@ -882,8 +922,8 @@ Your instructions here
             alias = "iterative_removal_doc",
             stop_context_insertion = true,
             adapter = {
-              name = "copilot",
-              model = "claude-sonnet-4.5",
+              name = DEFAULT_ADAPTER,
+              model = DEFAULT_MODEL,
             },
           },
           prompts = {
@@ -925,10 +965,10 @@ Documentation and Tracking:
             auto_submit = true,
             is_slash_cmd = true,
             adapter = {
-              name = "copilot",
+              name = DEFAULT_ADAPTER,
               -- model = "gpt-4o",
               -- model = "grok-code-fast-1",
-              model = "gpt-5-mini",
+              model = FAST_MODEL,
             },
           },
           prompts = {
@@ -969,8 +1009,8 @@ feat(release): add slack msg and create release after deploy
             auto_submit = true,
             is_slash_cmd = true,
             adapter = {
-              name = "copilot",
-              model = "gpt-5-mini",
+              name = DEFAULT_ADAPTER,
+              model = FAST_MODEL,
             },
           },
           prompts = {
@@ -1018,8 +1058,8 @@ feat(release): add slack msg and create release after deploy
             auto_submit = true,
             is_slash_cmd = true,
             adapter = {
-              name = "copilot",
-              model = "gpt-4.1",
+              name = DEFAULT_ADAPTER,
+              model = FAST_MODEL,
             },
           },
           prompts = {
@@ -1087,7 +1127,7 @@ staged-commits
             alias = "review-staged-commit", -- ✅ Fixed: short_name → alias
             auto_submit = true,
             is_slash_cmd = true,
-            adapter = "copilot", -- ✅ Fixed: simplified to string
+            adapter = DEFAULT_ADAPTER,
           },
           prompts = {
             {
@@ -1269,7 +1309,7 @@ staged-commits
           opts = {
             is_workflow = true, -- v18+ syntax (was: strategy = "workflow")
             --   adapter = "openai", -- Always use the OpenAI adapter for this workflow
-            adapter = "copilot",
+            adapter = DEFAULT_ADAPTER,
             callbacks = { on_created = enable_yolo_on_created },
           },
           prompts = {
@@ -1318,8 +1358,8 @@ Your instructions here
             is_slash_cmd = true,
             auto_submit = true,
             adapter = {
-              name = "copilot",
-              model = "gpt-4.1", -- lower max token (16k vs 50k) 5-mini get some error while 4.1 perform pull correctly
+              name = DEFAULT_ADAPTER,
+              model = FAST_MODEL,
             },
             callbacks = { on_created = enable_yolo_on_created },
           },
@@ -1375,7 +1415,7 @@ Proceed autonomously without asking for confirmation between steps.]],
             is_slash_cmd = true,
             auto_submit = false,
             stop_context_insertion = true,
-            adapter = "copilot",
+            adapter = DEFAULT_ADAPTER,
           },
           prompts = {
             {

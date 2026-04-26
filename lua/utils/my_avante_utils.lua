@@ -2,9 +2,21 @@
 local M = {}
 
 local AI = require "utils.my_ai_constants"
+local AI_CFG = require "utils.my_ai_default_config"
 
-local DEFAULT_PROVIDER = "copilot"
-local DEFAULT_MODEL = vim.env.DEFAULT_MODEL_COPILOT or AI.defaults.model
+local DEFAULT_PROVIDER = AI_CFG.DEFAULT_PROVIDER
+local DEFAULT_MODEL = AI_CFG.preferred_model()
+local ENABLE_COPILOT = AI_CFG.ENABLE_COPILOT
+
+local function prune_copilot_provider()
+  if ENABLE_COPILOT then
+    return
+  end
+  local cfg = require "avante.config"
+  if cfg.providers then
+    cfg.providers.copilot = nil
+  end
+end
 -- Get Agoda-specific provider configurations
 -- Derived from M.providers.openai_agd in my_ai_constants
 -- model_names: filtered + remapped AGD provider models for Avante selector
@@ -161,7 +173,7 @@ function M.get_lean_providers()
   -- local agd_providers = M.get_agoda_providers()
 
   local agd_providers = M.get_agoda_providers()
-  for name, value in ipairs(agd_providers) do
+  for name, _ in pairs(agd_providers) do
     lean[name] = {
       -- DOES NOT REALLY WORK WILL NOT OVERRIDE / THROW ERRORS
       -- __inherited_from = value["__inherited_from"],
@@ -177,15 +189,31 @@ end
 -- Open AvanteModels with lean providers (without AGD)
 function M.select_model_lean()
   local current_provider, current_model = M.current_provider_and_model()
+  local model = current_provider == DEFAULT_PROVIDER and current_model or DEFAULT_MODEL
+
+  prune_copilot_provider()
+
+  local providers = {
+    [DEFAULT_PROVIDER] = {
+      model = model,
+    },
+  }
+
+  -- If the default provider is AGD, include the full provider config so AvanteModels
+  -- doesn't try to fall back to other providers (e.g. copilot) or error on missing fields.
+  if DEFAULT_PROVIDER == "openai_agd" then
+    local agd = M.get_agoda_providers { source = "top_choices" }
+    providers.openai_agd = vim.tbl_extend("force", agd.openai_agd, { model = model })
+  end
 
   require("avante.config").override {
     provider = DEFAULT_PROVIDER,
-    providers = {
-      [DEFAULT_PROVIDER] = {
-        model = current_provider == DEFAULT_PROVIDER and current_model or DEFAULT_MODEL,
-      },
-    },
+    providers = providers,
   }
+
+  -- Avante override deep-merges provider tables; prune again to keep selector
+  -- from calling copilot:list_models() when Copilot is disabled.
+  prune_copilot_provider()
 
   -- Open model selection
   vim.cmd "AvanteModels"
@@ -198,6 +226,8 @@ function M.select_model_agd(opts)
   local agd_providers = M.get_agoda_providers(opts)
   local default_agd_model = AI.providers.openai_agd.top_choices.gpt.default.M
 
+  prune_copilot_provider()
+
   require("avante.config").override {
     provider = "openai_agd",
     providers = {
@@ -207,18 +237,25 @@ function M.select_model_agd(opts)
     },
   }
 
+  prune_copilot_provider()
+
   -- Open model selection
   vim.cmd "AvanteModels"
 end
 
 -- Open AvanteModels with all providers (including AGD)
---- @param opts? AgdModelNameSource 
+--- @param opts? AgdModelNameSource
 function M.select_model_all(opts)
   -- Restore full provider list including Agoda providers
   local full_providers = vim.tbl_extend("force", M.get_lean_providers(), M.get_agoda_providers(opts))
+
+  prune_copilot_provider()
+
   require("avante.config").override {
     providers = full_providers,
   }
+
+  prune_copilot_provider()
 
   -- Open model selection
   vim.cmd "AvanteModels"
@@ -295,14 +332,16 @@ function M.generate_avante_keymaps(baseKeymap)
 
   -- Model selection keymaps
   -- Copilot models with <leader>rs prefix
-  local copilot_keymaps = M.generate_model_keymaps {
-    prefix = "<leader>rs",
-    provider = "copilot",
-    label = "",
-    models = M.get_copilot_models_config(),
-  }
+  if ENABLE_COPILOT then
+    local copilot_keymaps = M.generate_model_keymaps {
+      prefix = "<leader>rs",
+      provider = "copilot",
+      label = "",
+      models = M.get_copilot_models_config(),
+    }
 
-  vim.list_extend(keymaps, copilot_keymaps)
+    vim.list_extend(keymaps, copilot_keymaps)
+  end
 
   -- AGD models with <leader>rS prefix (OpenAI + Vertex Claude combined)
   local agd_models = vim.tbl_extend("force", M.get_openai_agd_models_config(), M.get_vertex_claude_agd_models_config())

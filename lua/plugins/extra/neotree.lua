@@ -463,6 +463,7 @@ return {
                 ".vscode",
                 ".cursor",
                 ".claude",
+                ".agents",
                 -- dotfiles
                 ".config",
                 ".nvim-config.lua",
