@@ -232,7 +232,34 @@ Lazy's merge is **deep but destructive** for nested keys:
 
 But beware of intermediate tables being replaced entirely.
 
-### Issue 3: Function References in Config
+### Issue 3: `enabled = false` in one fragment silently kills the plugin
+
+If any fragment has `enabled = false` and no later fragment overrides it with `enabled = true`,
+lazy.nvim treats the merged plugin as disabled — it is **not registered at all**, and every
+`keys`, `opts`, `config`, and `event` from *all* fragments is dropped. There is no warning;
+keymaps simply do not appear and `Lazy.plugins["<name>"]` returns `nil`.
+
+```lua
+-- plugins/extra/avante.lua  (older "migrated" stub)
+{ "yetone/avante.nvim", enabled = false, opts = { ... }, config = function() ... end }
+
+-- plugins/extra/myAi.lua  (intended new home)
+{ "yetone/avante.nvim", opts = { ... }, keys = { ... } }
+-- ⇒ avante.nvim is DISABLED. <leader>r* keymaps silently stop working.
+```
+
+**Fix**: explicitly add `enabled = true` to the later fragment to flip it back on, or remove
+`enabled = false` from the older stub. See [`lua/plugins/extra/myAi.lua`](lua/plugins/extra/myAi.lua)
+avante spec for an example.
+
+**Detection** (headless):
+```sh
+NVIM_APPNAME=nvim3_jelly_tinynvim nvim --headless \
+  -c 'lua print(require("lazy.core.config").plugins["avante.nvim"] and "registered" or "MISSING")' \
+  -c 'qa'
+```
+
+### Issue 4: Function References in Config
 `config` functions **cannot be merged**:
 ```lua
 -- plugins/snacks.lua

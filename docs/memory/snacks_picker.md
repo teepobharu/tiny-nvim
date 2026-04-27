@@ -264,3 +264,47 @@ via `persistence.current()`, which may not match the selected item if the branch
 Testing
 
 - TO confirm branch shown show `%%` text in item display when the have `/` in the branch name
+
+---
+
+### Key Callbacks: `win.input.keys` vs `actions`
+
+**Caveat**: `function(picker, item)` signature only works in `actions = {}` config. In `win.input.keys` (and `win.list.keys`), the callback receives `snacks.win` — NOT the picker. `item` is always `nil`.
+
+**Wrong** (keys config — `item` is always nil):
+```lua
+win = {
+  input = {
+    keys = {
+      ["<M-e>"] = {
+        function(picker, item)  -- item is ALWAYS nil here
+          -- picker is snacks.win, not the real picker
+        end,
+      },
+    },
+  },
+},
+```
+
+**Correct** — fetch the real picker via `Snacks.picker.get`:
+```lua
+win = {
+  input = {
+    keys = {
+      ["<M-e>"] = {
+        function()
+          local picker = (Snacks.picker.get { source = "my_source" })[1]
+          if not picker then return end
+          local item = picker:current()
+          if not item then return end
+          -- ...
+        end,
+        mode = { "n", "i" },
+        desc = "...",
+      },
+    },
+  },
+},
+```
+
+**Rule**: Only define keys in `win.input.keys` (not `win.list.keys` — redundant and can conflict). Use `actions = {}` if you need `(picker, item)` signature directly.

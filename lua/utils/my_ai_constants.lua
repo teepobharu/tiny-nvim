@@ -241,6 +241,10 @@ M.filters = {
     "agoda", -- Contains "agoda"
     -- "^claude%-", -- Starts with "claude-" (for AGD proxy that doesn't support Claude)
     "^ft%-", -- Fine-tuned models
+    -- no computer-use
+    "^computer-use",
+    "^dalle-e",
+    -- "^gpt-realtime",
     -- M.models.gemini.GEMINI_3_PRO,
   },
   -- TODO: add opts to model
@@ -254,6 +258,7 @@ M.filters = {
     "babbage",
     "davinci",
     "2024%-", -- Date-stamped models
+    "2025%-", -- Date-stamped models
     "image",
     "audio",
     "embedding",

@@ -443,7 +443,7 @@ M.keymaps = {
       function()
         require("utils.my_avante_utils").select_model_lean()
       end,
-      desc = "Avante Models (Copilot/default)",
+      desc = "Avante Models (default)",
       mode = "n",
     },
     {
@@ -465,7 +465,7 @@ M.keymaps = {
     {
       "<leader>rc", -- if not map not show not sure why unsafe key ?
       function()
-        require("avante.api").add_selected_file(vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ':p'))
+        require("avante.api").add_selected_file(vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":p"))
       end,
       desc = "Avante - Add current to chat",
     },
