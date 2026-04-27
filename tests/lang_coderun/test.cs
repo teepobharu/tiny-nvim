@@ -1,8 +1,12 @@
 #!/usr/bin/env mise exec dotnet@10 -- dotnet run
 #:package Humanizer@3.0.0-rc.30
 // #:property TargetFramework=net8.0 // not work yet get below error
+//
+// $ ./test.cs 
+// $ chmod 700 test.cs
+//
+// Error:
 // https://aka.ms/dotnet-core-applaunch?framework=Microsoft.NETCore.App&framework_version=8.0.0&arch=arm64&rid=osx-arm64&os=osx.26
-// bash-5.3$ ./test.cs 
 // You must install or update .NET to run this application.
 //
 // App: /Users/tharutaipree/Library/Application Support/dotnet/runfile/test-073e667041a82b9d8cf47e554f4dfa69a79866089782780a3ceccb99f7fa04e7/bin/debu

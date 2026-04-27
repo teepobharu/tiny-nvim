@@ -144,6 +144,9 @@ return {
         sh = {
           "bash",
         },
+        cs = {
+          "mise exec dotnet@10 -- dotnet run", -- dotnet 10+ single-file execution
+        },
       },
       global_files = {
         javascript = pathUtil.get_global_file_by_type "js",
@@ -153,6 +156,7 @@ return {
         lua = pathUtil.get_global_file_by_type "lua",
         --  end common -------------------
         sh = pathUtil.get_global_file_by_type "sh",
+        cs = pathUtil.get_global_file_by_type "cs",
       },
     },
   },

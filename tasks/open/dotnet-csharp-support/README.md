@@ -7,6 +7,7 @@ updated: 2026-03-26
 related:
   - [test.cs sample](tests/lang_coderun/test.cs)
   - [run_script_deterministic](lua/overseer/template/user/run_script_deterministic.lua)
+  - [run_script](lua/overseer/template/user/run_script.lua)
   - [dotnet_test overseer template](lua/overseer/template/agoda/dotnet/dotnet_test.lua)
   - [quick-code-runner config](lua/plugins/extra/myEditor.lua:102-157)
   - [overseer config](lua/plugins/extra/myEditor.lua:47-95)

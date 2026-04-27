@@ -1,3 +1,5 @@
+local shebang = require "utils.shebang"
+
 return {
   name = "run script",
   tags = { require("overseer").TAG.RUN, "run", "custom" },
@@ -25,15 +27,16 @@ return {
     end
     cmd = filetype_commands[ft] or cmd
     if vim.fn.executable(cmd[1]) == 0 then
-      local warning = tostring(cmd) .. "is not executable"
-      Snacks.notify.warning(warning)
-      cmd = cmd .. " " .. "|| echo 'Warning: cmd not working"
+      local warning = vim.inspect(cmd) .. " is not executable"
+      vim.notify(warning, vim.log.levels.WARN)
+      cmd = shebang.build_exec_cmd(file) or { "sh", file }
     end
 
     return {
       cmd = cmd,
       components = {
         { "on_output_quickfix", set_diagnostics = true },
+        { "open_output", on_start = "always", direction = "dock", focus = false },
         "default",
       },
     }

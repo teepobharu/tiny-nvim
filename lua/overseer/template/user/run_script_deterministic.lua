@@ -61,19 +61,19 @@ local FiletypeConfigurations = {
   },
   cs = {
     {
-      name = "dotnet",
-      cmd = { "dotnet", "run", "--project", "$file" },
-      prerequisite = ".NET SDK must be installed and in PATH",
+      name = "dotnet-run-file",
+      cmd = { "dotnet", "run", "$file" },
+      prerequisite = ".NET 10+ SDK (single-file execution via run-file feature)",
       executable_check = "dotnet",
       comment_syntax = "//",
+      content_patterns = { "#:package", "Console%." },
+      is_match_with_content_only = false,
     },
-  },
-  cs_script = {
     {
       name = "dotnet-script",
       cmd = { "dotnet", "script", "$file" },
-      prerequisite = "dotnet-script tool must be installed (dotnet tool install -g dotnet-script)",
-      executable_check = "dotnet", -- dotnet tool is run via dotnet exe
+      prerequisite = "dotnet-script tool (dotnet tool install -g dotnet-script)",
+      executable_check = "dotnet",
       comment_syntax = "//",
     },
   },
@@ -125,6 +125,8 @@ local FiletypeConfigurations = {
   },
 }
 
+local shebang = require "utils.shebang"
+
 FiletypeConfigurations.typescript = vim.list_extend(FiletypeConfigurations.javascript, {
   {
     name = "tsc",
@@ -140,6 +142,11 @@ local dbg = debg.dbg
 -- debg.on()
 
 local function get_best_runner(file, ft)
+  local shebang_info = shebang.detect(file)
+  if shebang_info.has_shebang then
+    return "shebang"
+  end
+
   local candidates = FiletypeConfigurations[ft] or FiletypeConfigurations.default
   local best_score = -1
   local best_runner = nil
@@ -205,6 +212,33 @@ local get_runner_by_ft_and_name = function(ft, name)
   return nil
 end
 
+local function append_unique(tbl, value)
+  for _, item in ipairs(tbl) do
+    if item == value then
+      return
+    end
+  end
+  table.insert(tbl, value)
+end
+
+local function normalize_runner_name(name)
+  return (name or ""):gsub(" %(not executable%)$", "")
+end
+
+local function resolve_command(file, ft, runner_name)
+  local normalized_runner_name = normalize_runner_name(runner_name)
+
+  if normalized_runner_name == "shebang" then
+    return shebang.build_exec_cmd(file)
+  end
+
+  local runner = get_runner_by_ft_and_name(ft, normalized_runner_name)
+  local cmd = runner and runner.cmd or { ft, file }
+  return vim.tbl_map(function(part)
+    return part:gsub("%$file", file)
+  end, cmd)
+end
+
 return {
   name = "run script - deterministic",
   tags = { require("overseer").TAG.RUN, "run", "custom" },
@@ -215,19 +249,15 @@ return {
     -- local ft = vim.bo.filetype
     local file = params.file
     local ft = vim.bo.filetype
-    local runner = get_runner_by_ft_and_name(ft, params.chosen_runner)
-
-    local cmd = runner and runner.cmd or { ft, file }
-    -- replace "strap dmc ni "elif$
-    cmd = vim.tbl_map(function(part)
-      return part:gsub("%$file", file)
-    end, cmd)
+    local cmd = resolve_command(file, ft, params.chosen_runner) or { "sh", file }
 
     -- local final_cmd_table, runner_name, prerequisite = params.get_resolved_command_info(file, ft)
     return {
       cmd = cmd,
       components = {
         { "on_output_quickfix", set_diagnostics = true },
+        { "open_output", on_start = "always", direction = "dock", focus = false },
+        { "on_permission_error", auto_chmod = false },
         "default",
       },
     }
@@ -255,7 +285,8 @@ return {
     local candidates = FiletypeConfigurations[ft] or FiletypeConfigurations.default
     -- append (not executable in runner name if not executable as a label)
     for _, runner_def in ipairs(candidates) do
-      if vim.fn.executable(runner_def.executable_check or runner_def.cmd[1]) == 1 then
+      local executable = runner_def.executable_check or (runner_def.cmd and runner_def.cmd[1])
+      if executable and vim.fn.executable(executable) == 1 then
         table.insert(choicesRunnerForFt, runner_def.name)
       else
         table.insert(choicesRunnerForFt, runner_def.name .. " (not executable)")
@@ -276,14 +307,21 @@ return {
       end
     end)
 
-    table.insert(choicesRunnerForFt, FiletypeConfigurations.default[1].name)
-    table.insert(choicesRunnerForFt, ft)
+    -- Always offer shebang as a runner choice if file has one
+    local shebang_info = shebang.detect(file)
+    if shebang_info.has_shebang then
+      table.insert(choicesRunnerForFt, 1, "shebang")
+    end
+
+    append_unique(choicesRunnerForFt, FiletypeConfigurations.default[1].name)
+    append_unique(choicesRunnerForFt, ft)
 
     dbg([==[params choicesRunnerForFt:]==], vim.inspect(choicesRunnerForFt)) -- __AUTO_GENERATED_PRINT_VAR_END__
 
     local resolved_runner_name = get_best_runner(file, ft) or FiletypeConfigurations.default[1].name
     dbg([==[params resolved_runner_name:]==], vim.inspect(resolved_runner_name)) -- __AUTO_GENERATED_PRINT_VAR_END__
-    local commandString = vim.fn.join(get_runner_by_ft_and_name(ft, resolved_runner_name).cmd, " ")
+    local command = resolve_command(file, ft, resolved_runner_name)
+    local commandString = command and vim.fn.join(command, " ") or ""
 
     -- change to relative filepath
     file = vim.fn.fnamemodify(file, ":.")
