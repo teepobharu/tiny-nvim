@@ -95,6 +95,7 @@ return {
   },
   {
     "echasnovski/mini.bufremove",
+    enabled = true,
     keys = editor_keymaps.keymaps.bufremove,
   },
   -- AI tools moved to myAi.lua (img-clip, copilot, CopilotChat, avante, sidekick)
@@ -383,6 +384,7 @@ return {
         -- does not allow to have K + K to jump to preview like noice but has preview scroll c-f,b
         -- but why get map by inital vim.lsp.buf ??
         -- ["K"] = { "show_documentation"}
+        -- minuet handle it if it enabled
         ["<C-c>"] = {
           function(cmp)
             if cmp.is_visible() then

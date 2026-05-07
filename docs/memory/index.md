@@ -25,10 +25,11 @@
 - [avante.md](avante.md) — setup, keybindings, model config, update notes
 - [avante-mcphub.md](avante-mcphub.md) — Avante + MCPHub integration, blink-cmp-avante, MCP completions
 
-## Copilot
+## Copilot / Minuet
 
 - [copilot_model_fetching.md](copilot_model_fetching.md) — how CopilotChat fetches and resolves models
 - [copilot-model-selection-bug.md](copilot-model-selection-bug.md) — model selection bug analysis and fix
+- [minuet.md](minuet.md) — model pinning, 401 auth cause, change_model backend-switch behavior, AGD subprovider patch
 
 ## Lazy.nvim
 

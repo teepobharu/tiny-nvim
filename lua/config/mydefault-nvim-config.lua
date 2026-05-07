@@ -45,6 +45,8 @@ vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
     "myEditor",
     "mySnacks", -- snacks.nvim (picker, dashboard, terminal, explorer, etc.)
     "myCoding",
+    "myMinuet",
+    "myBlinkIcons",
     "myGit",
     "myAi",
     "myLazyPatcher",
@@ -99,5 +101,16 @@ vim.g.snacks_debug_external_filter = true
 -- vim.g.ai_default_tier = "gpt"
 vim.g.ai_default_provider = "openai_agd" -- copilot , openai_agd
 -- vim.g.ai_default_provider = "copilot" -- copilot , openai_agd
+-- Copilot-backed providers/keymaps toggle. Default OFF (no Copilot license).
+-- Override per-project in .nvim-config.lua: vim.g.ai_enable_copilot = true
+-- vim.g.ai_enable_copilot = true
+-- Minuet-AI completion profile (active when ai_enable_copilot = false)
+-- "agd" = Agoda OpenAI proxy (default) | "ollama" | "llamacpp"
+-- M4 Max rec: ollama → qwen2.5-coder:3b-base, llamacpp → qwen2.5-coder-1.5b Q4_K_M
+vim.g.ai_minuet_profile = vim.g.ai_minuet_profile or "agd"
+-- vim.g.ai_ollama_endpoint  = "http://localhost:11434"   -- default
+-- vim.g.ai_ollama_model     = "qwen2.5-coder:3b-base"    -- FIM base model required
+-- vim.g.ai_llamacpp_endpoint = "http://localhost:8012"   -- default
+-- vim.g.ai_llamacpp_model   = "qwen2.5-coder-1.5b"       -- FIM GGUF base required
 vim.opt.cmdheight = 2 -- Hide message continue prompt startup when has is <=2 line
 -- vim.opt.shortmess:append("IFc") -- remove "I" for startup message, "F" for file info, "c" for completion messages (e.g. "match 1 of 2")

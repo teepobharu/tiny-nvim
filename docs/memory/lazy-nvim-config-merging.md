@@ -320,6 +320,37 @@ This will show the final merged opts for each plugin.
    -- This suggests circular dependency or load ordering issue to investigate
    ```
 
+### Issue 3: Upstream `branch = "main"` blocks version pin override
+
+**Problem**: Upstream spec sets `branch = "main"` (unstable channel). Setting `version = "1.*"` in a `my*.lua` override does NOT work because Lazy treats `version`/`branch`/`commit`/`tag` as mutually exclusive but `branch` from upstream still appears in merged spec when `version` is set alongside it.
+
+**Root cause**: `branch = false` in override spec is silently ignored (Lazy treats `false` as absence, not as unsetting). The merged spec retains `branch = "main"` from upstream and `version` is not honoured.
+
+**Solution**: Use `commit = "<sha>"` instead. `commit` takes explicit precedence in `git.lua`'s `get_target()` — when `plugin.commit` is set, it returns that SHA regardless of `branch`/`version` fields. The `my*.lua` spec loads after upstream (alphabetical order ensures `myCoding` > `coding`), so `commit` wins.
+
+```lua
+-- lua/plugins/extra/myCoding.lua — pin blink.cmp to v1 when upstream uses branch = "main"
+{
+  "saghen/blink.cmp",
+  commit = "9b189bb2a0e03412e0e901dfbd09904f86cd593c", -- v1.10.2
+},
+```
+
+Also edit `lazy-lock.json` directly to set the pinned SHA (remove `branch` field from lock entry):
+```json
+"blink.cmp": { "commit": "9b189bb2a0e03412e0e901dfbd09904f86cd593c" },
+```
+
+Then checkout the SHA in the local plugin dir:
+```bash
+cd ~/.local/share/nvim3_jelly_tinynvim/lazy/blink.cmp
+git checkout 9b189bb2a0e03412e0e901dfbd09904f86cd593c
+```
+
+**Source**: `manage/task/git.lua` (update skip logic), `manage/git.lua:127` (`get_target` checks `plugin.commit` first).
+
+**Context**: Used 2026-05-07 to pin `blink.cmp` to `v1.10.2` after upstream `main` advanced to v2 which requires Neovim 0.12+ and `saghen/blink.lib`.
+
 ## References
 - **lazy.nvim Github**: https://github.com/folke/lazy.nvim
 - **Lazy Docs**: https://lazy.folke.io/spec
@@ -330,5 +361,5 @@ This will show the final merged opts for each plugin.
   - `fragments.lua` - Fragment management
 
 ---
-**Last Updated**: 2026-01-29
+**Last Updated**: 2026-05-07
 **Researched By**: Crush

@@ -98,6 +98,22 @@ When `:ProjectSettings` or `:ProjectSettingsReload` runs, it embeds a commented-
 
 Content outside the markers is preserved on regeneration.
 
+## Copilot disable flag
+
+Single boolean toggle `vim.g.ai_enable_copilot` (default `false`) drives every
+Copilot-backed plugin/provider/keymap inside personal `my*` files:
+
+- `myAi.lua` — `github/copilot.vim`, `CopilotChat.nvim`, mcphub `copilotchat` extension, avante `copilot` provider, codecompanion `copilot` http adapter.
+- `myCoding.lua` — blink.cmp `fang2hou/blink-copilot` dep + `copilot` source.
+
+Flip per project via `.nvim-config.lua`:
+
+```lua
+vim.g.ai_enable_copilot = true
+```
+
+Upstream `extra/copilot-*.lua` files keep their existing `vim.g.enable_extra_plugins` list gate — out of scope here.
+
 ## xx Mute Switch Files
 
 Group-level mute switches for multi-spec core plugin files. Each `xx<Name>.lua` returns `{ "plugin/name", enabled = false }` specs for the **unique** plugins in that core file (shared plugins like which-key are NOT affected).

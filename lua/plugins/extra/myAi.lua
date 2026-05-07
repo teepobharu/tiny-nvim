@@ -271,7 +271,7 @@ return {
     "github/copilot.vim",
     -- v1.58.0 has issue errors 2026-01-26 02:58
     version = "1.57.0",
-    enabled = false, -- no Copilot license: use AGD (openai_agd) in CodeCompanion / Avante
+    enabled = ENABLE_COPILOT,
   },
   {
     "CopilotC-Nvim/CopilotChat.nvim",
@@ -279,7 +279,7 @@ return {
       { "github/copilot.vim" },
       { "nvim-lua/plenary.nvim" },
     },
-    enabled = false,
+    enabled = ENABLE_COPILOT,
     keys = editor_keymaps.keymaps.copilot_chat,
     opts = {
       model = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL,
@@ -287,9 +287,8 @@ return {
   },
   {
     "yetone/avante.nvim",
-    -- Override `enabled = false` set in lua/plugins/extra/avante.lua (migrated here).
-    -- Without this, lazy.nvim merges fragments and the disabled flag wins, dropping ALL
-    -- avante keymaps/opts/setup → `<leader>r{a,A,r,s,S,...}` stop working.
+    -- Single canonical spec for Avante: do not declare yetone/avante again in plugins/extra/avante.lua.
+    -- lazy.nvim merges plugin fragments but does not merge `config` — a second fragment's config would replace this one.
     enabled = true,
     -- https://github.com/yetone/avante.nvim?tab=readme-ov-file#default-setup-configuration
     config = function(_, opts)
@@ -351,11 +350,23 @@ return {
           debug = "<leader>rd", -- discard to some random key
           selection = "<localleader>ax",
         },
+        ask = "<leader>ra",    -- Change 'Ask' to <leader>ua
         select_history = "<leader>rh",
         focus = "<localleader>ax", -- discard to some random key
+        select_model = "<leader>rM",
+        select_acp_model = "<localleader>arM",
+        select_acp_mode = "<localleader>arm", -- discard key, avoid <leader>am collision
       },
     },
     keys = editor_keymaps.keymaps.avante,
+  },
+  {
+    "MeanderingProgrammer/render-markdown.nvim",
+    optional = true,
+    opts = {
+      file_types = { "markdown", "Avante" },
+    },
+    ft = { "markdown", "Avante" },
   },
   --#endregion AI tools moved from myEditor.lua
   {
@@ -363,7 +374,12 @@ return {
     optional = true,
     opts = {
       spec = {
+        { vim.g.ai_prefix_key or "<leader>A", group = "Code Companion", mode = { "n", "v" } },
         { "<leader>ah", group = "MCPHub", mode = { "n" } },
+        { "<leader>am", group = "minuet/duet", icon = "󱗻", mode = { "n" } },
+        { "<leader>amS", group = "servers/FIM", icon = "󰒋", mode = { "n" } },
+        { "<leader>aM", group = "sidekick", icon = "󰚩", mode = { "n" } },
+        { "<leader>aMm", group = "NES", icon = "󰚩", mode = { "n" } },
         { "<leader>Am", group = "Commit Message", mode = { "n" } },
         { "<leader>Amm", desc = "Git staged commit msg", mode = { "n" } },
         { "<leader>AmM", desc = "Git staged commit msg (large files)", mode = { "n" } },
@@ -457,7 +473,7 @@ return {
       auto_toggle_mcp_servers = true,
       extensions = {
         copilotchat = {
-          enabled = false, -- CopilotChat.nvim disabled without Copilot license
+          enabled = ENABLE_COPILOT,
           convert_tools_to_functions = true,
           convert_resources_to_functions = true,
           add_mcp_prefix = false,
@@ -526,7 +542,7 @@ return {
   },
   {
     "olimorris/codecompanion.nvim",
-    version = "19.7.x", -- exact pin: v19.7.0 / f76cd2598e1d4a5fd78e27c29e2e5f53c9a99c21
+    version = "19.13.x", -- exact pin: v19.13.0 / 9d985b1cc4e650a676a977ab1f9ed50dc6d0f4d8
     dependencies = {
       -- "ibhagwan/fzf-lua", -- For fzf provider, file or buffer picker
       -- "nvim-lua/plenary.nvim",
@@ -541,13 +557,14 @@ return {
       require("codecompanion").setup(options)
       require("utils.my_codecompanion_inline_debug_demo").setup()
 
+      local hooks_group = vim.api.nvim_create_augroup("CodeCompanionHooks", {})
+
       -- Show loading spinner when request is started (from jellydn/tiny-nvim)
       local ok, spinner = pcall(require, "spinner")
       if ok then
-        local group = vim.api.nvim_create_augroup("CodeCompanionHooks", {})
         vim.api.nvim_create_autocmd({ "User" }, {
           pattern = "CodeCompanionRequest*",
-          group = group,
+          group = hooks_group,
           callback = function(request)
             if request.match == "CodeCompanionRequestStarted" then
               spinner.show()
@@ -567,7 +584,7 @@ return {
       -- by reference to _submit_http, mutating payload.messages here takes effect.
       vim.api.nvim_create_autocmd("User", {
         pattern = "CodeCompanionChatCreated",
-        group = group,
+        group = hooks_group,
         callback = function(event)
           local chat = require("codecompanion.interactions.chat").buf_get_chat(event.data.bufnr)
           if not chat then
@@ -720,28 +737,24 @@ return {
       },
       adapters = {
         cache_models_for = 5000, -- local cached inside var - def 1800 (30m)
-        http = require("utils.my_codecompanion_utils").merge_agoda_adapters {
-          copilot = function()
-            return require("codecompanion.adapters").extend("copilot", {
-              schema = {
-                model = {
-                  default = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
-                  -- choices -> currently no temperature opts check for 5mini
-                  -- /Users/tharutaipree/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/copilot/init.lua:334:27
+        http = require("utils.my_codecompanion_utils").merge_agoda_adapters(vim.tbl_extend(
+          "force",
+          ENABLE_COPILOT and {
+            copilot = function()
+              return require("codecompanion.adapters").extend("copilot", {
+                schema = {
+                  model = {
+                    default = AI_CONST.DEFAULT_COPILOT_MODEL or "gpt-5-mini",
+                    -- choices -> currently no temperature opts check for 5mini
+                    -- /Users/tharutaipree/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/copilot/init.lua:334:27
+                  },
+                  -- temperature = { -- see tasks/open/investigate-codecompanion-adapter-switching.md:85:1
                 },
-                -- temperature = { -- see tasks/open/investigate-codecompanion-adapter-switching.md:85:1
-              },
-            })
-          end,
-          --   copilot = {
-          --    schema = {
-          --     model = {
-          -- if have show error formatted
-          -- default = require("utils.my_ai_constants").DEFAULT_COPILOT_MODEL or "gpt-5-mini",
-          --      },
-          --    },
-          --  },
-        },
+              })
+            end,
+          } or {},
+          {}
+        )),
         acp = { -- codex and claude_code works without extra settings just make sure acp cli is installed
           -- claude_code = function()
           --   return require("codecompanion.adapters").extend("claude_code", {

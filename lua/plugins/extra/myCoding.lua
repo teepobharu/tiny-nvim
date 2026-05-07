@@ -1,5 +1,14 @@
 -- Personal coding overrides kept out of core plugin specs
-return {
+local ENABLE_COPILOT = require("utils.my_ai_default_config").ENABLE_COPILOT
+
+local specs = {
+  -- Pin blink.cmp to v1.10.2. v2 requires Neovim 0.12+ and saghen/blink.lib.
+  -- Nvim 0.11.6 installed. Use commit pin since upstream spec sets branch="main" which
+  -- takes precedence over version="1.*" in Lazy spec merging.
+  {
+    "saghen/blink.cmp",
+    commit = "9b189bb2a0e03412e0e901dfbd09904f86cd593c", -- v1.10.2
+  },
   {
     "L3MON4D3/LuaSnip",
     opts = {
@@ -40,14 +49,25 @@ return {
       -- },
     },
   },
-  -- Support copilot as source
-  {
+}
+
+-- Support copilot as blink.cmp source only when Copilot is enabled
+if ENABLE_COPILOT then
+  table.insert(specs, {
     -- define here since coding removed blink.cmp
     "saghen/blink.cmp",
     dependencies = { "fang2hou/blink-copilot" },
     opts = {
+      keymap = {
+        -- <C-c> is the unified AI-completion trigger: copilot when enabled, minuet when disabled (see myMinuet.lua)
+        ["<C-c>"] = {
+          function(cmp)
+            return cmp.show { providers = { "copilot" } }
+          end,
+          "fallback",
+        },
+      },
       sources = {
-        -- default = { "copilot" }, -- dont show it but togglable with c-c (see myEditor blink.cmp <C-c> keymap)
         providers = {
           copilot = {
             name = "copilot",
@@ -58,5 +78,7 @@ return {
         },
       },
     },
-  },
-}
+  })
+end
+
+return specs

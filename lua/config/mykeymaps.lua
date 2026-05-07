@@ -704,7 +704,35 @@ opts.desc = nil
 -- LOCALLEADER ==========================
 -- ===============================================
 
+local function diff_with_saved()
+  local bufnr = vim.api.nvim_get_current_buf()
+  local fname = vim.api.nvim_buf_get_name(bufnr)
+  if fname == "" then
+    vim.notify("Cannot diff: buffer has no file name", vim.log.levels.WARN)
+    return
+  end
+  fname = vim.fn.fnamemodify(fname, ":p")
+  if vim.fn.filereadable(fname) == 0 then
+    vim.notify("Cannot diff: file not readable on disk", vim.log.levels.WARN)
+    return
+  end
+  local ft = vim.bo[bufnr].filetype
+  vim.cmd.diffthis()
+  vim.cmd "vertical new"
+  vim.bo.buftype = "nofile"
+  vim.bo.bufhidden = "wipe"
+  vim.bo.swapfile = false
+  if ft ~= "" then
+    vim.bo.filetype = ft
+  end
+  vim.cmd("0read ++edit " .. vim.fn.fnameescape(fname))
+  vim.bo.modifiable = false
+  vim.cmd.diffthis()
+  vim.cmd.wincmd "p"
+end
+
 -- Diff Operations
+keymap("n", "<leader>dS", diff_with_saved, { desc = "Diff vs saved file", noremap = true, silent = true })
 keymap("n", "<leader>Gdd", ":if &diff | diffoff | else | diffthis | endif<CR>", { desc = "Toggle Diff Mode" })
 keymap("n", "<leader>Gdx", ":diffoff<CR>", { desc = "Diff Off" })
 -- diff off

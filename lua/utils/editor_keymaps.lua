@@ -323,7 +323,6 @@ M.keymaps = {
       {
         companion_prefix .. "i",
         "<cmd>'<,'>CodeCompanion<cr>",
-        ":CodeCompanion",
         desc = "Code Companion - Quick inline ui",
         mode = "v",
       },
@@ -468,6 +467,13 @@ M.keymaps = {
         require("avante.api").add_selected_file(vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":p"))
       end,
       desc = "Avante - Add current to chat",
+    },
+    {
+      "<leader>ra", -- if not map not show not sure why unsafe key ?
+      function()
+        require("avante.api").ask()
+      end,
+      desc = "Avante - ask",
     },
   },
 
@@ -1052,36 +1058,40 @@ M.keymaps = {
       desc = "Send Visual Selection",
     },
     {
-      "<leader>aNt",
+      "<leader>aMmt",
       function()
         require("sidekick.nes").toggle()
       end,
       mode = { "n" },
-      desc = "Sidekick Toggle CLI",
+      desc = "Sidekick NES: toggle",
     },
     {
-      "<leader>aNe",
+      "<leader>aMme",
       function()
         require("sidekick.nes").enable()
       end,
       mode = { "n" },
-      desc = "Sidekick Enable CLI",
+      desc = "Sidekick NES: enable",
     },
     {
-      "<leader>aNd",
+      "<leader>aMmd",
       function()
         require("sidekick.nes").disable()
       end,
       mode = { "n" },
-      desc = "Sidekick Disable Nes",
+      desc = "Sidekick NES: disable",
     },
     {
-      "<leader>aNu",
+      "<leader>aMmu",
       function()
         require("sidekick.nes").update()
       end,
       mode = { "n" },
-      desc = "Sidekick Nes Update",
+      desc = "Sidekick NES: update",
+    },
+    {
+      "<leader>am",
+      false, -- remove mapping from ai.lua
     },
   },
 
