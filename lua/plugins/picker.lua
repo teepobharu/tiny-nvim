@@ -1,66 +1,3 @@
--- Module state for tracking hidden file toggle
-local _hidden_files = false
-local _unrestricted_files = false
-
-local function get_visual_selection()
-  local mode = vim.fn.mode()
-  if mode == "v" or mode == "V" or mode == "\22" then
-    local lines = vim.fn.getregion(vim.fn.getpos "v", vim.fn.getpos ".", { type = mode })
-    vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "nx", false)
-    return table.concat(lines, "\n")
-  end
-  return ""
-end
-
-local function pick_files(opts)
-  local MiniPick = require "mini.pick"
-  MiniPick.builtin.files(
-    nil,
-    vim.tbl_deep_extend("force", opts or {}, {
-      mappings = {
-        toggle_hidden = {
-          char = "<M-h>",
-          func = function()
-            _hidden_files = not _hidden_files
-            _unrestricted_files = false
-            local cmd = _hidden_files and { "fd", "-H", "-t", "f" } or { "fd", "-t", "f" }
-            vim.notify("Hidden files: " .. tostring(_hidden_files), vim.log.levels.INFO)
-            MiniPick.builtin.cli({
-              command = cmd,
-              spawn_opts = { cwd = opts and opts.source and opts.source.cwd },
-            }, {
-              source = {
-                name = _hidden_files and "Files (hidden)" or "Files",
-                choose = MiniPick.default_choose,
-                preview = MiniPick.default_preview,
-              },
-            })
-          end,
-        },
-        toggle_unrestricted = {
-          char = "<M-u>",
-          func = function()
-            _unrestricted_files = not _unrestricted_files
-            _hidden_files = false
-            local cmd = _unrestricted_files and { "fd", "-HI", "-t", "f" } or { "fd", "-t", "f" }
-            vim.notify("Include gitignored: " .. tostring(_unrestricted_files), vim.log.levels.INFO)
-            MiniPick.builtin.cli({
-              command = cmd,
-              spawn_opts = { cwd = opts and opts.source and opts.source.cwd },
-            }, {
-              source = {
-                name = _unrestricted_files and "Files (unrestricted)" or "Files",
-                choose = MiniPick.default_choose,
-                preview = MiniPick.default_preview,
-              },
-            })
-          end,
-        },
-      },
-    })
-  )
-end
-
 -- Find all files including gitignored
 local function pick_files_unrestricted(opts)
   local MiniPick = require "mini.pick"
@@ -89,19 +26,6 @@ local function pick_git_files_all(opts)
       preview = MiniPick.default_preview,
     },
   })
-end
-
--- Normal grep (respects .gitignore)
--- opts.pattern: optional pattern to pre-fill search
-local function pick_grep_live(opts)
-  local MiniPick = require "mini.pick"
-  if opts and opts.pattern then
-    local pattern = opts.pattern
-    opts.pattern = nil
-    MiniPick.builtin.grep({ pattern = pattern }, opts)
-  else
-    MiniPick.builtin.grep_live(nil, opts or {})
-  end
 end
 
 -- Grep with hidden files (respects .gitignore)
@@ -135,81 +59,6 @@ local function pick_grep_unrestricted(opts)
   })
 end
 
--- Grep for word under cursor
-local function pick_grep_cword(opts)
-  local word = vim.fn.expand "<cword>"
-  if word == "" then
-    vim.notify("No word under cursor", vim.log.levels.WARN)
-    return
-  end
-  pick_grep_live(vim.tbl_deep_extend("force", opts or {}, { pattern = word }))
-end
-
--- Grep for WORD under cursor
-local function pick_grep_cWORD(opts)
-  local word = vim.fn.expand "<cWORD>"
-  if word == "" then
-    vim.notify("No WORD under cursor", vim.log.levels.WARN)
-    return
-  end
-  pick_grep_live(vim.tbl_deep_extend("force", opts or {}, { pattern = word }))
-end
-
--- Grep project (like fzf-lua grep_project)
-local function pick_grep_project(opts)
-  local pattern = vim.fn.input "Grep pattern: "
-  if pattern == "" then
-    return
-  end
-
-  local MiniPick = require "mini.pick"
-  MiniPick.builtin.cli({
-    command = {
-      "rg",
-      "--column",
-      "--line-number",
-      "--no-heading",
-      "--field-match-separator",
-      "\\x00",
-      "--color=never",
-      "--smart-case",
-      "--",
-      pattern,
-    },
-    spawn_opts = { cwd = opts and opts.source and opts.source.cwd },
-  }, {
-    source = {
-      name = "Grep Project",
-    },
-  })
-end
-
--- Live grep including hidden files
-local function pick_grep_live_hidden(opts)
-  local MiniPick = require "mini.pick"
-  MiniPick.builtin.cli({
-    command = {
-      "rg",
-      "--hidden",
-      "--column",
-      "--line-number",
-      "--no-heading",
-      "--field-match-separator",
-      "\\x00",
-      "--color=never",
-      "--smart-case",
-      "-g",
-      "!{.git,node_modules}/",
-      ".",
-    },
-    spawn_opts = { cwd = opts and opts.source and opts.source.cwd },
-  }, {
-    source = {
-      name = "Grep (hidden)",
-    },
-  })
-end
-
 local function pick_help()
   require("mini.pick").builtin.help()
 end
@@ -220,32 +69,6 @@ end
 
 local function pick_resume()
   require("mini.pick").builtin.resume()
-end
-
-local function minifiles_toggle(path)
-  local mini_files = require "mini.files"
-  if not mini_files.close() then
-    mini_files.open(path)
-  end
-end
-
-local function minifiles_open_cwd()
-  minifiles_toggle()
-end
-
-local function minifiles_open_file()
-  local path = vim.api.nvim_buf_get_name(0)
-  if path == "" then
-    minifiles_toggle()
-    return
-  end
-
-  if vim.fn.filereadable(path) == 1 or vim.fn.isdirectory(path) == 1 then
-    minifiles_toggle(path)
-    return
-  end
-
-  minifiles_toggle()
 end
 
 local function git_cli(command, fallback)
@@ -359,66 +182,16 @@ return {
     keys = {
       -- Picker
       { "<leader>,", pick_buffers, desc = "Switch Buffer" },
-      { "<leader>/", pick_grep_live, desc = "Grep" },
       { "<leader>:", pick_commands_history, desc = "Command History" },
-      { "<leader><space>", pick_files, desc = "Find Files" },
-
-      -- Ctrl shortcuts
-      {
-        "<C-g>",
-        pick_grep_project,
-        desc = "Grep Project",
-      },
-      {
-        "<C-g>",
-        function()
-          local text = get_visual_selection()
-          if text ~= "" then
-            pick_grep_live { pattern = text }
-          else
-            vim.notify("No text selected", vim.log.levels.WARN)
-          end
-        end,
-        desc = "Grep visual selection",
-        mode = "v",
-      },
-      {
-        "<C-e>",
-        pick_files,
-        desc = "Find Files at project directory",
-      },
-
-      -- Explorer
-      {
-        "<leader>e",
-        function()
-          minifiles_open_file()
-        end,
-        desc = "File Explorer",
-      },
-      {
-        "<leader>E",
-        function()
-          minifiles_open_cwd()
-        end,
-        desc = "File Explorer (cwd)",
-      },
 
       -- find
       { "<leader>fb", pick_buffers, desc = "Buffers" },
       {
         "<leader>fc",
         function()
-          pick_files { source = { cwd = vim.fn.stdpath "config" } }
+          require("fff").find_files_in_dir(vim.fn.stdpath "config")
         end,
         desc = "Find Config File",
-      },
-      {
-        "<leader>ff",
-        function()
-          pick_git_files_all()
-        end,
-        desc = "Find Git Files",
       },
       { "<leader>fa", pick_files_unrestricted, desc = "Find Files (all)" },
       {
@@ -428,19 +201,7 @@ return {
         end,
         desc = "Find Git Files (including untracked)",
       },
-      {
-        "<leader>fr",
-        function()
-          require("mini.extra").pickers.oldfiles()
-        end,
-        desc = "Recent",
-      },
       { "<leader>fR", pick_resume, desc = "Resume" },
-      {
-        "<leader>fl",
-        pick_grep_live_hidden,
-        desc = "Find Live Grep (including hidden files)",
-      },
       -- git
       {
         "<leader>gc",
@@ -502,29 +263,6 @@ return {
       { "<leader>sb", pick_buffer_lines, desc = "Search Current Buffer" },
       { "<leader>sB", pick_open_buffer_lines, desc = "Search Lines in Open Buffers" },
       { "<leader>sg", pick_grep_unrestricted, desc = "Grep (all files)" },
-      {
-        "<leader>sw",
-        pick_grep_cword,
-        desc = "Search word under cursor",
-      },
-      {
-        "<leader>sw",
-        function()
-          local text = get_visual_selection()
-          if text ~= "" then
-            pick_grep_live { pattern = text }
-          else
-            vim.notify("No text selected", vim.log.levels.WARN)
-          end
-        end,
-        desc = "Search word in visual selection",
-        mode = "v",
-      },
-      {
-        "<leader>sW",
-        pick_grep_cWORD,
-        desc = "Search WORD under cursor",
-      },
 
       -- search
       {
@@ -663,7 +401,9 @@ return {
       {
         "<leader>sp",
         function()
-          pick_grep_live { source = { cwd = vim.fn.stdpath "config" .. "/lua/plugins" } }
+          require("fff").live_grep {
+            cwd = vim.fn.stdpath "config" .. "/lua/plugins",
+          }
         end,
         desc = "Search for Plugin Spec",
       },

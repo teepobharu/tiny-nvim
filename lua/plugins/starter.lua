@@ -11,11 +11,11 @@ logo = string.rep("\n", 4) .. logo .. "\n"
 local hostname = io.popen("hostname"):read("*a"):gsub("%s+", "")
 
 local function action_find_files()
-  require("mini.pick").builtin.files()
+  require("fff").find_files()
 end
 
 local function action_find_text()
-  require("mini.pick").builtin.grep_live()
+  require("fff").live_grep()
 end
 
 local function action_recent_files()
@@ -23,7 +23,7 @@ local function action_recent_files()
 end
 
 local function action_config_files()
-  require("mini.pick").builtin.files(nil, { source = { cwd = vim.fn.stdpath "config" } })
+  require("fff").find_files_in_dir(vim.fn.stdpath "config")
 end
 
 local function starter_footer()

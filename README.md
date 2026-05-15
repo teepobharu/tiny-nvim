@@ -152,12 +152,13 @@ This configuration has migrated from `snacks.nvim` to `mini.nvim` as its core UI
 - Reduced dependencies while maintaining feature parity
 - Optimized for Neovim 0.11+
 
-| Feature      | Previously (snacks) | Now (mini.nvim)        |
-| ------------ | ------------------- | ---------------------- |
-| Fuzzy Picker | Snacks.picker       | mini.pick + mini.extra |
-| Dashboard    | Snacks.dashboard    | mini.starter           |
-| Git Diff     | Snacks.git          | mini.diff              |
-| Icons        | nvim-web-devicons   | mini.icons             |
+| Feature      | Previously (snacks) | Now (mini.nvim + extras) |
+| ------------ | ------------------- | ------------------------ |
+| Fuzzy Picker | Snacks.picker       | fff.nvim (primary) + mini.pick |
+| Dashboard    | Snacks.dashboard    | mini.starter             |
+| File Explorer| Snacks.explorer     | oil.nvim                 |
+| Git Diff     | Snacks.git          | mini.diff                |
+| Icons        | nvim-web-devicons   | mini.icons               |
 
 > **Note**: `snacks.nvim` is still available as an optional extra plugin if you prefer it.
 
@@ -173,7 +174,7 @@ This configuration leverages the mini.nvim plugin suite as its core UI framework
 - **mini.statusline**: Lightweight, informative statusline
 - **mini.tabline**: Smart buffer/tabline with buffer management
 - **mini.icons**: Comprehensive icon support
-- **mini.files**: File explorer with a consistent mini.nvim UI
+- **fff.nvim**: Fast fuzzy file picker with frecency scoring and live grep
 - **mini.ai**: Enhanced text objects for code
 - **mini.pairs**: Automatic bracket and quote pairing
 - **mini.bufremove**: Cleaner buffer deletion
@@ -233,43 +234,51 @@ Theme switching:
 
 - [flash.nvim](https://github.com/folke/flash.nvim): Navigation and search enhancements
 - [which-key.nvim](https://github.com/folke/which-key.nvim): Keybinding hints and management
+- [fff.nvim](https://github.com/dmtrKovalenko/fff.nvim): Fast fuzzy file picker with frecency scoring, git integration, and live grep
+- [oil.nvim](https://github.com/stevearc/oil.nvim): File explorer that lets you edit your filesystem like a buffer
 - Fuzzy finder and extra pickers via mini.nvim ecosystem
 - [better-escape.nvim](https://github.com/max397574/better-escape.nvim): Better escape functionality
 - [grug-far.nvim](https://github.com/MagicDuck/grug-far.nvim): Advanced search and replace functionality
 
-### Picker Keymaps (mini.pick)
+### Picker Keymaps (FFF)
 
 #### General
 
 | Keymap | Mode | Description |
 | --- | --- | --- |
-| `<leader><space>` | n | Find Files (toggle hidden with `Alt-h`, unrestricted with `Alt-u`) |
-| `<leader>/` | n | Grep (live) |
+| `<leader><space>` | n | Find Files (FFF — frecency-scored) |
+| `<leader>/` | n | Live Grep (FFF) |
+| `<leader>ff` | n | Find Files (FFF) |
+| `<leader>fr` | n | Recent Files |
+| `<C-e>` | n | Find Files at project directory (FFF) |
 | `<leader>,` | n | Switch Buffer |
 | `<leader>:` | n | Command History |
-| `<C-g>` | n | Grep Project |
-| `<C-g>` | v | Grep visual selection |
-| `<C-e>` | n | Find Files at project directory |
+
+#### FFF Prefix (`<leader>'`)
+
+| Keymap | Mode | Description |
+| --- | --- | --- |
+| `<leader>'f` | n | FFF find files |
+| `<leader>'g` | n | FFF live grep |
+| `<leader>'z` | n | FFF fuzzy grep |
+| `<leader>'c` | n | FFF search current word |
+| `<leader>'r` | n | FFF recent files |
 
 #### Explorer
 
 | Keymap | Mode | Description |
 | --- | --- | --- |
-| `<leader>e` | n | File Explorer (current file) |
-| `<leader>E` | n | File Explorer (cwd) |
+| `<leader>e` | n | File Explorer (oil — floating window) |
 
 #### Find (`<leader>f`)
 
 | Keymap | Mode | Description |
 | --- | --- | --- |
 | `<leader>fb` | n | Buffers |
-| `<leader>fc` | n | Find Config File |
-| `<leader>ff` | n | Find Git Files |
+| `<leader>fc` | n | Find Config File (FFF) |
 | `<leader>fa` | n | Find Files (all, including gitignored) |
 | `<leader>fg` | n | Find Git Files (including untracked) |
-| `<leader>fr` | n | Recent Files |
 | `<leader>fR` | n | Resume last picker |
-| `<leader>fl` | n | Live Grep (including hidden files) |
 
 #### Git (`<leader>g`)
 
@@ -288,9 +297,9 @@ Theme switching:
 | `<leader>sb` | n | Search Current Buffer |
 | `<leader>sB` | n | Search Lines in Open Buffers |
 | `<leader>sg` | n | Grep (all files, including hidden) |
-| `<leader>sw` | n | Search word under cursor |
-| `<leader>sw` | v | Search visual selection |
-| `<leader>sW` | n | Search WORD under cursor |
+| `<leader>sw` | n | Search word under cursor (FFF) |
+| `<leader>fw` | n | Search word under cursor (FFF) |
+| `<leader>fw` | v | Search visual selection (FFF) |
 | `<leader>s"` | n | Registers |
 | `<leader>sa` | n | Find Actions (Commands) |
 | `<leader>s:` | n | Command History |
@@ -311,7 +320,7 @@ Theme switching:
 | `<leader>st` | n | Todo Comments |
 | `<leader>sT` | n | Todo/Fix/Fixme |
 | `<leader>su` | n | Changelist |
-| `<leader>sp` | n | Search for Plugin Spec |
+| `<leader>sp` | n | Search for Plugin Spec (FFF) |
 | `<leader>uC` | n | Colorschemes |
 
 #### LSP
@@ -518,22 +527,20 @@ This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim
 | `<C-c>`      | Copy whole file content             |
 | `<leader>m`  | Markdown preview (Previm)          |
 | `<leader>tm` | Toggle Markdown preview (Render)    |
-| `<leader>e`  | File Explorer (mini.files)          |
-| `<leader>E`  | File Explorer (cwd)                 |
-| `.`          | Toggle hidden files (mini.files)    |
-| `<C-c>`      | Copy path (mini.files)              |
-| `<M-h>`      | Toggle hidden files (mini.pick)     |
-| `<M-u>`      | Toggle gitignored files (mini.pick) |
+| `<leader>e`  | File Explorer (oil — floating window) |
+| `<C-s>`      | Save all changes (oil)              |
+| `q`          | Close oil buffer                    |
+| `<C-y>`      | Copy entry path (oil)               |
 
 ### Search & Navigation
 
-| Key          | Description                              |
-| ------------ | ---------------------------------------- |
-| `<leader><space>` | Find Files (normal picker)          |
-| `<leader>ff` | Find Files (with hidden toggle)        |
-| `<leader>fA` | Find Files (all including gitignored)  |
-| `<leader>/`  | Live Grep (normal files only)           |
-| `<leader>sg` | Live Grep (hidden files, respects .gitignore) |
+| Key              | Description           |
+| ---------------- | --------------------- |
+| `<leader><space>` | Find Files (FFF)     |
+| `<leader>/`       | Live Grep (FFF)      |
+| `<leader>ff`      | Find Files (FFF)     |
+| `<leader>'f`      | FFF find files       |
+| `<leader>'g`      | FFF live grep        |
 
 ### UI & Formatting
 
@@ -556,10 +563,10 @@ This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim
 
 | Item            | Description           |
 | --------------- | --------------------- |
-| Find File       | Open file picker      |
-| Find Text       | Live grep             |
+| Find File       | FFF find files        |
+| Find Text       | FFF live grep         |
 | Recent Files    | Recently opened files |
-| Config          | Find files in config  |
+| Config          | FFF find files in config |
 | Restore Session | Load last session     |
 | Lazy            | Open lazy.nvim        |
 | Update          | Update plugins        |
@@ -733,6 +740,8 @@ Available options:
    - `codecompanion`: AI code companion
    - `avante`: Alternative AI assistant
    - `mcphub`: Minecraft Plugin Hub
+   - `fold-preview`: Fold preview
+   - `difft`: Structural diffs
 
 2. LSP Servers:
    - `eslint`: ESLint language server
@@ -770,6 +779,9 @@ vim.g.enable_extra_plugins = {
   "no-neck-pain",  -- Additional UI plugin
   "nvim-eslint"    -- ESLint integration
 }
+
+-- Note: fff.nvim (file picker) and oil.nvim (file explorer) are always enabled.
+-- They do not need to be listed here.
 
 -- Set any other project-specific settings
 vim.opt.tabstop = 2
@@ -820,16 +832,7 @@ This configuration includes several extra plugins that can be enabled on demand 
    - Access Minecraft plugins directly from Neovim
    - Command: `:MCPHub`
 
-5. **[oil.nvim](https://github.com/stevearc/oil.nvim)**
-   - File explorer that lets you edit your filesystem like a buffer
-   - Replace netrw with a more intuitive file management experience
-   - Built-in git integration and smart file hiding
-   - Keymaps:
-     - `<leader>e`: Toggle floating file explorer (overrides mini.files)
-     - `<C-s>`: Save all changes in oil buffer
-     - `q`: Close oil buffer
-
-6. **[nvim-ufo](https://github.com/kevinhwang91/nvim-ufo)**
+5. **[nvim-ufo](https://github.com/kevinhwang91/nvim-ufo)**
    - Ultra-fast folding with treesitter and indent providers
    - Enhanced fold text with line count display
    - Improves code navigation and readability
@@ -837,28 +840,28 @@ This configuration includes several extra plugins that can be enabled on demand 
      - `zR`: Open all folds
      - `zM`: Close all folds
 
-7. **[fold-preview.nvim](https://github.com/anuvyklack/fold-preview.nvim)**
+6. **[fold-preview.nvim](https://github.com/anuvyklack/fold-preview.nvim)**
    - Preview folded code without opening the fold
    - Includes pretty-fold.nvim for better fold text formatting
    - Smart fold navigation with h/l keys
    - Shows fold level indicators and line counts
 
-8a. **[copilot-chat.nvim](https://github.com/CopilotC-Nvim/CopilotChat.nvim)** - Traditional AI chat interface with GitHub Copilot - Interactive conversations, code explanations, and commit message generation - Alternative to sidekick.nvim if you prefer a dedicated chat window - Automatically disables sidekick.nvim when enabled - Keymaps (when enabled): - `<leader>ap`: Prompt actions - `<leader>am`: Generate commit message - `<leader>af`: Fix diagnostic - `<leader>al`: Clear buffer and chat history - `<leader>av`: Toggle chat window - `<leader>a?`: Select models
+7a. **[copilot-chat.nvim](https://github.com/CopilotC-Nvim/CopilotChat.nvim)** - Traditional AI chat interface with GitHub Copilot - Interactive conversations, code explanations, and commit message generation - Alternative to sidekick.nvim if you prefer a dedicated chat window - Automatically disables sidekick.nvim when enabled - Keymaps (when enabled): - `<leader>ap`: Prompt actions - `<leader>am`: Generate commit message - `<leader>af`: Fix diagnostic - `<leader>al`: Clear buffer and chat history - `<leader>av`: Toggle chat window - `<leader>a?`: Select models
 
-8b. **[copilot.vim](https://github.com/github/copilot.vim)** - GitHub Copilot integration moved to extra plugins - Provides AI-powered code completion and suggestions - Keymaps (when enabled): - `<C-y>`: Accept suggestion - `<C-i>`: Accept line - `<C-j>`: Next suggestion - `<C-k>`: Previous suggestion - `<C-d>`: Dismiss suggestion - Note: This plugin is disabled by default and can be enabled via extra plugins
+7b. **[copilot.vim](https://github.com/github/copilot.vim)** - GitHub Copilot integration moved to extra plugins - Provides AI-powered code completion and suggestions - Keymaps (when enabled): - `<C-y>`: Accept suggestion - `<C-i>`: Accept line - `<C-j>`: Next suggestion - `<C-k>`: Previous suggestion - `<C-d>`: Dismiss suggestion - Note: This plugin is disabled by default and can be enabled via extra plugins
 
-8c. **[blink-copilot](https://github.com/fang2hou/blink-copilot)** - Copilot source for blink.cmp - Note: This plugin is disabled by default and can be enabled via extra plugins
+7c. **[blink-copilot](https://github.com/fang2hou/blink-copilot)** - Copilot source for blink.cmp - Note: This plugin is disabled by default and can be enabled via extra plugins
 
-8d. **[claudecode.nvim](https://github.com/coder/claudecode.nvim)** - Claude Code integration (floating terminal + prompt shortcuts) - Note: This plugin is disabled by default and can be enabled via extra plugins
+7d. **[claudecode.nvim](https://github.com/coder/claudecode.nvim)** - Claude Code integration (floating terminal + prompt shortcuts) - Note: This plugin is disabled by default and can be enabled via extra plugins
 
-9. **[difft.nvim](https://github.com/ahkohd/difft.nvim)**
+8. **[difft.nvim](https://github.com/ahkohd/difft.nvim)**
    - Beautiful structural diffs using difft
    - Shows git diffs with better syntax highlighting and structure awareness
    - Supports multiple layouts: buffer, float, or ivy_taller
    - Keymaps:
      - `<leader>gd`: Toggle Difft viewer
 
-10. **[scooter](https://github.com/liamg/scooter)**
+9. **[scooter](https://github.com/liamg/scooter)**
     - Blazingly fast file search and navigation
     - Alternative to grug-far with better performance
     - Interactive fuzzy search with file preview
@@ -877,7 +880,6 @@ vim.g.enable_extra_plugins = {
   "codecompanion",
   "avante",
   "mcphub",
-  "oil",
   "nvim-ufo",
   "fold-preview",
   "copilot-chat",  -- Alternative to sidekick.nvim
