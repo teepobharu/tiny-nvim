@@ -48,23 +48,25 @@ return {
     "stevearc/overseer.nvim",
     version = "^2.1.0",
     keys = editor_keymaps.keymaps.overseer,
-    opts = {
-      -- default config: https://github.com/stevearc/overseer.nvim/blob/a2734d90c514eea27c4759c9f502adbcdfbce485/lua/overseer/config.lua#L4
-      -- seems like already included by default if put inside lua/overseer/template
-      template_dirs = {},
-      disable_template_modules = {
-        -- works
-        "overseer.template.common_shell.grep_async", -- Exclude specific module
-        -- not work
-        -- "common_shell.grep_async",           -- Exclude specific module
-      },
-      strategy = {
-        "terminal",
-        use_shell = true,
-      },
-      -- https://deepwiki.com/search/can-params-return-object-value_cf6755d4-5426-473d-9d19-226d55ef99b7?mode=fast
-      task_list = {
+    opts = function(_, opts)
+      local overseer_actions = require("plugins.extra.myOverseer")
+
+      -- Merge custom actions
+      opts.actions = vim.tbl_deep_extend("force", opts.actions or {}, overseer_actions.actions)
+
+      -- Enhanced task list config
+      opts.task_list = vim.tbl_deep_extend("force", opts.task_list or {}, {
+        render = overseer_actions.render_with_status,
         keymaps = {
+          -- Duplicate task: clone and restart as new task (Alt-d avoids conflict with dd dispose)
+          ["<A-d>"] = { "keymap.run_action", opts = { action = "duplicate task" }, desc = "Duplicate task" },
+          -- Clone task, edit cmd/name in editor, then run as new task
+          ["A"] = { "keymap.run_action", opts = { action = "edit and run as new task" }, desc = "Edit and run as new task" },
+          -- Copy task command to clipboard
+          ["y"] = { "keymap.run_action", opts = { action = "copy task command" }, desc = "Copy task command" },
+          -- Copy task name to clipboard
+          ["Y"] = { "keymap.run_action", opts = { action = "copy task name" }, desc = "Copy task name" },
+          -- Keep existing keymaps
           ["<A-q>"] = {
             "keymap.run_action",
             opts = { action = "open output in quickfix" },
@@ -72,7 +74,6 @@ return {
           },
           ["<C-q>"] = { "<CMD>close<CR>", desc = "Close task list" },
           ["a"] = { "keymap.run_action", opts = { action = "edit" }, desc = "Edit task" },
-          -- since ^ works no mapping not work ?
           ["<C-s>"] = { "keymap.run_action", opts = { action = "stop" }, desc = "Stop task" },
           ["<C-c>"] = { "keymap.run_action", opts = { action = "stop" }, desc = "Stop task" },
           ["<C-r>"] = { "keymap.run_action", opts = { action = "restart" }, desc = "Restart task" },
@@ -81,7 +82,6 @@ return {
           ["<S-Down>"] = "keymap.scroll_output_down",
           ["<C-w>"] = { "keymap.run_action", opts = { action = "watch" }, desc = "Watch file for changes" },
           ["<C-p>"] = { "keymap.run_action", opts = { action = "unwatch" }, desc = "Stop watching file" },
-          -- H use to switch buffer ?
           ["H"] = "keymap.prev_task",
           ["J"] = "keymap.prev_task",
           ["L"] = "keymap.next_task",
@@ -90,8 +90,10 @@ return {
           ["<C-j>"] = false,
           ["<C-k>"] = false,
         },
-      },
-    },
+      })
+
+      return opts
+    end,
   },
   {
     "echasnovski/mini.bufremove",

@@ -61,6 +61,24 @@ else
     postcss = { "tailwindcss" },
   }
 
+  -- Gate C# LSP behind vim.g (default=false, opt-in per project via .nvim-config.lua)
+  --
+  -- Usage: vim.g.lsp_enable_csharp = true
+  -- Optional: vim.g.lsp_csharp_server = "omnisharp" | "csharp_ls"
+  local csharp_server = vim.g.lsp_csharp_server
+  if not csharp_server then
+    if vim.fn.executable "omnisharp" == 1 or vim.fn.executable "OmniSharp" == 1 then
+      csharp_server = "omnisharp"
+    elseif vim.fn.executable "csharp-ls" == 1 then
+      csharp_server = "csharp_ls"
+    else
+      csharp_server = "omnisharp"
+    end
+  end
+  if vim.g.lsp_enable_csharp then
+    lsp_by_ft.cs = { csharp_server }
+  end
+
   -- My custom handler to watch for different startup modes
   pcall(require, "utils.startup.simple_startup")
   -- Load additional config (skip if running with --noplugin)

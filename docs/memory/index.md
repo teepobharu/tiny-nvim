@@ -56,6 +56,10 @@
 - [rebase-safe-plugin-overrides.md](rebase-safe-plugin-overrides.md) — override patterns that survive upstream rebases
 - [mypath_marker_options.md](mypath_marker_options.md) — path marker config options
 
+## Task Runner
+
+- [overseer.md](overseer.md) — custom actions (duplicate, copy), enhanced render, key mappings
+
 ## Infrastructure
 
 - [nvim-worktree-testing.md](nvim-worktree-testing.md) — NVIM_APPNAME worktree isolation for testing

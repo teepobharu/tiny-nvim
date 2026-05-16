@@ -856,7 +856,7 @@ keymap("n", "<leader>Li", ":check lsp<CR>", { desc = "LSP Info", noremap = true,
 -- In picker: <C-r> restart, <C-x> stop, <CR> show hint
 keymap("n", "<leader>Ll", function()
   require("utils.lsp_setup").lsp_clients_picker()
-end, { desc = "LSP Manager (picker with preview)", noremap = true, silent = true })
+end, { desc = "LSP Manager (restart/stop/disable/enable/pause/resume)", noremap = true, silent = true })
 
 --   # which key migrate .nvim $HOME/.config/nvim/keys/which-key.vim
 keymap("n", "<c-q>", ":q<CR>", { desc = "Close", noremap = true, silent = true })

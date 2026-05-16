@@ -1,6 +1,7 @@
 local M = {}
 local path_utils = require "utils.path"
 local mypath = require "utils.mypath"
+local csharp_lsp_installer = require "utils.csharp_lsp_installer"
 
 -- ═══════════════════════════════════════════════════════════════════════════════
 -- .nvim-config.lua marker-based template system
@@ -23,12 +24,12 @@ local function get_default_config_reference()
 
   local existing_config_newlines = {}
   for line in f:lines() do
-      -- TODO: do not enforce this yet since might require re update every time when not comment
-      -- if line:find "**disableInit" then
-      table.insert(existing_config_newlines, "-- " .. line)
-      -- else
-      --   table.insert(existing_config_newlines, line)
-      -- end
+    -- TODO: do not enforce this yet since might require re update every time when not comment
+    -- if line:find "**disableInit" then
+    table.insert(existing_config_newlines, "-- " .. line)
+    -- else
+    --   table.insert(existing_config_newlines, line)
+    -- end
   end
   f:close()
 
@@ -431,6 +432,30 @@ function M.setup()
     end)
   end, {
     desc = "Regenerate default config reference and reload .nvim-config.lua",
+  })
+
+  vim.api.nvim_create_user_command("CSharpLspInstallInfo", function()
+    csharp_lsp_installer.show_install_info()
+  end, {
+    desc = "Show OmniSharp install/upgrade plan",
+  })
+
+  vim.api.nvim_create_user_command("CSharpLspInstall", function()
+    csharp_lsp_installer.install_latest()
+  end, {
+    desc = "Install OmniSharp from latest release (with confirmation)",
+  })
+
+  vim.api.nvim_create_user_command("CSharpLspUpgrade", function()
+    csharp_lsp_installer.upgrade_latest()
+  end, {
+    desc = "Upgrade OmniSharp to latest release (with confirmation)",
+  })
+
+  vim.api.nvim_create_user_command("CSharpLspOpenReleases", function()
+    csharp_lsp_installer.open_releases_page()
+  end, {
+    desc = "Open OmniSharp releases page",
   })
 end
 

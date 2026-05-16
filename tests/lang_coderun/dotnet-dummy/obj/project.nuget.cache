@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "u454/9W7Rwc=",
+  "success": true,
+  "projectFilePath": "/Users/tharutaipree/dotfiles/.config/nvimwt3a/tests/lang_coderun/dotnet-dummy/dotnet-dummy.csproj",
+  "expectedPackageFiles": [
+    "/Users/tharutaipree/.nuget/packages/microsoft.extensions.dependencyinjection/8.0.1/microsoft.extensions.dependencyinjection.8.0.1.nupkg.sha512",
+    "/Users/tharutaipree/.nuget/packages/microsoft.extensions.dependencyinjection.abstractions/8.0.2/microsoft.extensions.dependencyinjection.abstractions.8.0.2.nupkg.sha512"
+  ],
+  "logs": []
+}
