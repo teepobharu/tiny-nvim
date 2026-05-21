@@ -7,37 +7,16 @@ return {
       -- codespell: ux tool install codespell
       ["*"] = { "cspell", "codespell" },
       -- oxlint: npm install -g oxlint@latest
-      javascript = { "oxlint", "eslint_d" },
-      typescript = { "oxlint", "eslint_d" },
-      javascriptreact = { "oxlint", "eslint_d" },
-      typescriptreact = { "oxlint", "eslint_d" },
+      javascript = { "oxlint" },
+      typescript = { "oxlint" },
+      javascriptreact = { "oxlint" },
+      typescriptreact = { "oxlint" },
     },
-    linters = {
-      eslint_d = {
-        args = {
-          "--no-warn-ignored", -- Ignore warnings, support Eslint 9
-          "--format",
-          "json",
-          "--stdin",
-          "--stdin-filename",
-          function()
-            return vim.api.nvim_buf_get_name(0)
-          end,
-        },
-      },
-    },
+
   },
   config = function(_, opts)
     local lint = require "lint"
     lint.linters_by_ft = opts.linters_by_ft
-
-    -- Ignore issue with missing eslint config file
-    lint.linters.eslint_d = require("lint.util").wrap(lint.linters.eslint_d, function(diagnostic)
-      if diagnostic.message:find "Error: Could not find config file" then
-        return nil
-      end
-      return diagnostic
-    end)
 
     vim.api.nvim_create_autocmd({ "BufWritePost", "BufReadPost", "InsertLeave" }, {
       callback = function()
