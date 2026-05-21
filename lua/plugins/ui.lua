@@ -59,6 +59,46 @@ local function mini_diff_reset_current()
   vim.cmd "normal gHgh"
 end
 
+local function git_blame_line()
+  local buf = vim.api.nvim_get_current_buf()
+  local path = vim.api.nvim_buf_get_name(buf)
+  local lnum = vim.fn.line "."
+  if not vim.fn.isdirectory ".git" then
+    vim.notify("Not a git repository", vim.log.levels.WARN)
+    return
+  end
+  vim.system({ "git", "blame", "-L", lnum .. ",+1", "--line-porcelain", path }, { text = true }, function(obj)
+    if obj.code ~= 0 then
+      vim.notify("git blame failed: " .. (obj.stderr or ""), vim.log.levels.ERROR)
+      return
+    end
+    local info = {}
+    for line in vim.gsplit(obj.stdout, "\n", { plain = true, trimempty = true }) do
+      local key, val = line:match "^(%S+) (.+)$"
+      if key == "author" then
+        info.author = val
+      elseif key == "author-mail" then
+        info.mail = val:match "<(.+)>" or val
+      elseif key == "author-time" then
+        info.time = os.date("%Y-%m-%d %H:%M", tonumber(val))
+      elseif key == "summary" then
+        info.summary = val
+      elseif key == "filename" then
+        info.filename = val
+      end
+    end
+    local commit = obj.stdout:match "^(%x+)"
+    if not commit or commit == "0000000000000000" then
+      vim.notify("Not committed yet", vim.log.levels.INFO)
+      return
+    end
+    vim.notify(
+      string.format(" %s   %s   %s   %s", commit:sub(1, 8), info.author or "?", info.time or "?", info.summary or "?"),
+      vim.log.levels.INFO
+    )
+  end)
+end
+
 return {
   "nvim-lua/plenary.nvim",
   {
@@ -462,6 +502,7 @@ return {
       },
       { "<leader>ghs", mini_diff_apply_current, desc = "Stage Hunk" },
       { "<leader>ghr", mini_diff_reset_current, desc = "Reset Hunk" },
+      { "<leader>gb", git_blame_line, desc = "Git Blame Line" },
     },
     opts = {
       view = {
