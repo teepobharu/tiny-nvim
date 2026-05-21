@@ -744,9 +744,9 @@ Available options:
    - `difft`: Structural diffs
 
 2. LSP Servers:
-   - `eslint`: ESLint language server
+   - `oxlint`: Oxlint = Rust-based linter (ESLint replacement)
    - `lua_ls`: Lua language server
-   - `biome`: Biome = Eslint + Prettier
+   - `biome`: Biome = Linter + Formatter
    - `json`: JSON language server
    - `pyright`: Python language server
    - `gopls`: Go language server
@@ -756,7 +756,7 @@ When prompted, enter your selections as comma-separated values:
 
 ```
 Plugins: no-neck-pain,codecompanion
-LSP: eslint,biome
+LSP: biome
 ```
 
 ### Manual Configuration
@@ -771,13 +771,12 @@ vim.g.lsp_typescript_server = "ts_ls"
 
 -- Enable additional LSP servers
 vim.g.lsp_on_demands = {
-  "eslint",        -- ESLint language server
+  -- Add LSP servers here, e.g., "biome"
 }
 
 -- Enable extra plugins
 vim.g.enable_extra_plugins = {
   "no-neck-pain",  -- Additional UI plugin
-  "nvim-eslint"    -- ESLint integration
 }
 
 -- Note: fff.nvim (file picker) and oil.nvim (file explorer) are always enabled.

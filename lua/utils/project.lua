@@ -98,7 +98,7 @@ vim.g.lsp_typescript_server = "ts_ls" -- or "vtsls"
 
 -- Enable additional LSP servers
 vim.g.lsp_on_demands = {
-    "eslint",
+    "oxlint",
 }
 
 -- Enable extra plugins
@@ -134,7 +134,7 @@ local function create_nvim_config()
     -- Get LSP selection
     vim.ui.input({
       prompt = "Enter LSP servers to enable (comma-separated): ",
-      default = "eslint",
+      default = "oxlint",
     }, function(lsp_input)
       local selected_lsp = {}
       if lsp_input and lsp_input ~= "" then
