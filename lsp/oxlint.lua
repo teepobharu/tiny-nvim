@@ -1,0 +1,27 @@
+return {
+  cmd = { "oxlint", "--lsp" },
+  filetypes = {
+    "javascript",
+    "javascriptreact",
+    "typescript",
+    "typescriptreact",
+    "vue",
+    "svelte",
+    "astro",
+  },
+  root_markers = {
+    "oxlintrc.json",
+    "oxlintrc.jsonc",
+    ".oxlintrc.json",
+    ".oxlintrc.jsonc",
+    "eslint.config.js",
+    "eslint.config.mjs",
+    "eslint.config.cjs",
+    "eslint.config.ts",
+    ".eslintrc",
+    ".eslintrc.js",
+    ".eslintrc.json",
+    ".git",
+  },
+  settings = {},
+}
