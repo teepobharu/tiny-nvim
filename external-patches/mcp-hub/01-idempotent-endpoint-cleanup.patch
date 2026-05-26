@@ -1,0 +1,58 @@
+# Patch: idempotent MCP endpoint cleanup
+# Project: ravitemer/mcp-hub
+# Tested against local fork commit 6a4ce7e, mcp-hub 4.2.1
+#
+# Problem: `/mcp` endpoint cleanup is registered on both `res.close` and
+# `transport.onclose`. Cleanup calls `server.close()`, which can trigger
+# `transport.onclose` again. During hard restarts or mass disconnects this can
+# recurse until `Maximum call stack size exceeded` and spam
+# "'Unknown' client disconnected from MCP HUB" hundreds/thousands of times.
+#
+# Fix: make cleanup idempotent per session. Detach the close handlers before
+# calling `server.close()` so any re-entrant close event returns immediately.
+# The same guard is applied to the lean proxy endpoint.
+
+diff --git i/src/mcp/server.js w/src/mcp/server.js
+--- i/src/mcp/server.js
++++ w/src/mcp/server.js
+@@ -515,11 +515,18 @@
+ 
+     let clientInfo
+ 
++    let cleanedUp = false;
+ 
+     // Setup cleanup on close
+     const cleanup = async () => {
++      if (cleanedUp) {
++        return;
++      }
++      cleanedUp = true;
+       this.clients.delete(sessionId);
++      res.off("close", cleanup);
++      transport.onclose = undefined;
+       try {
+         await server.close();
+       } catch (error) {
+         logger.warn(`Error closing server connected to ${clientInfo?.name ?? "Unknown"}: ${error.message}`);
+diff --git i/src/mcp/proxy.js w/src/mcp/proxy.js
+--- i/src/mcp/proxy.js
++++ w/src/mcp/proxy.js
+@@ -330,9 +330,17 @@
+ 
+     this.clients.set(sessionId, { transport, server });
+ 
+     let clientInfo;
++    let cleanedUp = false;
+     const cleanup = async () => {
++      if (cleanedUp) {
++        return;
++      }
++      cleanedUp = true;
++
+       this.clients.delete(sessionId);
++      res.off("close", cleanup);
++      transport.onclose = undefined;
+       try {
+         await server.close();
+       } catch (error) {
+         logger.warn(

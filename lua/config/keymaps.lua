@@ -146,7 +146,6 @@ map("n", "<leader>ui", vim.show_pos, { desc = "Inspect Pos" })
 map("n", "<leader>uI", "<cmd>InspectTree<cr>", { desc = "Inspect Tree" })
 
 -- Terminal Mappings
-map("t", "<esc><esc>", "<c-\\><c-n>", { desc = "Enter Normal Mode" })
 map("t", "<C-h>", "<cmd>wincmd h<cr>", { desc = "Go to Left Window" })
 map("t", "<C-j>", "<cmd>wincmd j<cr>", { desc = "Go to Lower Window" })
 map("t", "<C-k>", "<cmd>wincmd k<cr>", { desc = "Go to Upper Window" })

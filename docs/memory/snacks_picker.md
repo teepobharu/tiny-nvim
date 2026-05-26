@@ -308,3 +308,32 @@ win = {
 ```
 
 **Rule**: Only define keys in `win.input.keys` (not `win.list.keys` — redundant and can conflict). Use `actions = {}` if you need `(picker, item)` signature directly.
+
+---
+
+### Multi-Select Copy Actions
+
+For picker action handlers, use `picker:selected({ fallback = true })` instead of only
+`item` or `picker:current()` when the action should support marked items. This preserves
+single-item behavior while making keys like `<C-y>`, `Yy`, `Yg`, `Yp`, and `YP` copy all
+selected paths newline-separated. Copy actions should leave the picker open so multiple
+items/formats can be copied in one picker session.
+
+Path actions should resolve relative `item.file` values through `item.cwd` or `picker:cwd()`
+before formatting. Snacks file, grep, and git sources commonly store relative paths plus a
+source cwd; formatting those directly with `:p` can produce the wrong absolute path if the
+picker cwd is not the process cwd.
+
+Current convention:
+
+- `<C-y>` copies git-root-relative paths by default (`copy_path_git_multi`).
+- `YP` is the explicit absolute-path copy action.
+
+---
+
+### LazyGit Log for Selected Explorer Items
+
+`Snacks.lazygit.log_file()` always reads the current buffer path, so it is not enough for
+Snacks explorer rows. Use `utils.snacks_actions.lazygit_log_selected`, resolve the selected
+picker item before closing the picker, then open LazyGit with `args = { "-f", path }` and a
+git-root cwd when available. This works for both file and directory explorer items.

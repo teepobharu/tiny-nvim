@@ -28,6 +28,22 @@ end, {
     return { "colon", "space", "at", "at_caps", "hash" }
   end,
 })
+
+local function open_obsidian_vault_audit(cmd)
+  require("utils.obsidian_vault_audit").pick { scan = not cmd.bang }
+end
+
+vim.api.nvim_create_user_command("ObsidianVaultAudit", open_obsidian_vault_audit, {
+  bang = true,
+  force = true,
+  desc = "Audit Obsidian vault registry/config cleanup with Snacks",
+})
+
+vim.api.nvim_create_user_command("SnacksObsidianVaultAudit", open_obsidian_vault_audit, {
+  bang = true,
+  force = true,
+  desc = "Audit Obsidian vault registry/config cleanup with Snacks",
+})
 -- ===========================
 -- LAZY NVIM ====================
 -- =======================
@@ -511,9 +527,19 @@ function _G.set_toggleterm_keymaps()
   local is_toggleterm = ft == "toggleterm"
   local is_snacks = ft == "snacks_terminal"
   local is_sidekick = ft == "sidekick_terminal"
+  local is_tiny_term = ft == "tiny_term"
   local is_lazygit = bufName:match "lazygit" ~= nil
   -- print([==[_G.set_toggleterm_keymaps bufName:]==], vim.inspect(bufName)) -- __AUTO_GENERATED_PRINT_VAR_END__
   -- print([==[_G.set_toggleterm_keymaps is_lazygit:]==], vim.inspect(is_lazygit)) -- __AUTO_GENERATED_PRINT_VAR_END__
+
+  opts.desc = "Enter normal mode (hjk)"
+  vim.keymap.set("t", "hjk", [[<C-\><C-n>]], opts)
+  pcall(vim.keymap.del, "t", "jk", { buffer = bufnum })
+  pcall(vim.keymap.del, "t", "<Esc><Esc>", { buffer = bufnum })
+  if is_snacks or is_tiny_term then
+    pcall(vim.keymap.del, "t", "<Esc>", { buffer = bufnum })
+  end
+
   if is_lazygit then
     print "Lazygit buffer"
   elseif is_sidekick then
@@ -526,8 +552,6 @@ function _G.set_toggleterm_keymaps()
     -- remove_map_if_exists('<C-j>', 't')
     -- remove_map_if_exists('<C-k>', 't')
   else
-    opts.desc = "Enter normal mode"
-    vim.keymap.set("t", "jk", [[<C-\><C-n>]], opts)
     -- vim.keymap.set("n", "<C-_>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]],
     -- { desc = "Toggle term BF", noremap = true, silent = true })
 
@@ -608,7 +632,6 @@ function _G.set_toggleterm_keymaps()
     elseif is_toggleterm then
       -- print("Toggleterm buffer")
       opts.desc = "Toggle Term in normal mode"
-      -- vim.keymap.set("n", "jk", [[<Cmd>ToggleTerm<CR>]], opts)
       opts.desc = "Toggle Term <num> (press with <n> to open other term)"
       vim.keymap.set("n", "<C-t>", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], opts)
       vim.keymap.set("n", "<localleader>tt", [[<Cmd>exe v:count1 . "ToggleTerm"<CR>]], opts)
@@ -1120,6 +1143,10 @@ keymap({ "n", "v" }, "gGd", function()
     vim.notify("Invalid directory: " .. (dir_path or selected_word or "<nil>"), vim.log.levels.WARN)
   end
 end, { desc = "Open NeoTree dir - select/cursor/file" })
+
+keymap("n", "gGO", function()
+  require("utils.open_external").pick_current()
+end, { desc = "Open current file/dir in external app picker" })
 
 keymap({ "n", "v" }, "gF", function()
   myPathUtil.goto_file_line(false)

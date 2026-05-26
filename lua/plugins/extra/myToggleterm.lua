@@ -4,6 +4,39 @@ local key_g = KeyUtils.key_g
 local key_l = KeyUtils.key_l
 local isSnacksEnable = KeyUtils.isSnackEnabled
 
+local function lazygit_full_float_opts()
+  return {
+    width = math.max(1, vim.o.columns - 2),
+    height = math.max(1, vim.o.lines - vim.o.cmdheight - 3),
+    row = 0,
+    col = 0,
+  }
+end
+
+local function toggle_lazygit_float_size(term)
+  if not (term and term.window and vim.api.nvim_win_is_valid(term.window)) then
+    return
+  end
+  if not term:is_float() then
+    vim.notify("LazyGit size toggle only supports floating toggleterm windows", vim.log.levels.WARN)
+    return
+  end
+
+  term.lazygit_original_float_opts = term.lazygit_original_float_opts or vim.deepcopy(term.float_opts or {})
+  term.lazygit_expanded = not term.lazygit_expanded
+  term.float_opts = term.lazygit_expanded
+    and vim.tbl_extend("force", vim.deepcopy(term.lazygit_original_float_opts), lazygit_full_float_opts())
+    or vim.deepcopy(term.lazygit_original_float_opts)
+  require("toggleterm.ui").update_float(term)
+end
+
+local function set_lazygit_size_keymap(term)
+  local opts = { buffer = term.bufnr, nowait = true, desc = "Toggle LazyGit Size" }
+  vim.keymap.set({ "n", "t" }, "<A-m>", function()
+    toggle_lazygit_float_size(term)
+  end, opts)
+end
+
 function sentSelectedToTerminal()
   local mode = vim.fn.mode()
   if mode == "V" then
@@ -34,8 +67,6 @@ local isToggleCurrentLazyTerm = function(name, termOpts)
         vim.api.nvim_buf_set_keymap(term.bufnr, "n", "<c-q>", "<cmd>close<CR>", { noremap = true, silent = true })
         vim.api.nvim_buf_set_keymap(term.bufnr, "t", "<c-q>", "<cmd>close<CR>", { noremap = true, silent = true })
         vim.api.nvim_buf_set_keymap(term.bufnr, "t", "<c-_>", "<cmd>stopinsert<CR>", { noremap = true, silent = true })
-        -- below will cause lagging since might always need to check within timeout len before executing ?
-        -- vim.api.nvim_buf_set_keymap(term.bufnr, "t", "jk", "<cmd>stopinsert<CR>", { noremap = true, silent = true })
         -- All keys (q) break when type in input prompt a
         -- q will quit like Q
         -- Q already do the job to quit buffer (still work on typing input)
@@ -58,13 +89,10 @@ local isToggleCurrentLazyTerm = function(name, termOpts)
         vim.keymap.set("t", "<c-k>", "<c-k>", { buffer = term.bufnr, nowait = true })
         vim.keymap.set("t", "<c-l>", "<c-l>", { buffer = term.bufnr, nowait = true })
         vim.keymap.set("t", "<esc>", "<esc>", { buffer = term.bufnr, nowait = true })
+        set_lazygit_size_keymap(term)
 
 
         local opts = { buffer = term.bufnr, nowait = true }
-        opts.desc = "normal mode"
-        vim.keymap.set("t", "<ESC><ESC>", function()
-          vim.cmd("stopinsert")
-        end, opts)
         local currDir = lazygitTerm[name].term.direction or "float"
         opts.desc = "Toggle layout all"
         -- vim.keymap.set("t", "<c-\\>", function()

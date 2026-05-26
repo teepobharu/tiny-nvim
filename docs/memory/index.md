@@ -47,6 +47,7 @@
 
 - [neotree.md](neotree.md) — neo-tree config, keybindings, gotchas
 - [oil.md](oil.md) — oil.nvim file manager config and patterns
+- [obsidian.md](obsidian.md) — Obsidian vault registry/config audit and cleanup picker
 - [snacks_picker.md](snacks_picker.md) — snacks.nvim picker config, path copy, session picker, CWD state
 
 ## Keybindings & Config
@@ -62,6 +63,7 @@
 
 ## Infrastructure
 
+- [file-agent-flow.md](file-agent-flow.md) — file-based multi-agent handoff workflow with receiver status watcher
 - [nvim-worktree-testing.md](nvim-worktree-testing.md) — NVIM_APPNAME worktree isolation for testing
 - [sidekick_env_propagation.md](sidekick_env_propagation.md) — environment variable propagation in sidekick sessions
 - [slack-mcp.md](slack-mcp.md) — Slack MCP server setup and integration

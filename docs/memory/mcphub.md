@@ -698,6 +698,236 @@ at most 1 line per unique message (with `×N` badge) instead of 40 identical lin
 
 See `tasks/review/mcphub-log-spam-fix.md` for full investigation and checklist.
 
+### Hard restart cascades with `/mcp` endpoint clients
+
+**Symptom**: `Hard restart failed`, `SSE connection failed with code 18/56`,
+and a burst like:
+
+```text
+Error closing server connected to Unknown: Maximum call stack size exceeded
+'Unknown' client disconnected from MCP HUB ×1279
+```
+
+**Confirmed logic**:
+- `mcphub.nvim` does **not** hard-restart just because another Neovim connects.
+- Startup only posts `/api/hard-restart` when the health check finds the same
+  port is an MCP Hub but either the `mcp-hub` version differs, the workspace
+  cache has no matching hub entry, or the cached `config_files` differ from the
+  current context. Manual `R` in the UI also uses `/api/hard-restart`.
+- On `mcphub.nvim` v6.2.0 (`163b3ad`), setup-time version validation accepts
+  compatible patch versions (required `4.2.0`, running `4.2.1`), but
+  `check_server()` used exact string equality. Patch
+  `patches/mcphub.nvim/06-compatible-health-version-check.patch` fixes that by
+  using `validation.validate_version()` for `/api/health` responses.
+- Patch `patches/mcphub.nvim/07-confirm-hard-restart.patch` makes automatic
+  startup hard restarts explicit. Config/cache mismatch prompts default to
+  **connect to existing**; version mismatch defaults to cancel unless the user
+  chooses hard restart. Manual `R` is explicit user intent and does not prompt.
+- `/api/hard-restart` in `mcp-hub` used to set state to `restarting`, emit
+  `SIGTERM`, then try to return JSON. If the process closed before curl
+  received JSON, curl reported exit 56 (`Recv failure: Connection reset by
+  peer`) even though shutdown had started. External patch
+  `external-patches/mcp-hub/02-hard-restart-response-before-shutdown.patch`
+  returns JSON first, then emits `SIGTERM` from the response `finish` hook.
+
+**Extra bug exposed by restarts**: the `mcp-hub` `/mcp` endpoint cleanup path in
+`src/mcp/server.js` attaches the same cleanup function to both `res.close` and
+`transport.onclose`; cleanup calls `server.close()`. During mass disconnects
+this can re-enter cleanup and produce `Maximum call stack size exceeded`, then
+repeat the `'Unknown' client disconnected` log many times.
+
+**Local prevention patch**:
+`external-patches/mcp-hub/01-idempotent-endpoint-cleanup.patch` adds a
+per-session cleanup guard and detaches both close handlers before calling
+`server.close()`. It covers both `src/mcp/server.js` (`/mcp`) and
+`src/mcp/proxy.js` (`/mcp-lean`). The patch applies cleanly to the local
+`~/projects/mcp-hub` fork; rebuild `dist/cli.js` after applying because
+`myAi.lua` prefers the dist CLI when it exists.
+
+**Avoidance**:
+- Keep profiles and workspace contexts on distinct ports. Current config uses
+  main global `37373`, worktree global `37374`, and main workspace `47474`.
+- Do not share one fixed workspace port across multiple different workspace
+  config roots. Either disable workspace mode for stable CLI-agent ports, or
+  let workspace mode choose/hash per-workspace ports when project-specific
+  `.mcphub/servers.json` isolation matters.
+- Avoid manual `R` while other Neovim/CLI clients are connected unless the
+  goal is to replace the process. Manual `R` intentionally does not prompt; use
+  server-level refresh/reconnect for normal MCP server capability changes.
+- For the `Maximum call stack` issue, patch `mcp-hub` endpoint cleanup with an
+  idempotent guard so close handlers run once per client connection.
+
+### MCPHub logs: source and startup cost
+
+**Log source**: lines shown in the MCPHub Logs tab are mostly server-side
+`mcp-hub` logs relayed over `/api/events`, not Neovim plugin logs.
+
+- `Server 'query-assist' requires authorization` is emitted by
+  `MCPConnection:_handleUnauthorizedConnection()` in the Node hub when a remote
+  MCP server returns an auth challenge.
+- `<server> stderr: ... ExperimentalWarning` is stderr from the child stdio MCP
+  server process, captured by `MCPConnection:_createStdioTransport()` and
+  rebroadcast by the hub logger. The Node 23/npm CommonJS/ESM warning is from
+  the spawned `npx` process, not from mcphub.nvim.
+
+**Startup cost**:
+
+- `mcp-hub` constructs a connection object for every configured server, but
+  disabled servers return early in `MCPConnection.connect()` before env
+  resolution or process spawn. Their cost should be config parsing plus object
+  creation.
+- Slow startup comes from enabled servers: stdio servers spawn `npx` packages and
+  fetch capabilities, while remote HTTP/SSE servers perform auth/connect checks.
+  A project `.mcphub/servers.json` can override a global disabled server; in this
+  config, project-local `tavily` is enabled even if many global servers are
+  disabled.
+- Lowest-risk optimization is to keep heavy servers disabled by default and use
+  `auto_toggle_mcp_servers` or the UI to enable on demand. Consequence: first
+  use pays the startup delay and tools are unavailable until the server connects.
+- Using Node LTS instead of Node 23 can remove the npm experimental warnings.
+  Filtering stderr in the hub is possible, but it risks hiding real MCP server
+  startup errors.
+
+### Main view action keys stopped working after endpoint/agent patch
+
+**Symptom**: In the MCPHub main view, `l` still expands/opens rows, but actions
+such as `t` toggle and `e` edit stop working on server, native-server, tool,
+resource, or prompt rows.
+
+**Cause**: The endpoint/agent registry patch originally managed row-specific
+actions by deleting buffer-local mappings on every cursor move:
+`e`, `t`, `d`, `a`, `A`, `r`, `R`, plus endpoint-only keys. Those keys are also
+normal main-view actions. When the cursor moved to a non endpoint/agent row, the
+normal mappings were gone and were not recreated.
+
+**Fix**: `patches/mcphub.nvim/08-main-view-keymap-dispatch.patch` keeps core
+main-view keymaps registered and dispatches them by current row type.
+Endpoint-only actions (`s`, `i`, `u`, `y`) are silent row-aware mappings
+owned by the main view, so cursor movement no longer deletes keymaps.
+
+**Server build dependency**: none. This fix is client-side only and does not
+require rebuilding `~/projects/mcp-hub/dist/cli.js`.
+
+### Endpoint inspector auth and copy keys
+
+**Symptom**: Pressing `e` on an endpoint row can open MCP Inspector, but the
+Inspector UI cannot call its proxy because MCP Inspector 0.21+ requires a proxy
+session token. Endpoint `E` also duplicates config editing already available via
+the MCPHub config view (`C`, then `e`).
+
+**Fix**:
+
+- `patches/mcphub.nvim/09-endpoint-inspector-auth-copy.patch` removes endpoint
+  `E` and endpoint hover hints for `E:cfg`.
+- `lua/utils/mcp_inspector.lua` now honors `MCP_PROXY_AUTH_TOKEN` or creates
+  `~/.config/mcp-inspector/proxy-token`, starts Inspector with that token, and
+  opens the browser URL with `MCP_PROXY_AUTH_TOKEN=<token>`.
+- The helper sets `MCP_AUTO_OPEN_ENABLED=false` so Neovim controls the browser
+  open instead of racing Inspector's own auto-open.
+- `y` copies the current MCP row name; endpoint rows keep `y` as URL copy.
+- `Y` copies the full row path. For tools this is `server_name .. "_" .. tool`,
+  for example `gitlab_mr_get_merge_request`.
+
+**Endpoint tool execution in UI**: executing the tools exposed by `/mcp` or
+`/mcp-lean` inside the MCPHub main view is possible, but it is a separate
+feature. Those endpoint rows are MCP client entrypoints, not normal hub-managed
+server rows. The low-risk path is to use `e` to open MCP Inspector for endpoint
+execution; a native tab/context switch would need an endpoint-client session and
+capability view for `/mcp` or `/mcp-lean`.
+
+**Server build dependency**: none. This fix is client-side plus local helper
+behavior only and does not require rebuilding `~/projects/mcp-hub/dist/cli.js`.
+
+**Suggested commit title**:
+`mcphub: auth inspector endpoint links and add copy actions`.
+
+### Configurable CLI agent profiles
+
+**Use case**: Show and manage more than one profile for the same CLI agent. For
+example, the alternate Claude profile at `/Users/tharutaipree/.claude-agd` has
+its own `settings.json` and `.claude.json`, and `claude mcp ...` can target it
+by running with `CLAUDE_CONFIG_DIR=/Users/tharutaipree/.claude-agd`.
+
+**Fix**:
+
+- `patches/mcphub.nvim/10-configurable-agent-profiles.patch` makes the CLI
+  Agents panel key rows by profile id instead of executable name.
+- `lua/utils/mcphub_agents.lua` supports preset-backed profiles. Existing
+  `{ name = "claude" }` configs still work.
+- `claude-agd` is configured in `lua/plugins/extra/myAi.lua` as:
+
+```lua
+{
+  id = "claude-agd",
+  preset = "claude",
+  label = "claude-agd",
+  command = "claude",
+  config_dir = "/Users/tharutaipree/.claude-agd",
+  config_path = "/Users/tharutaipree/.claude-agd/settings.json",
+  binding_flat = "mcphub",
+  binding_lean = "mcphub-lean",
+  scopes = { "user" },
+}
+```
+
+- `a`/`A`/`t`/`d` act only on the selected profile row.
+- Endpoint-row `r`/`u` use `ui.agent_registry.default_agent_id` and
+  `default_scope`, so the default target remains explicit.
+- `e` on `claude-agd` opens `/Users/tharutaipree/.claude-agd/settings.json`;
+  MCP list/add/remove still go through the Claude CLI with `CLAUDE_CONFIG_DIR`.
+
+**Server build dependency**: none. This fix is client-side plus local helper
+behavior only and does not require rebuilding `~/projects/mcp-hub/dist/cli.js`.
+
+**Suggested commit title**:
+`mcphub: support configurable CLI agent profiles`.
+
+### Active capability copy and token estimates
+
+**Copy behavior**:
+
+- In an active tool or prompt view, `y` on an input row copies the current field
+  value.
+- `y` on the submit row copies the JSON form payload without running validation
+  first. Tool values are schema-converted when valid and left raw when invalid,
+  so it is useful for debugging partially filled forms.
+- `y` on any rendered text result line copies the whole current result, not just
+  the visible line under the cursor. The same result tracking applies to tool,
+  prompt, resource, and resource-template outputs.
+
+**Token estimates**:
+
+- `patches/mcphub.nvim/11-copy-payload-token-counts.patch` shows approximate
+  `~Nt` token counts on connected server rows and expanded tool rows.
+- Server counts estimate `mcphub.utils.prompt.server_to_text(server)` after
+  applying `disabled_tools`, `removed_tools`, and env regex tool filters.
+- Tool counts estimate the tool description plus rendered input schema only
+  while the tool is visible to prompts.
+- Counts use the existing `utils.calculate_tokens()` approximation
+  (`ceil(chars / 4)`), so they are prompt-size hints, not exact tokenizer
+  counts.
+- Display is controlled from `lua/plugins/extra/myAi.lua`:
+
+```lua
+token_counts = {
+  enabled = true,
+  servers = true,
+  tools = true,
+}
+```
+
+**MCP lean execution in UI**: still future work. `/mcp-lean` exposes the lean
+meta-tools as an endpoint client surface, not as normal hub-managed server rows.
+The current low-risk path remains endpoint `e` to open MCP Inspector. Native
+execution inside MCPHub would need a separate endpoint-client capability context
+or a tab that treats `/mcp` and `/mcp-lean` as client sessions.
+
+**Server build dependency**: none. This fix is client-side only and does not
+require rebuilding `~/projects/mcp-hub/dist/cli.js`.
+
+**Suggested commit title**:
+`mcphub: copy active payloads and show token estimates`.
+
 ### Environment variables not loaded
 
 Use `global_env` in mcphub.nvim config:

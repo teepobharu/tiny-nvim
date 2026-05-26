@@ -11,6 +11,12 @@ local key_g = KeyUtils.key_g
 
 local isSnackEnabled = KeyUtils.isSnackEnabled
 
+local function copy_path_to_registers(path)
+  vim.fn.setreg('"', path, "c")
+  pcall(vim.fn.setreg, "+", path, "c")
+  pcall(vim.fn.setreg, "*", path, "c")
+end
+
 function openGitRemote(state)
   local gitUtils = require "utils.git"
   local node = state.tree:get_node()
@@ -235,6 +241,8 @@ return {
                 end,
                 desc = "Open with System Application",
               },
+              ["<C-o>"] = "open_external",
+              ["<leader>gf"] = "lazygit_log_path",
               ["P"] = { "toggle_preview", config = { use_float = false } },
               ["X"] = {
                 function()
@@ -303,6 +311,14 @@ return {
         {
           commands = {
             openGitRemote = openGitRemote,
+            open_external = function(state)
+              local node = state.tree:get_node()
+              require("utils.open_external").pick(node:get_id())
+            end,
+            lazygit_log_path = function(state)
+              local node = state.tree:get_node()
+              require("utils.snacks_actions").open_lazygit_log_path(node:get_id())
+            end,
             copy_selector = function(state)
               local node = state.tree:get_node()
               local filepath = node:get_id()
@@ -333,13 +349,13 @@ return {
                   local i = tonumber(choice:sub(1, 1))
                   if i then
                     local result = results[i]
-                    vim.fn.setreg("+", result)
+                    copy_path_to_registers(result)
                     vim.notify("Copied: " .. result .. " to vim clipboard")
                   else
                     vim.notify "Invalid selection"
                   end
                 else
-                  vim.fn.setreg("+", results[4])
+                  copy_path_to_registers(results[4])
                   vim.notify("Copied: " .. results[4] .. " to vim clipbard by default")
                 end
               end)
@@ -348,13 +364,13 @@ return {
               local node = state.tree:get_node()
               local filepath = node:get_id()
               local relative_path = vim.fn.fnamemodify(filepath, ":.")
-              vim.fn.setreg('"', relative_path)
+              copy_path_to_registers(relative_path)
               vim.notify("Copied: " .. relative_path, vim.log.levels.INFO)
             end,
             copy_abs_file = function(state)
               local node = state.tree:get_node()
               local filepath = node:get_id()
-              vim.fn.setreg('"', filepath)
+              copy_path_to_registers(filepath)
               vim.notify("Copied: " .. filepath, vim.log.levels.INFO)
             end,
             telescope_livegrep_cwd = function(state)
@@ -503,12 +519,13 @@ return {
                 ["<leader>/"] = "snacks_grep",
                 ["<leader>f"] = "snacks_find_files",
                 ["<tab>"] = "toggle_node",
+                ["-"] = "navigate_up",
 
                 ["Y"] = {
                   function(state)
                     local node = state.tree:get_node()
                     local path = node:get_id()
-                    vim.fn.setreg("+", path, "c")
+                    copy_path_to_registers(path)
                   end,
                   desc = "copy_abs_file clipboard",
                 },
@@ -519,6 +536,8 @@ return {
                   end,
                   desc = "Open with System Application",
                 },
+                ["<C-o>"] = "open_external",
+                ["<leader>gf"] = "lazygit_log_path",
                 ["P"] = { "toggle_preview", config = { use_float = false } },
                 -- custom binding
                 ["YY"] = "copy_selector",

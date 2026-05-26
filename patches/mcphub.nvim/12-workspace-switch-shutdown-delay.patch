@@ -1,0 +1,93 @@
+diff --git c/lua/mcphub/hub.lua w/lua/mcphub/hub.lua
+index 2d4d117..6949488 100644
+--- c/lua/mcphub/hub.lua
++++ w/lua/mcphub/hub.lua
+@@ -523,25 +523,65 @@ function MCPHub:handle_directory_change()
+         return
+     end
+ 
+-    -- Check if we need to switch hubs
+-    local needs_switch = false
+-    local reason = ""
++    -- Cancel any pending switch — new resolution is the new ground truth
++    if self._pending_switch_timer then
++        pcall(self._pending_switch_timer.stop, self._pending_switch_timer)
++        pcall(self._pending_switch_timer.close, self._pending_switch_timer)
++        self._pending_switch_timer = nil
++    end
+ 
+-    if tostring(new_context.port) ~= tostring(current_context.port) then
+-        needs_switch = true
+-        reason = string.format("port change (%s -> %s)", current_context.port, new_context.port)
++    if tostring(new_context.port) == tostring(current_context.port) then
++        log.debug("No hub switch needed - context unchanged")
++        return
+     end
+ 
+-    if needs_switch then
+-        log.debug("Switching hub due to: " .. reason)
+-        -- self:restart(nil, reason)
++    -- Different port: defer the switch by shutdown_delay so the previous workspace
++    -- hub stays usable during quick buffer hops. The mcp-hub server was started with
++    -- --shutdown-delay matching this value, so it stays alive over the same window.
++    local delay = tonumber(self.shutdown_delay) or 0
++    if delay <= 0 then
++        log.debug("Switching hub immediately (no shutdown_delay configured)")
+         self:stop_sse()
+         vim.schedule(function()
+             self:start()
+         end)
+-    else
+-        log.debug("No hub switch needed - context unchanged")
++        return
++    end
++
++    log.debug(string.format("Deferring workspace hub switch %s -> %s by %dms",
++        current_context.port, new_context.port, delay))
++
++    local timer = vim.uv.new_timer()
++    if not timer then
++        log.warn("Failed to create timer for workspace hub switch, switching immediately")
++        self:stop_sse()
++        vim.schedule(function()
++            self:start()
++        end)
++        return
+     end
++    self._pending_switch_timer = timer
++    timer:start(delay, 0, vim.schedule_wrap(function()
++        pcall(timer.stop, timer)
++        pcall(timer.close, timer)
++        if self._pending_switch_timer == timer then
++            self._pending_switch_timer = nil
++        end
++        -- Re-resolve at fire time — user may have moved back
++        local final_ctx = self:resolve_context()
++        if not final_ctx then
++            return
++        end
++        local cur = State.current_hub
++        if cur and tostring(final_ctx.port) == tostring(cur.port) then
++            log.debug("Hub switch cancelled — already on correct hub")
++            return
++        end
++        self:stop_sse()
++        vim.schedule(function()
++            self:start()
++        end)
++    end))
+ end
+ 
+ function MCPHub:handle_hub_ready()
+@@ -557,6 +597,11 @@ function MCPHub:handle_hub_ready()
+ end
+ 
+ function MCPHub:_clean_up()
++    if self._pending_switch_timer then
++        pcall(self._pending_switch_timer.stop, self._pending_switch_timer)
++        pcall(self._pending_switch_timer.close, self._pending_switch_timer)
++        self._pending_switch_timer = nil
++    end
+     self.is_owner = false
+     self.ready = false
+     self.is_starting = false

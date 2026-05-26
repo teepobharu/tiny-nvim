@@ -272,6 +272,25 @@ return {
         lazygit = {
           width = 0.8,
           height = 0.8,
+          keys = {
+            toggle_size = {
+              "<A-m>",
+              function(win)
+                win.lazygit_original_size = win.lazygit_original_size
+                  or { width = win.opts.width, height = win.opts.height, row = win.opts.row, col = win.opts.col }
+                win.lazygit_expanded = not win.lazygit_expanded
+                local size = win.lazygit_expanded and { width = 0, height = 0, row = 0, col = 0 }
+                  or win.lazygit_original_size
+                win.opts.width = size.width
+                win.opts.height = size.height
+                win.opts.row = size.row
+                win.opts.col = size.col
+                win:update()
+              end,
+              mode = { "n", "t" },
+              desc = "Toggle LazyGit Size",
+            },
+          },
         },
       },
       -- Learn this tip from LazyVim

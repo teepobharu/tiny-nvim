@@ -504,78 +504,217 @@ end
 
 local path_utils = require "utils.path"
 
---- Picker action: Copy relative path to previous/active buffer
-function M.copy_path_relative_buffer(picker, item)
-  local file_path, _, _ = get_item_path(item or picker:current())
-  if not file_path then
-    vim.notify("No file path found", vim.log.levels.WARN)
-    return
+local function get_picker_cwd(picker)
+  if picker and type(picker.cwd) == "function" then
+    local ok, cwd = pcall(function()
+      return picker:cwd()
+    end)
+    if ok and cwd and cwd ~= "" then
+      return cwd
+    end
   end
-
-  local prev_buf = vim.api.nvim_buf_get_name(vim.fn.bufnr "#")
-  local current_buf = vim.api.nvim_buf_get_name(0)
-  local ref_buf_path = (prev_buf ~= "" and prev_buf) or current_buf
-
-  local rel_path = path_utils.get_relative_path_with_parent(file_path, ref_buf_path)
-  if copy_to_clipboard(rel_path, "relative path (to buffer)") then
-    picker:close()
-  end
+  return vim.fn.getcwd(0)
 end
 
---- Picker action: Copy relative path to git root
-function M.copy_path_relative_git(picker, item)
-  local file_path, _, _ = get_item_path(item or picker:current())
-  if not file_path then
-    vim.notify("No file path found", vim.log.levels.WARN)
-    return
+local function get_selected_items(picker, item)
+  if picker and type(picker.selected) == "function" then
+    local ok, selected = pcall(function()
+      return picker:selected { fallback = true }
+    end)
+    if ok and selected and #selected > 0 and selected[1] then
+      return selected
+    end
   end
 
-  local git_root = Snacks.git.get_root()
-  if not git_root then
-    vim.notify("Not in a git repository", vim.log.levels.WARN)
-    return
+  if item then
+    return { item }
   end
 
-  local rel_path = file_path:gsub("^" .. vim.pesc(git_root) .. "/?", "")
-  if copy_to_clipboard(rel_path, "relative path (to git root)") then
-    picker:close()
+  if picker and type(picker.current) == "function" then
+    local ok, current = pcall(function()
+      return picker:current()
+    end)
+    if ok and current then
+      return { current }
+    end
   end
+
+  return {}
 end
 
---- Picker action: Copy relative path to current CWD
-function M.copy_path_relative_cwd(picker, item)
-  local file_path, _, _ = get_item_path(item or picker:current())
-  if not file_path then
-    vim.notify("No file path found", vim.log.levels.WARN)
+local function to_absolute_path(file_path, item, picker)
+  if not file_path or file_path == "" then
+    return nil
+  end
+
+  if file_path:match "^/" or file_path:match "^~" then
+    return vim.fn.fnamemodify(file_path, ":p")
+  end
+
+  local cwd = (item and item.cwd) or get_picker_cwd(picker)
+  return vim.fn.fnamemodify(cwd .. "/" .. file_path, ":p")
+end
+
+local function normalize_dir(dir)
+  if not dir or dir == "" then
+    return nil
+  end
+  return vim.fn.fnamemodify(dir, ":p"):gsub("/$", "")
+end
+
+local function relative_to_dir(target_path, base_dir)
+  local target = vim.fn.fnamemodify(target_path, ":p"):gsub("/$", "")
+  local base = normalize_dir(base_dir or vim.fn.getcwd(0))
+  if not base or base == "" then
+    return target
+  end
+
+  if target == base then
+    return "."
+  end
+
+  local target_parts = vim.split(target, "/", { plain = true })
+  local base_parts = vim.split(base, "/", { plain = true })
+  local common_len = 0
+  for i = 1, math.min(#target_parts, #base_parts) do
+    if target_parts[i] ~= base_parts[i] then
+      break
+    end
+    common_len = i
+  end
+
+  local rel_parts = {}
+  for i = common_len + 1, #base_parts do
+    if base_parts[i] ~= "" then
+      table.insert(rel_parts, "..")
+    end
+  end
+  for i = common_len + 1, #target_parts do
+    if target_parts[i] ~= "" then
+      table.insert(rel_parts, target_parts[i])
+    end
+  end
+
+  return #rel_parts > 0 and table.concat(rel_parts, "/") or "."
+end
+
+local function get_picker_git_root(picker)
+  local cwd = get_picker_cwd(picker)
+
+  local ok, root = pcall(function()
+    return Snacks.git.get_root(cwd)
+  end)
+  if ok and root and root ~= "" then
+    return normalize_dir(root)
+  end
+
+  ok, root = pcall(path_utils.get_git_root)
+  if ok and root and root ~= "" then
+    return normalize_dir(root)
+  end
+
+  return nil
+end
+
+local function get_lazygit_log_context(file_path, item, picker)
+  local abs_path = to_absolute_path(file_path, item, picker)
+  if not abs_path then
+    return nil
+  end
+
+  abs_path = vim.fn.fnamemodify(abs_path, ":p"):gsub("/$", "")
+  local stat = vim.uv.fs_stat(abs_path)
+  local is_dir = (item and item.dir) or (stat and stat.type == "directory")
+  local start_dir = is_dir and abs_path or vim.fn.fnamemodify(abs_path, ":h")
+  local cwd = start_dir
+  local filter_path = abs_path
+
+  local ok, git_root = pcall(function()
+    return Snacks.git.get_root(start_dir)
+  end)
+  git_root = ok and git_root and normalize_dir(git_root) or nil
+
+  if git_root then
+    cwd = git_root
+    if abs_path == git_root then
+      filter_path = "."
+    elseif abs_path:sub(1, #git_root + 1) == git_root .. "/" then
+      filter_path = abs_path:sub(#git_root + 2)
+    end
+  end
+
+  return {
+    abs_path = abs_path,
+    cwd = cwd,
+    filter_path = filter_path,
+  }
+end
+
+function M.open_lazygit_log_path(file_path, opts)
+  opts = opts or {}
+  local ctx = get_lazygit_log_context(file_path, opts.item, opts.picker)
+  if not ctx then
+    vim.notify("No file or directory selected", vim.log.levels.WARN)
     return
   end
 
-  local rel_path = vim.fn.fnamemodify(file_path, ":.")
-  if copy_to_clipboard(rel_path, "relative path (to cwd)") then
-    picker:close()
+  local snacks = Snacks
+  if not snacks then
+    local ok
+    ok, snacks = pcall(require, "snacks")
+    if not ok then
+      vim.notify("Snacks is not available", vim.log.levels.WARN)
+      return
+    end
   end
+
+  snacks.lazygit({
+    args = { "-f", ctx.filter_path },
+    cwd = ctx.cwd,
+  })
 end
 
---- Picker action: Copy absolute path
-function M.copy_path_absolute(picker, item)
-  local file_path, _, _ = get_item_path(item or picker:current())
+function M.lazygit_log_selected(picker, item)
+  local selected = get_selected_items(picker, item)
+  local selected_item = selected[1]
+  local file_path = selected_item and get_item_path(selected_item) or nil
   if not file_path then
-    vim.notify("No file path found", vim.log.levels.WARN)
+    vim.notify("No file or directory selected", vim.log.levels.WARN)
     return
   end
 
-  local abs_path = vim.fn.fnamemodify(file_path, ":p")
-  if copy_to_clipboard(abs_path, "absolute path") then
+  local abs_path = to_absolute_path(file_path, selected_item, picker)
+  if picker and type(picker.close) == "function" then
     picker:close()
   end
+  M.open_lazygit_log_path(abs_path, { item = selected_item })
 end
 
---- Picker action: Copy absolute path(s) — supports multi-selection.
---- With no selection uses the current item. With multi-select copies all paths
---- newline-separated. Bound to <C-y> across file/buffer/git pickers.
-function M.copy_path_abs_multi(picker, _item)
-  local selected = picker:selected { fallback = true }
-  if not selected or #selected == 0 then
+local function make_git_relative_path(file_path, item, picker, git_root)
+  local abs_path = to_absolute_path(file_path, item, picker)
+  if not abs_path then
+    return nil
+  end
+
+  local root = normalize_dir(git_root)
+  local normalized_abs = vim.fn.fnamemodify(abs_path, ":p"):gsub("/$", "")
+  if root and normalized_abs == root then
+    return "."
+  end
+  if root and normalized_abs:sub(1, #root + 1) == root .. "/" then
+    return normalized_abs:sub(#root + 2)
+  end
+
+  -- Avoid surprising absolute-path output for files outside the current git root.
+  if not (file_path:match "^/" or file_path:match "^~") then
+    return file_path:gsub("^%./", "")
+  end
+  return relative_to_dir(abs_path, vim.fn.getcwd(0))
+end
+
+local function copy_selected_paths(picker, item, opts)
+  local selected = get_selected_items(picker, item)
+  if #selected == 0 then
     vim.notify("No item under cursor", vim.log.levels.WARN)
     return
   end
@@ -583,22 +722,90 @@ function M.copy_path_abs_multi(picker, _item)
   local paths = {}
   for _, sel_item in ipairs(selected) do
     local file_path = get_item_path(sel_item)
-    if file_path and file_path ~= "" then
-      table.insert(paths, vim.fn.fnamemodify(file_path, ":p"))
+    local result = file_path and opts.format(file_path, sel_item, picker) or nil
+    if result and result ~= "" then
+      table.insert(paths, result)
     end
   end
 
   if #paths == 0 then
-    vim.notify("No file path found in selection", vim.log.levels.WARN)
+    vim.notify(opts.empty_message or "No file path found in selection", vim.log.levels.WARN)
     return
   end
 
   local result = table.concat(paths, "\n")
-  if copy_to_clipboard(result, "absolute path") then
-    local label = #paths == 1 and vim.fn.fnamemodify(paths[1], ":~") or string.format("%d paths", #paths)
-    vim.notify(string.format("Copied: %s", label), vim.log.levels.INFO)
-    picker:close()
+  if copy_to_clipboard(result, opts.label) then
+    local detail = #paths == 1 and paths[1] or string.format("%d paths", #paths)
+    vim.notify(string.format("Copied %s: %s", opts.label, detail), vim.log.levels.INFO)
   end
+end
+
+--- Picker action: Copy relative path to previous/active buffer
+function M.copy_path_relative_buffer(picker, item)
+  local prev_buf = vim.api.nvim_buf_get_name(vim.fn.bufnr "#")
+  local current_buf = vim.api.nvim_buf_get_name(0)
+  local ref_buf_path = (prev_buf ~= "" and prev_buf) or current_buf
+
+  copy_selected_paths(picker, item, {
+    label = "relative path (to buffer)",
+    format = function(file_path, sel_item)
+      local abs_path = to_absolute_path(file_path, sel_item, picker)
+      return path_utils.get_relative_path_with_parent(abs_path, ref_buf_path)
+    end,
+  })
+end
+
+--- Picker action: Copy relative path to git root
+function M.copy_path_relative_git(picker, item)
+  local git_root = get_picker_git_root(picker)
+  if not git_root then
+    vim.notify("Not in a git repository", vim.log.levels.WARN)
+    return
+  end
+
+  copy_selected_paths(picker, item, {
+    label = "git path",
+    format = function(file_path, sel_item)
+      return make_git_relative_path(file_path, sel_item, picker, git_root)
+    end,
+  })
+end
+
+--- Picker action: Copy relative path to current CWD
+function M.copy_path_relative_cwd(picker, item)
+  copy_selected_paths(picker, item, {
+    label = "relative path (to cwd)",
+    format = function(file_path, sel_item)
+      local abs_path = to_absolute_path(file_path, sel_item, picker)
+      if not abs_path then
+        return nil
+      end
+      return relative_to_dir(abs_path, vim.fn.getcwd(0))
+    end,
+  })
+end
+
+--- Picker action: Copy absolute path
+function M.copy_path_absolute(picker, item)
+  copy_selected_paths(picker, item, {
+    label = "absolute path",
+    format = function(file_path, sel_item)
+      return to_absolute_path(file_path, sel_item, picker)
+    end,
+  })
+end
+
+--- Picker action: Copy git-root relative path(s) - supports multi-selection.
+--- With no selection uses the current item. With multi-select copies all paths
+--- newline-separated. Bound to <C-y> across file/buffer/git pickers.
+function M.copy_path_git_multi(picker, item)
+  M.copy_path_relative_git(picker, item)
+end
+
+--- Picker action: Copy absolute path(s) - supports multi-selection.
+--- Kept for explicit absolute-path mappings and compatibility.
+function M.copy_path_abs_multi(picker, item)
+  M.copy_path_absolute(picker, item)
 end
 
 --- Picker action: Open sub-picker to choose path/code-ref format with preview.
@@ -2023,6 +2230,7 @@ M.path_copy_actions = {
   copy_path_relative_git = M.copy_path_relative_git,
   copy_path_relative_cwd = M.copy_path_relative_cwd,
   copy_path_absolute = M.copy_path_absolute,
+  copy_path_git_multi = M.copy_path_git_multi,
   copy_path_abs_multi = M.copy_path_abs_multi,
   copy_path_select = M.copy_path_select,
 }

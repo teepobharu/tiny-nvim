@@ -1,0 +1,32 @@
+# Patch: respond before hard restart shutdown
+# Project: ravitemer/mcp-hub
+# Tested against local fork commit 6a4ce7e, mcp-hub 4.2.1
+#
+# Problem: `/api/hard-restart` emitted SIGTERM before returning JSON. If the
+# process exited before curl received the response, mcphub.nvim surfaced curl
+# error 56 (`Recv failure: Connection reset by peer`) as "Hard restart failed"
+# even though shutdown had started.
+#
+# Fix: set hub state to restarting, register a response `finish` hook, return
+# JSON, then emit SIGTERM on the next tick after the response is flushed.
+
+diff --git i/src/server.js w/src/server.js
+--- i/src/server.js
++++ w/src/server.js
+@@ -654,9 +654,14 @@ registerRoute("POST", "/hard-restart", "Hard Restart MCP Hub", async (req, res) => {
+   try {
+-
++    let shouldShutdown = false;
+     if (serviceManager.mcpHub) {
+       serviceManager.setState(HubState.RESTARTING)
+-      process.emit('SIGTERM')
++      shouldShutdown = true;
+     }
++    if (shouldShutdown) {
++      res.once("finish", () => {
++        setImmediate(() => process.emit('SIGTERM'));
++      });
++    }
+     res.json({
+       status: "ok",
+       timestamp: new Date().toISOString(),

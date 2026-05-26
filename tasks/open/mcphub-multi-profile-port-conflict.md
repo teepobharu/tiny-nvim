@@ -3,7 +3,7 @@ title: "MCPHub multi-profile port conflict causes SIGTERM and bulk disconnects"
 status: open
 priority: high
 created: 2026-03-25
-updated: 2026-03-25
+updated: 2026-05-21
 related:
   - [MCPHub config](lua/plugins/extra/myAi.lua)
   - [MCPHub memory doc](docs/memory/mcphub.md)
@@ -26,7 +26,30 @@ Fix MCPHub port conflicts when two Neovim profiles (main `nvim3_jelly_tinynvim` 
 
 ## Context
 
-### Current Config (`myAi.lua:256-274`, identical in both profiles)
+### Current Status (2026-05-21)
+
+The exact main-vs-worktree fixed-workspace-port conflict below has been
+partially mitigated in [myAi.lua](lua/plugins/extra/myAi.lua): main uses global
+port `37373`, worktree uses global port `37374`, and worktree workspace mode is
+disabled. Main workspace mode still uses fixed workspace port `47474`, so two
+main-profile Neovim instances in different workspace config roots can still
+force a config mismatch on the same port.
+
+The `Maximum call stack size exceeded` / `'Unknown' client disconnected ×N`
+burst is now confirmed as an additional `mcp-hub` endpoint cleanup issue:
+`src/mcp/server.js` attaches the same cleanup function to both `res.close` and
+`transport.onclose`; cleanup calls `server.close()`, so mass disconnects can
+re-enter cleanup. See [MCPHub memory](docs/memory/mcphub.md).
+Added [mcp-hub patch 01](patches/mcp-hub/01-idempotent-endpoint-cleanup.patch)
+to make endpoint cleanup idempotent for both `/mcp` and `/mcp-lean`.
+
+Also confirmed: `mcphub.nvim` v6.2.0 accepted local `mcp-hub` `4.2.1` during
+setup, then treated the same running hub as a mismatch during `check_server()`
+because the health check used exact equality against required string `4.2.0`.
+Added [patch 06](patches/mcphub.nvim/06-compatible-health-version-check.patch)
+to reuse the existing semver-compatible validator.
+
+### Historical Config (`myAi.lua:256-274`, identical in both profiles)
 
 ```lua
 opts = {

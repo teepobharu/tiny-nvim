@@ -1192,11 +1192,17 @@ M.snacks_common_actions = {
   copy_path_absolute = function(picker, item)
     require("utils.snacks_actions").copy_path_absolute(picker, item)
   end,
+  copy_path_git_multi = function(picker, item)
+    require("utils.snacks_actions").copy_path_git_multi(picker, item)
+  end,
   copy_path_abs_multi = function(picker, item)
     require("utils.snacks_actions").copy_path_abs_multi(picker, item)
   end,
   copy_path_select = function(picker, item)
     require("utils.snacks_actions").copy_path_select(picker, item)
+  end,
+  lazygit_log_selected = function(picker, item)
+    require("utils.snacks_actions").lazygit_log_selected(picker, item)
   end,
   toggle_external_scope = function(picker)
     require("utils.snacks_actions").toggle_external(picker)
@@ -1262,7 +1268,7 @@ M.snacks_common_actions = {
 --
 -- KEY ORGANIZATION:
 -- - common_keys: Universal keys used across all/most pickers (e.g., <C-o> for open_file_remote)
--- - copy_path_keys: Path copy actions (Yy, Yg, YP, Yp, YY) for file/grep pickers
+-- - copy_path_keys: Path copy actions (<C-y>, Yy, Yg, YP, Yp, YY) for file/grep pickers
 -- - files_keys: File-specific actions (toggle, cycle cwd) for files/buffers
 -- - grep_keys: Grep-specific actions (<C-x>, <A-s>) for grep/qflist pickers
 -- - git_file_keys*: Git-specific actions for git pickers (not used in declarative sources)
@@ -1291,7 +1297,7 @@ local snacks_picker_shared_keys = {
   -- Copy path actions - applies to file/grep/explorer pickers
   copy_path_keys = {
     input = {
-      ["<C-y>"] = { "copy_path_abs_multi", mode = { "n", "i" }, desc = "Copy Absolute Path(s)" },
+      ["<C-y>"] = { "copy_path_git_multi", mode = { "n", "i" }, desc = "Copy Git Path(s)" },
       ["Yy"] = { "copy_path_relative_buffer", mode = { "n" }, desc = "Copy Relative Path (Buffer)" },
       ["Yg"] = { "copy_path_relative_git", mode = { "n" }, desc = "Copy Relative Path (Git)" },
       ["Yp"] = { "copy_path_relative_cwd", mode = { "n" }, desc = "Copy Relative Path (CWD)" },
@@ -1341,7 +1347,7 @@ local snacks_picker_group_keys = {
   -- Git diff & remote actions - for git file pickers
   git_file_keys = {
     input = {
-      ["<C-y>"] = { "copy_path_abs_multi", mode = { "n", "i" }, desc = "Copy Absolute Path(s)" },
+      ["<C-y>"] = { "copy_path_git_multi", mode = { "n", "i" }, desc = "Copy Git Path(s)" },
       ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at ref" },
@@ -1352,7 +1358,7 @@ local snacks_picker_group_keys = {
       -- ["<M-S>"] = { "select_subproject_cwd", mode = { "n", "i" }, desc = "Pick Subproject CWD" },
     },
     list = {
-      ["<C-y>"] = { "copy_path_abs_multi", mode = { "n", "i" }, desc = "Copy Absolute Path(s)" },
+      ["<C-y>"] = { "copy_path_git_multi", mode = { "n", "i" }, desc = "Copy Git Path(s)" },
       ["<C-s>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-g>"] = { "open_file_diff", mode = { "n", "i" }, desc = "Open Gitsigns diff in new tab" },
       ["<C-o>"] = { "open_remote_at_ref", mode = { "n", "i" }, desc = "Open file in remote at ref" },
@@ -1679,10 +1685,14 @@ M.sources_n_keys = {
     explorer = {
       win = {
         input = {
-          keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.files_keys.input),
+          keys = vim.tbl_extend("force", snacks_picker_group_keys.files_keys.input, {
+            ["<leader>gf"] = { "lazygit_log_selected", mode = { "n" }, desc = "Lazygit File/Dir History" },
+          }),
         },
         list = {
-          keys = vim.tbl_extend("force", {}, snacks_picker_shared_keys.copy_path_keys.input),
+          keys = vim.tbl_extend("force", snacks_picker_shared_keys.copy_path_keys.input, {
+            ["<leader>gf"] = { "lazygit_log_selected", mode = { "n" }, desc = "Lazygit File/Dir History" },
+          }),
         },
       },
     },
