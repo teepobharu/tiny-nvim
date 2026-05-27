@@ -70,30 +70,44 @@ end
 --- Build prompt_library entries from ai_constants.providers.
 --- Iterates each provider → top_choices → family → tier → size.
 ---
+--- Options:
+---   opts.enabled_providers: table<string, boolean> — when provided, include only
+---     providers whose key maps to a truthy value. When omitted, include all.
+---
 --- Returns a table ready to merge into CodeCompanion's prompt_library config.
----@param empty_prompt table The empty prompt template (EMPTY_PROMPT_CODECOMPANION)
----@return table<string, table> prompt_library entries keyed by display title
-function M.build(empty_prompt)
+--- @param empty_prompt table The empty prompt template (EMPTY_PROMPT_CODECOMPANION)
+--- @param opts table? Optional settings (see above)
+--- @return table<string, table> prompt_library entries keyed by display title
+function M.build(empty_prompt, opts)
   local lib = {}
+  local enabled = opts and opts.enabled_providers or nil
 
-  for _, pconfig in pairs(ai_constants.providers) do
-    local label = pconfig.display_label
-    local adapter = pconfig.adapter_name
+  for pname, pconfig in pairs(ai_constants.providers) do
+    if enabled == nil or enabled[pname] then
+      local label = pconfig.display_label
+      local adapter = pconfig.adapter_name
 
-    for family, tiers in pairs(pconfig.top_choices) do
-      for tier_name, sizes in pairs(tiers) do
-        local tier_abbrev = TIER_ABBREV[tier_name] or tier_name
-        for size, model in pairs(sizes) do
-          local title = make_title(label, family, model, tier_abbrev, size)
-          local alias = make_alias(adapter, model)
-          -- Apply provider-specific remap for the adapter when sending the
-          -- model name to the API (AGD gemini models require "-preview").
-          local send_model = model
-          local remap_table = ai_constants.provider_model_remap and ai_constants.provider_model_remap[adapter]
-          if remap_table and remap_table[model] then
-            send_model = remap_table[model]
+      for family, tiers in pairs(pconfig.top_choices) do
+        for tier_name, sizes in pairs(tiers) do
+          local tier_abbrev = TIER_ABBREV[tier_name] or tier_name
+          for size, model in pairs(sizes) do
+            -- Skip models excluded for CodeCompanion chat for this adapter
+            local excluded = ai_constants.codecompanion_chat_excluded_models
+              and ai_constants.codecompanion_chat_excluded_models[adapter]
+              and ai_constants.codecompanion_chat_excluded_models[adapter][model]
+            if not excluded then
+              local title = make_title(label, family, model, tier_abbrev, size)
+              local alias = make_alias(adapter, model)
+              -- Apply provider-specific remap for the adapter when sending the
+              -- model name to the API (AGD gemini models require "-preview").
+              local send_model = model
+              local remap_table = ai_constants.provider_model_remap and ai_constants.provider_model_remap[adapter]
+              if remap_table and remap_table[model] then
+                send_model = remap_table[model]
+              end
+              lib[title] = make_entry(adapter, send_model, alias, empty_prompt)
+            end
           end
-          lib[title] = make_entry(adapter, send_model, alias, empty_prompt)
         end
       end
     end

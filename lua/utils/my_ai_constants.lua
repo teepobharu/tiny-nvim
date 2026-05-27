@@ -1,6 +1,16 @@
 -- Shared AI constants for Avante, CodeCompanion, and other AI tools
 -- Centralized model names, endpoints, and configurations to avoid duplication
+-- Source of truth for AGD model defaults: ~/dotfiles/.bash_exports (AGD_* env).
+-- DEFAULT_AGD_MODEL and the static_models lists below honor those env vars first
+-- and fall back to the literals listed here. Override AGD_LATEST / AGD_CODE_* /
+-- AGD_COMMIT_* in ~/.bash.local to retarget without editing this file.
 local M = {}
+
+local function env_or(name, fallback)
+  local v = os.getenv(name)
+  if v and v ~= "" then return v end
+  return fallback
+end
 
 -- ============================================================================
 -- Model Names (shared across Avante and CodeCompanion)
@@ -13,8 +23,11 @@ M.models = {
     GPT_4_1_MINI = "gpt-4.1-mini",
     GPT_4_1_NANO = "gpt-4.1-nano",
     GPT_5 = "gpt-5",
+    GPT_5_5 = "gpt-5.5",
     GPT_5_NANO = "gpt-5-nano",
+    GPT_5_4_NANO = "gpt-5.4-nano",
     GPT_5_MINI = "gpt-5-mini",
+    GPT_5_4_MINI = "gpt-5.4-mini",
     GPT_5_1 = "gpt-5.1",
     GPT_5_2 = "gpt-5.2",
     GPT_5_3_CODEX = "gpt-5.3-codex",
@@ -41,6 +54,7 @@ M.models = {
 
   gemini = {
     GEMINI_3_1_PRO = "gemini-3.1-pro",
+    GEMINI_3_1_PRO_PREVIEW = "gemini-3.1-pro-preview",
     GEMINI_3_1_FLASH_LITE = "gemini-3.1-flash-lite",
     GEMINI_3_PRO = "gemini-3-pro",
     GEMINI_3_FLASH = "gemini-3-flash",
@@ -67,6 +81,7 @@ M.models = {
   qwen = {
     -- QWQ_32B = "qwq-32b", -- does not seem to work/support chat
     QWEN_3_5_27B = "qwen-3.5-27b",
+    QWEN_3_6_27B = "qwen-3.6-27b",
   },
 
   others = {
@@ -145,30 +160,52 @@ M.providers = {
     display_label = "AGD",
     top_choices = {
       gpt = {
-        default = { S = M.models.gpt.GPT_5_MINI, M = M.models.gpt.GPT_5_2, L = M.models.gpt.GPT_5_4 },
-        alt = { S = M.models.gpt.GPT_4_1_MINI },
-        max = { M = M.models.gpt.GPT_5_1_CODEX_MAX, L = M.models.gpt.GPT_5_3_CODEX }, -- avante works but all codex model not work in codecompanion /completions error (This is not a chat model and thus not supported in the v1/chat/completions endpoint. Did you mean to use v1/completions)
-      },
-      claude = {
+        -- default=current tier, alt=previous tier; env overrides from ~/dotfiles/.bash_exports
         default = {
-          S = M.models.claude.CLAUDE_HAIKU_4_5,
-          M = M.models.claude.CLAUDE_SONNET_4_6,
-          L = M.models.claude.CLAUDE_OPUS_4_7,
+          XS = env_or("AGD_GPT_NANO", M.models.gpt.GPT_5_4_NANO),
+          S = env_or("AGD_GPT_MINI", M.models.gpt.GPT_5_MINI),
+          M = M.models.gpt.GPT_5_2,
+          L = env_or("AGD_GPT_FLAGSHIP", M.models.gpt.GPT_5_5),
         },
         alt = {
-          L = M.models.claude.CLAUDE_OPUS_4_6,
+          S = M.models.gpt.GPT_4_1_MINI,
+          L = env_or("AGD_GPT_PREV_FLAGSHIP", M.models.gpt.GPT_5_4),
+        },
+        -- avante works but codex models fail codecompanion /completions (not a chat model)
+        max = { L = M.models.gpt.GPT_5_5, M = M.models.gpt.GPT_5_1_CODEX_MAX },
+      },
+      claude = {
+        -- default=current tier, alt=previous tier; env overrides from ~/dotfiles/.bash_exports
+        default = {
+          S = env_or("AGD_CLAUDE_S", M.models.claude.CLAUDE_HAIKU_4_5),
+          M = env_or("AGD_CLAUDE_SONNET", M.models.claude.CLAUDE_SONNET_4_6),
+          L = env_or("AGD_CLAUDE_L", M.models.claude.CLAUDE_OPUS_4_7),
+        },
+        alt = {
+          M = env_or("AGD_CLAUDE_M_PREV", M.models.claude.CLAUDE_SONNET_4_5),
+          L = env_or("AGD_CLAUDE_L_PREV", M.models.claude.CLAUDE_OPUS_4_6),
         },
       },
       gemini = {
+        -- default=current tier, alt=previous tier; env overrides from ~/dotfiles/.bash_exports
         default = {
-          S = M.models.gemini.GEMINI_3_1_FLASH_LITE,
-          M = M.models.gemini.GEMINI_3_1_PRO,
+          S = env_or("AGD_GEMINI_FLASH_LITE", M.models.gemini.GEMINI_3_1_FLASH_LITE),
+          M = env_or("AGD_GEMINI_PRO", M.models.gemini.GEMINI_3_1_PRO_PREVIEW),
           L = M.models.gemini.GEMINI_3_FLASH,
         },
+        alt = {
+          S = env_or("AGD_GEMINI_FLASH_LITE_PREV", M.models.gemini.GEMINI_2_5_FLASH_LITE),
+          M = env_or("AGD_GEMINI_PRO_PREV", M.models.gemini.GEMINI_2_5_FLASH),
+        },
       },
-      inhouse = { -- cost 0 / free
+      inhouse = { -- cost 0 / free; env overrides from ~/dotfiles/.bash_exports
         default = {
-          S = M.models.qwen.QWEN_3_5_27B,
+          S = env_or("AGD_INHOUSE_QWEN", M.models.qwen.QWEN_3_6_27B),
+          M = env_or("AGD_INHOUSE_DEEPSEEK", M.models.deepseek.DEEPSEEK_R1),
+          L = env_or("AGD_INHOUSE_GEMMA", M.models.gemini.GEMMA_4),
+        },
+        alt = {
+          S = env_or("AGD_INHOUSE_QWEN_PREV", M.models.qwen.QWEN_3_5_27B),
         },
       },
       -- not exists
@@ -190,8 +227,8 @@ M.providers = {
     display_label = "Copilot",
     top_choices = {
       gpt = {
-        default = { S = M.models.gpt.GPT_5_MINI, M = M.models.gpt.GPT_5_3_CODEX },
-        alt = { S = M.models.gpt.GPT_4_1 },
+        default = { S = M.models.gpt.GPT_5_MINI, M = M.models.gpt.GPT_5_5 },
+        alt = { S = M.models.gpt.GPT_4_1, M = M.models.gpt.GPT_5_4 },
         max = { M = M.models.gpt.GPT_5_1_CODEX_MAX, L = M.models.gpt.GPT_5_1_CODEX_MINI },
       },
       claude = {
@@ -201,6 +238,7 @@ M.providers = {
           L = M.models.claude.CLAUDE_OPUS_4_7,
         },
         alt = {
+          M = M.models.claude.CLAUDE_SONNET_4_5,
           L = M.models.claude.CLAUDE_OPUS_4_6,
         },
       },
@@ -208,6 +246,23 @@ M.providers = {
         default = { S = M.models.others.GROK_FAST_1 },
       },
     },
+  },
+}
+
+-- ==========================================================================
+-- CodeCompanion chat-specific model exclusions
+-- ==========================================================================
+-- Some models listed in shared top_choices are not compatible with
+-- CodeCompanion's chat-completions transport, while remaining valid for
+-- other consumers (e.g. Avante). Keep exclusions here so audits happen in one
+-- place alongside providers/filters.
+
+M.codecompanion_chat_excluded_models = {
+  [M.providers.openai_agd.adapter_name] = {
+    [M.models.gpt.GPT_5_3_CODEX] = true,
+    [M.models.gpt.GPT_5_1_CODEX_MAX] = true,
+    [M.models.gpt.GPT_5_1_CODEX_MINI] = true,
+    [M.models.gemini.GEMINI_3_PRO] = true, -- maps to -preview but 404 on proxy
   },
 }
 
@@ -284,8 +339,26 @@ M.static_models = { -- Fast models (for quick operations)
     M.models.gpt.GPT_5_NANO,
   },
 
+  -- Commit-short — mirrors $AGD_COMMIT_SHORT_* in ~/dotfiles/.bash_exports.
+  commit_short = {
+    env_or("AGD_COMMIT_SHORT_1", M.models.gpt.GPT_5_4_NANO),
+    env_or("AGD_COMMIT_SHORT_2", M.models.gpt.GPT_4_1_MINI),
+    env_or("AGD_COMMIT_SHORT_3", M.models.gemini.GEMINI_3_1_FLASH_LITE),
+    env_or("AGD_COMMIT_SHORT_4", M.models.gpt.GPT_4_1_MINI),
+  },
+
+  -- Commit-long — every entry supports up to 1M context window.
+  -- Mirrors $AGD_COMMIT_LONG_* in ~/dotfiles/.bash_exports.
+  commit_long = {
+    env_or("AGD_COMMIT_LONG_1", M.models.gpt.GPT_4_1_MINI),
+    env_or("AGD_COMMIT_LONG_2", M.models.gemini.GEMINI_3_1_FLASH_LITE),
+    env_or("AGD_COMMIT_LONG_3", M.models.gpt.GPT_5_4_MINI),
+    env_or("AGD_COMMIT_LONG_4", M.models.gemini.GEMINI_3_1_PRO_PREVIEW),
+  },
+
   -- Heavy models (for complex operations)
   heavy = {
+    env_or("AGD_CODE_LARGE", M.models.gpt.GPT_5_5),
     M.models.claude.CLAUDE_OPUS_4_7,
     M.models.claude.CLAUDE_SONNET_4_6,
     M.models.claude.CLAUDE_SONNET_4_5,
@@ -294,8 +367,9 @@ M.static_models = { -- Fast models (for quick operations)
     M.models.claude.CLAUDE_OPUS_4_5,
   },
 
-  -- Codex models (for code-specific operations)
+  -- Codex models (for code-specific operations); env AGD_CODE_CODEX → ~/dotfiles/.bash_exports
   codex = {
+    env_or("AGD_CODE_CODEX", M.models.gpt.GPT_5_5),
     M.models.gpt.GPT_5_3_CODEX,
     M.models.gpt.GPT_5_1_CODEX_MAX,
     M.models.gpt.GPT_5_1_CODEX_MINI,
@@ -303,6 +377,7 @@ M.static_models = { -- Fast models (for quick operations)
 
   -- Default priority order for CodeCompanion
   agd_default = {
+    env_or("AGD_CODE_LARGE", M.models.gpt.GPT_5_5),
     M.models.gpt.GPT_5_4,
     M.models.gpt.GPT_5_2,
     M.models.gpt.GPT_5_1,
@@ -420,8 +495,8 @@ function M.filter_models(models, opts, provider)
 end
 
 -- M.DEFAULT_COPILOT_MODEL = M.models.others.GROK_FAST_1 -- x0.33
-M.DEFAULT_COPILOT_MODEL = M.models.gpt.GPT_5_MINI
-M.DEFAULT_AGD_MODEL = M.models.gpt.GPT_5_2
+M.DEFAULT_COPILOT_MODEL = env_or("AGD_LATEST", M.models.gpt.GPT_5_MINI)
+M.DEFAULT_AGD_MODEL = env_or("AGD_LATEST", M.models.gpt.GPT_5_2)
 
 -- ============================================================================
 -- Provider Keymap Slot Pattern

@@ -3,7 +3,10 @@
 -- All provider slots loaded at startup; switch at runtime via:
 --   :Minuet change_provider openai_fim_compatible  (→ FIM / local)
 --   :MinuetFimSwitch ollama|llamacpp               (swap local backend)
---   <leader>aS → :Minuet change_model              (AGD model picker)
+--   <leader>amM → :Minuet change_model             (virttext model picker)
+--   <leader>amd* → duet subgroup (m=model, P=provider, s=status, p/a/x=predict/apply/dismiss)
+-- GPT-5+/o-series compat: rewrite_gpt5_max_tokens transform swaps max_tokens →
+-- max_completion_tokens at request time (gemini/claude/gpt-4.x unaffected).
 -- Per-project FIM override: vim.g.ai_minuet_fim_profile = "llamacpp" in .nvim-config.lua
 -- Docs: https://github.com/milanglacier/minuet-ai.nvim
 
@@ -51,6 +54,22 @@ local fim_presets = {
   },
 }
 
+-- AGD/OpenAI: GPT-5+ and o-series reject `max_tokens`, requiring `max_completion_tokens`.
+-- Gemini/Claude/GPT-4.x via the same AGD chat endpoint still accept `max_tokens`,
+-- so this transform only mutates the wire body when the model name matches.
+-- Wired into every openai_compatible / openai slot below as `transform = { rewrite_gpt5_max_tokens }`.
+local function rewrite_gpt5_max_tokens(t)
+  local body = t.body
+  if type(body) == "table" and type(body.model) == "string" and body.max_tokens then
+    local m = body.model
+    if m:match "^gpt%-5" or m:match "^gpt%-o" or m:match "^o%d" then
+      body.max_completion_tokens = body.max_tokens
+      body.max_tokens = nil
+    end
+  end
+  return t
+end
+
 -- All provider slots populated at load so :Minuet change_provider works without restart.
 -- stream=true + request_timeout=3: timeout cancels mid-flight but keeps partial tokens.
 -- If AGD proxy doesn't forward SSE → completions empty → flip stream=false + timeout=10.
@@ -70,16 +89,17 @@ local setup_opts = {
       name = "AGD",
       stream = true,
       optional = { max_tokens = 256, top_p = 0.9 },
+      transform = { rewrite_gpt5_max_tokens },
     },
     openai_fim_compatible = fim_presets[fim_profile] or fim_presets.ollama,
     -- openai slot: OpenAI model names routed through AGD proxy (same endpoint + key)
-    openai = {
-      model = "gpt-5.4-nano",
+    openai= {
+      model = AI.providers.openai_agd.top_choices.gpt.default.XS,
       end_point = AI.endpoints.agoda.OPENAI_PROXY_CHAT,
       api_key = "GENAIAG",
       stream = true,
       optional = {},
-      transform = {},
+      transform = { rewrite_gpt5_max_tokens },
     },
     -- gemini / claude use minuet defaults; require GEMINI_API_KEY / ANTHROPIC_API_KEY
   },
@@ -96,8 +116,24 @@ local setup_opts = {
     show_on_completion_menu = false,
   },
 }
--- Duet shares AGD openai_compatible slot (no separate backend needed)
-setup_opts.duet = setup_opts.provider_options.openai_compatible
+-- Duet has its own config namespace (NOT shared with setup_opts.provider_options).
+-- M.config.duet.provider selects the backend (gemini|openai|claude|openai_compatible);
+-- M.config.duet.provider_options[<provider>] holds endpoint/key/model.
+-- Built-in :Minuet change_model only edits M.config.provider_options, NOT duet —
+-- switch duet model at runtime via :MinuetDuetModel / <leader>amD.
+setup_opts.duet = {
+  provider = "openai_compatible",
+  provider_options = {
+    openai_compatible = {
+      end_point = AI.endpoints.agoda.OPENAI_PROXY_CHAT,
+      api_key = "GENAIAG",
+      model = AI.models.gemini.GEMINI_3_FLASH .. "-preview",
+      name = "AGD",
+      optional = { max_tokens = 512, top_p = 0.9 },
+      transform = { rewrite_gpt5_max_tokens },
+    },
+  },
+}
 
 -- Presets for :Minuet change_preset — atomic provider+endpoint+model switch
 -- "original" preset is auto-registered by minuet (captures initial config)
@@ -112,6 +148,7 @@ setup_opts.presets = {
         name = "AGD",
         stream = true,
         optional = { max_tokens = 256, top_p = 0.9 },
+        transform = { rewrite_gpt5_max_tokens },
       },
     },
   },
@@ -208,6 +245,61 @@ return {
         end)
       end, { desc = "Pick minuet preset (agd/fim_ollama/fim_llamacpp/original)" })
 
+      -- Duet pickers — operate on M.config.duet.* (separate from virttext M.config.provider_options.*)
+      -- :MinuetDuetModel — pick AGD model for duet's openai_compatible slot.
+      vim.api.nvim_create_user_command("MinuetDuetModel", function()
+        local m = require "minuet"
+        if not m.config then
+          vim.notify("minuet not loaded", vim.log.levels.WARN, { title = "Duet" })
+          return
+        end
+        vim.ui.select(agd_models_remapped, { prompt = "Duet AGD model:" }, function(choice)
+          if not choice then return end
+          m.config.duet.provider = "openai_compatible"
+          m.config.duet.provider_options.openai_compatible.model = choice
+          vim.notify("Duet model → " .. choice, vim.log.levels.INFO, { title = "Duet" })
+        end)
+      end, { desc = "Pick duet model (AGD openai_compatible)" })
+
+      -- :MinuetDuetProvider — switch duet backend (openai_compatible/gemini/openai/claude).
+      vim.api.nvim_create_user_command("MinuetDuetProvider", function()
+        local m = require "minuet"
+        local providers = {}
+        for k, _ in pairs(m.config.duet.provider_options or {}) do
+          table.insert(providers, k)
+        end
+        table.sort(providers)
+        vim.ui.select(providers, { prompt = "Duet provider:" }, function(choice)
+          if not choice then return end
+          m.config.duet.provider = choice
+          local po = m.config.duet.provider_options[choice] or {}
+          vim.notify(
+            string.format("Duet provider → %s (%s)", choice, po.model or "?"),
+            vim.log.levels.INFO,
+            { title = "Duet" }
+          )
+        end)
+      end, { desc = "Pick duet provider (openai_compatible/gemini/openai/claude)" })
+
+      -- :MinuetDuetStatus — show live duet config (separate from :MinuetStatus / amSs).
+      vim.api.nvim_create_user_command("MinuetDuetStatus", function()
+        local m = require "minuet"
+        if not m.config then
+          vim.notify("minuet not loaded", vim.log.levels.WARN, { title = "Duet" })
+          return
+        end
+        local prov = m.config.duet.provider
+        local po = (m.config.duet.provider_options or {})[prov] or {}
+        vim.notify(
+          string.format(
+            "duet (live)\n  provider=%s\n  model=%s\n  endpoint=%s\n  api_key_env=%s",
+            prov, po.model or "?", po.end_point or "?", po.api_key or "?"
+          ),
+          vim.log.levels.INFO,
+          { title = "Duet" }
+        )
+      end, { desc = "Show live duet provider/model/endpoint" })
+
       -- Helper: swap FIM backend at runtime without restart
       vim.api.nvim_create_user_command("MinuetFimSwitch", function(a)
         local preset = fim_presets[a.args]
@@ -230,33 +322,39 @@ return {
     end,
     opts = setup_opts,
     keys = {
-      -- Insert-mode triggers (untouched)
-      { "<A-d>", "<cmd>Minuet duet predict<cr>", mode = "i", desc = "Duet: predict" },
-      { "<A-c>", "<cmd>Minuet duet apply<cr>", mode = "i", desc = "Duet: apply" },
-      { "<A-x>", "<cmd>Minuet duet dismiss<cr>", mode = "i", desc = "Duet: dismiss" },
+      -- Insert-mode triggers
+      { "<A-d>", "<cmd>Minuet duet predict<cr>", mode = "i", desc = "Duet: predict 🔮" },
+      { "<A-c>", "<cmd>Minuet duet apply<cr>",   mode = "i", desc = "Duet: yes ✅" },
+      { "<A-x>", "<cmd>Minuet duet dismiss<cr>", mode = "i", desc = "Duet: no ❌" },
       -- Normal-mode under <leader>am* (which-key group in myAi.lua)
       -- Virttext
       { "<leader>amm", "<cmd>Minuet virtualtext toggle<cr>", desc = "Virttext: toggle" },
       {
         "<leader>ame",
         function() require("minuet.virtualtext").action.enable_auto_trigger() end,
-        desc = "Virttext: enable",
+        desc = "Virttext: on 🟢",
       },
       {
-        "<leader>amd",
+        "<leader>amf",
         function() require("minuet.virtualtext").action.disable_auto_trigger() end,
-        desc = "Virttext: disable",
+        desc = "Virttext: off 🔴",
       },
       {
         "<leader>amZ",
         function() require("minuet.virtualtext").action.accept() end,
-        desc = "Virttext: accept (A-a); dismiss (A-e), next,prev A-],[",
+        desc = "Virttext: ✅ A-a | ❌ A-e | 🔄 A-]/A-[",
       },
-      -- Duet
-      { "<leader>amp", function() vim.cmd "Minuet duet predict" end, desc = "Duet: predict (A-d)" },
-      { "<leader>amn", function() vim.cmd "Minuet duet apply" end, desc = "Duet: apply (A-c)" },
-      { "<leader>amx", function() vim.cmd "Minuet duet dismiss" end, desc = "Duet: dismiss (A-x)" },
-      { "<leader>amu", "<cmd>Minuet duet predict<cr>", desc = "Duet: predict (A-d)" },
+      { "<leader>am.", "<cmd>Minuet duet predict<cr>",
+        desc = "Duet: predict 🔮 A-d | ✅ A-c | ❌ A-x",
+      },
+      -- Duet subgroup under <leader>amd*
+      { "<leader>amd",  group = "Duet 🔮" },
+      { "<leader>amdp", "<cmd>Minuet duet predict<cr>", desc = "predict 🔮 A-d" },
+      { "<leader>amda", "<cmd>Minuet duet apply<cr>",   desc = "yes ✅ A-c" },
+      { "<leader>amdx", "<cmd>Minuet duet dismiss<cr>", desc = "no ❌ A-x" },
+      { "<leader>amdm", "<cmd>MinuetDuetModel<cr>",     desc = "model 🎯" },
+      { "<leader>amdP", "<cmd>MinuetDuetProvider<cr>",  desc = "provider 🔌" },
+      { "<leader>amds", "<cmd>MinuetDuetStatus<cr>",    desc = "status ℹ️" },
       -- Model + preset pickers
       { "<leader>amM", "<cmd>Minuet change_model<cr>", desc = "Pick model (:Minuet change_model)" },
       { "<leader>amP", "<cmd>MinuetPresetPick<cr>", desc = "Pick preset (agd/fim_ollama/fim_llamacpp/original)" },

@@ -119,7 +119,9 @@ local EMPTY_PROMPT_CCOMP = ai_prompts.EMPTY_PROMPT_CODECOMPANION
 local CODE_REVIEW_INSTRUCTIONS = ai_prompts.CODE_REVIEW_INSTRUCTIONS
 
 -- Generated prompt_library entries from top_choices (AGD + Copilot)
-local prompt_lib_gen = require("utils.my_codecompanion_prompt_library").build(EMPTY_PROMPT_CCOMP)
+local prompt_lib_gen = require("utils.my_codecompanion_prompt_library").build(EMPTY_PROMPT_CCOMP, {
+  enabled_providers = { openai_agd = true, copilot = ENABLE_COPILOT },
+})
 -- Jellydn base prompts (migrated from codecompanion.lua with v19 fields)
 local jellydn_prompts = require("utils.my_codecompanion_prompt_library").build_jellydn_prompts()
 
@@ -180,6 +182,7 @@ return {
           --   },
           -- },
           codex = {
+            cmd = { "codex", "--dangerously-bypass-approvals-and-sandbox" },
             env = common_agent_env,
           },
           claude = {
@@ -376,7 +379,8 @@ return {
       spec = {
         { vim.g.ai_prefix_key or "<leader>A", group = "Code Companion", mode = { "n", "v" } },
         { "<leader>ah", group = "MCPHub", mode = { "n" } },
-        { "<leader>am", group = "minuet/duet", icon = "󱗻", mode = { "n" } },
+        { "<leader>am", group = "Minuet", icon = "󱗻", mode = { "n" } },
+        { "<leader>amd",  group = "Duet 🔮" },
         { "<leader>amS", group = "servers/FIM", icon = "󰒋", mode = { "n" } },
         { "<leader>aM", group = "sidekick", icon = "󰚩", mode = { "n" } },
         { "<leader>aMm", group = "NES", icon = "󰚩", mode = { "n" } },
@@ -446,7 +450,7 @@ return {
       cmd = mcphub_backend.cmd,
       cmdArgs = mcphub_backend.cmdArgs,
       config = vim.fn.expand "~/dotfiles/ai/mcp/mcphub.json",
-      shutdown_delay = 60 * 60 * 000, -- 60min ~ Delay in ms before shutting down the server when last instance closes (default: 5 minutes)
+      shutdown_delay = 60 * 60 * 1000, -- 60min ~ Delay in ms before shutting down the server when last instance closes (default: 5 minutes)
       port = is_git_worktree_profile and 37374 or 37373,
       -- Disable workspace mode for consistent port access by CLI agents on worktree profiles.
       -- Main checkout keeps workspace mode enabled.
@@ -487,14 +491,40 @@ return {
           width = 0.8,
           height = 0.8,
         },
+        -- patch 05: endpoints + agent registry sections in :MCPHub main view
+        endpoints = {
+          enabled = true,
+        },
+        agent_registry = {
+          enabled = true,
+          default_agent_id = "claude",
+          default_scope = "user",
+          agents = {
+            { name = "claude", binding_flat = "mcphub", binding_lean = "mcphub-lean" },
+            {
+              id = "claude-agd",
+              preset = "claude",
+              label = "claude-agd",
+              command = "claude",
+              config_dir = "/Users/tharutaipree/.claude-agd",
+              config_path = "/Users/tharutaipree/.claude-agd/.claude.json",
+              binding_flat = "mcphub",
+              binding_lean = "mcphub-lean",
+              scopes = { "user" },
+            },
+            { name = "codex", binding_flat = "mcphub", binding_lean = "mcphub-lean" },
+            { name = "opencode", binding_flat = "mcphub", binding_lean = "mcphub-lean" },
+          },
+          scopes = { "user", "project" },
+        },
+        token_counts = {
+          enabled = true,
+          servers = true,
+          tools = true,
+        },
       },
       log = {
         -- level = vim.log.levels.WARN, -- patch03 apply this correctly on UI to hide SSE client connection
-        -- claude mcp add -s user mcphub2 http://localhost:37373/mcp --type sse
-        -- claude mcp remove mcphub2
-        -- claude mcp add --scope user --transport http mcphub http://localhost:37373/mcp
-        -- claude mcp add --scope user --transport sse mcphub2 http://localhost:37374/mcp
-
         level = vim.log.levels.INFO,
         to_file = false,
       },
@@ -744,7 +774,7 @@ return {
               return require("codecompanion.adapters").extend("copilot", {
                 schema = {
                   model = {
-                    default = AI_CONST.DEFAULT_COPILOT_MODEL or "gpt-5-mini",
+                    default = AI_CONST.DEFAULT_COPILOT_MODEL,
                     -- choices -> currently no temperature opts check for 5mini
                     -- /Users/tharutaipree/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/copilot/init.lua:334:27
                   },
