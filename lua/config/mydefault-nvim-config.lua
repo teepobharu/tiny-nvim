@@ -50,6 +50,7 @@ vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
     "myGit",
     "myAi",
     "myLazyPatcher",
+    "myMdPreview",
     -- Disable mechanism (must be LAST)
     "disablePlugins",
   }

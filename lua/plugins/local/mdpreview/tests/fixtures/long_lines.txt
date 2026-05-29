@@ -1,0 +1,9 @@
+long_lines.txt — wrap toggle fixture (S3.6)
+
+This file contains intentionally long lines to test the wrap toggle (↵ button) in code view.
+
+NORMAL LINE
+This is a very long line that should overflow the viewport when word-wrap is disabled, forcing a horizontal scrollbar to appear at the bottom of the code view panel so you can verify the toggle works correctly by clicking the wrap button and watching it fold.
+SHORT
+Another extremely long line: Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua, ut enim ad minim veniam quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat duis aute irure dolor in reprehenderit in voluptate.
+END OF FILE
