@@ -3,7 +3,7 @@ title: "Add .NET/C# standalone script support — code runner, shebang fallback,
 status: open
 priority: medium
 created: 2026-03-25
-updated: 2026-03-26
+updated: 2026-04-27
 related:
   - [test.cs sample](tests/lang_coderun/test.cs)
   - [run_script_deterministic](lua/overseer/template/user/run_script_deterministic.lua)
@@ -14,7 +14,11 @@ related:
   - [treesitter config](lua/plugins/ui.lua:338-371)
   - [init.lua LSP enable](init.lua:38-107)
   - [mydefault-nvim-config](lua/config/mydefault-nvim-config.lua)
+  - [OmniSharp LSP config](lsp/omnisharp.lua)
+  - [csharp-ls LSP config](lsp/csharp_ls.lua)
   - [Suggested patch](tasks/open/dotnet-csharp-support/01-dotnet-csharp-support.patch)
+  - [OmniSharp releases](https://github.com/OmniSharp/omnisharp-roslyn/releases)
+  - [nvim-lspconfig omnisharp reference](https://github.com/neovim/nvim-lspconfig/blob/21db1fd40cbcbf1524ae154ab8f394fdf085749a/lsp/omnisharp.lua#L3)
   - [overseer component loader](~/.local/share/nvim3_jelly_tinynvim/lazy/overseer.nvim/lua/overseer/component.lua:152)
 ---
 
@@ -26,6 +30,74 @@ Add standalone .NET/C# script execution support focusing on:
 3. **Auto-show overseer output panel** when `run script - deterministic` runs
 4. **LSP gated by `vim.g`** — OmniSharp disabled by default, opt-in per project
 5. **TreeSitter highlighting** for C#
+
+## Patch Artifact
+
+- `tasks/open/dotnet-csharp-support/01-dotnet-csharp-support.patch` is now a real unified diff patch.
+- Scope: code runner fix, shebang fallback, output toggle, permission error component, gated LSP, TreeSitter.
+- Files in patch: 3 modified + 3 new.
+- Apply from repo root:
+
+```bash
+git apply --check tasks/open/dotnet-csharp-support/01-dotnet-csharp-support.patch
+git apply tasks/open/dotnet-csharp-support/01-dotnet-csharp-support.patch
+```
+
+## OmniSharp Install + Setup Guideline
+
+### Configuration alignment
+
+- `lsp/omnisharp.lua` is now aligned with upstream `nvim-lspconfig` defaults (`-z`, `--hostPID`, `--encoding utf-8`, `--languageserver`, workspaceFolders=false, root markers including `*.slnx`/`function.json`).
+- Custom behavior kept for local environment: auto-detect `omnisharp`/`OmniSharp` in PATH, or fallback to `dotnet <OmniSharp.dll>` if `vim.g.omnisharp_dll_path` is set.
+
+### Quick install from GitHub releases (macOS arm64)
+
+```bash
+VER="v1.39.15"
+ASSET="omnisharp-osx-arm64-net6.0.tar.gz"
+INSTALL_DIR="$HOME/.local/opt/omnisharp-$VER"
+
+mkdir -p "$INSTALL_DIR" "$HOME/.local/bin"
+curl -fL "https://github.com/OmniSharp/omnisharp-roslyn/releases/download/$VER/$ASSET" | tar -xz -C "$INSTALL_DIR"
+chmod +x "$INSTALL_DIR/OmniSharp"
+ln -sf "$INSTALL_DIR/OmniSharp" "$HOME/.local/bin/omnisharp"
+```
+
+### Quick project opt-in (`/Users/tharutaipree/AgodaGit/fe/mmbweb/src/Serverside/.nvim-config.lua`)
+
+```lua
+vim.g.lsp_enable_csharp = true
+vim.g.lsp_csharp_server = "omnisharp"
+
+-- Optional when using dotnet DLL mode instead of PATH binary:
+-- vim.g.omnisharp_dll_path = vim.fn.expand("~/.local/opt/omnisharp-v1.39.15/OmniSharp.dll")
+```
+
+### Fast verification commands
+
+```bash
+command -v omnisharp
+NVIM_APPNAME=nvimwt3a nvim --headless "+lua print(vim.inspect(vim.lsp.config['omnisharp'].cmd))" +qa
+```
+
+### In-editor helper commands
+
+```vim
+:CSharpLspInstallInfo
+:CSharpLspInstall
+:CSharpLspUpgrade
+:CSharpLspOpenReleases
+```
+
+- `:CSharpLspInstallInfo` resolves latest release + asset for current platform and shows copy/paste commands.
+- `:CSharpLspInstall` and `:CSharpLspUpgrade` execute with confirmation.
+- If auto-detect fails, use `:CSharpLspOpenReleases` and pick asset manually.
+
+### Optional fallback server (dotnet tool)
+
+```bash
+dotnet tool install --global csharp-ls
+```
 
 ## Context
 
@@ -502,3 +574,83 @@ NVIM_APPNAME=nvim3_jelly_tinynvim nvim tests/lang_coderun/test.cs
 - [dotnet 10 run-file feature](https://learn.microsoft.com/en-us/dotnet/core/whats-new/dotnet-10#file-based-apps)
 - [OmniSharp releases](https://github.com/OmniSharp/omnisharp-roslyn/releases)
 - [csharp-ls](https://github.com/razzmatazz/csharp-language-server)
+
+---
+
+## c_sharp (TreeSitter) vs OmniSharp (LSP)
+
+Two separate systems — both should be active together:
+
+| Aspect | TreeSitter `c_sharp` parser | OmniSharp LSP |
+|--------|-----------------------------|---------------|
+| What it does | Syntax tree → highlight, folds, text-objects, `:InspectTree` | Semantics → hover, `gd`, `gr`, rename, diagnostics, completion, code actions |
+| Needs project root | No — works on any `.cs` file | Yes — requires `.csproj` / `.sln` / `omnisharp.json` / `function.json` / `.git` |
+| Install | `:TSInstall c_sharp` | `:CSharpLspInstall` (or use `csharp_lsp_installer.lua`) |
+| Verify installed | `:TSInstallInfo c_sharp` → `installed` | `:LspInfo` → omnisharp client attached to buffer |
+| Quick check | `:InspectTree` — tree renders with `c_sharp` nodes | `K` on `Console.WriteLine` → hover popup appears |
+
+OmniSharp **will not attach** to a bare `.cs` file with no project context — that is expected behavior, not a bug. TreeSitter still works in that case (syntax highlight, text-objects).
+
+---
+
+## Dummy Project: Quickstart LSP Verification
+
+Dummy project in `tests/lang_coderun/dotnet-dummy/` gives OmniSharp a valid `.csproj` root to attach to.
+
+### Setup (already done)
+
+```bash
+cd /path/to/dotfiles/.config/nvimwt3a
+dotnet new console -o tests/lang_coderun/dotnet-dummy
+dotnet build tests/lang_coderun/dotnet-dummy
+```
+
+Files created:
+- `tests/lang_coderun/dotnet-dummy/Program.cs` — entrypoint
+- `tests/lang_coderun/dotnet-dummy/dotnet-dummy.csproj` — root marker OmniSharp uses
+
+### Open and verify
+
+```bash
+NVIM_APPNAME=nvimwt3a nvim tests/lang_coderun/dotnet-dummy/Program.cs
+```
+
+OmniSharp starts automatically (global `vim.g.lsp_enable_csharp = true` already set in `lua/config/mydefault-nvim-config.lua`). No per-project `.nvim-config.lua` needed.
+
+### LSP capability checklist
+
+- [ ] `:LspInfo` → omnisharp client listed, attached to current buffer
+- [ ] `:checkhealth vim.lsp` → no errors for omnisharp
+- [ ] `K` on `Console` → hover popup shows type info
+- [ ] `gd` on `WriteLine` → jumps to BCL stub (or shows definition preview)
+- [ ] `gr` on a symbol → references quickfix list
+- [ ] `<leader>ca` → code action menu appears
+- [ ] `<leader>rn` on a variable → rename prompt
+- [ ] `:InspectTree` → c_sharp parse tree rendered (TreeSitter working)
+- [ ] `:TSInstallInfo c_sharp` → shows `installed`
+
+---
+
+## Real-Project Check: Agoda mmbweb
+
+Path: `/Users/tharutaipree/AgodaGit/fe/mmbweb/src/Serverside/`
+
+Confirmed root markers present:
+- `mmbweb.sln` — solution file (OmniSharp primary anchor)
+- `global.json` — pins SDK version
+- 9 `.csproj` files: `Agoda.Cronos.Mmb`, `Agoda.Cronos.Mmb.All`, `Agoda.Cronos.Mmb.Common`, `Agoda.Cronos.Mmb.External`, `Agoda.Cronos.MmbUnitTests`, `Agoda.Cronos.NotificationCenter`, `Agoda.Cronos.NotificationCenter.UnitTests`, `Agoda.Mmb.Core`
+
+### Notes
+
+- **No `.nvim-config.lua` needed** — `vim.g.lsp_enable_csharp = true` is global; LSP opts in for all projects. The per-project opt-in example earlier in this doc is now historical / only relevant if you want to override to a different server.
+- **Large solution = slow first load** — initial OmniSharp startup for `mmbweb.sln` may take 30–60 seconds while Roslyn indexes the solution. Wait for `:LspInfo` to show the client as "attached" before testing features.
+- **SDK mismatch check** — `global.json` pins a specific SDK. Run `dotnet --list-sdks` and compare. If mismatch, align via `mise` or `.tool-versions`.
+
+### Steps
+
+```bash
+cd /Users/tharutaipree/AgodaGit/fe/mmbweb/src/Serverside
+NVIM_APPNAME=nvimwt3a nvim Agoda.Mmb.Core/Program.cs   # pick any .cs file
+```
+
+Then run the same checklist from the Dummy Project section above. Wait for the sln to load before testing `gd` / `gr` / hover — they return nothing until indexing completes.

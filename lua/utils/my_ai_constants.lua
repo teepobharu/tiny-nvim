@@ -79,9 +79,9 @@ M.models = {
 
   -- Qwen models (AGD proxy IDs)
   qwen = {
-    -- QWQ_32B = "qwq-32b", -- does not seem to work/support chat
-    QWEN_3_5_27B = "qwen-3.5-27b",
     QWEN_3_6_27B = "qwen-3.6-27b",
+    -- QWQ_32B = "qwq-32b", -- does not seem to work/support chat
+    -- QWEN_3_5_27B = "qwen-3.5-27b", -- missing / delted now avoid using
   },
 
   others = {
@@ -205,7 +205,7 @@ M.providers = {
           L = env_or("AGD_INHOUSE_GEMMA", M.models.gemini.GEMMA_4),
         },
         alt = {
-          S = env_or("AGD_INHOUSE_QWEN_PREV", M.models.qwen.QWEN_3_5_27B),
+          -- S = env_or("AGD_INHOUSE_QWEN_PREV", M.models.qwen.QWQ_32B),
         },
       },
       -- not exists

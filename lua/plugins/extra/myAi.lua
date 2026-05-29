@@ -113,6 +113,55 @@ local function enable_yolo_on_created(chat)
   require("codecompanion.interactions.chat.tools.approvals"):toggle_yolo_mode(chat.bufnr)
 end
 
+local function focus_codecompanion_chat()
+  local codecompanion = require "codecompanion"
+  local chat = codecompanion.last_chat()
+
+  if chat and chat.bufnr then
+    codecompanion.restore(chat.bufnr)
+    return
+  end
+
+  codecompanion.chat()
+end
+
+local function run_codecompanion_slash_picker(name)
+  local chat_api = require "codecompanion.interactions.chat"
+  local codecompanion = require "codecompanion"
+  local chat = chat_api.buf_get_chat(vim.api.nvim_get_current_buf()) or codecompanion.last_chat()
+  if not chat then
+    chat = codecompanion.chat()
+  end
+  if not chat then
+    vim.notify("CodeCompanion: no chat buffer found", vim.log.levels.WARN)
+    return
+  end
+
+  if chat.ui and not chat.ui:is_visible() then
+    chat.ui:open()
+  end
+
+  local config = require "codecompanion.config"
+  local slash_config = config.interactions.chat.slash_commands[name]
+  if not slash_config then
+    vim.notify(("CodeCompanion: slash command not found: %s"):format(name), vim.log.levels.WARN)
+    return
+  end
+
+  local ok, slash_command = pcall(require, "codecompanion.interactions.chat.slash_commands.builtin." .. name)
+  if not ok then
+    vim.notify(("CodeCompanion: failed to load /%s picker"):format(name), vim.log.levels.ERROR)
+    return
+  end
+
+  slash_command
+    .new({
+      Chat = chat,
+      config = slash_config,
+    })
+    :execute(require("codecompanion.interactions.chat.slash_commands").new())
+end
+
 -- Import AI prompts from centralized location
 local ai_prompts = require "utils.my_ai_prompts"
 local EMPTY_PROMPT_CCOMP = ai_prompts.EMPTY_PROMPT_CODECOMPANION
@@ -675,12 +724,45 @@ return {
                 end
               end
               args.payload.messages = clean
+
+              -- Filter 3: Some OpenAI-compatible/LiteLLM backends reject
+              -- system messages unless they are at the beginning. Tool context
+              -- such as <tool>memory</tool> can append hidden system prompts
+              -- after prior user/assistant messages.
+              local system_messages = {}
+              local non_system_messages = {}
+
+              for _, msg in ipairs(args.payload.messages) do
+                if msg.role == "system" then
+                  if type(msg.content) == "string" and vim.trim(msg.content) ~= "" then
+                    table.insert(system_messages, msg.content)
+                  end
+                else
+                  table.insert(non_system_messages, msg)
+                end
+              end
+
+              if #system_messages > 0 then
+                table.insert(non_system_messages, 1, {
+                  role = "system",
+                  content = table.concat(system_messages, "\n\n"),
+                })
+              end
+
+              args.payload.messages = non_system_messages
             end
           end)
         end,
       })
     end,
-    keys = require("utils.editor_keymaps").keymaps.codecompanion(),
+    keys = vim.list_extend(require("utils.editor_keymaps").keymaps.codecompanion(), {
+      {
+        (vim.g.ai_prefix_key or "<leader>A") .. "c",
+        focus_codecompanion_chat,
+        desc = "Code Companion - Focus Chat",
+        mode = "n",
+      },
+    }),
     -- NOTE: llama3_2 and llama3latest ollama adapters were removed — they were
     -- at the plugin spec level (not inside opts) so Lazy.nvim ignored them.
     -- To re-enable, move into opts.adapters.http below.
@@ -727,6 +809,7 @@ return {
             ["symbols"] = { opts = { provider = "snacks" } },
           },
           -- Chat buffer keymaps (from jellydn/tiny-nvim codecompanion.lua)
+          -- require "codecompanion.actions" not seem to have keymap avail for buffer / files
           keymaps = {
             send = {
               modes = { n = "<CR>", i = "<C-CR>" },
@@ -751,6 +834,24 @@ return {
               index = 6,
               callback = "keymaps.clear",
               description = "[Chat] Clear",
+            },
+            buffer_picker = {
+              modes = { i = "<C-b>" },
+              index = 7,
+              callback = function()
+                pcall(vim.cmd, "stopinsert")
+                run_codecompanion_slash_picker "buffer"
+              end,
+              description = "Attach buffer",
+            },
+            file_picker = {
+              modes = { i = "<C-f>" },
+              index = 8,
+              callback = function()
+                pcall(vim.cmd, "stopinsert")
+                run_codecompanion_slash_picker "file"
+              end,
+              description = "Attach file",
             },
           },
         },
@@ -856,6 +957,11 @@ return {
         },
       },
       prompt_library = vim.tbl_extend("keep", {
+        markdown = {
+          dirs = {
+            vim.fn.expand("~/Personal/mynotes/Extras/Template/copilot-custom-prompts/codecompanion"),
+          },
+        },
         -- https://deepwiki.com/search/check-the-settting-from-prompt_65b9cc4c-5ada-41a8-8b0d-49142cfdef65?mode=deep
         -- will work only when open new chat with the action cmd else not change model while there is prompt
         -- NOTE: AGD + Copilot model entries are auto-generated by utils/my_codecompanion_prompt_library.lua

@@ -1283,7 +1283,7 @@ vim.api.nvim_create_autocmd("FileType", {
 -- I use a Ctrl keymap so that I can paste images in insert mode
 -- I tried using <C-v> but duh, that's used for visual block mode
 -- so don't do it
-vim.keymap.set({ "n", "v", "i" }, "<C-a><C-v>", function()
+vim.keymap.set({ "n", "v", "i" }, "<C-i><C-v>", function()
   local pasted_image = require("img-clip").paste_image()
   if pasted_image then
     -- "Update" saves only if the buffer has been modified since the last save

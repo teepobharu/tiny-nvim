@@ -46,13 +46,72 @@ local function make_title(label, family, model, tier_abbrev, size)
   return label .. " " .. family .. " " .. display_model .. " [" .. tier_abbrev .. "-" .. size .. "]"
 end
 
+--- Prefix prompt content with CodeCompanion chat context tokens.
+---@param content string|function|nil Prompt content
+---@param prefix string Context prefix to prepend
+---@return string|function
+local function prefix_prompt_content(content, prefix)
+  if type(content) == "function" then
+    return function(context)
+      return prefix .. (content(context) or "")
+    end
+  end
+
+  return prefix .. (content or "")
+end
+
+--- Copy prompt templates and add current-buffer/file-tool context to the first user prompt.
+---@param prompts table Empty prompt template
+---@param opts table? Build options
+---@return table prompts Prompt template copy with context attached
+local function with_editor_context(prompts, opts)
+  opts = opts or {}
+
+  if opts.attach_buffer == false and opts.attach_files_tool == false then
+    return prompts
+  end
+
+  local context_items = {}
+  if opts.attach_files_tool ~= false then
+    table.insert(context_items, "@{read_file}")
+    table.insert(context_items, "@{file_search}")
+    table.insert(context_items, "@{grep_search}")
+    table.insert(context_items, "@{files}")
+  end
+  if opts.attach_buffer ~= false then
+    table.insert(context_items, "#{buffer}")
+  end
+
+  if #context_items == 0 then
+    return prompts
+  end
+
+  local result = vim.deepcopy(prompts or {})
+  local prefix = table.concat(context_items, " ") .. "\n\n"
+
+  for _, prompt in ipairs(result) do
+    if prompt.role == "user" then
+      prompt.content = prefix_prompt_content(prompt.content, prefix)
+      return result
+    end
+  end
+
+  table.insert(result, 1, {
+    role = "user",
+    content = prefix,
+  })
+
+  return result
+end
+
 --- Build a single prompt_library entry table.
 ---@param adapter_name string Adapter name (e.g. "openai_agd", "copilot")
 ---@param model string Model name to use
 ---@param alias string Slash command alias
 ---@param empty_prompt table Empty prompt template
+---@param opts table? Build options controlling attached editor context
 ---@return table prompt_library entry
-local function make_entry(adapter_name, model, alias, empty_prompt)
+local function make_entry(adapter_name, model, alias, empty_prompt, opts)
   return {
     interaction = "chat",
     opts = {
@@ -63,7 +122,7 @@ local function make_entry(adapter_name, model, alias, empty_prompt)
       is_slash_cmd = true,
       alias = alias,
     },
-    prompts = empty_prompt,
+    prompts = with_editor_context(empty_prompt, opts),
   }
 end
 
@@ -73,6 +132,8 @@ end
 --- Options:
 ---   opts.enabled_providers: table<string, boolean> — when provided, include only
 ---     providers whose key maps to a truthy value. When omitted, include all.
+---   opts.attach_buffer: boolean|nil — when not false, prepend #{buffer}.
+---   opts.attach_files_tool: boolean|nil — when not false, prepend @files.
 ---
 --- Returns a table ready to merge into CodeCompanion's prompt_library config.
 --- @param empty_prompt table The empty prompt template (EMPTY_PROMPT_CODECOMPANION)
@@ -105,7 +166,7 @@ function M.build(empty_prompt, opts)
               if remap_table and remap_table[model] then
                 send_model = remap_table[model]
               end
-              lib[title] = make_entry(adapter, send_model, alias, empty_prompt)
+              lib[title] = make_entry(adapter, send_model, alias, empty_prompt, opts)
             end
           end
         end
