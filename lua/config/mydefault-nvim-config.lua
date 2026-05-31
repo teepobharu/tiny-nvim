@@ -48,6 +48,7 @@ vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
     "myMinuet",
     "myBlinkIcons",
     "myGit",
+    "myCodecomp", -- CodeCompanion spec (extracted from myAi.lua)
     "myAi",
     "myLazyPatcher",
     "myMdPreview",
