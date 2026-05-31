@@ -107,6 +107,47 @@ function M.get_agoda_adapters(use_dynamic_fetch)
   }
 end
 
+-- Get Agoda-specific adapter for codex/responses models (uses /v1/responses endpoint)
+function M.get_agoda_responses_adapters()
+  return {
+    [myAiC.providers.openai_responses_agd.adapter_name] = function()
+      return require("codecompanion.adapters").extend("openai_responses", {
+        name = myAiC.providers.openai_responses_agd.adapter_name,
+        formatted_name = "OpenAI Responses AGD",
+        env = {
+          api_key = "OPENAI_API_KEY",
+          url = "AG_OPENAIPROXY",
+        },
+        -- Override the hardcoded upstream URL with the AGD proxy responses endpoint
+        url = "${url}/v1/responses",
+        schema = {
+          model = {
+            default = MODELS.gpt.GPT_5_3_CODEX,
+            choices = function()
+              -- Static list: codex models only work on responses endpoint
+              local result = {}
+              for _, m in ipairs(myAiC.codecompanion_responses_models) do
+                result[m] = { opts = {} }
+              end
+              return result
+            end,
+          },
+          max_output_tokens = {
+            default = 4096,
+          },
+        },
+      })
+    end,
+  }
+end
+
+-- Merge Agoda responses adapters with existing adapters configuration
+function M.merge_agoda_responses_adapters(base_adapters)
+  base_adapters = base_adapters or {}
+  local responses_adapters = M.get_agoda_responses_adapters()
+  return vim.tbl_extend("force", base_adapters, responses_adapters)
+end
+
 -- Get list of Agoda adapter names (for filtering)
 function M.get_agoda_adapter_names()
   local adapters = M.get_agoda_adapters()

@@ -549,14 +549,40 @@ return {
           default_agent_id = "claude",
           default_scope = "user",
           agents = {
-            { name = "claude", binding_flat = "mcphub", binding_lean = "mcphub-lean" },
+            {
+              name = "claude",
+              binding_flat = "mcphub",
+              binding_lean = "mcphub-lean",
+              config_alternates = {
+                {
+                  key = "1",
+                  label = "settings permissions",
+                  path = "~/.claude/settings.json",
+                  matcher = ".permissions",
+                },
+              },
+            },
             {
               id = "claude-agd",
               preset = "claude",
               label = "claude-agd",
               command = "claude",
-              config_dir = "/Users/tharutaipree/.claude-agd",
-              config_path = "/Users/tharutaipree/.claude-agd/.claude.json",
+              config_dir = "~/.claude-agd",
+              config_path = "~/.claude-agd/.claude.json",
+              config_alternates = {
+                {
+                  key = "1",
+                  label = "settings permissions",
+                  path = "~/.claude-agd/settings.json",
+                  matcher = ".permissions",
+                },
+                {
+                  key = "2",
+                  label = "main settings permissions",
+                  path = "~/.claude/settings.json",
+                  matcher = ".permissions",
+                },
+              },
               binding_flat = "mcphub",
               binding_lean = "mcphub-lean",
               scopes = { "user" },
@@ -868,24 +894,26 @@ return {
       },
       adapters = {
         cache_models_for = 5000, -- local cached inside var - def 1800 (30m)
-        http = require("utils.my_codecompanion_utils").merge_agoda_adapters(vim.tbl_extend(
-          "force",
-          ENABLE_COPILOT and {
-            copilot = function()
-              return require("codecompanion.adapters").extend("copilot", {
-                schema = {
-                  model = {
-                    default = AI_CONST.DEFAULT_COPILOT_MODEL,
-                    -- choices -> currently no temperature opts check for 5mini
-                    -- /Users/tharutaipree/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/copilot/init.lua:334:27
+        http = require("utils.my_codecompanion_utils").merge_agoda_responses_adapters(
+          require("utils.my_codecompanion_utils").merge_agoda_adapters(vim.tbl_extend(
+            "force",
+            ENABLE_COPILOT and {
+              copilot = function()
+                return require("codecompanion.adapters").extend("copilot", {
+                  schema = {
+                    model = {
+                      default = AI_CONST.DEFAULT_COPILOT_MODEL,
+                      -- choices -> currently no temperature opts check for 5mini
+                      -- /Users/tharutaipree/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/copilot/init.lua:334:27
+                    },
+                    -- temperature = { -- see tasks/open/investigate-codecompanion-adapter-switching.md:85:1
                   },
-                  -- temperature = { -- see tasks/open/investigate-codecompanion-adapter-switching.md:85:1
-                },
-              })
-            end,
-          } or {},
-          {}
-        )),
+                })
+              end,
+            } or {},
+            {}
+          ))
+        ),
         acp = { -- codex and claude_code works without extra settings just make sure acp cli is installed
           -- claude_code = function()
           --   return require("codecompanion.adapters").extend("claude_code", {

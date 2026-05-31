@@ -222,6 +222,11 @@ M.providers = {
       },
     },
   },
+  -- Provider for codex models using /v1/responses endpoint
+  openai_responses_agd = {
+    adapter_name = "openai_responses_agd",
+    display_label = "AGD Responses",
+  },
   copilot = {
     adapter_name = "copilot",
     display_label = "Copilot",
@@ -259,11 +264,15 @@ M.providers = {
 
 M.codecompanion_chat_excluded_models = {
   [M.providers.openai_agd.adapter_name] = {
-    [M.models.gpt.GPT_5_3_CODEX] = true,
-    [M.models.gpt.GPT_5_1_CODEX_MAX] = true,
-    [M.models.gpt.GPT_5_1_CODEX_MINI] = true,
     [M.models.gemini.GEMINI_3_PRO] = true, -- maps to -preview but 404 on proxy
   },
+}
+
+-- Models that require /v1/responses endpoint (not /v1/chat/completions)
+M.codecompanion_responses_models = {
+  M.models.gpt.GPT_5_3_CODEX,
+  M.models.gpt.GPT_5_1_CODEX_MAX,
+  M.models.gpt.GPT_5_1_CODEX_MINI,
 }
 
 M.provider_model_remap = {
