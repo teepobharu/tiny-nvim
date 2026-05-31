@@ -88,11 +88,37 @@ function M.get_agoda_adapters(use_dynamic_fetch)
               -- The `async` param in opts is ignored by openai_compatible.get_models().
               local finalOpt = vim.tbl_deep_extend("force", {}, opts or {})
               finalOpt.use_dynamic_fetch = use_dynamic_fetch
-              return require("utils.my_codecompanion_actions").fetch_model_helper(
+              -- fetch_model_helper returns a flat string array: { "model-a", "model-b", ... }
+              local raw = require("utils.my_codecompanion_actions").fetch_model_helper(
                 self,
                 finalOpt,
                 myAiC.providers.openai_agd.adapter_name
               )
+              -- Normalize to keyed table so CodeCompanion can attach per-model opts.
+              -- Upstream enabled gate: choices[model].opts.can_reason == true
+              local result = {}
+              if type(raw) == "table" then
+                for k, v in pairs(raw) do
+                  if type(k) == "number" then
+                    -- list form: { "model-a", "model-b" }
+                    result[v] = {}
+                  else
+                    -- already keyed form: { ["model-a"] = { opts = {} } }
+                    result[k] = v
+                  end
+                end
+              end
+              -- Inject can_reason = true for reasoning-capable models
+              local reasoning_set = {}
+              for _, m in ipairs(myAiC.codecompanion_reasoning_models) do
+                reasoning_set[m] = true
+              end
+              for model_name, entry in pairs(result) do
+                if reasoning_set[model_name] then
+                  entry.opts = vim.tbl_extend("force", entry.opts or {}, { can_reason = true })
+                end
+              end
+              return result
             end,
           },
           -- temperature = {
@@ -100,6 +126,30 @@ function M.get_agoda_adapters(use_dynamic_fetch)
           -- },
           max_completion_tokens = {
             default = 4096,
+          },
+          -- reasoning_effort: override the upstream enabled gate which reads self.schema.model.default
+          -- (a static string, never the live selection). We read self.parameters.model instead so
+          -- switching to e.g. o3 in the chat actually shows this field.
+          reasoning_effort = {
+            order = 2,
+            mapping = "parameters",
+            type = "string",
+            optional = true,
+            enabled = function(self)
+              -- Prefer the live selected model; fall back to the static schema default
+              local model = (self.parameters and self.parameters.model) or self.schema.model.default
+              if type(model) == "function" then
+                model = model()
+              end
+              for _, m in ipairs(myAiC.codecompanion_reasoning_models) do
+                if m == model then
+                  return true
+                end
+              end
+              return false
+            end,
+            default = "medium",
+            choices = { "high", "medium", "low", "minimal" },
           },
         },
       })

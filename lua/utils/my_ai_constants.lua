@@ -275,6 +275,17 @@ M.codecompanion_responses_models = {
   M.models.gpt.GPT_5_1_CODEX_MINI,
 }
 
+-- Models that support reasoning_effort (o-series + DeepSeek R1)
+-- Used to inject opts.can_reason = true in the adapter choices table so that
+-- CodeCompanion's upstream reasoning_effort.enabled gate activates.
+M.codecompanion_reasoning_models = {
+  M.models.o_series.O3,
+  M.models.o_series.O3_MINI,
+  M.models.o_series.O4_MINI,
+  -- DeepSeek R1 also supports reasoning
+  M.models.deepseek.DEEPSEEK_R1,
+}
+
 M.provider_model_remap = {
   [M.providers.openai_agd.adapter_name] = {
     -- Gemini models (3.x/3.1.x REQUIRE -preview suffix on AGD proxy chat endpoint)
