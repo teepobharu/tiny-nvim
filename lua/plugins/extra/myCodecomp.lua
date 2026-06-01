@@ -304,6 +304,7 @@ return {
               index = 6,
               callback = "keymaps.clear",
               description = "[Chat] Clear",
+
             },
             buffer_picker = {
               modes = { i = "<C-b>" },

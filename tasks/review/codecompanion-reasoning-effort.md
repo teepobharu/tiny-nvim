@@ -64,29 +64,48 @@ Model+effort preset approach (e.g. `gpt-5.5-high`) requires a `form_parameters` 
 
 ### How to verify
 
+With `show_settings = true` the YAML block at the top of the chat buffer is the canonical control. To debug the settings live: open the buffer, position cursor on the YAML block, run `gd` (go-to-definition) — this opens the schema definition so you can inspect all available fields and their current values. Edit a value and press `Enter` to save.
+
+**Testing trick:** enter an invalid value (e.g. `reasoning_effort: xxhigh`) and send — CodeCompanion will show a validation error if the field is schema-gated, confirming the field is active and being read.
+
+**Caveat:** if you set an invalid value and then _remove_ the line entirely, the last-set value persists for that session (`chat.settings` retains the last parsed value; removal just means the YAML key is absent and the default is not re-applied until the next adapter change or buffer reload).
+
 ```bash
 NVIM_APPNAME=nvimwt3a nvim
 ```
 
 ```vim
 :CodeCompanionChat
-" Select a reasoning-capable model (e.g. an o-series or annotated GPT-5 model)
-" Run the change_adapter keymap (see config.lua:372 — check actual keymap binding)
-" Look for "reasoning_effort" in the schema options
+" For openai_agd (chat completions) — edit YAML header directly:
+"   reasoning_effort: high
+" For openai_responses_agd (responses API) — use dotted key:
+"   reasoning.effort: high
+" Send a message to confirm the value is picked up
+```
+
+**Sample settings block** (for `openai_responses_agd` / responses API):
+```yaml
+model = "gpt-5.3-codex"  -- or: gpt-5-codex, gpt-5.1-codex, gpt-5.2-codex, gpt-5.4-pro, gpt-5.1-codex-max
+["reasoning.effort"] = "high"   -- low / medium / high / minimal
+temperature = 1
+max_output_tokens = 4096
+verbosity = "medium"
 ```
 
 ```bash
-# Check debug log for reasoning_effort in the outbound payload
+# Confirm reasoning key in the outbound payload
 grep -i "reasoning" ~/.local/state/nvimwt3a/log
 ```
 
 ### Checklist
 
-- [ ] `reasoning_effort` option visible in adapter schema for thinking-capable model
-- [ ] Field NOT shown for non-thinking model (gate respected)
-- [ ] Changing the effort level logs the updated value in debug output
+- [ ] YAML header shows `reasoning_effort` (for `openai_agd`) or `reasoning.effort` (for `openai_responses_agd`) when a reasoning-capable model is active
+- [ ] Setting `reasoning_effort: xxhigh` (invalid) triggers a validation error on send — confirms the field is schema-gated and active
+- [ ] Setting `reasoning_effort: high` → log shows `"reasoning_effort":"high"` in outbound payload
+- [ ] Removing the key after setting it leaves the last value in effect (expected behavior — note in docs)
+- [ ] Non-reasoning model (e.g. `gpt-5.4`) does not show `reasoning_effort` in YAML header
 - [ ] No regressions — regular chat with `gpt-5.4` / `gpt-5.5` still works
-- [ ] `docs/memory/codecompanion.md` updated with default effort findings
+- [ ] `docs/memory/codecompanion.md` updated with AGD default effort findings
 
 ## References
 

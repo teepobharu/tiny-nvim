@@ -693,6 +693,47 @@ This extension integrates with CodeCompanion's internal APIs. If pinned version 
 
 ---
 
+## 8. Reasoning Effort — Practical Control via `show_settings`
+
+`show_settings = true` (set at `myCodecomp.lua:257`) renders an editable YAML block at the top of every chat buffer. This is the canonical way to control `reasoning_effort` — no keymap needed.
+
+### Debugging the settings live
+
+- Open a chat buffer, position cursor on the YAML block, press `gd` (go-to-definition) — opens the schema so you can inspect all available fields and their current values
+- Edit a value and press `Enter` (or just send the next message) to apply it
+
+### Testing if a field is active
+
+Enter an intentionally **invalid value** (e.g. `reasoning_effort: xxhigh`) and send. If the field is schema-gated and active, CodeCompanion will return a validation error. If nothing happens, the field is either disabled or not being read.
+
+### Schema key differs by adapter
+
+| Adapter | YAML key | API wire path |
+|---|---|---|
+| `openai_agd` (chat completions) | `reasoning_effort: high` | `parameters.reasoning_effort` |
+| `openai_responses_agd` (responses API) | `reasoning.effort: high` | `parameters.reasoning.effort` |
+
+### Sample settings block for `openai_responses_agd`
+
+```yaml
+model = "gpt-5.3-codex"
+-- available models: gpt-5-codex, gpt-5.1-codex, gpt-5.2-codex, gpt-5.3-codex, gpt-5.4-pro, gpt-5.1-codex-max
+["reasoning.effort"] = "high"   -- low / medium / high / minimal
+temperature = 1
+max_output_tokens = 4096
+verbosity = "medium"
+```
+
+### Caveat: key removal does not reset to default
+
+If you set a value (e.g. `reasoning.effort: xxhigh`) then **delete the line**, the last-set value persists for the session — `chat.settings` retains the previous value; removal means the key is absent from the parsed YAML, but the default is not re-applied until the adapter changes or the buffer reloads. To reset: explicitly set the desired default value rather than removing the line.
+
+### ACP adapters
+
+For `codex` / `claude_code` ACP adapters: use the `/acp_session_options` slash command instead (HTTP `show_settings` YAML does not apply to ACP).
+
+---
+
 ## References
 
 - **CodeCompanion Repo:** https://github.com/olimorris/codecompanion.nvim
