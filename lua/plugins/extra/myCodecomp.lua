@@ -220,11 +220,12 @@ return {
       })
     end,
     keys = vim.list_extend(require("utils.editor_keymaps").keymaps.codecompanion(), {
+      -- Replaces former <leader>Av: focus existing chat or open a new one
       {
-        (vim.g.ai_prefix_key or "<leader>A") .. "c",
+        (vim.g.ai_prefix_key or "<leader>A") .. "V",
         focus_codecompanion_chat,
         desc = "Code Companion - Focus Chat",
-        mode = "n",
+        mode = { "n" },
       },
     }),
     -- NOTE: llama3_2 and llama3latest ollama adapters were removed — they were
@@ -251,6 +252,11 @@ return {
       --     }
       interactions = {
         chat = {
+          -- Reasoning effort: edit the YAML header at the top of the chat buffer directly.
+          -- For openai_agd: set `reasoning_effort: high` (flat key, chat-completions API).
+          -- For openai_responses_agd: set `reasoning.effort: high` (nested, responses API).
+          -- For ACP (codex/claude_code) adapters: use /acp_session_options slash command instead.
+          -- Ref: https://deepwiki.com/search/default-thinking-level-and-doe_48a90378-1b06-4d69-98e5-fcf9808fc350?mode=fast
           adapter = DEFAULT_ADAPTER,
           model = DEFAULT_MODEL,
           -- adapter = {
@@ -300,7 +306,7 @@ return {
               description = "[Chat] Clear",
             },
             buffer_picker = {
-              modes = { i = "<M-b>" },
+              modes = { i = "<C-b>" },
               index = 7,
               callback = function()
                 pcall(vim.cmd, "stopinsert")
@@ -309,44 +315,13 @@ return {
               description = "Attach buffer",
             },
             file_picker = {
-              modes = { i = "<M-f>" },
+              modes = { i = "<C-f>" },
               index = 8,
               callback = function()
                 pcall(vim.cmd, "stopinsert")
                 run_codecompanion_slash_picker "file"
               end,
               description = "Attach file",
-            },
-            toggle_reasoning = {
-              modes = { n = (vim.g.ai_prefix_key or "<leader>A") .. "r" },
-              index = 9,
-              callback = function()
-                local chat = require("codecompanion").last_chat()
-                if not chat then
-                  vim.notify("CodeCompanion: no active chat", vim.log.levels.WARN)
-                  return
-                end
-                -- Guard: only meaningful for adapters with reasoning_effort in schema
-                if not (chat.adapter and chat.adapter.schema and chat.adapter.schema.reasoning_effort) then
-                  vim.notify("CodeCompanion: current adapter does not support reasoning_effort", vim.log.levels.WARN)
-                  return
-                end
-                local levels = { "low", "medium", "high" }
-                -- Read from chat.settings — the source of truth that map_schema_to_params reads on each send
-                local current = (chat.settings and chat.settings.reasoning_effort) or "medium"
-                local next_level = levels[1]
-                for i, l in ipairs(levels) do
-                  if l == current then
-                    next_level = levels[(i % #levels) + 1]
-                    break
-                  end
-                end
-                -- Write to chat.settings so map_schema_to_params picks it up on next submit
-                chat.settings = chat.settings or {}
-                chat.settings.reasoning_effort = next_level
-                vim.notify(("CodeCompanion: reasoning_effort → %s"):format(next_level), vim.log.levels.INFO)
-              end,
-              description = "Toggle reasoning effort (low/medium/high)",
             },
           },
         },
@@ -398,6 +373,9 @@ return {
         },
       },
       display = {
+        chat = {
+          -- show_settings = true, -- ! cant change model on the fly ! - Renders a YAML settings block at top of chat buffer (edit to change effort/params) instead of going through gd debug context
+        },
         action_palette = {
           provider = "snacks",
         },

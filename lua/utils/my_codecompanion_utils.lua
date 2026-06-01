@@ -168,22 +168,22 @@ function M.get_agoda_responses_adapters()
           api_key = "OPENAI_API_KEY",
           url = "AG_OPENAIPROXY",
         },
-        -- Override the hardcoded upstream URL with the AGD proxy responses endpoint
+        -- Override the hardcoded upstream URL with the AGD proxy responses endpoint.
+        -- model.choices is inherited from upstream (openai_responses.lua:586-661) which
+        -- already lists gpt-5-codex, 5.1-codex, 5.1-codex-max, 5.2-codex, 5.3-codex, etc.
         url = "${url}/v1/responses",
         schema = {
           model = {
             default = MODELS.gpt.GPT_5_3_CODEX,
-            choices = function()
-              -- Static list: codex models only work on responses endpoint
-              local result = {}
-              for _, m in ipairs(myAiC.codecompanion_responses_models) do
-                result[m] = { opts = {} }
-              end
-              return result
-            end,
           },
           max_output_tokens = {
             default = 4096,
+          },
+          -- Codex models on AGD reject top_p — suppress it (same pattern upstream uses for gpt-5.4-nano)
+          top_p = {
+            enabled = function()
+              return false
+            end,
           },
         },
       })

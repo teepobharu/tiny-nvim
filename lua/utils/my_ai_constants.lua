@@ -268,11 +268,11 @@ M.codecompanion_chat_excluded_models = {
   },
 }
 
--- Models that require /v1/responses endpoint (not /v1/chat/completions)
+-- Models that require /v1/responses endpoint (not /v1/chat/completions).
+-- Note: gpt-5.1-codex-mini is NOT present on AGD proxy — excluded intentionally.
 M.codecompanion_responses_models = {
   M.models.gpt.GPT_5_3_CODEX,
   M.models.gpt.GPT_5_1_CODEX_MAX,
-  M.models.gpt.GPT_5_1_CODEX_MINI,
 }
 
 -- Models that support reasoning_effort (o-series + DeepSeek R1)

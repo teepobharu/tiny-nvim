@@ -5,10 +5,10 @@ priority: low
 created: 2026-05-31
 updated: 2026-06-01
 related:
-  - [myAi.lua](lua/plugins/extra/myAi.lua)
+  - [myCodecomp.lua](lua/plugins/extra/myCodecomp.lua)
   - [editor_keymaps.lua](lua/utils/editor_keymaps.lua)
   - [my_ai_constants.lua](lua/utils/my_ai_constants.lua)
-  - [codecompanion-reasoning-effort task](tasks/open/codecompanion-reasoning-effort.md)
+  - [codecompanion-reasoning-effort task](tasks/review/codecompanion-reasoning-effort.md)
 ---
 
 ## Objective
@@ -23,7 +23,7 @@ Three housekeeping items bundled (none individually complex):
 
 ### #4 buff/file keymap
 
-Custom insert-mode pickers at `lua/plugins/extra/myAi.lua:130-163` (`run_codecompanion_slash_picker`) and `L864-881` (buffer `<C-b>`, file `<C-f>`). Comment at `L838`: *"require codecompanion.actions not seem to have keymap avail for buffer/files"* — these were added because no upstream default existed.
+Custom insert-mode pickers at `lua/plugins/extra/myCodecomp.lua:30-65` (`run_codecompanion_slash_picker`) and `L306-326` (buffer `<M-b>`, file `<M-f>`). Comment at `L278`: *"Custom insert-mode pickers — `<M-b>`/`<M-f>` to avoid blink.cmp `<C-b>`/`<C-f>` scroll-docs conflict"*.
 
 Known conflicts:
 - Insert-mode `<C-b>` = Neovim default page-up scroll (`:help i_CTRL-B` — not actually a default, so may be blink.cmp)
@@ -35,18 +35,11 @@ Investigation needed: check blink.cmp config (`lua/plugins/extra/myEditor.lua` o
 
 ### #6 thinking toggle via model preset
 
-Depends on `reasoning_effort` schema being live (see `tasks/open/codecompanion-reasoning-effort.md`). Once `can_reason` flags and schema are in place:
-- Add a chat keymap (e.g. `<leader>tr` or repurpose an existing one) that cycles `reasoning_effort` between `low` / `medium` / `high` for the current model
-- Reuse the `change_adapter` pattern at `~/.local/share/.../config.lua:372` or call `adapter:set("reasoning_effort", next_level)` directly from a keymap
+**Superseded by `show_settings = true` YAML flow.** Editing `reasoning_effort:` directly in the YAML header (rendered by `show_settings` at `myCodecomp.lua:257`) is the canonical mechanism. A runtime keymap toggle would be overwritten on every submit. The `toggle_reasoning` keymap was removed in iteration 2 (2026-06-01). See `tasks/review/codecompanion-reasoning-effort.md` for full context.
 
-### #7 extract to myCodecomp.lua
+### #7 extract to myCodecomp.lua — DONE
 
-`lua/plugins/extra/myAi.lua` is 1777 lines. The CodeCompanion plugin spec starts around `L649` and runs to ~`L1100` (~450 lines). It is self-contained and has no hard coupling to the rest of `myAi.lua`.
-
-Plan:
-- Create `lua/plugins/extra/myCodecomp.lua` with the extracted block
-- Move shared helper functions (`run_codecompanion_slash_picker`, `L130-163`) into `lua/utils/my_codecompanion_actions.lua` or a new `lua/utils/my_codecompanion_ui.lua` (check if they already live elsewhere first)
-- In `myAi.lua`, replace the extracted block with `require("plugins.extra.myCodecomp")` or a Lazy import entry
+`lua/plugins/extra/myCodecomp.lua` exists with the full CC spec. `myAi.lua` shrunk to ~600 lines. Helpers (`run_codecompanion_slash_picker`, `focus_codecompanion_chat`, `enable_yolo_on_created`) are inlined at `myCodecomp.lua:18-65`.
 
 ## Implementation Plan
 
@@ -122,9 +115,9 @@ wc -l lua/plugins/extra/myCodecomp.lua                # should be ~450+
 
 ## References
 
-- [Custom picker helpers](lua/plugins/extra/myAi.lua:116-163)
-- [In-chat keymap table](lua/plugins/extra/myAi.lua:839-882)
+- [Custom picker helpers](lua/plugins/extra/myCodecomp.lua:30-65)
+- [In-chat keymap table](lua/plugins/extra/myCodecomp.lua:279-328)
 - [Upstream chat keymaps](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/config.lua)
-- [Reasoning effort task (prerequisite for #6)](tasks/open/codecompanion-reasoning-effort.md)
+- [Reasoning effort task](tasks/review/codecompanion-reasoning-effort.md)
 - [CodeCompanion memory](docs/memory/codecompanion.md)
 - [Lazy merging guide](docs/memory/lazy-nvim-config-merging.md)

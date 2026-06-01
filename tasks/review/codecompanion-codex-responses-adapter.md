@@ -7,7 +7,7 @@ updated: 2026-06-01
 related:
   - [my_ai_constants.lua](lua/utils/my_ai_constants.lua)
   - [my_codecompanion_utils.lua](lua/utils/my_codecompanion_utils.lua)
-  - [myAi.lua](lua/plugins/extra/myAi.lua)
+  - [myCodecomp.lua](lua/plugins/extra/myCodecomp.lua)
   - [codecompanion.md](docs/memory/codecompanion.md)
 ---
 
@@ -44,9 +44,15 @@ Comment at `L174-178`: *"codex models fail codecompanion /completions — not a 
   - AGD base URL env key (same `AG_OPENAIPROXY`) and responses endpoint (`/v1/responses`)
 - [x] In `lua/utils/my_codecompanion_utils.lua` alongside `get_agoda_adapters()`, add a factory for `openai_responses_agd` extending `openai_responses` with AGD env and a model `choices` function returning only codex models
 - [x] Create `merge_agoda_responses_adapters()` helper (pattern mirrors existing `merge_agoda_adapters()`)
-- [x] In `lua/plugins/extra/myAi.lua`, call `merge_agoda_responses_adapters()` in the adapters table block (around `L897`)
-- [x] Remove `GPT_5_3_CODEX` (and the `5.1-codex-*` models) from `codecompanion_chat_excluded_models` — they now have their own adapter
-- [ ] Test in worktree profile first: `NVIM_APPNAME=nvimwt3a nvim`
+- [x] In `lua/plugins/extra/myCodecomp.lua`, call `merge_agoda_responses_adapters()` in the adapters table block (see `myCodecomp.lua:370-374`)
+- [x] Remove `GPT_5_3_CODEX` (and `5.1-codex-*` models) from `codecompanion_chat_excluded_models` — they now have their own adapter
+
+### Iteration 2 (2026-06-01)
+
+- [x] Suppress `top_p` for codex models — added `top_p = { enabled = function() return false end }` to `get_agoda_responses_adapters()` schema (mirrors upstream `gpt-5.4-nano` gate at `openai_responses.lua:750-753`)
+- [x] Drop static `choices` override — inherit upstream's static codex list from `openai_responses.lua:586-661` (already includes gpt-5-codex, gpt-5.1-codex, gpt-5.1-codex-max, gpt-5.2-codex, gpt-5.3-codex)
+- [x] Remove `GPT_5_1_CODEX_MINI` from `codecompanion_responses_models` — model not exposed on AGD proxy
+- [ ] Test in worktree profile: `NVIM_APPNAME=nvimwt3a nvim`
 
 ## Success Criteria
 
@@ -80,17 +86,19 @@ cat ~/.local/state/nvimwt3a/log
 ### Checklist
 
 - [ ] `gpt-5.3-codex` appears in the model picker in CodeCompanion chat
-- [ ] Sending a message with `gpt-5.3-codex` returns a response (not an error)
-- [ ] `gpt-5.5` chat still works normally in the same session
+- [ ] Sending a message with `gpt-5.3-codex` returns a response (not an error) [ ] `gpt-5.5` chat still works normally in the same session
 - [ ] No error notifications on Neovim startup related to adapters
 - [ ] `:messages` shows no adapter-related Lua errors
 
 ## References
 
-- [Adapter factory](lua/utils/my_codecompanion_utils.lua:60-110)
-- [Exclusion table](lua/utils/my_ai_constants.lua:260-267)
+- [Adapter factory — openai_agd](lua/utils/my_codecompanion_utils.lua:65-158)
+- [Adapter factory — openai_responses_agd](lua/utils/my_codecompanion_utils.lua:161-200)
+- [Exclusion table](lua/utils/my_ai_constants.lua:264-270)
+- [Responses models list](lua/utils/my_ai_constants.lua:271-277)
 - [Model constants](lua/utils/my_ai_constants.lua:25-40)
-- [myAi.lua adapter merge point](lua/plugins/extra/myAi.lua:897)
+- [Adapter merge point in myCodecomp.lua](lua/plugins/extra/myCodecomp.lua:370-374)
 - [Upstream openai_responses adapter](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai_responses.lua)
 - [GPT5.2 adapter fix reference](tasks/completed/gpt52_adapter_fix.md)
 - [CodeCompanion memory](docs/memory/codecompanion.md)
+

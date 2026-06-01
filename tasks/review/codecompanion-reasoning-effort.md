@@ -7,7 +7,7 @@ updated: 2026-06-01
 related:
   - [my_codecompanion_utils.lua](lua/utils/my_codecompanion_utils.lua)
   - [my_ai_constants.lua](lua/utils/my_ai_constants.lua)
-  - [myAi.lua](lua/plugins/extra/myAi.lua)
+  - [myCodecomp.lua](lua/plugins/extra/myCodecomp.lua)
   - [codecompanion.md](docs/memory/codecompanion.md)
 ---
 
@@ -27,7 +27,7 @@ reasoning_effort = {
 ```
 The `enabled` function gates on `model.choices[selected].opts.can_reason`. Without `can_reason = true` on any model entry, the field never appears in the adapter schema UI.
 
-**Local gap:** `lua/utils/my_codecompanion_utils.lua:68-106` builds the `openai_agd` adapter with `schema = { model = { choices = <function>, … }, max_completion_tokens = … }`. No `reasoning_effort` entry and no model carries `opts.can_reason = true`.
+**Local gap:** `lua/utils/my_codecompanion_utils.lua:65-158` builds the `openai_agd` adapter. No `reasoning_effort` entry and no model carried `opts.can_reason = true` until this task.
 
 **Where model choices come from:** The `choices` closure calls `fetch_model_helper` (`lua/utils/my_codecompanion_actions.lua`) which returns models from the AGD `/v1/models` endpoint dynamically. Static `opts.can_reason` flags must be injected at the adapter-build layer, keyed by model name.
 
@@ -37,10 +37,21 @@ The `enabled` function gates on `model.choices[selected].opts.can_reason`. Witho
 
 - [x] Read `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai.lua:460-495` to confirm exact `can_reason` gate and `reasoning_effort` schema shape
 - [x] Identify which models support reasoning on AGD (o-series + deepseek-r1; added `M.codecompanion_reasoning_models` in `my_ai_constants.lua`)
-- [x] In `lua/utils/my_codecompanion_utils.lua`, updated the `choices` function to normalize `fetch_model_helper`'s flat string array into keyed table and inject `opts.can_reason = true` for reasoning models
-- [x] Added `reasoning_effort` schema entry in the `openai_agd` adapter factory — deep-merges with upstream's `enabled` gate via `tbl_deep_extend`
-- [ ] Test that the field appears in the adapter schema UI when a reasoning-capable model is selected (`:CodeCompanionActions` → Chat → Change model)
-- [ ] Document the AGD default behavior in `docs/memory/codecompanion.md`
+- [x] In `lua/utils/my_codecompanion_utils.lua:97-122`, updated `choices` to normalize `fetch_model_helper`'s flat array into keyed table and inject `opts.can_reason = true` for reasoning models
+- [x] Added `reasoning_effort` schema entry in the `openai_agd` adapter factory (`my_codecompanion_utils.lua:130-153`) with live-model `enabled` gate (`self.parameters.model` fallback `schema.model.default`)
+
+### Iteration 2 notes (2026-06-01)
+
+**`show_settings = true` is the canonical control.** The YAML settings block at the top of the chat buffer (`myCodecomp.lua:257`) lets you edit `reasoning_effort: high` directly; it overwrites `chat.settings` on every submit via `interactions/chat/init.lua:1144`. A runtime keymap toggle would conflict and be silently overwritten — the `toggle_reasoning` keymap has been removed.
+
+- `openai_agd` adapter: YAML key is `reasoning_effort` (flat)
+- `openai_responses_agd` adapter: YAML key is `reasoning.effort` (dotted, responses API format)
+- ACP adapters (codex/claude_code): use `/acp_session_options` slash command
+
+Model+effort preset approach (e.g. `gpt-5.5-high`) requires a `form_parameters` hook — no upstream decoupler exists. Tracked separately in `tasks/open/codecompanion-model-effort-presets.md`.
+
+- [ ] Test that `reasoning_effort` appears in YAML header when o3/o4-mini is active
+- [ ] Document AGD default behavior in `docs/memory/codecompanion.md`
 
 ## Success Criteria
 
@@ -79,8 +90,13 @@ grep -i "reasoning" ~/.local/state/nvimwt3a/log
 
 ## References
 
-- [Adapter factory (schema entry point)](lua/utils/my_codecompanion_utils.lua:60-110)
+- [Adapter factory — openai_agd schema](lua/utils/my_codecompanion_utils.lua:65-158)
+- [Reasoning models list](lua/utils/my_ai_constants.lua:278-290)
 - [Model constants](lua/utils/my_ai_constants.lua:25-40)
-- [Upstream reasoning_effort schema](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai.lua)
+- [show_settings comment + YAML reasoning docs](lua/plugins/extra/myCodecomp.lua:255-260)
+- [Upstream reasoning_effort schema (openai.lua)](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai.lua:463-484)
+- [Upstream reasoning.effort schema (openai_responses.lua)](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai_responses.lua:663-691)
+- [show_settings YAML parse flow](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/interactions/chat/init.lua:1144)
+- [Model+effort presets follow-up](tasks/open/codecompanion-model-effort-presets.md)
 - [CodeCompanion memory](docs/memory/codecompanion.md)
 - [CodeCompanion debug memory](docs/memory/codecompanion_debug.md)
