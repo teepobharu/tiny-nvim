@@ -542,6 +542,12 @@ function _G.set_toggleterm_keymaps()
 
   if is_lazygit then
     print "Lazygit buffer"
+    if vim.g.lazygit_passthrough_ctrl_hjkl then
+      vim.keymap.set("t", "<C-h>", "<C-h>", { buffer = bufnum, nowait = true })
+      vim.keymap.set("t", "<C-j>", "<C-j>", { buffer = bufnum, nowait = true })
+      vim.keymap.set("t", "<C-k>", "<C-k>", { buffer = bufnum, nowait = true })
+      vim.keymap.set("t", "<C-l>", "<C-l>", { buffer = bufnum, nowait = true })
+    end
   elseif is_sidekick then
     print "Sidekick buffer"
     -- try remove but still not work usable

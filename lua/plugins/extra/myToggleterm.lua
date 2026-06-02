@@ -83,11 +83,13 @@ local isToggleCurrentLazyTerm = function(name, termOpts)
         vim.cmd("startinsert!")
         vim.notify("OPEN " .. name, vim.log.levels.INFO, { title = "Lazygit" })
 
-        -- Allow to make it work for lazygit for Esc and ctrl + hjkl
-        vim.keymap.set("t", "<c-h>", "<c-h>", { buffer = term.bufnr, nowait = true })
-        vim.keymap.set("t", "<c-j>", "<c-j>", { buffer = term.bufnr, nowait = true })
-        vim.keymap.set("t", "<c-k>", "<c-k>", { buffer = term.bufnr, nowait = true })
-        vim.keymap.set("t", "<c-l>", "<c-l>", { buffer = term.bufnr, nowait = true })
+        -- Allow lazygit to own ctrl + hjkl only when explicitly enabled.
+        if vim.g.lazygit_passthrough_ctrl_hjkl then
+          vim.keymap.set("t", "<c-h>", "<c-h>", { buffer = term.bufnr, nowait = true })
+          vim.keymap.set("t", "<c-j>", "<c-j>", { buffer = term.bufnr, nowait = true })
+          vim.keymap.set("t", "<c-k>", "<c-k>", { buffer = term.bufnr, nowait = true })
+          vim.keymap.set("t", "<c-l>", "<c-l>", { buffer = term.bufnr, nowait = true })
+        end
         vim.keymap.set("t", "<esc>", "<esc>", { buffer = term.bufnr, nowait = true })
         set_lazygit_size_keymap(term)
 
