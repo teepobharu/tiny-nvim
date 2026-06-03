@@ -1,230 +1,103 @@
 # mcphub.nvim patches
 
-Patch files are applied in numeric order by `lazy-local-patcher`.
+Patch files are applied in order by `lazy-local-patcher`. Three grouped patch files cover all local changes against `163b3ad` (v6.2.0).
 
-## 01-codecompanion-v19-compat.patch
-
-- Updates CodeCompanion extension glue for v19 behavior.
-- Keeps MCPHub tool/resource/prompt integration stable after upstream API changes.
-
-## 02-env-tool-filters.patch
-
-- Adds env-driven tool filter support (`*_ALLOWED_TOOLS_REGEX`, `*_DENIED_TOOLS_REGEX`, etc.).
-- Adds strict hide behavior via `removed_tools` and blocks removed tool execution in mcphub.nvim path.
-- Adds UI action key `x` for strict hide toggling in main view tool entries.
-
-## 03-log-dedup-throttle.patch
-
-- Reduces log spam pressure by deduplicating repeated server log entries.
-- Throttles UI notification updates to avoid freezes during disconnect/reconnect bursts.
-
-## 04-tool-input-nav-keys.patch
-
-- Adds configurable capability-form navigation keys for tool input fields and submit line.
-- Default keys: `<C-j>` next field, `<C-k>` previous field.
-- Config path:
-
-```lua
-require("mcphub").setup({
-  ui = {
-    input_navigation = {
-      next_field = "<C-j>",
-      prev_field = "<C-k>",
-    },
-  },
-})
+**Application order** (required):
+```bash
+git apply --ignore-space-change 01-compat_v1.patch
+git apply --ignore-space-change 02-hub-stability_v1.patch
+git apply --ignore-space-change 03-main-ui_v1.patch
 ```
 
-## 05-endpoints-and-agents.patch
+`02` must precede `03` — env-tool-filters (in `02`) adds hub.lua and main.lua context that `03` depends on.
 
-- Adds **Endpoints panel** below MCP Servers: shows `/mcp` (flat) and `/mcp-lean` (lean) rows with hub-up status dot.
-- Adds **CLI Agents panel**: shows registered bindings for each configured agent profile (claude / claude-agd / codex / opencode) × scope × endpoint target.
-- **Hover-only key hints**: action hints appear as virtual-text on the cursor line only. Driven by the upstream `context.hint` / `hover_ns` mechanism — no always-visible inline text.
-- **MCP Inspector integration** (endpoint rows, cursor-only):
-  - `e` — launch `npx @modelcontextprotocol/inspector -y` (reuse running) and open browser at `http://localhost:6274/?transport=sse&serverUrl=<url>&MCP_PROXY_AUTH_TOKEN=<token>`
-  - `s` — stop the running inspector job
-  - `i` — edit `~/.config/mcp-inspector/config.json` (created as `{}` if missing)
-  - Servers config remains reachable through the MCPHub config view (`C`, then `e`).
-- **Toggle-and-edit pattern** (matches upstream ConfigView's `e` behavior): any config file opened by `e`/`i` calls `self.ui:toggle()` to hide the floating MCPHub window, then `:edit <path>` in the underlying window. The hub itself stays alive — only the float is hidden. Re-show with `:MCPHub` (or your `<leader>ah` keymap).
-- Keys on agent rows (cursor-only, single-key — no `<leader>` prefix): `t` toggle /mcp ↔ /mcp-lean, `d` remove, `a` add lean, `A` add flat, `R` refresh, `e` edit agent config (vsplit + `<C-q>`).
-- Patch 08/09 route keys through main-view dispatch instead of cursor-line key deletion. Endpoint keys: `e/s/i/r/u/y`; agent keys: `e/t/d/a/A/R`.
-- Hint text is terse single-token form (`e:inspect s:stop ...`, `t:toggle d:remove e:cfg`).
-- Per-agent CLI dispatch in `lua/utils/mcphub_agents.lua`: claude uses `--transport sse`, codex uses `--url` (no `--transport`), opencode returns helpful error directing to `e` for manual config edit (no CLI add). Patch 10 makes this preset/profile-aware.
-- Inspector lifecycle owned by `lua/utils/mcp_inspector.lua`: start (`vim.fn.jobstart`), stop (`vim.fn.jobstop`), `is_running` check, URL builder, `vim.ui.open` for browser.
-- Config paths: `ui.endpoints.enabled`, `ui.agent_registry.{enabled, agents, scopes, default_agent_id, default_scope}`.
-- **Server build dependency**: `/mcp-lean` requires the local `mcp-hub` fork to
-  include the lean proxy endpoint and for `~/projects/mcp-hub/dist/cli.js` to be
-  rebuilt. If this patch is committed together with the server-side lean proxy,
-  include that dependency in the commit title, e.g.
-  `mcphub: add lean endpoint UI and rebuild local hub`.
+To add a new patch on top, apply all 3 groups first, make changes, then `git diff HEAD -- <files>`. Save as a new `_v2` file rather than overwriting `_v1`.
 
-## 06-compatible-health-version-check.patch
+---
 
-- Fixes startup health checks treating compatible `mcp-hub` patch versions as
-  mismatches.
-- Reuses `validation.validate_version()` for an existing hub's `/api/health`
-  `version` instead of exact string equality with `REQUIRED_NODE_VERSION.string`.
-- Prevents a second Neovim instance from hard-restarting a compatible existing
-  hub such as `4.2.1` when the plugin's required string is `4.2.0`.
+## 01-compat_v1.patch
 
-## 07-confirm-hard-restart.patch
+Upstream compatibility fixes. No shared files with other groups; safe to apply independently.
 
-- Adds `confirm_hard_restart = true` and asks before posting
-  `/api/hard-restart` from automatic startup mismatch paths.
-- Startup config/cache mismatch cases default to connecting to the existing hub
-  instead of replacing it.
-- Manual `R` is explicit user intent and does not show the confirmation popup.
-- Client-side patch; no `mcp-hub` server rebuild is required.
+- Updates CodeCompanion extension glue for v19 behavior — keeps MCPHub tool/resource/prompt integration stable after upstream API changes.
+- Fixes startup health checks treating compatible `mcp-hub` patch versions as mismatches. Reuses `validation.validate_version()` for the existing hub's `/api/health` version instead of exact string equality, so a running `4.2.1` hub is not hard-restarted when the plugin requires `4.2.0`.
 
-## 08-main-view-keymap-dispatch.patch
+**Files**: `lua/mcphub/extensions/codecompanion/` (core, init, slash_commands, tools, variables), `lua/mcphub/hub.lua`
 
-- Fixes a regression from patch 05 where cursor-line remapping deleted core
-  browse-mode mappings (`e`, `t`, `d`, `a`, `A`, `r`, `R`) on non endpoint/agent
-  rows.
-- Keeps normal server/tool/native actions working, including `t` toggle and `e`
-  edit, while still routing endpoint/agent rows to their special actions.
-- Removes cursor-move key deletion entirely for these actions; endpoint-only
-  keys are silent row-aware mappings owned by the main view.
-- Client-side patch; no `mcp-hub` server rebuild is required.
+---
 
-## 09-endpoint-inspector-auth-copy.patch
+## 02-hub-stability_v1.patch
 
-- Removes endpoint `E` because endpoint config editing is already reachable through the MCPHub config view (`C`, then `e`).
-- Keeps endpoint `e` focused on opening MCP Inspector.
-- Adds `y` and `Y` copy actions:
-  - Endpoint row: `y` copies the endpoint URL.
-  - Server row: `y` and `Y` copy the server name.
-  - Tool/prompt/resource rows: `y` copies the item name/URI, `Y` copies `server_name .. "_" .. item_name`, for example `gitlab_mr_get_merge_request`.
-- Updates hover hints for server/capability rows to include `y`/`Y`.
-- Companion local config change in `lua/utils/mcp_inspector.lua`:
-  - Honors existing `MCP_PROXY_AUTH_TOKEN`.
-  - Otherwise reads or creates `~/.config/mcp-inspector/proxy-token` using `openssl rand -hex 32` when available.
-  - Starts Inspector with `MCP_PROXY_AUTH_TOKEN`, `CLIENT_PORT`, `SERVER_PORT`, and `MCP_AUTO_OPEN_ENABLED=false`.
-  - Opens the browser URL with `MCP_PROXY_AUTH_TOKEN=<token>` attached.
-- **Server build dependency**: none. This is client/UI plus local inspector-helper behavior only.
-- Suggested commit title: `mcphub: auth inspector endpoint links and add copy actions`.
+Hub lifecycle hardening. Contains env-tool-filters which is the root dependency for `03-main-ui_v1`.
 
-## 10-configurable-agent-profiles.patch
+- **Env-driven tool filters** — adds `*_ALLOWED_TOOLS_REGEX` / `*_DENIED_TOOLS_REGEX` env var support per server config. Adds strict hide via `removed_tools` blocking tool execution. Adds UI action key `x` for strict-hide toggling on tool rows.
+- **Log dedup/throttle** — deduplicates repeated server log entries; throttles UI notification updates to avoid freezes during disconnect/reconnect bursts.
+- **Confirm hard-restart** — adds `confirm_hard_restart = true`; startup config/cache mismatch paths default to connecting the existing hub instead of replacing it. Manual `R` is explicit intent and skips the prompt.
+- **Workspace switch debounce** — debounces `MCPHub:handle_directory_change` by `shutdown_delay` ms client-side. A timer cancels pending switches if `cwd` returns to the original workspace before it fires. Falls back to immediate switch when `shutdown_delay <= 0`. Timer is cancelled in `_clean_up()`.
+- **UI context reconcile on open** — on `:MCPHub` open, re-resolves workspace context and switches the connected hub if `cwd` now points to a different port. Cancels any pending debounce timer so the two don't race. Uses `MCPHub:start()`'s fast path (short-circuits to `connect_sse()` when the target port is already up).
 
-- Makes the CLI Agents panel profile-aware instead of keying all rows by executable name.
-- Keeps old config working: `{ name = "claude" }` still normalizes to the `claude` preset.
-- Supports explicit profiles:
+**Files**: `lua/mcphub/hub.lua`, `lua/mcphub/state.lua`, `lua/mcphub/utils/handlers.lua`, `lua/mcphub/ui/init.lua`, `lua/mcphub/config.lua`
 
-```lua
-{
-  id = "claude-agd",
-  preset = "claude",
-  label = "claude-agd",
-  command = "claude",
-  config_dir = "/Users/tharutaipree/.claude-agd",
-  config_path = "/Users/tharutaipree/.claude-agd/settings.json",
-  binding_flat = "mcphub",
-  binding_lean = "mcphub-lean",
-  scopes = { "user" },
-}
-```
+---
 
-- `lua/utils/mcphub_agents.lua` runs Claude profile commands with `CLAUDE_CONFIG_DIR=<config_dir>`, so list/add/remove target the alternate Claude profile.
-- Endpoint row `r`/`u` now use `ui.agent_registry.default_agent_id` and `default_scope` instead of hardcoded `claude` user scope.
-- `e` on a profile row opens `config_path` when configured.
-- **Server build dependency**: none. This is client/UI plus local helper behavior only.
-- Suggested commit title: `mcphub: support configurable CLI agent profiles`.
+## 03-main-ui_v1.patch
 
-## 11-copy-payload-token-counts.patch
+All main-view UI work. Depends on `02-hub-stability_v1` for hub.lua and main.lua context.
 
-- Adds `y` inside active capability views:
-  - Tool/prompt input row: copies the current field value.
-  - Tool/prompt submit row: copies the JSON form payload without forcing
-    validation first. Tool values are schema-converted when valid and left raw
-    when invalid.
-  - Text result row: copies the whole current result, not only the selected
-    rendered line.
-- Resource/resource-template result text lines also use the same result-line copy tracking.
-- Adds approximate token estimates:
-  - Connected server rows show `~Nt` for that server's generated prompt text
-    after `disabled_tools`, `removed_tools`, and env regex tool filters.
-  - Expanded tool rows show `~Nt` for that tool description plus input schema
-    only while the tool is visible to prompts.
-- Token display is controlled by:
+- **Tool input navigation keys** — configurable capability-form navigation: `<C-j>` next field, `<C-k>` previous field. Config path: `ui.input_navigation.{next_field, prev_field}`.
 
-```lua
-ui = {
-  token_counts = {
-    enabled = true,
-    servers = true,
-    tools = true,
-  },
-}
-```
+- **Endpoints panel** — shows `/mcp` (flat) and `/mcp-lean` (lean) rows below MCP Servers with hub-up status dot. Per-row hover-only key hints via `context.hint` / `hover_ns`.
+  - `e` launches `npx @modelcontextprotocol/inspector -y` (reuses running) and opens browser with proxy auth token.
+  - `s` stops the inspector. `i` edits `~/.config/mcp-inspector/config.json`.
+  - `y` copies the endpoint URL.
 
-- Counts use the existing approximate `utils.calculate_tokens()` helper
-  (`ceil(chars / 4)`), so they are sizing hints, not model-tokenizer exact values.
-- **Server build dependency**: none. This is client/UI behavior only.
-- Suggested commit title: `mcphub: copy active payloads and show token estimates`.
+- **CLI Agents panel** — shows registered bindings for each configured agent profile × scope × endpoint. Profile-aware: `{ name = "claude" }` normalises to the `claude` preset; explicit profiles support `id`, `preset`, `label`, `command`, `config_dir`, `config_path`, `scopes`. Agent commands run with `CLAUDE_CONFIG_DIR=<config_dir>`. Row keys: `t` toggle flat↔lean, `d` remove, `a` add lean, `A` add flat, `R` refresh, `e` edit config.
 
-## 12-workspace-switch-shutdown-delay.patch
+- **Main-view keymap dispatch fix** — routes endpoint/agent keys through a persistent main-view dispatch instead of cursor-move key deletion, so normal server/tool/native actions (`e`, `t`, `d`, `a`, `A`, `r`, `R`) are never wiped on non-endpoint/agent rows.
 
-- Debounces workspace hub switches in `MCPHub:handle_directory_change` by `shutdown_delay` ms (client-side).
-- Previously, switching `cwd` across workspace roots immediately tore down the old hub's SSE connection and started a new hub — `shutdown_delay` was only forwarded to the mcp-hub server process, not honoured by the Neovim client.
-- Now: when ports would differ, a `vim.uv.new_timer` is started for `shutdown_delay` ms. If `cwd` returns to the original workspace before the timer fires, the switch is cancelled — no churn. If the timer fires and the context still wants a different port, the switch proceeds normally.
-- Timer is always cancelled in `_clean_up()` to prevent leaks on explicit stop/restart.
-- Falls back to immediate switch when `shutdown_delay <= 0`.
+- **Copy actions** — `y`/`Y` on server rows copies server name; on tool/prompt/resource rows `y` copies item name/URI, `Y` copies `server_name_item_name`. Inside capability views, `y` on input rows copies field value; on submit row copies JSON payload; on result rows copies full result text.
 
-## 13-ui-show-reconcile-context.patch
+- **Token estimates** — server rows show `~N` / `~Nk` approximate prompt-token count after tool filters. Tool rows show per-tool estimate while visible. Controlled by `ui.token_counts.{enabled, servers, tools}`. Uses `ceil(chars / 4)` — sizing hints, not exact values.
 
-- On `:MCPHub` open, re-resolves workspace context and switches the connected hub if `cwd` now points to a different port.
-- Companion to patch 12: when the debounce timer hasn't fired yet, opening the UI is treated as explicit user intent — switch immediately so the UI reflects the current workspace (or global) hub.
-- Adds `UI:reconcile_context()` and a single call from `UI:show()`. No-op when `workspace.enabled = false` or when the resolved port already matches `State.current_hub.port`.
-- Cancels any pending switch timer so patch 12 and patch 13 don't race.
-- Uses `MCPHub:start()`'s existing fast path: when the target port is already running our server, `start()` short-circuits to `connect_sse()` — no `--shutdown-delay` of the old hub, no process spawn, no hard restart.
-- Closes the gap where pressing `r` (refresh) only refreshed the workspace hub's capabilities and `R` (hard restart) was the only way to swap hubs.
+- **SSE recovery** — recovers from transient disconnects by probing the hub before tearing down state; reconnects SSE when reachable. Main-view `r` tries soft reconnect when disconnected, falls back to hard-refresh when connected.
 
-## 14-sse-recovery-and-hub-fallback.patch
+- **Agent alternate config targets** — `config_alternates` list on each agent profile registers extra keys (non-conflicting with existing main-view keys). Pressing the key on an agent row opens the target file and jumps to the `matcher` location.
+  - Matcher: dot-path navigation for JSON/TOML/YAML, plain-text fallback. JSON prefers the shallowest (root-level) match so `.mcpServers` lands on the root key, not a nested duplicate inside `projects[]`.
+  - Paths expand `~` and `$HOME`.
 
-- Recovers from transient SSE disconnects by probing the existing hub before tearing down state.
-- Reconnects SSE when the hub is still reachable instead of forcing cleanup/restart.
-- Makes main-view `r` try a soft reconnect when disconnected, then falls back to normal refresh when connected.
-- Client-side patch; no `mcp-hub` server rebuild is required.
+  ```lua
+  config_alternates = {
+    { key = "1", label = "perms",  path = "~/.claude/settings.json", matcher = ".permissions" },
+    { key = "2", label = "c_json", path = "~/.claude.json",          matcher = ".mcpServers"  },
+  }
+  ```
 
-## 15-agent-alternate-config-open.patch
+- **Cursor persists on toggle** — `cleanup()` calls `before_leave()` before closing so browse position is saved and restored when the UI is reopened.
 
-- Extends CLI Agent rows with optional `config_alternates` targets.
-- Registers each alternate target's configured `key` when it does not conflict with an existing MCPHub main-view key.
-- Pressing the configured key on an agent row opens the matching alternate config and jumps to `matcher` when provided.
-- Example targets:
+- **Section navigation / fold** — in main browse mode:
+  - `J` / `K` — jump to next / previous section header (wraps); shown in footer.
+  - `h` / `l` on a section header — fold / unfold (`▶` collapsed, `▼` open); on any other line — original server collapse/expand.
+  - `T` (outside any section line) — toggle all foldable sections at once; collapses all if any are open, expands all if all are collapsed.
+  - Foldable sections: Global group, Project group, Native Servers, Endpoints, CLI Agents, Active Hubs. MCP Servers is a nav anchor only (not foldable).
 
-```lua
-config_alternates = {
-  { key = "1", label = "settings permissions", path = "~/.claude/settings.json", matcher = ".permissions" },
-  { key = "P", label = "settings permissions", path = "$HOME/.claude/settings.json", matcher = ".permissions" },
-}
-```
+**Files**: `lua/mcphub/config.lua`, `lua/mcphub/ui/init.lua`, `lua/mcphub/ui/views/main.lua`, `lua/mcphub/ui/capabilities/` (base, prompt, resource, resourceTemplate, tool), `lua/mcphub/utils/renderer.lua`
 
-- `e` still opens the profile's main `config_path`.
-- Matchers support pragmatic dot-path search for JSON/TOML/YAML plus plain-text fallback.
-- For JSON, `.mcpServers` prefers the shallowest (root-level) match; nested duplicates (e.g. inside `projects[]`) are skipped.
-- Path config can use `~` or `$HOME`; paths are expanded before opening.
-- Cursor persists across UI toggle: `cleanup()` saves browse position via `before_leave()` so reopening the UI restores the exact line.
-- Section navigation in main view browse mode:
-  - `J` / `K` — jump to next / previous section header (wraps)
-  - `h` / `l` on a section header line — fold / unfold the section; on any other line — original server collapse/expand behavior
-  - Sections: MCP Servers, Native Servers, Endpoints, CLI Agents, Active Hubs
-  - Folded sections show `[folded]` hint inline and skip rendering their content
-- Client-side patch; no `mcp-hub` server rebuild is required.
+---
 
 ## Validation note
 
-- `04-tool-input-nav-keys.patch` was validated on a clean baseline matching this setup by applying patches `01 -> 02 -> 03` then checking `04` with `git apply --check`.
-- `lazy-local-patcher` can show a contradictory notification (`Error applying...` and `Applied ...`) due notifier behavior; use manual `git apply --check` for authoritative validation.
+- All 3 patches validated by applying in order from clean `163b3ad` (v6.2.0) with `git apply --check` then `git apply`.
+- `lazy-local-patcher` can show a contradictory notification (`Error applying...` and `Applied ...`) due to notifier race behavior; use manual `git apply --check` for authoritative validation.
 
 ## User notes
+
 Fix
 - [ ]
-- [ ] error and unauth server show as enabled can we make clear distinction in the response ?
+- [ ] error and unauth server show as enabled — make clear distinction in the response?
 
 Added requirements
-- [ ] be able to check those mcp-lean tools from UI
+- [ ] be able to check mcp-lean tools from UI
   - Current low-risk path: `e` on `/mcp-lean` opens MCP Inspector with proxy auth token attached.
   - Native execution inside MCPHub UI would need a separate endpoint-client capability view.
-- [x] Add UI command to open/close the npx inspector web ui to check on each endpoint lean / mcp
+- [x] Add UI command to open/close the npx inspector web UI to check on each endpoint
   - `e` on endpoint row launches inspector + opens browser; `s` stops it

@@ -486,9 +486,21 @@ return {
               config_alternates = {
                 {
                   key = "1",
-                  label = "settings permissions",
+                  label = "pm",
                   path = "~/.claude/settings.json",
                   matcher = ".permissions",
+                },
+                {
+                  key = "2",
+                  label = "og_pm",
+                  path = "~/dotfiles/ai/claude/settings.json",
+                  matcher = ".permissions",
+                },
+                {
+                  key = "s",
+                  label = "jsn",
+                  path = "~/.claude.json",
+                  matcher = ".mcpServers",
                 },
               },
             },
@@ -502,22 +514,59 @@ return {
               config_alternates = {
                 {
                   key = "1",
-                  label = "settings permissions",
+                  label = "pm",
                   path = "~/.claude-agd/settings.json",
                   matcher = ".permissions",
                 },
                 {
                   key = "2",
-                  label = "main settings permissions",
-                  path = "~/.claude/settings.json",
+                  label = "og_pm",
+                  path = "~/dotfiles/ai/claude/cc-agd/settings.json",
                   matcher = ".permissions",
+                },
+                {
+                  key = "s",
+                  label = "jsn",
+                  path = "~/.claude-agd/.claude.json",
+                  matcher = ".mcpServers",
                 },
               },
               binding_flat = "mcphub",
               binding_lean = "mcphub-lean",
               scopes = { "user" },
             },
-            { name = "codex", binding_flat = "mcphub", binding_lean = "mcphub-lean" },
+            {
+              name = "codex",
+              binding_flat = "mcphub",
+              binding_lean = "mcphub-lean",
+              config_alternates = {
+                {
+                  key = "1",
+                  label = "s_mc",
+                  path = "~/.codex/config.toml",
+                  matcher = ".mcp_servers",
+                },
+              },
+            },
+            {
+              name = "cursor",
+              binding_flat = "mcphub",
+              binding_lean = "mcphub-lean",
+              config_alternates = {
+                {
+                  key = "1",
+                  label = "usr_mcp",
+                  path = "~/.cursor/mcp.json",
+                  matcher = ".mcpServers",
+                },
+                {
+                  key = "2",
+                  label = "p_mcp",
+                  path = "./.cursor/mcp.json",
+                  matcher = ".mcpServers",
+                },
+              },
+            },
             { name = "opencode", binding_flat = "mcphub", binding_lean = "mcphub-lean" },
           },
           scopes = { "user", "project" },

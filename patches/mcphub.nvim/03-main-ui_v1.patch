@@ -1,0 +1,1836 @@
+diff --git c/lua/mcphub/config.lua w/lua/mcphub/config.lua
+index 8f99710..df19a94 100644
+--- c/lua/mcphub/config.lua
++++ w/lua/mcphub/config.lua
+@@ -77,6 +77,42 @@ local defaults = {
+     },
+     ---@type MCPHub.UIConfig
+     ui = {
++        endpoints = {
++            enabled = true,
++        },
++        agent_registry = {
++            enabled = true,
++            default_agent_id = "claude",
++            default_scope = "user",
++            agents = {
++                {
++                    name = "claude",
++                    binding_flat = "mcphub",
++                    binding_lean = "mcphub-lean",
++                    config_alternates = {},
++                },
++                {
++                    name = "codex",
++                    binding_flat = "mcphub",
++                    binding_lean = "mcphub-lean",
++                },
++                {
++                    name = "opencode",
++                    binding_flat = "mcphub",
++                    binding_lean = "mcphub-lean",
++                },
++            },
++            scopes = { "user", "project" },
++        },
++        input_navigation = {
++            next_field = "<C-j>",
++            prev_field = "<C-k>",
++        },
++        token_counts = {
++            enabled = true,
++            servers = true,
++            tools = true,
++        },
+         window = {},
+         wo = {},
+     },
+diff --git c/lua/mcphub/hub.lua w/lua/mcphub/hub.lua
+index 6949488..7881112 100644
+--- c/lua/mcphub/hub.lua
++++ w/lua/mcphub/hub.lua
+@@ -1429,7 +1429,15 @@ function MCPHub:connect_sse()
+         on_exit = vim.schedule_wrap(function(_, code)
+             log.debug("SSE JOB exited with " .. tostring(code))
+             self.sse_job = nil
+-            self:handle_hub_stopped("SSE connection failed with code " .. tostring(code), code)
++            -- If we asked the SSE to stop (stop_sse path) or the whole hub is shutting down,
++            -- treat the exit as expected and clean up normally.
++            if self.is_shutting_down or code == 0 then
++                self:handle_hub_stopped("SSE connection closed", code)
++                return
++            end
++            -- Patch 14: transient SSE drop (curl error 56, idle timeout, server restart, sleep/wake).
++            -- Don't tear down state — probe /api/health first; if the hub is still alive, just reopen SSE.
++            self:_attempt_sse_recovery(code)
+         end),
+     })
+ 
+@@ -1438,6 +1446,33 @@ function MCPHub:connect_sse()
+     sse_job:start()
+ end
+ 
++--- Patch 14: try to recover from a transient SSE disconnect without going through _clean_up().
++--- Probes the existing hub at the same port. If it's still our hub and reachable, reopens SSE.
++--- Otherwise falls through to handle_hub_stopped so the existing UI/error path runs.
++function MCPHub:_attempt_sse_recovery(exit_code)
++    if self.is_shutting_down then
++        return
++    end
++    log.debug("Attempting SSE recovery after exit code " .. tostring(exit_code))
++    -- Reuse check_server; it short-circuits when self:is_ready(), so force a real probe by
++    -- temporarily flipping ready off (we already lost the SSE feed; ready is effectively stale).
++    local was_ready = self.ready
++    self.ready = false
++    self:check_server(function(is_running, is_our_server, _is_same_version)
++        if is_running and is_our_server then
++            log.debug("SSE recovery: hub still alive, reopening SSE without state reset")
++            self.ready = was_ready
++            -- Reconnect; skip if already reconnected by something else
++            if not self.sse_job then
++                self:connect_sse()
++            end
++            return
++        end
++        log.debug("SSE recovery: hub not reachable, falling through to handle_hub_stopped")
++        self:handle_hub_stopped("SSE connection failed with code " .. tostring(exit_code), exit_code)
++    end)
++end
++
+ --- Stop SSE connection
+ function MCPHub:stop_sse()
+     if self.sse_job then
+diff --git c/lua/mcphub/ui/capabilities/base.lua w/lua/mcphub/ui/capabilities/base.lua
+index 4d4c90d..1ee6857 100644
+--- c/lua/mcphub/ui/capabilities/base.lua
++++ w/lua/mcphub/ui/capabilities/base.lua
+@@ -71,12 +71,17 @@ function CapabilityHandler:handle_cursor_move(view, line)
+ 
+     if type == "submit" and not self.state.is_executing then
+         view.cursor_highlight = vim.api.nvim_buf_set_extmark(view.ui.buffer, view.hover_ns, line - 1, 0, {
+-            virt_text = { { "[<l> Submit]", highlights.muted } },
++            virt_text = { { "[<l> Submit, <y> Copy payload]", highlights.muted } },
+             virt_text_pos = "eol",
+         })
+     elseif type == "input" then
+         view.cursor_highlight = vim.api.nvim_buf_set_extmark(view.ui.buffer, view.hover_ns, line - 1, 0, {
+-            virt_text = { { "[<l> Edit, <o> Multiline Edit]", highlights.muted } },
++            virt_text = { { "[<l> Edit, <o> Multiline Edit, <y> Copy value]", highlights.muted } },
++            virt_text_pos = "eol",
++        })
++    elseif type == "result" then
++        view.cursor_highlight = vim.api.nvim_buf_set_extmark(view.ui.buffer, view.hover_ns, line - 1, 0, {
++            virt_text = { { "[<y> Copy result]", highlights.muted } },
+             virt_text_pos = "eol",
+         })
+     end
+@@ -137,11 +142,18 @@ function CapabilityHandler:render_section_end(content, indent_level)
+     return lines
+ end
+ 
+-function CapabilityHandler:render_output(output)
++function CapabilityHandler:render_output(output, line_offset)
+     local lines = {}
+     --Handle text content
+     if output.text and output.text ~= "" then
+-        vim.list_extend(lines, self:render_section_content(Text.multiline(output.text, highlights.info), 1))
++        for _, text_line in ipairs(Text.multiline(output.text, highlights.info)) do
++            vim.list_extend(lines, self:render_section_content({ text_line }, 1))
++            if line_offset then
++                self:track_line(line_offset + #lines, "result", {
++                    text = self:get_result_text(),
++                })
++            end
++        end
+     end
+     -- Handle image content
+     if output.images and #output.images > 0 then
+@@ -191,7 +203,7 @@ function CapabilityHandler:render_output(output)
+ end
+ 
+ -- Common result rendering
+-function CapabilityHandler:render_result()
++function CapabilityHandler:render_result(line_offset)
+     if not self.state.result then
+         return {}
+     end
+@@ -199,11 +211,51 @@ function CapabilityHandler:render_result()
+     local lines = {}
+     table.insert(lines, Text.pad_line(NuiLine())) -- Empty line
+     vim.list_extend(lines, self:render_section_start("Result"))
+-    vim.list_extend(lines, self:render_output(self.state.result))
++    vim.list_extend(lines, self:render_output(self.state.result, line_offset and (line_offset + #lines)))
+     vim.list_extend(lines, self:render_section_end())
+     return lines
+ end
+ 
++function CapabilityHandler:get_yank_value(line)
++    local type, context = self:get_line_info(line)
++    if type == "result" and context and context.text then
++        return context.text, "result"
++    end
++    return nil, nil
++end
++
++function CapabilityHandler:get_result_text()
++    local result = self.state.result
++    if not result then
++        return ""
++    end
++
++    if type(result.text) == "string" and result.text ~= "" then
++        return result.text
++    end
++
++    if type(result.messages) == "table" then
++        local parts = {}
++        for _, message in ipairs(result.messages) do
++            local output = message.output or {}
++            local role = message.role
++            if type(output.text) == "string" and output.text ~= "" then
++                if role and role ~= "" then
++                    table.insert(parts, role .. ":\n" .. output.text)
++                else
++                    table.insert(parts, output.text)
++                end
++            end
++        end
++        if #parts > 0 then
++            return table.concat(parts, "\n\n")
++        end
++    end
++
++    local ok, encoded = pcall(vim.json.encode, result)
++    return ok and encoded or vim.inspect(result)
++end
++
+ -- Error handling
+ function CapabilityHandler:handle_response(response, err)
+     self.state.is_executing = false
+diff --git c/lua/mcphub/ui/capabilities/prompt.lua w/lua/mcphub/ui/capabilities/prompt.lua
+index 269c3a7..83c24bc 100644
+--- c/lua/mcphub/ui/capabilities/prompt.lua
++++ w/lua/mcphub/ui/capabilities/prompt.lua
+@@ -172,6 +172,25 @@ function PromptHandler:execute()
+     end
+ end
+ 
++function PromptHandler:get_current_payload()
++    local converted_values = {}
++    for name, value in pairs(self.state.params.values) do
++        converted_values[name] = value
++    end
++    return converted_values
++end
++
++function PromptHandler:get_yank_value(line)
++    local type, context = self:get_line_info(line)
++    if type == "input" then
++        return tostring(self.state.params.values[context] or ""), context
++    elseif type == "submit" then
++        local ok, encoded = pcall(vim.json.encode, self:get_current_payload())
++        return ok and encoded or vim.inspect(self.state.params.values), "payload"
++    end
++    return Base.get_yank_value(self, line)
++end
++
+ function PromptHandler:render_submit()
+     local submit_content
+     if self.state.is_executing then
+@@ -331,7 +350,7 @@ function PromptHandler:render(line_offset)
+             local role = message.role
+             local output = message.output
+             vim.list_extend(lines, self:render_section_content({ NuiLine():append(role, highlights.success) }))
+-            vim.list_extend(lines, self:render_output(output))
++            vim.list_extend(lines, self:render_output(output, line_offset + #lines))
+         end
+     end
+ 
+diff --git c/lua/mcphub/ui/capabilities/resource.lua w/lua/mcphub/ui/capabilities/resource.lua
+index 5870253..d9aa2d9 100644
+--- c/lua/mcphub/ui/capabilities/resource.lua
++++ w/lua/mcphub/ui/capabilities/resource.lua
+@@ -107,7 +107,7 @@ function ResourceHandler:render(line_offset)
+     vim.list_extend(lines, self:render_section_end())
+ 
+     -- Result section if any
+-    vim.list_extend(lines, self:render_result())
++    vim.list_extend(lines, self:render_result(line_offset + #lines))
+ 
+     return lines
+ end
+diff --git c/lua/mcphub/ui/capabilities/resourceTemplate.lua w/lua/mcphub/ui/capabilities/resourceTemplate.lua
+index 070da3b..8d0b6aa 100644
+--- c/lua/mcphub/ui/capabilities/resourceTemplate.lua
++++ w/lua/mcphub/ui/capabilities/resourceTemplate.lua
+@@ -52,6 +52,14 @@ function ResourceTemplateHandler:execute()
+     end
+ end
+ 
++function ResourceTemplateHandler:get_yank_value(line)
++    local type = self:get_line_info(line)
++    if type == "input" or type == "submit" then
++        return tostring(self.state.input_value or ""), type == "input" and "URI" or "payload"
++    end
++    return Base.get_yank_value(self, line)
++end
++
+ function ResourceTemplateHandler:handle_input_update(input)
+     -- Update value
+     self.state.input_value = input
+@@ -150,7 +158,7 @@ function ResourceTemplateHandler:render(line_offset)
+     vim.list_extend(lines, self:render_section_end())
+ 
+     -- Result section if any
+-    vim.list_extend(lines, self:render_result())
++    vim.list_extend(lines, self:render_result(line_offset + #lines))
+ 
+     return lines
+ end
+diff --git c/lua/mcphub/ui/capabilities/tool.lua w/lua/mcphub/ui/capabilities/tool.lua
+index 7ac63d5..51a2479 100644
+--- c/lua/mcphub/ui/capabilities/tool.lua
++++ w/lua/mcphub/ui/capabilities/tool.lua
+@@ -149,11 +149,9 @@ function ToolHandler:handle_param_update(param_name, input)
+     else
+         -- Only validate non-empty input
+         local ok, err = self:validate_param(param_name, input)
++        self.state.params.values[param_name] = input
+         if not ok then
+             self.state.params.errors[param_name] = err
+-        else
+-            -- Update value
+-            self.state.params.values[param_name] = input
+         end
+     end
+     self.view:draw()
+@@ -251,6 +249,32 @@ function ToolHandler:execute()
+     end
+ end
+ 
++function ToolHandler:get_current_payload()
++    local values = {}
++    for name, value in pairs(self.state.params.values) do
++        local ok = self:validate_param(name, value)
++        local param_schema = self.parsedInputSchema.properties[name] or {}
++        local handler = Handlers.TypeHandlers[param_schema.type]
++        if ok and handler and handler.convert then
++            values[name] = handler.convert(value)
++        else
++            values[name] = value
++        end
++    end
++    return values
++end
++
++function ToolHandler:get_yank_value(line)
++    local type, context = self:get_line_info(line)
++    if type == "input" then
++        return tostring(self.state.params.values[context] or ""), context
++    elseif type == "submit" then
++        local ok, encoded = pcall(vim.json.encode, self:get_current_payload())
++        return ok and encoded or vim.inspect(self.state.params.values), "payload"
++    end
++    return Base.get_yank_value(self, line)
++end
++
+ function ToolHandler:render_submit()
+     local submit_content
+     if self.state.is_executing then
+@@ -382,7 +406,7 @@ function ToolHandler:render(line_offset)
+     vim.list_extend(lines, self:render_param_form(line_offset + #lines))
+ 
+     -- Result if any
+-    vim.list_extend(lines, self:render_result())
++    vim.list_extend(lines, self:render_result(line_offset + #lines))
+ 
+     return lines
+ end
+diff --git c/lua/mcphub/ui/init.lua w/lua/mcphub/ui/init.lua
+index 4865f2d..8dee5a3 100644
+--- c/lua/mcphub/ui/init.lua
++++ w/lua/mcphub/ui/init.lua
+@@ -385,6 +385,11 @@ function UI:cleanup()
+         return
+     end
+ 
++    -- Save cursor before closing so toggle restores position.
++    if self.current_view and self.views[self.current_view] then
++        self.views[self.current_view]:before_leave()
++    end
++
+     -- Clean up buffer if it exists
+     if self.buffer and vim.api.nvim_buf_is_valid(self.buffer) then
+         vim.api.nvim_buf_delete(self.buffer, { force = true })
+diff --git c/lua/mcphub/ui/views/main.lua w/lua/mcphub/ui/views/main.lua
+index e275e30..dba272f 100644
+--- c/lua/mcphub/ui/views/main.lua
++++ w/lua/mcphub/ui/views/main.lua
+@@ -9,6 +9,7 @@ local Text = require("mcphub.utils.text")
+ local View = require("mcphub.ui.views.base")
+ local config_manager = require("mcphub.utils.config_manager")
+ local constants = require("mcphub.utils.constants")
++local mcphub_config = require("mcphub.config")
+ local native = require("mcphub.native")
+ local renderer = require("mcphub.utils.renderer")
+ local ui_utils = require("mcphub.utils.ui")
+@@ -32,6 +33,7 @@ function MainView:new(ui)
+     instance.expanded_server = nil
+     instance.expanded_workspace = nil
+     instance.active_capability = nil
++    instance.collapsed_sections = {}
+     instance.cursor_positions = {
+         browse_mode = nil, -- Will store [line, col]
+         capability_line = nil, -- Will store [line, col]
+@@ -553,39 +555,94 @@ function MainView:setup_active_mode()
+                 end,
+                 desc = "Back",
+             },
++            ["y"] = {
++                action = function()
++                    self:handle_active_capability_yank()
++                end,
++                desc = "Yank value",
++            },
+         }
++
++        local nav_config = (mcphub_config.ui or {}).input_navigation or {}
++        local next_key = nav_config.next_field
++        local prev_key = nav_config.prev_field
++
++        if type(next_key) == "string" and next_key ~= "" then
++            self.keymaps[next_key] = {
++                action = function()
++                    self:move_active_capability_focus(1)
++                end,
++                desc = "Next input",
++            }
++        end
++
++        if type(prev_key) == "string" and prev_key ~= "" then
++            self.keymaps[prev_key] = {
++                action = function()
++                    self:move_active_capability_focus(-1)
++                end,
++                desc = "Previous input",
++            }
++        end
+     else
+         -- Normal mode keymaps
+         self.keymaps = {
+             ["e"] = {
+                 action = function()
+-                    self:handle_edit()
++                    local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++                    if line_type == "endpoint" then
++                        self:handle_endpoint_inspect()
++                    elseif line_type == "agent_binding" then
++                        self:handle_edit_config()
++                    else
++                        self:handle_edit()
++                    end
+                 end,
+                 desc = "Edit",
+             },
+             ["d"] = {
+                 action = function()
+-                    self:handle_delete()
++                    local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++                    if line_type == "agent_binding" then
++                        self:handle_agent_remove()
++                    else
++                        self:handle_delete()
++                    end
+                 end,
+                 desc = "Delete",
+             },
+ 
+             ["A"] = {
+                 action = function()
+-                    -- Handle like an add_server action
+-                    self:add_server()
++                    local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++                    if line_type == "agent_binding" then
++                        self:handle_agent_add_flat()
++                    else
++                        -- Handle like an add_server action
++                        self:add_server()
++                    end
+                 end,
+                 desc = "Add Server",
+             },
+             ["t"] = {
+                 action = function()
+-                    self:handle_server_toggle()
++                    local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++                    if line_type == "agent_binding" then
++                        self:handle_agent_toggle()
++                    else
++                        self:handle_server_toggle()
++                    end
+                 end,
+                 desc = "Toggle",
+             },
+             ["a"] = {
+                 action = function()
+-                    self:handle_auto_approve_toggle()
++                    local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++                    if line_type == "agent_binding" then
++                        self:handle_agent_add_lean()
++                    else
++                        self:handle_auto_approve_toggle()
++                    end
+                 end,
+                 desc = "Auto-approve",
+             },
+@@ -597,15 +654,19 @@ function MainView:setup_active_mode()
+             },
+             ["h"] = {
+                 action = function()
+-                    self:handle_collapse()
++                    if not self:toggle_section_fold(true) then
++                        self:handle_collapse()
++                    end
+                 end,
+-                desc = "Collapse",
++                desc = "Collapse / Fold section",
+             },
+             ["l"] = {
+                 action = function()
+-                    self:handle_action()
++                    if not self:toggle_section_fold(false) then
++                        self:handle_action()
++                    end
+                 end,
+-                desc = "Expand",
++                desc = "Expand / Unfold section",
+             },
+             ["gd"] = {
+                 action = function()
+@@ -628,6 +689,139 @@ function MainView:setup_active_mode()
+         end,
+         desc = "Toggle AutoApprove",
+     }
++    self.keymaps["r"] = {
++        action = function()
++            local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++            if line_type == "endpoint" then
++                self:handle_endpoint_register()
++                return
++            end
++            -- Patch 14: soft-reconnect when the hub is stopped/disconnected. start() probes the
++            -- existing process; if it's already running we just connect_sse() — no hard-restart,
++            -- no kicking other clients. Falls through to hard_refresh for the connected case.
++            local State = require("mcphub.state")
++            if State.hub_instance and not State:is_connected() then
++                vim.notify("MCP Hub: attempting reconnect")
++                State.hub_instance:start()
++                return
++            end
++            self.ui:hard_refresh()
++        end,
++        desc = "Refresh / Reconnect",
++        silent = true,
++    }
++    self.keymaps["R"] = {
++        action = function()
++            local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++            if line_type == "agent_binding" then
++                self:refresh_agent_registry()
++            else
++                self.ui:restart()
++            end
++        end,
++        desc = "Restart",
++        silent = true,
++    }
++    self.keymaps["s"] = {
++        action = function()
++            local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++            if line_type == "endpoint" then
++                self:handle_inspector_stop()
++            end
++        end,
++        desc = "Stop inspector",
++        silent = true,
++    }
++    self.keymaps["i"] = {
++        action = function()
++            local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++            if line_type == "endpoint" then
++                self:handle_inspector_edit_config()
++            end
++        end,
++        desc = "Edit inspector config",
++        silent = true,
++    }
++    self.keymaps["u"] = {
++        action = function()
++            local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++            if line_type == "endpoint" then
++                self:handle_endpoint_unregister()
++            end
++        end,
++        desc = "Unregister endpoint",
++        silent = true,
++    }
++    self.keymaps["y"] = {
++        action = function()
++            if self.active_capability then
++                self:handle_active_capability_yank()
++                return
++            end
++            local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++            if line_type == "endpoint" then
++                self:handle_endpoint_yank()
++            else
++                self:handle_context_yank_name()
++            end
++        end,
++        desc = "Yank name",
++        silent = true,
++    }
++    self.keymaps["Y"] = {
++        action = function()
++            self:handle_context_yank_path()
++        end,
++        desc = "Yank path",
++        silent = true,
++    }
++    -- Endpoint and agent keys dispatch by line type here, so cursor movement
++    -- never deletes normal server/tool/native-server actions.
++
++    -- Section navigation: J/K jump to next/previous section header
++    self.keymaps["J"] = {
++        action = function()
++            self:jump_to_section(1)
++        end,
++        desc = "Next section",
++        silent = false,
++    }
++    self.keymaps["K"] = {
++        action = function()
++            self:jump_to_section(-1)
++        end,
++        desc = "Prev section",
++        silent = false,
++    }
++
++    self.keymaps["T"] = {
++        action = function() self:toggle_all_sections() end,
++        desc = "Toggle all sections", silent = false,
++    }
++    do
++        local cfg = self:_get_agent_registry_config()
++        local registered_keys = {}
++        for _, agent_cfg in ipairs(cfg.agents or {}) do
++            for _, target in ipairs(agent_cfg.config_alternates or {}) do
++                local key = type(target.key) == "string" and target.key or tostring(target.key or "")
++                if key ~= "" and registered_keys[key] then
++                    -- same key across profiles; row context selects the right target
++                elseif key ~= "" and not self.keymaps[key] then
++                    registered_keys[key] = true
++                    self.keymaps[key] = {
++                        action = function()
++                            local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++                            if line_type == "agent_binding" then
++                                self:handle_agent_alternate_config(key)
++                            end
++                        end,
++                        desc = "Agent alt config " .. key,
++                        silent = true,
++                    }
++                end
++            end
++        end
++    end
+ 
+     -- Add silent keymap aliases for common expand/action keys
+     if self.active_capability then
+@@ -642,6 +836,851 @@ function MainView:setup_active_mode()
+     self:apply_keymaps()
+ end
+ 
++---@param direction 1|-1
++function MainView:move_active_capability_focus(direction)
++    if not self.active_capability or self.active_capability.type ~= "tool" then
++        return
++    end
++
++    local interactive_lines = self.active_capability.interactive_lines or {}
++    if #interactive_lines == 0 then
++        return
++    end
++
++    local focusable_lines = {}
++    for _, item in ipairs(interactive_lines) do
++        if item.type == "input" or item.type == "submit" then
++            table.insert(focusable_lines, item.line)
++        end
++    end
++
++    if #focusable_lines == 0 then
++        return
++    end
++
++    table.sort(focusable_lines)
++
++    local cursor = vim.api.nvim_win_get_cursor(0)
++    local current_line = cursor[1]
++
++    local current_index = nil
++    for i, line in ipairs(focusable_lines) do
++        if line == current_line then
++            current_index = i
++            break
++        end
++    end
++
++    if not current_index then
++        if direction > 0 then
++            vim.api.nvim_win_set_cursor(0, { focusable_lines[1], 2 })
++        else
++            vim.api.nvim_win_set_cursor(0, { focusable_lines[#focusable_lines], 2 })
++        end
++        return
++    end
++
++    local next_index = current_index + direction
++    if next_index < 1 then
++        next_index = #focusable_lines
++    elseif next_index > #focusable_lines then
++        next_index = 1
++    end
++
++    vim.api.nvim_win_set_cursor(0, { focusable_lines[next_index], 2 })
++end
++
++-- ── Endpoint + Agent Registry helpers ────────────────────────────────────────
++
++function MainView:_get_endpoint_context()
++    local cursor = vim.api.nvim_win_get_cursor(0)
++    local t, context = self:get_line_info(cursor[1])
++    if t == "endpoint" then
++        return context
++    end
++    return nil
++end
++
++function MainView:_get_agent_context()
++    local cursor = vim.api.nvim_win_get_cursor(0)
++    local t, context = self:get_line_info(cursor[1])
++    if t == "agent_binding" then
++        return context
++    end
++    return nil
++end
++
++function MainView:_get_agent_registry_config()
++    return (mcphub_config.ui or {}).agent_registry or {}
++end
++
++function MainView:_get_agent_scopes(agent_cfg)
++    local cfg = self:_get_agent_registry_config()
++    return agent_cfg.scopes or cfg.scopes or { "user", "project" }
++end
++
++function MainView:_get_default_agent_target()
++    local cfg = self:_get_agent_registry_config()
++    local agents_cfg = cfg.agents or {}
++    local helper = require("utils.mcphub_agents")
++    local wanted = cfg.default_agent_id
++    local selected_cfg = agents_cfg[1]
++    local selected_profile = selected_cfg and helper.normalize_profile(selected_cfg) or helper.normalize_profile("claude")
++
++    if wanted then
++        for _, agent_cfg in ipairs(agents_cfg) do
++            local profile = helper.normalize_profile(agent_cfg)
++            if profile.id == wanted or profile.name == wanted or profile.label == wanted then
++                selected_cfg = agent_cfg
++                selected_profile = profile
++                break
++            end
++        end
++    end
++
++    local scopes = selected_cfg and self:_get_agent_scopes(selected_cfg) or { "user" }
++    return {
++        profile = selected_profile,
++        label = selected_profile.label,
++        scope = cfg.default_scope or scopes[1] or "user",
++        binding_flat = (selected_cfg and selected_cfg.binding_flat) or "mcphub",
++        binding_lean = (selected_cfg and selected_cfg.binding_lean) or "mcphub-lean",
++    }
++end
++
++local function mcphub_escape_pattern(value)
++    return (tostring(value):gsub("([^%w])", "%%%1"))
++end
++local function mcphub_split_dotpath(matcher)
++    if type(matcher) ~= "string" or not matcher:match("^%.") then return nil end
++    local parts = {}
++    for part in matcher:gsub("^%.", ""):gmatch("[^%.]+") do
++        if part ~= "" then table.insert(parts, part) end
++    end
++    return #parts > 0 and parts or nil
++end
++local function mcphub_find_json_line(bufnr, parts)
++    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
++    local start = 1
++    for index, key in ipairs(parts) do
++        local pattern = '^%s*"' .. mcphub_escape_pattern(key) .. '"%s*:'
++        if index == #parts then
++            local best_lnum, best_indent = nil, math.huge
++            for lnum = start, #lines do
++                if lines[lnum]:match(pattern) then
++                    local indent = #(lines[lnum]:match("^(%s*)") or "")
++                    if indent < best_indent then best_indent = indent; best_lnum = lnum end
++                end
++            end
++            return best_lnum
++        end
++        local found = false
++        for lnum = start, #lines do
++            if lines[lnum]:match(pattern) then start = lnum + 1; found = true; break end
++        end
++        if not found then return nil end
++    end
++    return nil
++end
++local function mcphub_find_toml_line(bufnr, parts)
++    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
++    if #parts == 1 then
++        local key = mcphub_escape_pattern(parts[1])
++        for lnum, line in ipairs(lines) do
++            if line:match("^%s*%[" .. key .. "%]%s*$") or line:match("^%s*" .. key .. "%s*=") then return lnum end
++        end
++        return nil
++    end
++    local section_parts = {}
++    for i = 1, #parts - 1 do table.insert(section_parts, parts[i]) end
++    local section = mcphub_escape_pattern(table.concat(section_parts, "."))
++    local key = mcphub_escape_pattern(parts[#parts])
++    local in_section = false
++    for lnum, line in ipairs(lines) do
++        if line:match("^%s*%[.+%]%s*$") then
++            in_section = line:match("^%s*%[" .. section .. "%]%s*$") ~= nil
++        elseif in_section and line:match("^%s*" .. key .. "%s*=") then return lnum end
++    end
++    return nil
++end
++local function mcphub_find_yaml_line(bufnr, parts)
++    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
++    local key = mcphub_escape_pattern(parts[#parts])
++    for lnum, line in ipairs(lines) do
++        if line:match("^%s*" .. key .. "%s*:") then return lnum end
++    end
++    return nil
++end
++local function mcphub_find_plain_line(bufnr, matcher)
++    local lines = vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
++    local needle = tostring(matcher):gsub("^%.", "")
++    for lnum, line in ipairs(lines) do
++        if line:find(needle, 1, true) then return lnum end
++    end
++    return nil
++end
++function MainView:_find_config_match_line(bufnr, matcher, path)
++    if type(matcher) == "function" then return matcher(bufnr, path) end
++    if type(matcher) ~= "string" or matcher == "" then return nil end
++    local parts = mcphub_split_dotpath(matcher)
++    if parts then
++        local ext = vim.fn.fnamemodify(path, ":e"):lower()
++        if ext == "json" or ext == "jsonc" then return mcphub_find_json_line(bufnr, parts)
++        elseif ext == "toml" then return mcphub_find_toml_line(bufnr, parts)
++        elseif ext == "yaml" or ext == "yml" then return mcphub_find_yaml_line(bufnr, parts)
++        end
++    end
++    return mcphub_find_plain_line(bufnr, matcher)
++end
++function MainView:_open_config_target(target)
++    if not target or not target.path or target.path == "" then
++        vim.notify("Config target has no path", vim.log.levels.WARN); return
++    end
++    local path = vim.fs.normalize(vim.fn.expand(target.path))
++    if vim.fn.filereadable(path) == 0 then
++        vim.notify("Config file not found: " .. path, vim.log.levels.WARN); return
++    end
++    self:_open_with_back_key(path)
++    vim.schedule(function()
++        local lnum = self:_find_config_match_line(vim.api.nvim_get_current_buf(), target.matcher, path)
++        if lnum then
++            vim.api.nvim_win_set_cursor(0, { lnum, 0 })
++            vim.cmd.normal({ "zz", bang = true })
++            return
++        end
++        if target.matcher and target.matcher ~= "" then
++            vim.notify("Matcher not found: " .. tostring(target.matcher), vim.log.levels.WARN)
++        end
++    end)
++end
++function MainView:_find_agent_alternate_config(context, key)
++    for _, target in ipairs((context and context.config_alternates) or {}) do
++        if tostring(target.key) == tostring(key) then return target end
++    end
++    return nil
++end
++function MainView:_get_agent_context()
++    local cursor = vim.api.nvim_win_get_cursor(0)
++    local t, context = self:get_line_info(cursor[1])
++    if t == "agent_binding" then return context end
++    return nil
++end
++function MainView:handle_agent_alternate_config(key)
++    local context = self:_get_agent_context()
++    if not context then return false end
++    local target = self:_find_agent_alternate_config(context, key)
++    if not target then return false end
++    self:_open_config_target(target)
++    return true
++end
++function MainView:toggle_all_sections()
++    local foldable = {}
++    for _, tracked in ipairs(self.interactive_lines) do
++        if tracked.type == "section_header" and tracked.context and tracked.context.hint ~= "J/K:nav" then
++            table.insert(foldable, tracked.context.name)
++        end
++    end
++    if #foldable == 0 then return end
++    local any_open = false
++    for _, name in ipairs(foldable) do
++        if not self.collapsed_sections[name] then any_open = true; break end
++    end
++    local collapse = any_open
++    for _, name in ipairs(foldable) do self.collapsed_sections[name] = collapse end
++    self:draw()
++end
++-- Hide the MCPHub float and edit the file in the underlying window.
++-- The hub itself stays alive (only the floating UI is toggled). Re-show
++-- with :MCPHub (or the user's <leader>ah keymap). Same pattern as ConfigView.
++function MainView:_open_with_back_key(path)
++    self.ui:toggle()
++    vim.cmd("edit " .. vim.fn.fnameescape(path))
++end
++
++function MainView:handle_edit_config()
++    local cursor = vim.api.nvim_win_get_cursor(0)
++    local t, context = self:get_line_info(cursor[1])
++    local path
++    if t == "endpoint" then
++        -- Resolve the active servers.json (workspace-aware) like ConfigView does.
++        local ConfigManager = require("mcphub.utils.config_manager")
++        local files = ConfigManager.get_active_config_files() or {}
++        path = files[1] or vim.fn.expand("~/.config/mcphub/servers.json")
++    elseif t == "agent_binding" then
++        local agents = require("utils.mcphub_agents")
++        path = vim.fn.expand(agents.config_path(context.profile or context.agent, context.scope))
++    end
++    if not path or path == "" then
++        return
++    end
++    if vim.fn.filereadable(path) == 0 then
++        vim.notify("Config file not found: " .. path, vim.log.levels.WARN)
++        return
++    end
++    self:_open_with_back_key(path)
++end
++
++-- Jump to next (direction=1) or previous (direction=-1) section_header line.
++function MainView:jump_to_section(direction)
++    local cur = vim.api.nvim_win_get_cursor(0)[1]
++    local headers = {}
++    for _, tracked in ipairs(self.interactive_lines) do
++        if tracked.type == "section_header" then
++            table.insert(headers, tracked.line)
++        end
++    end
++    table.sort(headers)
++    if #headers == 0 then
++        return
++    end
++    local target
++    if direction == 1 then
++        for _, lnum in ipairs(headers) do
++            if lnum > cur then
++                target = lnum
++                break
++            end
++        end
++        if not target then
++            target = headers[1]
++        end
++    else
++        for i = #headers, 1, -1 do
++            if headers[i] < cur then
++                target = headers[i]
++                break
++            end
++        end
++        if not target then
++            target = headers[#headers]
++        end
++    end
++    vim.api.nvim_win_set_cursor(0, { target, 2 })
++end
++
++-- Toggle collapse state for the section under cursor (h=collapse, l=expand).
++-- Returns false for non-foldable nav anchors, falling through to server collapse/expand.
++function MainView:toggle_section_fold(collapse)
++    local cur = vim.api.nvim_win_get_cursor(0)[1]
++    local line_type, ctx = self:get_line_info(cur)
++    if line_type ~= "section_header" then
++        return false
++    end
++    local name = ctx and ctx.name
++    if not name then
++        return false
++    end
++    -- nav-only anchors are not foldable; pass through to server collapse/expand
++    if ctx.hint == "J/K:nav" then
++        return false
++    end
++    if collapse == nil then
++        self.collapsed_sections[name] = not self.collapsed_sections[name]
++    else
++        self.collapsed_sections[name] = collapse
++    end
++    self:draw()
++    -- Restore cursor to the header line (line numbers shift after redraw)
++    vim.schedule(function()
++        for _, tracked in ipairs(self.interactive_lines) do
++            if tracked.type == "section_header" and tracked.context and tracked.context.name == name then
++                local line_count = vim.api.nvim_buf_line_count(self.ui.buffer)
++                vim.api.nvim_win_set_cursor(0, { math.min(tracked.line, line_count), 2 })
++                break
++            end
++        end
++    end)
++    return true
++end
++
++-- Inspect: launch MCP Inspector and open browser at the endpoint URL.
++function MainView:handle_endpoint_inspect()
++    local ctx = self:_get_endpoint_context()
++    if not ctx then
++        return
++    end
++    require("utils.mcp_inspector").open("sse", ctx.url)
++end
++
++function MainView:handle_inspector_stop()
++    require("utils.mcp_inspector").stop()
++end
++
++function MainView:handle_inspector_edit_config()
++    local path = require("utils.mcp_inspector").config_path()
++    if vim.fn.filereadable(path) == 0 then
++        vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
++        vim.fn.writefile({ "{}" }, path)
++    end
++    self:_open_with_back_key(path)
++end
++
++function MainView:handle_endpoint_register()
++    local ctx = self:_get_endpoint_context()
++    if not ctx then
++        return
++    end
++    local agents = require("utils.mcphub_agents")
++    local profile = ctx.profile or "claude"
++    local scope = ctx.scope or "user"
++    local agent_label = ctx.agent_label or "claude"
++    agents.register(profile, ctx.binding_name, ctx.url, scope, function(res)
++        if res.ok then
++            vim.notify("Registered " .. ctx.binding_name .. " for " .. agent_label .. " \xe2\x86\x92 " .. ctx.url, vim.log.levels.INFO)
++        else
++            vim.notify("Failed: " .. (res.stderr or ""), vim.log.levels.ERROR)
++        end
++        self:refresh_agent_registry()
++    end)
++end
++
++function MainView:handle_endpoint_unregister()
++    local ctx = self:_get_endpoint_context()
++    if not ctx then
++        return
++    end
++    local agents = require("utils.mcphub_agents")
++    local profile = ctx.profile or "claude"
++    local scope = ctx.scope or "user"
++    local agent_label = ctx.agent_label or "claude"
++    agents.unregister(profile, ctx.binding_name, scope, function(res)
++        if res.ok then
++            vim.notify("Unregistered " .. ctx.binding_name .. " from " .. agent_label, vim.log.levels.INFO)
++        else
++            vim.notify("Failed: " .. (res.stderr or ""), vim.log.levels.ERROR)
++        end
++        self:refresh_agent_registry()
++    end)
++end
++
++function MainView:handle_endpoint_yank()
++    local ctx = self:_get_endpoint_context()
++    if not ctx then
++        return
++    end
++    vim.fn.setreg("+", ctx.url)
++    vim.notify("Yanked: " .. ctx.url, vim.log.levels.INFO)
++end
++
++local function get_context_copy_values(line_type, context)
++    if line_type == "endpoint" then
++        return context.url, context.url
++    end
++
++    if line_type == "server" then
++        return context.name, context.name
++    end
++
++    if line_type == "customInstructions" then
++        local server_name = context.server_name
++        if not server_name or server_name == "" then
++            return "Custom Instructions", "Custom Instructions"
++        end
++        return "Custom Instructions", server_name .. "_custom_instructions"
++    end
++
++    if vim.tbl_contains({ "tool", "prompt", "resource", "resourceTemplate" }, line_type) then
++        local def = context.def or {}
++        local name = def.name or def.uri or def.uriTemplate
++        if not name or name == "" then
++            return nil, nil
++        end
++        if not context.server_name or context.server_name == "" then
++            return name, name
++        end
++        return name, context.server_name .. "_" .. name
++    end
++
++    return nil, nil
++end
++
++function MainView:handle_context_yank_name()
++    local cursor = vim.api.nvim_win_get_cursor(0)
++    local line_type, context = self:get_line_info(cursor[1])
++    if not line_type or not context then
++        return
++    end
++
++    local name = get_context_copy_values(line_type, context)
++    if not name or name == "" then
++        return
++    end
++
++    vim.fn.setreg("+", name)
++    vim.notify("Yanked name: " .. name, vim.log.levels.INFO)
++end
++
++function MainView:handle_context_yank_path()
++    local cursor = vim.api.nvim_win_get_cursor(0)
++    local line_type, context = self:get_line_info(cursor[1])
++    if not line_type or not context then
++        return
++    end
++
++    local _, path = get_context_copy_values(line_type, context)
++    if not path or path == "" then
++        return
++    end
++
++    vim.fn.setreg("+", path)
++    vim.notify("Yanked path: " .. path, vim.log.levels.INFO)
++end
++
++function MainView:handle_active_capability_yank()
++    if not self.active_capability or not self.active_capability.get_yank_value then
++        return
++    end
++
++    local line = vim.api.nvim_win_get_cursor(0)[1]
++    local value, label = self.active_capability:get_yank_value(line)
++    if value == nil then
++        return
++    end
++
++    vim.fn.setreg("+", value)
++    vim.notify("Yanked " .. (label or "value"), vim.log.levels.INFO)
++end
++
++function MainView:handle_agent_add_lean()
++    local ctx = self:_get_agent_context()
++    if not ctx then
++        return
++    end
++    if not ctx.available then
++        vim.notify(ctx.agent_label .. " binary not found", vim.log.levels.WARN)
++        return
++    end
++    local agents = require("utils.mcphub_agents")
++    local port = (State.current_hub and State.current_hub.port) or 37373
++    agents.register(ctx.profile or ctx.agent, ctx.binding_lean, "http://localhost:" .. port .. "/mcp-lean", ctx.scope, function(res)
++        if res.ok then
++            vim.notify("Added " .. ctx.binding_lean .. " (" .. ctx.agent_label .. "/" .. ctx.scope .. ")", vim.log.levels.INFO)
++        else
++            vim.notify("Failed: " .. (res.stderr or ""), vim.log.levels.WARN)
++        end
++        self:refresh_agent_registry()
++    end)
++end
++
++function MainView:handle_agent_add_flat()
++    local ctx = self:_get_agent_context()
++    if not ctx then
++        return
++    end
++    if not ctx.available then
++        vim.notify(ctx.agent_label .. " binary not found", vim.log.levels.WARN)
++        return
++    end
++    local agents = require("utils.mcphub_agents")
++    local port = (State.current_hub and State.current_hub.port) or 37373
++    agents.register(ctx.profile or ctx.agent, ctx.binding_flat, "http://localhost:" .. port .. "/mcp", ctx.scope, function(res)
++        if res.ok then
++            vim.notify("Added " .. ctx.binding_flat .. " (" .. ctx.agent_label .. "/" .. ctx.scope .. ")", vim.log.levels.INFO)
++        else
++            vim.notify("Failed: " .. (res.stderr or ""), vim.log.levels.WARN)
++        end
++        self:refresh_agent_registry()
++    end)
++end
++
++function MainView:handle_agent_toggle()
++    local ctx = self:_get_agent_context()
++    if not ctx or not ctx.binding then
++        return
++    end
++    if not ctx.available then
++        vim.notify(ctx.agent_label .. " binary not found", vim.log.levels.WARN)
++        return
++    end
++    local agents = require("utils.mcphub_agents")
++    local port = (State.current_hub and State.current_hub.port) or 37373
++    local current_url = ctx.binding.url or ""
++    local new_name, new_url
++    if current_url:find("/mcp%-lean", 1, true) then
++        new_name = ctx.binding_flat
++        new_url = "http://localhost:" .. port .. "/mcp"
++    else
++        new_name = ctx.binding_lean
++        new_url = "http://localhost:" .. port .. "/mcp-lean"
++    end
++    agents.unregister(ctx.profile or ctx.agent, ctx.binding.name, ctx.scope, function(_)
++        agents.register(ctx.profile or ctx.agent, new_name, new_url, ctx.scope, function(res)
++            if res.ok then
++                vim.notify("Toggled \xe2\x86\x92 " .. new_url, vim.log.levels.INFO)
++            else
++                vim.notify("Failed: " .. (res.stderr or ""), vim.log.levels.WARN)
++            end
++            self:refresh_agent_registry()
++        end)
++    end)
++end
++
++function MainView:handle_agent_remove()
++    local ctx = self:_get_agent_context()
++    if not ctx or not ctx.binding then
++        return
++    end
++    if not ctx.available then
++        vim.notify(ctx.agent_label .. " binary not found", vim.log.levels.WARN)
++        return
++    end
++    local agents = require("utils.mcphub_agents")
++    agents.unregister(ctx.profile or ctx.agent, ctx.binding.name, ctx.scope, function(res)
++        if res.ok then
++            vim.notify("Removed " .. ctx.binding.name .. " from " .. ctx.agent_label, vim.log.levels.INFO)
++        else
++            vim.notify("Failed: " .. (res.stderr or ""), vim.log.levels.WARN)
++        end
++        self:refresh_agent_registry()
++    end)
++end
++
++function MainView:refresh_agent_registry()
++    State._agent_registry_cache = nil
++    State._agent_registry_fetching = nil
++    self:draw()
++end
++
++-- ── Render: Endpoints panel ───────────────────────────────────────────────────
++
++---@param line_offset number
++---@return NuiLine[]
++function MainView:render_endpoints(line_offset)
++    local cfg = (mcphub_config.ui or {}).endpoints or {}
++    if cfg.enabled == false then
++        return {}
++    end
++
++    local lines = {}
++    local current_line = line_offset
++    local port = (State.current_hub and State.current_hub.port) or 37373
++    local hub_up = State.hub_instance ~= nil and State.hub_instance:is_ready()
++    local server_count = #(State.server_state.servers or {})
++
++    local win_width = vim.api.nvim_win_get_width(0) - 4
++    local header_left = NuiLine():append(" \xef\x8a\x8b Endpoints", Text.highlights.title)
++    local header_right = NuiLine():append("Hub: ", Text.highlights.muted):append("localhost:" .. tostring(port), Text.highlights.success)
++    local pad = math.max(1, win_width - header_left:width() - header_right:width())
++    local endpoints_collapsed = self.collapsed_sections["endpoints"]
++    local ep_fold_icon = endpoints_collapsed and Text.icons.triangleRight or Text.icons.triangleDown
++    local header_line = NuiLine():append(ep_fold_icon .. " ", Text.highlights.muted):append(header_left):append(string.rep(" ", pad - 2)):append(header_right)
++    table.insert(lines, Text.pad_line(header_line))
++    current_line = current_line + 1
++    self:track_line(current_line - 1, "section_header", { name = "endpoints", hint = "h:fold l:unfold" })
++    table.insert(lines, self:divider())
++    current_line = current_line + 1
++    if endpoints_collapsed then
++        return lines
++    end
++
++    local dot = hub_up and "\xe2\x97\x8f " or "\xe2\x97\x8b "
++    local dot_hl = hub_up and Text.highlights.success or Text.highlights.error
++
++    local default_agent = self:_get_default_agent_target()
++    local flat_name = default_agent.binding_flat
++    local lean_name = default_agent.binding_lean
++
++    local flat_url = "http://localhost:" .. port .. "/mcp"
++    local flat_row = NuiLine()
++        :append("  ", Text.highlights.muted)
++        :append(dot, dot_hl)
++        :append("/mcp      ", Text.highlights.info)
++        :append("flat   ", Text.highlights.muted)
++        :append(tostring(server_count) .. " servers", Text.highlights.muted)
++    table.insert(lines, Text.pad_line(flat_row))
++    current_line = current_line + 1
++    self:track_line(current_line, "endpoint", {
++        url = flat_url,
++        binding_name = flat_name,
++        profile = default_agent.profile,
++        agent_label = default_agent.label,
++        scope = default_agent.scope,
++        hint = "e:inspect s:stop i:icfg r:reg u:unreg y:yank",
++    })
++
++    local lean_url = "http://localhost:" .. port .. "/mcp-lean"
++    local lean_row = NuiLine()
++        :append("  ", Text.highlights.muted)
++        :append(dot, dot_hl)
++        :append("/mcp-lean ", Text.highlights.info)
++        :append("lean   ", Text.highlights.muted)
++        :append("3 meta-tools", Text.highlights.muted)
++    table.insert(lines, Text.pad_line(lean_row))
++    current_line = current_line + 1
++    self:track_line(current_line, "endpoint", {
++        url = lean_url,
++        binding_name = lean_name,
++        profile = default_agent.profile,
++        agent_label = default_agent.label,
++        scope = default_agent.scope,
++        hint = "e:inspect s:stop i:icfg r:reg u:unreg y:yank",
++    })
++
++    table.insert(lines, Text.empty_line())
++    return lines
++end
++
++-- ── Render: Agent Registry panel ─────────────────────────────────────────────
++
++function MainView:_ensure_agent_registry(agents_cfg)
++    if State._agent_registry_fetching or State._agent_registry_cache then
++        return
++    end
++    State._agent_registry_fetching = true
++    local mcphub_agents = require("utils.mcphub_agents")
++    local pending = #agents_cfg
++    if pending == 0 then
++        State._agent_registry_cache = {}
++        State._agent_registry_fetching = false
++        return
++    end
++    State._agent_registry_cache = {}
++    for _, agent_cfg in ipairs(agents_cfg) do
++        local profile = mcphub_agents.normalize_profile(agent_cfg)
++        mcphub_agents.list(profile, function(res)
++            State._agent_registry_cache[profile.id] = res.bindings or {}
++            pending = pending - 1
++            if pending == 0 then
++                State._agent_registry_fetching = false
++                vim.schedule(function()
++                    self:draw()
++                end)
++            end
++        end)
++    end
++end
++
++---@param line_offset number
++---@return NuiLine[]
++function MainView:render_agent_registry(line_offset)
++    local ui_cfg = mcphub_config.ui or {}
++    local cfg = ui_cfg.agent_registry or {}
++    if cfg.enabled == false then
++        return {}
++    end
++
++    local agents_cfg = cfg.agents or {}
++    self:_ensure_agent_registry(agents_cfg)
++    local cache = State._agent_registry_cache or {}
++
++    local lines = {}
++    local current_line = line_offset
++    local mcphub_agents = require("utils.mcphub_agents")
++
++    local win_width = vim.api.nvim_win_get_width(0) - 4
++    local header_left = NuiLine():append(" \xef\xa0\xa9 CLI Agents", Text.highlights.title)
++    local header_right = NuiLine():append("R:refresh", Text.highlights.muted)
++    local pad = math.max(1, win_width - header_left:width() - header_right:width())
++    local agents_collapsed = self.collapsed_sections["cli_agents"]
++    local ag_fold_icon = agents_collapsed and Text.icons.triangleRight or Text.icons.triangleDown
++    local header_line = NuiLine():append(ag_fold_icon .. " ", Text.highlights.muted):append(header_left):append(string.rep(" ", pad - 2)):append(header_right)
++    table.insert(lines, Text.pad_line(header_line))
++    current_line = current_line + 1
++    self:track_line(current_line - 1, "section_header", { name = "cli_agents", hint = "h:fold l:unfold" })
++    table.insert(lines, self:divider())
++    current_line = current_line + 1
++    if agents_collapsed then
++        return lines
++    end
++
++    for _, agent_cfg in ipairs(agents_cfg) do
++        local function with_alternate_hint(hint)
++            local tokens = {}
++            for _, target in ipairs(agent_cfg.config_alternates or {}) do
++                if target.key then
++                    local lbl = target.label and tostring(target.label):gsub("%s+", "_") or "cfg"
++                    table.insert(tokens, tostring(target.key) .. ":" .. lbl)
++                end
++            end
++            return #tokens > 0 and (hint .. " " .. table.concat(tokens, " ")) or hint
++        end
++        local profile = mcphub_agents.normalize_profile(agent_cfg)
++        local agent_name = profile.label
++        local available = mcphub_agents.is_available(profile)
++        local bindings = cache[profile.id] or {}
++        local scopes = self:_get_agent_scopes(agent_cfg)
++        local binding_flat = agent_cfg.binding_flat or "mcphub"
++        local binding_lean = agent_cfg.binding_lean or "mcphub-lean"
++
++        local binding_map = {}
++        for _, b in ipairs(bindings) do
++            binding_map[b.name] = b
++        end
++
++        for _, scope in ipairs(scopes) do
++            local flat_b = binding_map[binding_flat]
++            local lean_b = binding_map[binding_lean]
++            local agent_hl = available and Text.highlights.info or Text.highlights.muted
++            local unavail_suffix = available and "" or " (not found)"
++
++            if lean_b then
++                local sdot = lean_b.status == "connected" and "\xe2\x97\x8f " or "\xe2\x97\x8b "
++                local sdot_hl = lean_b.status == "connected" and Text.highlights.success or Text.highlights.warning
++                local row = NuiLine()
++                    :append("  " .. agent_name .. unavail_suffix, agent_hl)
++                    :append("  " .. scope .. "  ", Text.highlights.muted)
++                    :append(lean_b.name, Text.highlights.info)
++                    :append(" \xe2\x86\x92 /mcp-lean  ", Text.highlights.muted)
++                    :append(sdot, sdot_hl)
++                table.insert(lines, Text.pad_line(row))
++                current_line = current_line + 1
++                self:track_line(current_line, "agent_binding", {
++                    agent = profile.id, agent_label = agent_name, profile = profile, scope = scope, available = available,
++                    binding = lean_b, binding_flat = binding_flat,
++                    binding_lean = binding_lean,
++                    config_alternates = agent_cfg.config_alternates,
++                    hint = with_alternate_hint("t:toggle d:remove e:cfg"),
++                })
++            end
++
++            if flat_b and flat_b.name ~= (lean_b and lean_b.name) then
++                local sdot = flat_b.status == "connected" and "\xe2\x97\x8f " or "\xe2\x97\x8b "
++                local sdot_hl = flat_b.status == "connected" and Text.highlights.success or Text.highlights.warning
++                local row = NuiLine()
++                    :append("  " .. agent_name .. unavail_suffix, agent_hl)
++                    :append("  " .. scope .. "  ", Text.highlights.muted)
++                    :append(flat_b.name, Text.highlights.info)
++                    :append(" \xe2\x86\x92 /mcp       ", Text.highlights.muted)
++                    :append(sdot, sdot_hl)
++                table.insert(lines, Text.pad_line(row))
++                current_line = current_line + 1
++                self:track_line(current_line, "agent_binding", {
++                    agent = profile.id, agent_label = agent_name, profile = profile, scope = scope, available = available,
++                    binding = flat_b, binding_flat = binding_flat,
++                    binding_lean = binding_lean,
++                    config_alternates = agent_cfg.config_alternates,
++                    hint = with_alternate_hint("t:toggle d:remove e:cfg"),
++                })
++            end
++
++            if not lean_b and not flat_b then
++                local row = NuiLine()
++                    :append("  " .. agent_name .. unavail_suffix, agent_hl)
++                    :append("  " .. scope .. "  ", Text.highlights.muted)
++                    :append("(none)", Text.highlights.muted)
++                table.insert(lines, Text.pad_line(row))
++                current_line = current_line + 1
++                local hint
++                if available then
++                    hint = "a:add-lean A:add-flat e:cfg"
++                else
++                    hint = profile.command .. " not on PATH — e:cfg"
++                end
++                self:track_line(current_line, "agent_binding", {
++                    agent = profile.id, agent_label = agent_name, profile = profile, scope = scope, available = available,
++                    binding = nil, binding_flat = binding_flat,
++                    binding_lean = binding_lean,
++                    config_alternates = agent_cfg.config_alternates,
++                    hint = with_alternate_hint(hint),
++                })
++            end
++        end
++    end
++
++    table.insert(lines, Text.empty_line())
++    return lines
++end
++
+ -- Helper function to get all tool names for a server
+ local function get_server_tool_names(server_name)
+     if not State.hub_instance or not State.hub_instance:is_ready() then
+@@ -979,7 +2018,7 @@ function MainView:render_servers(line_offset)
+ 
+             if total_tokens > 0 then
+                 left_section:append(
+-                    " (~ " .. utils.format_token_count(total_tokens) .. " tokens)",
++                    " (~" .. utils.format_token_count(total_tokens) .. ")",
+                     Text.highlights.muted
+                 )
+             end
+@@ -1008,6 +2047,8 @@ function MainView:render_servers(line_offset)
+ 
+     table.insert(lines, Text.pad_line(header_line))
+     current_line = current_line + 1
++    -- "MCP Servers" is a nav anchor for J/K but not foldable; Global/Project groups inside are.
++    self:track_line(current_line - 1, "section_header", { name = "mcp_servers", hint = "J/K:nav" })
+     -- Track breadcrumb line for interaction
+     -- self:track_line(current_line, "breadcrumb", {
+     --     hint = "<CR> to preview servers prompt",
+@@ -1038,36 +2079,41 @@ function MainView:render_servers(line_offset)
+     current_line = current_line + 1
+ 
+     -- Native servers section header
+-    table.insert(lines, Text.pad_line(NuiLine():append("" .. " Native Servers", Text.highlights.title)))
++    local native_collapsed = self.collapsed_sections["native_servers"]
++    local native_fold_icon = native_collapsed and Text.icons.triangleRight or Text.icons.triangleDown
++    local native_header = NuiLine():append(native_fold_icon .. " ", Text.highlights.muted):append("" .. " Native Servers", Text.highlights.title)
++    table.insert(lines, Text.pad_line(native_header))
+     current_line = current_line + 1
++    self:track_line(current_line - 1, "section_header", { name = "native_servers", hint = "h:fold l:unfold" })
++
++    if not native_collapsed then
++        -- Render Native servers first
++        local native_lines, native_line = self:render_servers_section(
++            nil, -- No title since we added it above
++            State.server_state.native_servers,
++            current_line
++        )
++        vim.list_extend(lines, native_lines)
++        current_line = native_line
+ 
+-    -- Render Native servers first
+-    local native_lines, native_line = self:render_servers_section(
+-        nil, -- No title since we added it above
+-        State.server_state.native_servers,
+-        current_line
+-    )
+-    vim.list_extend(lines, native_lines)
+-    current_line = native_line
+-
+-    -- Add create server option
+-    -- table.insert(lines, Text.empty_line())
+-    table.insert(
+-        lines,
+-        Text.pad_line(
+-            NuiLine()
+-                :append(" " .. Text.icons.edit .. " ", Text.highlights.muted)
+-                :append("Auto-create Server", Text.highlights.muted)
++        -- Add create server option
++        -- table.insert(lines, Text.empty_line())
++        table.insert(
++            lines,
++            Text.pad_line(
++                NuiLine()
++                    :append(" " .. Text.icons.edit .. " ", Text.highlights.muted)
++                    :append("Auto-create Server", Text.highlights.muted)
++            )
+         )
+-    )
+-    -- Track line for interaction
+-    self:track_line(current_line + 1, "create_server", {
+-        hint = "[<l> Create Server]",
+-    })
++        -- Track line for interaction
++        self:track_line(current_line + 1, "create_server", {
++            hint = "[<l> Create Server]",
++        })
++    end
+ 
+     return lines
+ end
+-
+ function MainView:before_enter()
+     View.before_enter(self)
+     self:setup_active_mode()
+@@ -1130,6 +2176,14 @@ function MainView:render()
+         if #errors > 0 then
+             vim.list_extend(lines, errors)
+         end
++        -- Patch 14: still surface known active hubs while the current connection is down,
++        -- so the user can `gc` to a working workspace hub instead of being stuck with `R`.
++        local workspaces = State.server_state.workspaces
++        if workspaces and workspaces.allActive and not vim.tbl_isempty(workspaces.allActive) then
++            table.insert(lines, Text.empty_line())
++            table.insert(lines, Text.empty_line())
++            vim.list_extend(lines, self:render_workspaces(#lines))
++        end
+         return lines
+     end
+     -- Handle capability mode
+@@ -1152,6 +2206,12 @@ function MainView:render()
+     -- Servers section
+     vim.list_extend(lines, self:render_servers(#lines))
+ 
++    -- Endpoints + Agent Registry sections
++    table.insert(lines, Text.empty_line())
++    table.insert(lines, Text.empty_line())
++    vim.list_extend(lines, self:render_endpoints(#lines))
++    vim.list_extend(lines, self:render_agent_registry(#lines))
++
+     -- Add spacing before workspaces section
+     table.insert(lines, Text.empty_line())
+     table.insert(lines, Text.empty_line())
+diff --git c/lua/mcphub/utils/renderer.lua w/lua/mcphub/utils/renderer.lua
+index 5a702f6..183b68c 100644
+--- c/lua/mcphub/utils/renderer.lua
++++ w/lua/mcphub/utils/renderer.lua
+@@ -4,9 +4,86 @@ local Text = require("mcphub.utils.text")
+ local config_manager = require("mcphub.utils.config_manager")
+ local constants = require("mcphub.utils.constants")
+ local utils = require("mcphub.utils")
++local prompt_utils = require("mcphub.utils.prompt")
+ 
+ local M = {}
+ local tool_regex_cache = {}
++local get_tool_filter_matchers
++
++local function token_counts_enabled(scope)
++    local cfg = (((State.config or {}).ui or {}).token_counts or {})
++    if cfg.enabled == false then
++        return false
++    end
++    return cfg[scope] ~= false
++end
++
++local function append_token_count(line, token_count)
++    if token_count and token_count > 0 then
++        line:append(" ~" .. utils.format_token_count(token_count), Text.highlights.muted)
++    end
++end
++
++function M.estimate_tool_tokens(tool)
++    local ok, text = pcall(function()
++        local input_schema = prompt_utils.get_inputSchema(tool)
++        return string.format(
++            "- %s: %s\n\n  Input Schema:\n\n  ```json\n  %s\n  ```",
++            tool.name,
++            prompt_utils.get_description(tool):gsub("\n", "\n  "),
++            utils.pretty_json(vim.json.encode(input_schema)):gsub("\n", "\n  ")
++        )
++    end)
++    return ok and utils.calculate_tokens(text) or 0
++end
++
++local function filter_server_for_prompt(server, server_config)
++    local filtered = vim.deepcopy(server)
++    server_config = server_config or {}
++
++    if not filtered.capabilities then
++        return filtered
++    end
++
++    local tool_matchers = get_tool_filter_matchers(server_config)
++    local filters = {
++        tools = { list = "disabled_tools", id = "name" },
++        resources = { list = "disabled_resources", id = "uri" },
++        resourceTemplates = { list = "disabled_resourceTemplates", id = "uriTemplate" },
++        prompts = { list = "disabled_prompts", id = "name" },
++    }
++
++    for cap_type, filter in pairs(filters) do
++        local capabilities = filtered.capabilities[cap_type]
++        if capabilities then
++            filtered.capabilities[cap_type] = vim.tbl_filter(function(item)
++                local item_id = item[filter.id]
++                if vim.tbl_contains(server_config[filter.list] or {}, item_id) then
++                    return false
++                end
++                if cap_type == "tools" then
++                    if vim.tbl_contains(server_config.removed_tools or {}, item_id) then
++                        return false
++                    end
++                    if tool_matchers.enabled and not tool_matchers.enabled:match_str(item_id) then
++                        return false
++                    end
++                    if tool_matchers.denied and tool_matchers.denied:match_str(item_id) then
++                        return false
++                    end
++                end
++                return true
++            end, capabilities)
++        end
++    end
++
++    return filtered
++end
++
++function M.estimate_server_tokens(server, server_config)
++    local ok, text = pcall(prompt_utils.server_to_text, filter_server_for_prompt(server, server_config))
++    return ok and utils.calculate_tokens(text) or 0
++end
+ 
+ ---@param env table<string, any>
+ ---@param preferred_keys string[]
+@@ -71,7 +148,7 @@ end
+ 
+ ---@param server_config table
+ ---@return { denied: vim.regex|nil, enabled: vim.regex|nil }
+-local function get_tool_filter_matchers(server_config)
++get_tool_filter_matchers = function(server_config)
+     local env = type(server_config.env) == "table" and server_config.env or {}
+     return {
+         denied = compile_tool_regex(get_env_regex(
+@@ -190,13 +267,22 @@ function M.render_server_group(config_source, servers, lines, current_line, view
+ 
+     local is_global = config_source == State.config.config
+     local icon = is_global and Text.icons.globe or Text.icons.folder
+-    local prefix = icon .. " " .. (is_global and "Global" or "Project") .. " "
++    local group_key = "group:" .. config_source
++    local group_collapsed = view and view.collapsed_sections and view.collapsed_sections[group_key]
++    local fold_icon = group_collapsed and Text.icons.triangleRight or Text.icons.triangleDown
++    local prefix = fold_icon .. " " .. icon .. " " .. (is_global and "Global" or "Project") .. " "
+ 
+     -- Render group header
+     -- local display_name = M.get_source_display_name(config_source)
+     local header_line = NuiLine():append(prefix, Text.highlights.title)
+     table.insert(lines, Text.pad_line(header_line))
+     current_line = current_line + 1
++    if view and view.track_line then
++        view:track_line(current_line - 1, "section_header", { name = group_key, hint = "h:fold l:unfold" })
++    end
++    if group_collapsed then
++        return current_line
++    end
+     if #sorted == 0 then
+         -- No servers in this group
+         table.insert(
+@@ -381,6 +467,10 @@ function M.render_cap_section(items, title, server_name, line_type, current_line
+             line:append(" (" .. item.mimeType .. ")", Text.highlights.muted)
+         end
+ 
++        if line_type == "tool" and not is_disabled and not is_removed and token_counts_enabled("tools") then
++            append_token_count(line, M.estimate_tool_tokens(item))
++        end
++
+         -- Show auto-approve status for tools
+         if line_type == "tool" and not is_disabled then
+             local auto_approve = server_config.autoApprove
+@@ -401,13 +491,16 @@ function M.render_cap_section(items, title, server_name, line_type, current_line
+ 
+         local hint
+         if is_removed then
+-            hint = "[<x> Toggle strict hide]"
++            hint = "[<x> Toggle strict hide, <y> Copy, <Y> Copy path]"
+         elseif is_disabled then
+-            hint = "[<t> Toggle]"
++            hint = "[<t> Toggle, <y> Copy, <Y> Copy path]"
+         elseif line_type == "tool" then
+-            hint = string.format("[<l> open %s, <t> Toggle, <x> Strict hide, <a> Auto-approve]", line_type)
++            hint = string.format(
++                "[<l> open %s, <t> Toggle, <x> Strict hide, <a> Auto-approve, <y> Copy, <Y> Copy path]",
++                line_type
++            )
+         else
+-            hint = string.format("[<l> open %s, <t> Toggle]", line_type)
++            hint = string.format("[<l> open %s, <t> Toggle, <y> Copy, <Y> Copy path]", line_type)
+         end
+         table.insert(mappings, {
+             line = current_line + #lines,
+@@ -438,16 +531,18 @@ function M.render_server_capabilities(server, lines, current_line, server_config
+     current_line = current_line + 1
+ 
+     -- Prepare hover hint based on server status
+-    local base_hint_disabled = is_native and "[<t> Toggle, <e> Edit]" or "[<t> Toggle, <e> Edit, <d> Delete]"
+-    local base_hint_enabled = is_native and "[<t> Toggle, <a> Auto-approve, <e> Edit]"
+-        or "[<t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete]"
++    local base_hint_disabled = is_native and "[<t> Toggle, <e> Edit, <y> Copy, <Y> Copy path]"
++        or "[<t> Toggle, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
++    local base_hint_enabled = is_native and "[<t> Toggle, <a> Auto-approve, <e> Edit, <y> Copy, <Y> Copy path]"
++        or "[<t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
+ 
+     local needs_authorization = server.status == "unauthorized"
+-    local enabled_hint = is_native and "[<l> Expand, <t> Toggle, <a> Auto-approve, <e> Edit]"
+-        or needs_authorization and "[<l> Authorize, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete]"
+-        or "[<l> Expand, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete]"
+-    local expanded_hint = is_native and "[<h> Collapse, <t> Toggle, <a> Auto-approve, <e> Edit]"
+-        or "[<h> Collapse, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete]"
++    local enabled_hint = is_native and "[<l> Expand, <t> Toggle, <a> Auto-approve, <e> Edit, <y> Copy, <Y> Copy path]"
++        or needs_authorization
++                and "[<l> Authorize, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
++            or "[<l> Expand, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
++    local expanded_hint = is_native and "[<h> Collapse, <t> Toggle, <a> Auto-approve, <e> Edit, <y> Copy, <Y> Copy path]"
++        or "[<h> Collapse, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
+ 
+     local hint
+     if server.status == "disabled" or server.status == "disconnected" then
+@@ -498,7 +593,8 @@ function M.render_server_capabilities(server, lines, current_line, server_config
+             server_name = server.name,
+             disabled = is_disabled,
+             name = Text.icons.instructions .. " Custom Instructions",
+-            hint = is_disabled and "[<t> Toggle]" or "[<e> Edit, <t> Toggle]",
++            hint = is_disabled and "[<t> Toggle, <y> Copy, <Y> Copy path]"
++                or "[<e> Edit, <t> Toggle, <y> Copy, <Y> Copy path]",
+         })
+         table.insert(lines, Text.empty_line())
+         current_line = current_line + 1
+@@ -708,6 +804,10 @@ function M.render_server_line(server, active)
+         --     Text.highlights.error
+         -- )
+         -- line:append("]", Text.highlights.muted)
++
++        if token_counts_enabled("servers") then
++            append_token_count(line, M.estimate_server_tokens(server, server_config))
++        end
+     end
+ 
+     -- Add status description if any
+@@ -1050,8 +1150,17 @@ function M.render_workspaces_section(line_offset, view)
+     local current_line = line_offset
+ 
+     -- Section header
+-    table.insert(lines, Text.pad_line(NuiLine():append(Text.icons.server .. " Active Hubs", Text.highlights.title)))
++    local ws_collapsed = view and view.collapsed_sections and view.collapsed_sections["active_hubs"]
++    local ws_fold_icon = ws_collapsed and Text.icons.triangleRight or Text.icons.triangleDown
++    local ws_header = NuiLine():append(ws_fold_icon .. " ", Text.highlights.muted):append(Text.icons.server .. " Active Hubs", Text.highlights.title)
++    table.insert(lines, Text.pad_line(ws_header))
+     current_line = current_line + 1
++    if view and view.track_line then
++        view:track_line(current_line - 1, "section_header", { name = "active_hubs", hint = "h:fold l:unfold" })
++    end
++    if ws_collapsed then
++        return lines
++    end
+ 
+     local workspaces = State.server_state.workspaces
+     if not workspaces or not workspaces.allActive or vim.tbl_isempty(workspaces.allActive) then

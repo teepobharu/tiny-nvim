@@ -1,12 +1,38 @@
-diff --git i/lua/mcphub/hub.lua w/lua/mcphub/hub.lua
-index 2b5245d..d81e80f 100644
---- i/lua/mcphub/hub.lua
-+++ w/lua/mcphub/hub.lua
-@@ -14,6 +14,95 @@ local native = require("mcphub.native")
+diff --git a/lua/mcphub/config.lua b/lua/mcphub/config.lua
+index 7aaa636..8f99710 100644
+--- a/lua/mcphub/config.lua
++++ b/lua/mcphub/config.lua
+@@ -60,6 +60,7 @@ local defaults = {
+     ---@type boolean | fun(parsed_params: MCPHub.ParsedParams): boolean | nil | string  Function to determine if a call should be auto-approved
+     auto_approve = false,
+     auto_toggle_mcp_servers = true, -- Let LLMs start and stop MCP servers automatically
++    confirm_hard_restart = true, -- Ask before automatic startup hard restart
+     use_bundled_binary = false, -- Whether to use bundled mcp-hub binary
+     ---@type table | fun(context: MCPHub.JobContext): table Global environment variables available to all MCP servers
+     global_env = {}, -- Environment variables that will be available to all MCP servers
+diff --git a/lua/mcphub/hub.lua b/lua/mcphub/hub.lua
+index 68af8eb..6949488 100644
+--- a/lua/mcphub/hub.lua
++++ b/lua/mcphub/hub.lua
+@@ -14,6 +14,109 @@ local native = require("mcphub.native")
  local prompt_utils = require("mcphub.utils.prompt")
  local utils = require("mcphub.utils")
  
 +local tool_regex_cache = {}
++
++---@param files table|nil
++---@return string
++local function format_config_files(files)
++    if type(files) ~= "table" then
++        return "<unknown>"
++    end
++
++    local normalized = {}
++    for _, file in ipairs(files) do
++        table.insert(normalized, tostring(file))
++    end
++    return table.concat(normalized, ", ")
++end
 +
 +--- Resolve a regex value from server env keys.
 +---@param env table<string, any>
@@ -98,7 +124,135 @@ index 2b5245d..d81e80f 100644
  -- Default timeouts
  local CONNECT_TIMEOUT = 1000 -- 1s for curl to connect to localhost
  local TOOL_TIMEOUT = 60000 -- 60s for tool calls
-@@ -759,6 +848,18 @@ end
+@@ -352,15 +455,21 @@ function MCPHub:start()
+             end
+             if not is_same_version then
+                 log.debug("Existing server is not of same version, restarting")
+-                vim.notify("mcp-hub version mismatch. Restarting hub...", vim.log.levels.INFO)
+-                self:handle_same_port_different_config(context)
++                vim.notify("mcp-hub version mismatch. Waiting for hard restart confirmation...", vim.log.levels.WARN)
++                self:handle_same_port_different_config(context, {
++                    reason = "mcp-hub version mismatch",
++                    allow_connect = false,
++                })
+                 return
+             end
+             if not context.existing_hub then
+                 log.debug(
+                     "Port available but no existing hub info, might be due to changed config files, starting new server"
+                 )
+-                self:handle_same_port_different_config(context)
++                self:handle_same_port_different_config(context, {
++                    reason = "workspace cache is missing for this running hub",
++                    allow_connect = true,
++                })
+                 return
+             end
+ 
+@@ -372,8 +481,11 @@ function MCPHub:start()
+                     self:connect_sse()
+                 else
+                     log.debug("Config files changed, restarting server")
+-                    vim.notify("Config files changed. Restarting hub...", vim.log.levels.INFO)
+-                    self:handle_same_port_different_config(context)
++                    vim.notify("Config files changed. Waiting for hard restart confirmation...", vim.log.levels.WARN)
++                    self:handle_same_port_different_config(context, {
++                        reason = "config files changed",
++                        allow_connect = true,
++                    })
+                 end
+             else
+                 -- No config info available (backwards compatibility)
+@@ -411,25 +523,65 @@ function MCPHub:handle_directory_change()
+         return
+     end
+ 
+-    -- Check if we need to switch hubs
+-    local needs_switch = false
+-    local reason = ""
++    -- Cancel any pending switch — new resolution is the new ground truth
++    if self._pending_switch_timer then
++        pcall(self._pending_switch_timer.stop, self._pending_switch_timer)
++        pcall(self._pending_switch_timer.close, self._pending_switch_timer)
++        self._pending_switch_timer = nil
++    end
++
++    if tostring(new_context.port) == tostring(current_context.port) then
++        log.debug("No hub switch needed - context unchanged")
++        return
++    end
+ 
+-    if tostring(new_context.port) ~= tostring(current_context.port) then
+-        needs_switch = true
+-        reason = string.format("port change (%s -> %s)", current_context.port, new_context.port)
++    -- Different port: defer the switch by shutdown_delay so the previous workspace
++    -- hub stays usable during quick buffer hops. The mcp-hub server was started with
++    -- --shutdown-delay matching this value, so it stays alive over the same window.
++    local delay = tonumber(self.shutdown_delay) or 0
++    if delay <= 0 then
++        log.debug("Switching hub immediately (no shutdown_delay configured)")
++        self:stop_sse()
++        vim.schedule(function()
++            self:start()
++        end)
++        return
+     end
+ 
+-    if needs_switch then
+-        log.debug("Switching hub due to: " .. reason)
+-        -- self:restart(nil, reason)
++    log.debug(string.format("Deferring workspace hub switch %s -> %s by %dms",
++        current_context.port, new_context.port, delay))
++
++    local timer = vim.uv.new_timer()
++    if not timer then
++        log.warn("Failed to create timer for workspace hub switch, switching immediately")
+         self:stop_sse()
+         vim.schedule(function()
+             self:start()
+         end)
+-    else
+-        log.debug("No hub switch needed - context unchanged")
++        return
+     end
++    self._pending_switch_timer = timer
++    timer:start(delay, 0, vim.schedule_wrap(function()
++        pcall(timer.stop, timer)
++        pcall(timer.close, timer)
++        if self._pending_switch_timer == timer then
++            self._pending_switch_timer = nil
++        end
++        -- Re-resolve at fire time — user may have moved back
++        local final_ctx = self:resolve_context()
++        if not final_ctx then
++            return
++        end
++        local cur = State.current_hub
++        if cur and tostring(final_ctx.port) == tostring(cur.port) then
++            log.debug("Hub switch cancelled — already on correct hub")
++            return
++        end
++        self:stop_sse()
++        vim.schedule(function()
++            self:start()
++        end)
++    end))
+ end
+ 
+ function MCPHub:handle_hub_ready()
+@@ -445,6 +597,11 @@ function MCPHub:handle_hub_ready()
+ end
+ 
+ function MCPHub:_clean_up()
++    if self._pending_switch_timer then
++        pcall(self._pending_switch_timer.stop, self._pending_switch_timer)
++        pcall(self._pending_switch_timer.close, self._pending_switch_timer)
++        self._pending_switch_timer = nil
++    end
+     self.is_owner = false
+     self.ready = false
+     self.is_starting = false
+@@ -763,6 +920,18 @@ end
  --- @return MCPResponseOutput?, string? If no callback is provided, returns response and error
  function MCPHub:call_tool(server_name, tool_name, args, opts)
      opts = opts or {}
@@ -117,7 +271,90 @@ index 2b5245d..d81e80f 100644
      if opts.callback then
          local original_callback = opts.callback
          opts.callback = function(response, err)
-@@ -1381,18 +1482,35 @@ function MCPHub:ensure_ready()
+@@ -1324,9 +1493,70 @@ function MCPHub:handle_hub_stopping()
+     end
+ end
+ 
++--- Ask what to do before killing an existing hub process.
++---@param context table Context containing port and config details
++---@param opts? { reason?: string, allow_connect?: boolean }
++---@return "restart"|"connect"|"cancel"
++function MCPHub:confirm_hard_restart(context, opts)
++    opts = opts or {}
++    local allow_connect = opts.allow_connect ~= false
++    local reason = opts.reason or "hub context mismatch"
++
++    if config.confirm_hard_restart == false then
++        return "restart"
++    end
++
++    if #vim.api.nvim_list_uis() == 0 then
++        vim.notify(
++            "MCP Hub hard restart needs confirmation but no UI is attached: " .. reason,
++            vim.log.levels.WARN
++        )
++        return allow_connect and "connect" or "cancel"
++    end
++
++    local existing_hub = context.existing_hub or {}
++    local message = table.concat({
++        "Hard restart MCP Hub?",
++        "",
++        "Reason: " .. reason,
++        "Port: " .. tostring(context.port),
++        "Existing PID: " .. tostring(existing_hub.pid or "unknown"),
++        "Existing config: " .. format_config_files(existing_hub.config_files),
++        "Current config: " .. format_config_files(context.config_files),
++        "",
++        "This will disconnect other Neovim and CLI clients on the same hub.",
++    }, "\n")
++
++    if allow_connect then
++        local choice = vim.fn.confirm(message, "&Connect to existing\n&Hard restart\n&Cancel", 1, "Warning")
++        if choice == 1 then
++            return "connect"
++        elseif choice == 2 then
++            return "restart"
++        end
++        return "cancel"
++    end
++
++    local choice = vim.fn.confirm(message, "&Hard restart\n&Cancel", 2, "Warning")
++    return choice == 1 and "restart" or "cancel"
++end
++
+ --- Handles already running mcp-hub on same port with different config files
+ ---@param context table Context containing port and config details
+-function MCPHub:handle_same_port_different_config(context)
++---@param opts? { reason?: string, allow_connect?: boolean }
++function MCPHub:handle_same_port_different_config(context, opts)
++    opts = opts or {}
++    local action = self:confirm_hard_restart(context, opts)
++    if action == "connect" then
++        vim.notify("Connecting to existing MCP Hub without hard restart", vim.log.levels.INFO)
++        self:connect_sse()
++        return
++    elseif action == "cancel" then
++        vim.notify("MCP Hub hard restart cancelled: " .. (opts.reason or "hub context mismatch"), vim.log.levels.WARN)
++        self:_clean_up()
++        return
++    end
++
+     self:api_request("POST", "hard-restart", {
+         callback = function(_, err)
+             if err then
+@@ -1340,7 +1570,9 @@ function MCPHub:handle_same_port_different_config(context)
+                 )
+                 return
+             end
+-            self:_start_server_with_context(context)
++            vim.defer_fn(function()
++                self:_start_server_with_context(context)
++            end, 1000)
+         end,
+         skip_ready_check = true,
+     })
+@@ -1385,18 +1617,35 @@ function MCPHub:ensure_ready()
      return true
  end
  
@@ -155,10 +392,128 @@ index 2b5245d..d81e80f 100644
              end, capabilities)
          end
  
-diff --git i/lua/mcphub/ui/views/main.lua w/lua/mcphub/ui/views/main.lua
+diff --git a/lua/mcphub/state.lua b/lua/mcphub/state.lua
+index ed7838d..9010cdb 100644
+--- a/lua/mcphub/state.lua
++++ b/lua/mcphub/state.lua
+@@ -292,11 +292,38 @@ function State:add_server_output(entry)
+     -- Ensure entry has timestamp
+     entry.timestamp = entry.timestamp or vim.loop.now()
+ 
++    -- Dedup: collapse consecutive identical messages within 2 seconds into a
++    -- single entry with an incrementing count. This prevents bursts of repeated
++    -- log lines (e.g. "Unknown client disconnected" x40) from flooding state
++    -- and triggering dozens of UI re-renders.
++    local last = self.server_output.entries[#self.server_output.entries]
++    if last and last.message == entry.message and last.type == entry.type then
++        local age_ms = entry.timestamp - last.timestamp
++        if age_ms < 2000 then
++            last.count = (last.count or 1) + 1
++            -- Debounce: restart the 50ms notify timer instead of firing now.
++            -- This merges rapid-fire updates into a single UI refresh.
++            if not self._log_notify_timer then
++                self._log_notify_timer = (vim.uv or vim.loop).new_timer()
++            end
++            self._log_notify_timer:stop()
++            self._log_notify_timer:start(
++                50,
++                0,
++                vim.schedule_wrap(function()
++                    self:notify_subscribers({ logs = true }, "logs")
++                end)
++            )
++            return
++        end
++    end
++
+     table.insert(self.server_output.entries, {
+         type = entry.type, -- info/warn/error/debug
+         message = entry.message, -- The actual message
+         timestamp = entry.timestamp,
+         data = entry.data, -- Optional extra data
++        count = 1, -- Track repetitions for dedup display
+     })
+ 
+     -- Keep reasonable history
+@@ -304,9 +331,19 @@ function State:add_server_output(entry)
+         table.remove(self.server_output.entries, 1)
+     end
+ 
+-    self:notify_subscribers({
+-        logs = true,
+-    }, "logs")
++    -- Debounce the subscriber notification to batch rapid log bursts into a
++    -- single UI update after 50ms of quiet.
++    if not self._log_notify_timer then
++        self._log_notify_timer = (vim.uv or vim.loop).new_timer()
++    end
++    self._log_notify_timer:stop()
++    self._log_notify_timer:start(
++        50,
++        0,
++        vim.schedule_wrap(function()
++            self:notify_subscribers({ logs = true }, "logs")
++        end)
++    )
+ end
+ 
+ ---@param status string
+diff --git a/lua/mcphub/ui/init.lua b/lua/mcphub/ui/init.lua
+index 4d57a51..4865f2d 100644
+--- a/lua/mcphub/ui/init.lua
++++ b/lua/mcphub/ui/init.lua
+@@ -440,11 +440,47 @@ function UI:show(args)
+     -- Focus window
+     vim.api.nvim_set_current_win(self.window)
+ 
++    -- Re-resolve context: if cwd has moved to a different hub (e.g. workspace -> global)
++    -- and patch 12's debounce timer hasn't fired yet, switch hubs now so the UI shows the
++    -- hub matching the current cwd. start() short-circuits to connect_sse when the target
++    -- port is already running our server, so this is a fast SSE-reconnect, not a process restart.
++    self:reconcile_context()
++
+     -- Draw current view
+     self:render()
+     self.is_shown = true
+ end
+ 
++--- Reconcile UI's hub against current cwd. No-op unless workspace mode is enabled
++--- and the resolved port differs from the connected one.
++function UI:reconcile_context()
++    local hub = State.hub_instance
++    if not hub then
++        return
++    end
++    if not (State.config and State.config.workspace and State.config.workspace.enabled) then
++        return
++    end
++    local resolved = hub:resolve_context()
++    if not resolved then
++        return
++    end
++    local current = State.current_hub
++    if current and tostring(resolved.port) == tostring(current.port) then
++        return
++    end
++    -- Cancel any pending debounced switch (patch 12) so we don't fight it
++    if hub._pending_switch_timer then
++        pcall(hub._pending_switch_timer.stop, hub._pending_switch_timer)
++        pcall(hub._pending_switch_timer.close, hub._pending_switch_timer)
++        hub._pending_switch_timer = nil
++    end
++    hub:stop_sse()
++    vim.schedule(function()
++        hub:start()
++    end)
++end
++
+ --- Render current view
+ ---@private
+ function UI:render()
+diff --git a/lua/mcphub/ui/views/main.lua b/lua/mcphub/ui/views/main.lua
 index 9639866..e275e30 100644
---- i/lua/mcphub/ui/views/main.lua
-+++ w/lua/mcphub/ui/views/main.lua
+--- a/lua/mcphub/ui/views/main.lua
++++ b/lua/mcphub/ui/views/main.lua
 @@ -438,7 +438,7 @@ function MainView:handle_action(line_override, context_override)
              vim.api.nvim_win_set_cursor(0, cap_pos)
          end
@@ -285,10 +640,38 @@ index 9639866..e275e30 100644
          local server_name = context.server_name
          local server_config = config_manager.get_server_config(server_name) or {}
  
-diff --git i/lua/mcphub/utils/renderer.lua w/lua/mcphub/utils/renderer.lua
-index d8263e0..9b9ca44 100644
---- i/lua/mcphub/utils/renderer.lua
-+++ w/lua/mcphub/utils/renderer.lua
+diff --git a/lua/mcphub/utils/handlers.lua b/lua/mcphub/utils/handlers.lua
+index 9536b83..197adee 100644
+--- a/lua/mcphub/utils/handlers.lua
++++ b/lua/mcphub/utils/handlers.lua
+@@ -101,6 +101,23 @@ M.SSEHandlers = {
+                 hub:refresh()
+             end
+         elseif event == constants.EventTypes.LOG then
++            -- Map server log type strings to vim.log.levels for comparison
++            local server_level_map = {
++                debug = vim.log.levels.DEBUG,
++                info = vim.log.levels.INFO,
++                warn = vim.log.levels.WARN,
++                error = vim.log.levels.ERROR,
++            }
++            local msg_level = server_level_map[data.type] or vim.log.levels.INFO
++            local cfg_level = (State.config.log or {}).level or vim.log.levels.INFO
++            -- Drop SSE log messages below the configured log level. This makes
++            -- the `log.level` option apply to the full server output stream, not
++            -- just vim.notify calls (which was the previous behaviour).
++            -- Errors are always stored regardless of level.
++            if msg_level < cfg_level and data.type ~= "error" then
++                return
++            end
++
+             -- Use message timestamp if valid ISO string, otherwise system time
+             local timestamp = vim.loop.now()
+             if data.timestamp then
+diff --git a/lua/mcphub/utils/renderer.lua b/lua/mcphub/utils/renderer.lua
+index d8263e0..5a702f6 100644
+--- a/lua/mcphub/utils/renderer.lua
++++ b/lua/mcphub/utils/renderer.lua
 @@ -6,6 +6,107 @@ local constants = require("mcphub.utils.constants")
  local utils = require("mcphub.utils")
  
@@ -504,3 +887,15 @@ index d8263e0..9b9ca44 100644
          end
  
          local auto_approve = server_config.autoApprove
+@@ -629,6 +766,11 @@ function M.render_server_entries(entries)
+                 -- Add main message
+                 line:append(entry.message, Text.highlights[entry.type] or Text.highlights.muted)
+ 
++                -- Show repeat count badge when dedup has collapsed multiple identical messages
++                if (entry.count or 1) > 1 then
++                    line:append(string.format(" ×%d", entry.count), Text.highlights.muted)
++                end
++
+                 table.insert(lines, Text.pad_line(line))
+             end
+         end
