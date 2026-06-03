@@ -179,6 +179,39 @@ ui = {
 - Uses `MCPHub:start()`'s existing fast path: when the target port is already running our server, `start()` short-circuits to `connect_sse()` — no `--shutdown-delay` of the old hub, no process spawn, no hard restart.
 - Closes the gap where pressing `r` (refresh) only refreshed the workspace hub's capabilities and `R` (hard restart) was the only way to swap hubs.
 
+## 14-sse-recovery-and-hub-fallback.patch
+
+- Recovers from transient SSE disconnects by probing the existing hub before tearing down state.
+- Reconnects SSE when the hub is still reachable instead of forcing cleanup/restart.
+- Makes main-view `r` try a soft reconnect when disconnected, then falls back to normal refresh when connected.
+- Client-side patch; no `mcp-hub` server rebuild is required.
+
+## 15-agent-alternate-config-open.patch
+
+- Extends CLI Agent rows with optional `config_alternates` targets.
+- Registers each alternate target's configured `key` when it does not conflict with an existing MCPHub main-view key.
+- Pressing the configured key on an agent row opens the matching alternate config and jumps to `matcher` when provided.
+- Example targets:
+
+```lua
+config_alternates = {
+  { key = "1", label = "settings permissions", path = "~/.claude/settings.json", matcher = ".permissions" },
+  { key = "P", label = "settings permissions", path = "$HOME/.claude/settings.json", matcher = ".permissions" },
+}
+```
+
+- `e` still opens the profile's main `config_path`.
+- Matchers support pragmatic dot-path search for JSON/TOML/YAML plus plain-text fallback.
+- For JSON, `.mcpServers` prefers the shallowest (root-level) match; nested duplicates (e.g. inside `projects[]`) are skipped.
+- Path config can use `~` or `$HOME`; paths are expanded before opening.
+- Cursor persists across UI toggle: `cleanup()` saves browse position via `before_leave()` so reopening the UI restores the exact line.
+- Section navigation in main view browse mode:
+  - `J` / `K` — jump to next / previous section header (wraps)
+  - `h` / `l` on a section header line — fold / unfold the section; on any other line — original server collapse/expand behavior
+  - Sections: MCP Servers, Native Servers, Endpoints, CLI Agents, Active Hubs
+  - Folded sections show `[folded]` hint inline and skip rendering their content
+- Client-side patch; no `mcp-hub` server rebuild is required.
+
 ## Validation note
 
 - `04-tool-input-nav-keys.patch` was validated on a clean baseline matching this setup by applying patches `01 -> 02 -> 03` then checking `04` with `git apply --check`.

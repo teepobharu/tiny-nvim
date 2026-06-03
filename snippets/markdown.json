@@ -6,20 +6,6 @@
     ],
     "description": "Add images with size"
   },
-  "WrapCodeBlock": {
-    "prefix": [
-      "cb",
-      "wcb",
-      "wrabcodeblock"
-    ],
-    "body": [
-      "```${1:lang}",
-      "${TM_SELECTED_TEXT:code}",
-      "```",
-      "$0"
-    ],
-    "description": "Wrap selection in a fenced code block (uses TM_SELECTED_TEXT)"
-  },
   "LinkFromSelection": {
     "prefix": [
       "mdlink",
@@ -43,14 +29,27 @@
     ],
     "description": "Wrap selection in single backticks (inline code)"
   },
-  "WrapBold": {
-    "prefix": [
-      "b",
-      "bd"
-    ],
+  "WrapLinkAlias": {
+    "prefix": "walink",
     "body": [
-      "**${TM_SELECTED_TEXT/^\\s+|\\s+$/ /g}$0**"
+      "[${TM_SELECTED_TEXT:${1:text}}]($2)$0"
     ],
-    "description": "Wrap selection in bold"
+    "description": "Wrap selection as hyperlink alias, enter URL manually"
+  },
+  "WrapLinkAliasClipboard": {
+    "prefix": "walinkc",
+    "body": [
+      "[${TM_SELECTED_TEXT:${1:text}}](${CLIPBOARD})$0"
+    ],
+    "description": "Wrap selection as hyperlink alias, URL from clipboard"
+  },
+  "Frontmatter": {
+    "prefix": "fmter",
+    "body": [
+      "---",
+      "$0",
+      "---"
+    ],
+    "description": "Insert YAML frontmatter block with cursor inside"
   }
 }

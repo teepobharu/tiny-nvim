@@ -111,5 +111,37 @@
       "${TM_FILEPATH}#L${TM_LINE_NUMBER}"
     ],
     "description": "ABS file#Lline reference"
+  },
+  "WrapCodeBlock": {
+    "prefix": [
+      "cb",
+      "wcb",
+      "wrabcodeblock"
+    ],
+    "body": [
+      "```${1:lang}",
+      "${TM_SELECTED_TEXT:code}",
+      "```",
+      "$0"
+    ],
+    "description": "Wrap selection in a fenced code block (uses TM_SELECTED_TEXT)"
+  },
+  "WrapBold": {
+    "prefix": [
+      "b",
+      "bd"
+    ],
+    "body": [
+      "**${TM_SELECTED_TEXT/^\\s+|\\s+$/ /g}$0**"
+    ],
+    "description": "Wrap selection in bold"
+  },
+  "Divider": {
+    "prefix": "dvd",
+    "body": [
+      "---",
+      "$0"
+    ],
+    "description": "Insert horizontal rule / divider"
   }
 }
