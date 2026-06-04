@@ -166,9 +166,51 @@ end
 -- High-level UI helpers (called from command / keymap)
 -- ---------------------------------------------------------------------------
 
---- Clear a URL and emit a vim.notify result. Used for direct-arg command flow.
+--- Resolve a server URL to the matching server name in the hub's server state.
+--- Returns nil when the hub is not connected or the URL is not in state.
+---@param url string
+---@return string|nil
+local function url_to_server_name(url)
+  local ok, State = pcall(require, "mcphub.state")
+  if not ok or not State or not State.server_state then
+    return nil
+  end
+  for _, srv in ipairs(State.server_state.servers or {}) do
+    local srv_url = srv.url or (srv.config and srv.config.url)
+    if srv_url == url then
+      return srv.name
+    end
+  end
+  return nil
+end
+
+--- Clear a URL and emit a vim.notify result.
+--- Tries POST /servers/clear-auth first (mcp-hub fork patch 03) so the running
+--- hub's in-memory state is also reset. Falls back to file-edit when the hub is
+--- not running or the endpoint returns an error (bundled mcp-hub).
 ---@param url string
 function M.clear_notify(url)
+  local State_ok, State = pcall(require, "mcphub.state")
+  local hub = State_ok and State and State.hub_instance
+  if hub and hub.clear_server_auth then
+    local name = url_to_server_name(url)
+    if name then
+      hub:clear_server_auth(name, function(success, _err)
+        if not success then
+          -- Hub rejected or endpoint missing — fall back to file-edit
+          M._clear_file_notify(url)
+        end
+      end)
+      return
+    end
+  end
+  -- Hub not reachable or URL not found in state — file-edit path
+  M._clear_file_notify(url)
+end
+
+--- File-edit-only clear (used as fallback). Requires hub restart to flush in-memory state.
+---@param url string
+function M._clear_file_notify(url)
   local ok, err = M.clear(url)
   if ok then
     vim.notify(

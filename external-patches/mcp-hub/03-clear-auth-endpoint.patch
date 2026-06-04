@@ -1,0 +1,96 @@
+# Patch: add /servers/clear-auth API endpoint
+# Project: ravitemer/mcp-hub
+# Tested against local fork commit 6a4ce7e (v4.2.1), after patches 01 and 02 are applied.
+#
+# Problem: When an upstream MCP OAuth server loses its client registry (e.g. pod
+# restart with in-memory DCR), the stored client_id in oauth-storage.json is
+# stale. The server rejects auth with "client ID not found in registry".
+# mcp-hub keeps serversStorage in module-level memory (loaded once at startup),
+# so editing oauth-storage.json on disk has no effect until the process restarts.
+# mcp-hub exposed no clear-auth API — the only fix was a full hard-restart.
+#
+# Fix:
+# 1. StorageManager.clear(serverUrl) — zero out the in-memory entry and persist.
+# 2. MCPHubOAuthProvider.clearAuth() — public wrapper called by the route.
+# 3. POST /servers/clear-auth — clears the in-memory OAuth state for one server,
+#    disconnects it (so the next authorize re-registers), and broadcasts
+#    SERVERS_UPDATED so clients update their UI without a hard restart.
+#
+# mcphub.nvim integration: mcphub.nvim patch 04-clear-auth_v1 calls this
+# endpoint when the user presses X on an unauthorized/authed server row.
+# Fallback (bundled mcp-hub without this endpoint): mcphub.nvim falls back to
+# the existing file-edit path (lua/utils/mcphub_auth.lua) which still requires
+# a manual R (hard-restart) to flush the in-memory state.
+#
+# Build: rebuild dist/cli.js after applying:
+#   cd ~/projects/mcp-hub && npm run build
+
+diff --git i/src/utils/oauth-provider.js w/src/utils/oauth-provider.js
+--- i/src/utils/oauth-provider.js
++++ w/src/utils/oauth-provider.js
+@@ -49,6 +49,11 @@ class StorageManager {
+     serversStorage[serverUrl] = { ...serverData, ...data };
+     return this.save();
+   }
++
++  async clear(serverUrl) {
++    serversStorage[serverUrl] = { clientInfo: null, tokens: null, codeVerifier: null };
++    return this.save();
++  }
+ }
+
+ // Singleton instance
+@@ -119,4 +124,9 @@ export default class MCPHubOAuthProvider {
+     logger.file(`[${this.serverName}] Getting Code verifier`);
+     return storage.get(this.serverUrl).codeVerifier;
+   }
++
++  async clearAuth() {
++    logger.file(`[${this.serverName}] Clearing stored OAuth credentials`);
++    return storage.clear(this.serverUrl);
++  }
+ }
+
+diff --git i/src/server.js w/src/server.js
+--- i/src/server.js
++++ w/src/server.js
+@@ -843,6 +843,36 @@ registerRoute(
+   }
+ )
+
++// Clear stored OAuth credentials for a server so the next auth attempt triggers fresh DCR.
++// Useful when the upstream MCP server loses its client registry (pod restart / in-memory DCR),
++// causing "client ID not found in registry" on the consent page.
++// After clearing, reconnect the server to start a new auth flow.
++registerRoute(
++  "POST",
++  "/servers/clear-auth",
++  "Clear stored OAuth credentials for a server",
++  async (req, res) => {
++    const { server_name } = req.body;
++    try {
++      if (!server_name) {
++        throw new ValidationError("Missing server name", { field: "server_name" });
++      }
++      const connection = serviceManager.mcpHub.getConnection(server_name);
++      if (connection.authProvider) {
++        await connection.authProvider.clearAuth();
++      }
++      await connection.disconnect();
++      serviceManager.broadcastSubscriptionEvent(SubscriptionTypes.SERVERS_UPDATED, {
++        changes: { modified: [server_name] },
++      });
++      res.json({
++        status: "ok",
++        server_name,
++        timestamp: new Date().toISOString(),
++      });
++    } catch (error) {
++      throw wrapError(error, "CLEAR_AUTH_ERROR", error.data || {});
++    }
++  }
++)
++
+ //For cases where mcp-hub is running on a remote system and the oauth callback points to localhost
+ registerRoute(
+   "POST",

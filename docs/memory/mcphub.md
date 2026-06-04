@@ -608,23 +608,44 @@ it forgets the client ID that MCPHub registered, but MCPHub keeps sending it.
 (including `client_id`) and active `tokens` per server URL. When the server-side
 registry is reset, those values become stale.
 
-`mcp-hub` exposes no clear-auth API endpoint — clearing must be done by resetting
-the JSON entry to `{clientInfo: null, tokens: null, codeVerifier: null}`.
+`mcp-hub` loads `serversStorage` into module-level memory once at startup —
+editing the JSON on disk has no effect until the process restarts. The fork patch
+`external-patches/mcp-hub/03-clear-auth-endpoint.patch` adds `POST /servers/clear-auth`
+which resets the in-memory entry and disconnects the server, so no process restart is
+needed.
 
-### Fix — built-in command
+### Fix — single key in MCPHub UI (preferred)
+
+With the fork patch applied (`external-patches/mcp-hub/03-clear-auth-endpoint.patch`)
+and mcp-hub rebuilt:
+
+1. Open `:MCPHub`
+2. Move cursor to the unauthorized server row
+3. Press `X` — clears in-memory OAuth state, immediately reconnects the server
+4. Row transitions: `unauthorized` → `connecting` → `unauthorized` (fresh auth URL)
+5. Press `l` → browser opens with fresh DCR → new valid client_id
+
+The `X` key hint appears in the row's hover hint for unauthorized servers.
+If the row ends up `disconnected` for any reason, `l` also reconnects it.
+
+**Server build dependency**: requires mcp-hub fork with the patch applied.
+See `external-patches/mcp-hub/README.md` for apply + rebuild instructions.
+
+### Fix — command / picker (fallback or when hub not running)
 
 ```vim
 :MCPHubClearAuth                          " picker: select from authed servers
 :MCPHubClearAuth <url>                    " clear specific server non-interactively
 ```
 
-After clearing, press `R` on the server row in `:MCPHub` to reconnect and
-trigger fresh DCR → new consent page → new valid client_id stored.
+`MCPHubClearAuth` now tries the API path first (same as `X`). If the hub is
+not connected or the endpoint is absent, it falls back to file-edit and prints
+a message to press `R` in `:MCPHub` to flush the running hub's in-memory state.
 
-Keymap: `<leader>ahx` (under MCPHub which-key group).
+Keymap: `<leader>aHx` (under MCPHub which-key group).
 
 Implementation: `lua/utils/mcphub_auth.lua` — `pick_and_clear()` / `clear_notify()`.
-Registered in `lua/plugins/extra/myAi.lua` as an optional `ravitemer/mcphub.nvim` spec.
+Registered in `lua/plugins/extra/myAi.lua`.
 
 ### Manual fallback (if Neovim isn't open)
 
@@ -634,6 +655,8 @@ jq --arg u "$SERVER_URL" '.[$u] = {clientInfo:null, tokens:null, codeVerifier:nu
   ~/.local/share/mcp-hub/oauth-storage.json \
   > /tmp/oauth.json && mv /tmp/oauth.json ~/.local/share/mcp-hub/oauth-storage.json
 ```
+
+Then restart mcp-hub so it reloads the file into memory.
 
 ## Troubleshooting
 

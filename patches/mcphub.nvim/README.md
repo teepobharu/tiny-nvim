@@ -1,17 +1,19 @@
 # mcphub.nvim patches
 
-Patch files are applied in order by `lazy-local-patcher`. Three grouped patch files cover all local changes against `163b3ad` (v6.2.0).
+Patch files are applied in order by `lazy-local-patcher`. Four grouped patch files cover all local changes against `163b3ad` (v6.2.0).
 
 **Application order** (required):
 ```bash
 git apply --ignore-space-change 01-compat_v1.patch
 git apply --ignore-space-change 02-hub-stability_v1.patch
 git apply --ignore-space-change 03-main-ui_v1.patch
+git apply --ignore-space-change 04-clear-auth_v1.patch
 ```
 
 `02` must precede `03` — env-tool-filters (in `02`) adds hub.lua and main.lua context that `03` depends on.
+`04` depends on `03` for the keymap dispatch infrastructure in main.lua.
 
-To add a new patch on top, apply all 3 groups first, make changes, then `git diff HEAD -- <files>`. Save as a new `_v2` file rather than overwriting `_v1`.
+To add a new patch on top, apply all groups first, make changes, then `git diff HEAD -- <files>`. Save as a new `_v2` file rather than overwriting `_v1`.
 
 ---
 
@@ -84,9 +86,30 @@ All main-view UI work. Depends on `02-hub-stability_v1` for hub.lua and main.lua
 
 ---
 
+---
+
+## 04-clear-auth_v1.patch
+
+Depends on `03-main-ui_v1` for keymap dispatch infrastructure. Requires mcp-hub fork
+`external-patches/mcp-hub/03-clear-auth-endpoint.patch` applied and rebuilt for the
+API path to work. Falls back to file-edit via `utils.mcphub_auth` when the endpoint
+is absent (bundled mcp-hub without the fork patch).
+
+- **`lua/mcphub/hub.lua`** — `MCPHub:clear_server_auth(name, cb)`: calls `POST /servers/clear-auth`; notifies on success; passes `(false, err)` to callback for fallback handling.
+- **`lua/mcphub/ui/views/main.lua`** — `MainView:handle_clear_auth(context)`: API path → on error falls back to `utils.mcphub_auth.clear_notify` by URL; `X` keymap on server rows dispatches here.
+- **`lua/mcphub/utils/renderer.lua`** — adds `<X> Clear auth` to the hover hint for `unauthorized` server rows.
+
+Also: `lua/utils/mcphub_auth.lua` (project-local helper) updated to try API path before file-edit.
+
+**Server build dependency**: requires mcp-hub fork with `external-patches/mcp-hub/03-clear-auth-endpoint.patch` applied and rebuilt. Without it, `X` falls back to the file-edit path which still needs manual `R` to flush in-memory state.
+
+**Files**: `lua/mcphub/hub.lua`, `lua/mcphub/ui/views/main.lua`, `lua/mcphub/utils/renderer.lua`
+
+---
+
 ## Validation note
 
-- All 3 patches validated by applying in order from clean `163b3ad` (v6.2.0) with `git apply --check` then `git apply`.
+- All 4 patches validated by applying in order from clean `163b3ad` (v6.2.0) with `git apply --check` then `git apply`.
 - `lazy-local-patcher` can show a contradictory notification (`Error applying...` and `Applied ...`) due to notifier race behavior; use manual `git apply --check` for authoritative validation.
 
 ## User notes
@@ -101,3 +124,5 @@ Added requirements
   - Native execution inside MCPHub UI would need a separate endpoint-client capability view.
 - [x] Add UI command to open/close the npx inspector web UI to check on each endpoint
   - `e` on endpoint row launches inspector + opens browser; `s` stops it
+- [x] Single key to reset stale OAuth client_id from the MCPHub main view
+  - `X` on an unauthorized server row: clears in-memory + file state, disconnects, no hard-restart needed

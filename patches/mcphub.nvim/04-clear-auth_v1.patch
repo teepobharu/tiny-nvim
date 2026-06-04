@@ -1,0 +1,168 @@
+diff --git c/lua/mcphub/hub.lua w/lua/mcphub/hub.lua
+index 7881112..69b25ed 100644
+--- c/lua/mcphub/hub.lua
++++ w/lua/mcphub/hub.lua
+@@ -727,6 +727,53 @@ function MCPHub:authorize_mcp_server(name, _)
+     })
+ end
+ 
++--- Clear stored OAuth credentials for a server and reconnect it so fresh DCR runs
++--- automatically. Server transitions: disconnected → connecting → unauthorized.
++--- Once the row shows unauthorized, press <l> to open the browser and complete auth.
++--- Requires mcp-hub fork patch 03 (POST /servers/clear-auth).
++--- Falls back to notify on error so callers can use the file-edit path.
++---@param name string Server name
++---@param cb? fun(ok: boolean, err?: string) Optional callback
++function MCPHub:clear_server_auth(name, cb)
++    self:api_request("POST", "servers/clear-auth", {
++        body = { server_name = name },
++        callback = function(response, err)
++            if err then
++                if cb then
++                    cb(false, err)
++                else
++                    vim.notify("[MCPHub] clear-auth failed: " .. tostring(err), vim.log.levels.WARN)
++                end
++                return
++            end
++            -- Immediately reconnect so the server runs fresh DCR and lands on
++            -- "unauthorized" — the user just presses <l> to complete auth.
++            self:api_request("POST", "servers/start", {
++                body = { server_name = name },
++                callback = function(_, start_err)
++                    if start_err then
++                        vim.notify(
++                            "[MCPHub] OAuth cleared for '" .. name .. "'. Reconnect failed: " .. tostring(start_err)
++                                .. ". Toggle the server manually to re-auth.",
++                            vim.log.levels.WARN
++                        )
++                    else
++                        vim.notify(
++                            "[MCPHub] OAuth cleared for '"
++                                .. name
++                                .. "'. Reconnecting… press <l> when row shows 'unauthorized'.",
++                            vim.log.levels.INFO
++                        )
++                    end
++                    if cb then
++                        cb(start_err == nil, start_err)
++                    end
++                end,
++            })
++        end,
++    })
++end
++
+ --- Start a disabled/disconnected MCP server
+ ---@param name string Server name to start
+ ---@param opts? { via_curl_request?:boolean,callback?: function }
+diff --git c/lua/mcphub/ui/views/main.lua w/lua/mcphub/ui/views/main.lua
+index dba272f..2c4ed8c 100644
+--- c/lua/mcphub/ui/views/main.lua
++++ w/lua/mcphub/ui/views/main.lua
+@@ -352,6 +352,50 @@ function MainView:handle_delete()
+     end
+ end
+ 
++--- Patch 04: clear stored OAuth credentials for a server row and reconnect.
++--- Calls POST /servers/clear-auth then POST /servers/start (mcp-hub fork patch 03).
++--- Falls back to the file-edit path (utils.mcphub_auth) when the endpoint is absent.
++function MainView:handle_clear_auth(context)
++    if not context or not context.name then
++        return
++    end
++    local name = context.name
++    local ok, auth = pcall(require, "utils.mcphub_auth")
++    if not ok then
++        auth = nil
++    end
++    if State.hub_instance and State.hub_instance.clear_server_auth then
++        State.hub_instance:clear_server_auth(name, function(success, err)
++            if not success then
++                if auth then
++                    local server = State.hub_instance and State.hub_instance:get_server(name)
++                    local url = server and (server.url or server.config and server.config.url)
++                    if url then
++                        auth.clear_notify(url)
++                    else
++                        vim.notify(
++                            "[MCPHub] clear-auth: cannot resolve URL for '" .. name .. "'",
++                            vim.log.levels.WARN
++                        )
++                    end
++                else
++                    vim.notify("[MCPHub] clear-auth failed: " .. tostring(err), vim.log.levels.WARN)
++                end
++            end
++        end)
++    elseif auth then
++        local server = State.hub_instance and State.hub_instance:get_server(name)
++        local url = server and (server.url or server.config and server.config.url)
++        if url then
++            auth.clear_notify(url)
++        else
++            vim.notify("[MCPHub] clear-auth: cannot resolve URL for '" .. name .. "'", vim.log.levels.WARN)
++        end
++    else
++        vim.notify("[MCPHub] clear-auth: hub not connected", vim.log.levels.WARN)
++    end
++end
++
+ function MainView:handle_action(line_override, context_override)
+     local go_to_cap_line = false
+     -- Get current line
+@@ -422,6 +466,10 @@ function MainView:handle_action(line_override, context_override)
+             State.hub_instance:authorize_mcp_server(context.name)
+             -- Show popup for the user
+             ui_utils.open_auth_popup(context.name, authUrl)
++        elseif context.status == "disconnected" then
++            -- Patch 04: reconnect a disconnected server (e.g. after clear-auth).
++            -- Mirrors the toggle-on path so <l> works instead of requiring t/t.
++            State.hub_instance:start_mcp_server(context.name, { via_curl_request = true })
+         end
+     elseif type == "create_server" then
+         -- Store browse mode position before switching
+@@ -775,6 +823,17 @@ function MainView:setup_active_mode()
+         desc = "Yank path",
+         silent = true,
+     }
++    self.keymaps["X"] = {
++        action = function()
++            local cursor = vim.api.nvim_win_get_cursor(0)
++            local line_type, context = self:get_line_info(cursor[1])
++            if line_type == "server" and context then
++                self:handle_clear_auth(context)
++            end
++        end,
++        desc = "Clear OAuth / re-auth",
++        silent = true,
++    }
+     -- Endpoint and agent keys dispatch by line type here, so cursor movement
+     -- never deletes normal server/tool/native-server actions.
+ 
+diff --git c/lua/mcphub/utils/renderer.lua w/lua/mcphub/utils/renderer.lua
+index 183b68c..40b10f7 100644
+--- c/lua/mcphub/utils/renderer.lua
++++ w/lua/mcphub/utils/renderer.lua
+@@ -539,14 +539,18 @@ function M.render_server_capabilities(server, lines, current_line, server_config
+     local needs_authorization = server.status == "unauthorized"
+     local enabled_hint = is_native and "[<l> Expand, <t> Toggle, <a> Auto-approve, <e> Edit, <y> Copy, <Y> Copy path]"
+         or needs_authorization
+-                and "[<l> Authorize, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
++                and "[<l> Authorize, <X> Clear auth, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
+             or "[<l> Expand, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
+     local expanded_hint = is_native and "[<h> Collapse, <t> Toggle, <a> Auto-approve, <e> Edit, <y> Copy, <Y> Copy path]"
+         or "[<h> Collapse, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
++    local disconnected_hint = is_native and "[<l> Reconnect, <t> Toggle, <e> Edit, <y> Copy, <Y> Copy path]"
++        or "[<l> Reconnect, <t> Toggle, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
+ 
+     local hint
+-    if server.status == "disabled" or server.status == "disconnected" then
+-        hint = base_hint_disabled -- No auto-approve for disabled/disconnected servers
++    if server.status == "disconnected" then
++        hint = disconnected_hint
++    elseif server.status == "disabled" then
++        hint = base_hint_disabled
+     else
+         hint = view.expanded_server == server.name and expanded_hint or enabled_hint
+     end
