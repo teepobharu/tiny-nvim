@@ -2204,9 +2204,15 @@ function M.dotfiles_picker()
     return files
   end
 
+  local editor_keymaps = require "utils.editor_keymaps"
+  local dotfiles_keys = vim.tbl_extend("force", editor_keymaps.snacks_picker_group_keys.files_keys.input, {
+    ["<C-space>"] = { "switch_to_grep", mode = { "n", "i" }, desc = "Switch to Grep Mode" },
+  })
+
   Snacks.picker.pick {
     source = "dotfiles",
     title = "Dotfiles Config",
+    cwd = base_dir,
     finder = function(_opts, _ctx)
       local files = add_extra_files {}
       vim.list_extend(files, scan_files(base_dir))
@@ -2214,23 +2220,21 @@ function M.dotfiles_picker()
     end,
     format = "text",
     preview = "file",
-    confirm = function(picker, item)
-      if not item or not item.file then
-        return
-      end
-      picker:close()
-      vim.cmd("edit " .. vim.fn.fnameescape(item.file))
-    end,
-    actions = {
+    confirm = "edit",
+    actions = vim.tbl_extend("force", editor_keymaps.snacks_common_actions, {
       switch_to_grep = function(picker, item)
         picker:close()
         Snacks.picker.grep { cwd = base_dir, hidden = true }
       end,
-    },
+    }),
     win = {
       input = {
+        keys = dotfiles_keys,
+      },
+      list = {
         keys = {
-          ["<C-space>"] = { "switch_to_grep", mode = { "n", "i" }, desc = "Switch to Grep Mode" },
+          ["<c-v>"] = "vsplit",
+          ["<c-s>"] = "hsplit",
         },
       },
     },

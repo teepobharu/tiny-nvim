@@ -230,6 +230,10 @@ keymap("n", "<leader>fu", function()
   require("utils.snacks_pickers").custom_git_pickers.git_diff_merge_base()
 end, { desc = "Git diff merge-base (increment/decrement)" })
 
+keymap("n", "<leader>fWs", function()
+  require("utils.workspace_all").pick_config()
+end, { desc = "Workspace configs" })
+
 -- ============================
 --  Navigations
 -- ============================
@@ -713,10 +717,20 @@ function gitsigns_jump_prev_hunk()
   return "<Ignore>"
 end
 
-keymap("n", "<C-S-j>", gitsigns_jump_next_hunk, { desc = "Jump to next hunk", expr = true })
-keymap({ "n", "v" }, "<C-M-j>", gitsigns_jump_next_hunk, { desc = "Jump to next hunk", expr = true })
-keymap("n", "<C-S-k>", gitsigns_jump_prev_hunk, { desc = "Jump to prev hunk", expr = true })
+-- c-s-k , j
+-- ghostty : seem not to work (act as tmux nav to panel on right) but c-s-j works
+-- alacritty : not work at all - do nothing
+-- iterm2 : works
+
+keymap({ "n", "v" }, "<C-S-j>", gitsigns_jump_next_hunk, { desc = "Jump to next hunk", expr = true })
+keymap({ "n", "v" }, "<C-S-k>", gitsigns_jump_prev_hunk, { desc = "Jump to prev hunk", expr = true })
 keymap({ "n", "v" }, "<C-M-k>", gitsigns_jump_prev_hunk, { desc = "Jump to prev hunk", expr = true })
+keymap({ "n", "v" }, "<C-M-j>", gitsigns_jump_next_hunk, { desc = "Jump to next hunk", expr = true })
+
+-- works in ghostty
+-- keymap({ "n", "v" }, "<C-S-y>", gitsigns_jump_prev_hunk, { desc = "Jump to prev hunk", expr = true })
+-- keymap({ "n", "v" }, "<M-C-o>", gitsigns_jump_prev_hunk, { desc = "Jump to prev hunk", expr = true })
+-- keymap({ "n", "v" }, "<M-C-f>", gitsigns_jump_next_hunk, { desc = "Jump to next hunk", expr = true })
 
 opts.desc = "Reset hunk"
 keymap("n", "<M-z>", function()

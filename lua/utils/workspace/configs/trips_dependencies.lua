@@ -1,13 +1,15 @@
 require("utils.workspace.schema")
 
+local workspace_root = require("utils.workspace.root")
+
 local function root()
-  return vim.env.TRIPS_WEB_ROOT or "/Users/tharutaipree/AgodaGit/fe/trips-web"
+  return workspace_root.git_root()
 end
 
 ---@type WorkspaceConfig
 return {
-  command = "WsTripsDependencyWorkspace",
-  desc = "Open trip list/detail cross-sell and saved dependency tabs",
+  command = "WsTripsWebTripViewBffDependencyWorkspace",
+  desc = "Open trips-web trip-view-bff cross-sell and saved dependency tabs",
   root = root,
   tabs = {
     {

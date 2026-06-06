@@ -1,11 +1,13 @@
 ---@class WorkspaceFileSpec
----@field file? string Project-root relative file path.
----@field abs? string Absolute or expandable file path.
----@field first? string[] First existing project-root relative file from this candidate list.
+---@field file? string Exact file path relative to workspace root.
+---@field abs? string Exact absolute or expandable file path.
+---@field first? string[] First existing workspace-root relative file from this ordered candidate list.
 ---@field quickfix_only? boolean Include only in quickfix-only runs (`:Command!` or `:Command qf`).
----@field max? integer Deprecated: only kept for old glob specs.
----@field glob? string Deprecated: avoid in workspace configs; prefer `file` or `first`.
----@field include_dirs? boolean Deprecated: only kept for old glob specs.
+---@field glob? string Vim glob pattern resolved by `vim.fn.glob()` from workspace root.
+---@field grep? string Ripgrep file glob resolved by `rg --files --glob` from workspace root; file discovery, not content search.
+---@field max_depth? integer Maximum directory depth for `grep`; glob fallback also filters by relative path depth.
+---@field max? integer Maximum number of files to add for `glob` or `grep`.
+---@field include_dirs? boolean Allow directories for `glob`; files only by default.
 
 ---@class WorkspaceTabConfig
 ---@field name string Short tab label shown by bufferline/custom tabline.

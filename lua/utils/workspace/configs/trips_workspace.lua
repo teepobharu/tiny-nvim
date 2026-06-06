@@ -1,13 +1,15 @@
 require("utils.workspace.schema")
 
+local workspace_root = require("utils.workspace.root")
+
 local function root()
-  return vim.env.TRIPS_WEB_ROOT or "/Users/tharutaipree/AgodaGit/fe/trips-web"
+  return workspace_root.git_root()
 end
 
 ---@type WorkspaceConfig
 return {
-  command = "WsTripsWorkspace",
-  desc = "Open trip-view-bff package, server, detail, and list tabs",
+  command = "WsTripsWebTripViewBffWorkspace",
+  desc = "Open trips-web trip-view-bff package, server, detail, and list tabs",
   root = root,
   tabs = {
     {
@@ -16,6 +18,7 @@ return {
         -- DO NOT REMOVE: trip-view-bff app dependency entrypoints. No tests/storybook here.
         -- Alias: deps. Focus: package metadata + install/build scripts for active client app.
         { file = "apps/trip-view-bff/src/Clientside/package.json" },
+        { grep = "apps/trip-view-bff/**/package.json", max_depth = 4, max = 3 },
       },
     },
     {
