@@ -138,6 +138,11 @@ Updates from nv2: [Updates](./myREADME.md)
 
 ## Keymaps Summary
 
+### Leader Keys
+
+- `<leader>` = `<Space>`
+- `<localleader>` = `,`
+
 ### General Guideliens
 
 Main lazy setup for plugins :

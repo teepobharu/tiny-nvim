@@ -85,14 +85,14 @@ return {
           vim.keymap.set(mode, l, r, { buffer = buffer, desc = desc })
         end
 
-        map("n", "]h", function()
+        map({ "n", "v" }, "]h", function()
           if vim.wo.diff then
             vim.cmd.normal { "]c", bang = true }
           else
             gs.nav_hunk "next"
           end
         end, "Next Hunk")
-        map("n", "[h", function()
+        map({ "n", "v" }, "[h", function()
           if vim.wo.diff then
             vim.cmd.normal { "[c", bang = true }
           else

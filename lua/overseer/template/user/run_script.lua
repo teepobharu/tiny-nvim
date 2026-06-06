@@ -1,11 +1,18 @@
 local shebang = require "utils.shebang"
 
+local function get_effective_filetype(file, ft)
+  if file:match("%.applescript$") or file:match("%.scpt$") then
+    return "applescript"
+  end
+  return ft
+end
+
 return {
   name = "run script",
   tags = { require("overseer").TAG.RUN, "run", "custom" },
   builder = function()
     local file = vim.fn.expand "%:p"
-    local ft = vim.bo.filetype
+    local ft = get_effective_filetype(file, vim.bo.filetype)
     local cmd = { ft, file }
     local filetype_commands = {
       -- lua = { "luafile", file },
@@ -16,6 +23,7 @@ return {
       typescript = { "bun", file },
       perl = { "perl", file },
       sh = { "sh", file },
+      applescript = { "osascript", file },
       -- Add more filetypes and commands as needed
     }
 

@@ -1,4 +1,13 @@
 local FiletypeConfigurations = {
+  applescript = {
+    {
+      name = "osascript",
+      cmd = { "osascript", "$file" },
+      prerequisite = "osascript must be available on macOS",
+      executable_check = "osascript",
+      comment_syntax = "--",
+    },
+  },
   lua = {
     {
       name = "luafile",
@@ -127,6 +136,13 @@ local FiletypeConfigurations = {
 
 local shebang = require "utils.shebang"
 
+local function get_effective_filetype(file, ft)
+  if file:match("%.applescript$") or file:match("%.scpt$") then
+    return "applescript"
+  end
+  return ft
+end
+
 FiletypeConfigurations.typescript = vim.list_extend(FiletypeConfigurations.javascript, {
   {
     name = "tsc",
@@ -248,7 +264,7 @@ return {
     -- local file = vim.fn.expand "%:p"
     -- local ft = vim.bo.filetype
     local file = params.file
-    local ft = vim.bo.filetype
+    local ft = get_effective_filetype(file, vim.bo.filetype)
     local cmd = resolve_command(file, ft, params.chosen_runner) or { "sh", file }
 
     -- local final_cmd_table, runner_name, prerequisite = params.get_resolved_command_info(file, ft)
@@ -279,7 +295,7 @@ return {
     -- __AUTO_GENERATED_PRINT_VAR_START__
     print([==[params file:]==], vim.inspect(file)) -- __AUTO_GENERATED_PRINT_VAR_END__
     -- __AUTO_GENERATED_PRINT_VAR_START__
-    local ft = vim.bo.filetype
+    local ft = get_effective_filetype(file, vim.bo.filetype)
     print([==[params file:]==], vim.inspect { file, ft }) -- __AUTO_GENERATED_PRINT_VAR_END__
     local choicesRunnerForFt = {}
     local candidates = FiletypeConfigurations[ft] or FiletypeConfigurations.default
