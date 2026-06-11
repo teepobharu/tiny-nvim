@@ -397,6 +397,13 @@ This configuration uses [kanagawa.nvim](https://github.com/rebelot/kanagawa.nvim
 <details>
 <summary>Click to expand keymaps</summary>
 
+### Leader Keys
+
+| Key             | Value     |
+| --------------- | --------- |
+| `<leader>`      | `<Space>` |
+| `<localleader>` | `,`       |
+
 ### Buffer Management
 
 | Key             | Description                 |

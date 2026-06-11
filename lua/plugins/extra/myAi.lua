@@ -134,6 +134,10 @@ return {
         },
         win = {
           keys = {
+            buffers       = { "<c-b>", "buffers"   , mode = "n", desc = "open buffer picker" },
+            files         = { "<c-f>", "files"     , mode = "n", desc = "open file picker" },
+            hide_ctrl_z   = { "<c-z>", "blur"      , mode = "nt", desc = "go back to the previous window without hiding the terminal" },
+            prompt        = { "<c-p>", "prompt"    , mode = "n" , desc = "insert prompt or context" },
             -- Disable conflicting Ctrl keybindings
             -- files = false, -- disables <c-f>
             -- prompt = "<m-i>", -- disables <c-p>
@@ -168,6 +172,10 @@ return {
             cmd = { "claude", "--allow-dangerously-skip-permissions" },
             env = common_agent_env,
           },
+          claude_bare = {
+            cmd = { "claude", "--bare", "--allow-dangerously-skip-permissions" },
+            env = common_agent_env,
+          },
           claudeF = {
             cmd = { "claude", "--allow-dangerously-skip-permissions" },
             env = vim.tbl_extend("force", common_agent_env, { CLAUDE_CODE_NO_FLICKER = "0" }),
@@ -183,6 +191,26 @@ return {
           claude_AgdOmD = {
             cmd = { vim.env.DOTFILES_DIR .. "/ai/claude/cc-agd/cag.sh", "--omd" },
             env = common_agent_env,
+          },
+          pi = {
+            -- Try pi with extensions; on failure (e.g. mcphub bridge crash outside
+            -- its worktree) fall back to --no-extensions. Wrapped in bash -c because
+            -- sidekick runs cmd directly (no shell), so "||" would be a literal arg.
+            cmd = { "bash", "-c", "pi 2>/dev/null || exec pi --no-extensions" },
+            env = vim.tbl_extend("force", common_agent_env, {
+              PI_TELEMETRY = "0",
+              PI_CACHE_RETENTION = "long",
+            }),
+          },
+          pi_noext = {
+            -- Try pi with extensions; on failure (e.g. mcphub bridge crash outside
+            -- its worktree) fall back to --no-extensions. Wrapped in bash -c because
+            -- sidekick runs cmd directly (no shell), so "||" would be a literal arg.
+            cmd = {  "pi",  "--no-extensions" },
+            env = vim.tbl_extend("force", common_agent_env, {
+              PI_TELEMETRY = "0",
+              PI_CACHE_RETENTION = "long",
+            }),
           },
           debug_me = { -- https://github.com/folke/sidekick.nvim/issues/62
             env = vim.tbl_extend("force", common_agent_env, {
@@ -484,6 +512,11 @@ return {
               binding_flat = "mcphub",
               binding_lean = "mcphub-lean",
               config_alternates = {
+                {
+                  key ="m",
+                  label = "e_mng",
+                  path = "/Library/Application Support/ClaudeCode/managed-settings.json"
+                },
                 {
                   key = "1",
                   label = "pm",

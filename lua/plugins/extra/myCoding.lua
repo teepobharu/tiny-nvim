@@ -47,6 +47,18 @@ local specs = {
       --   mode = "x",
       --   desc = "expand",
       -- },
+      {
+        "<Esc>",
+        function()
+          local ls = require "luasnip"
+          if ls.session.current_nodes[vim.api.nvim_get_current_buf()] then
+            ls.unlink_current()
+          end
+          vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<Esc>", true, false, true), "in", false)
+        end,
+        mode = "i",
+        desc = "Dismiss active snippet or exit insert",
+      },
     },
   },
 }

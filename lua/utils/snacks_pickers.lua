@@ -2088,6 +2088,11 @@ function M.dotfiles_picker()
     base_dir = "~/dotfiles",
     include_patterns = { ".*", "*bash*", "*.lua", "*.vim", "*.json", "*.yaml", "*.yml", "*.toml", "*.conf", "*.config" },
     -- Exclude patterns: can be simple names or relative paths from base_dir
+    -- - In your picker, exclusion is checked two ways in `is_excluded_dir(path)`:
+    -- - **basename check** (`dirname`): `matches_pattern(dirname, exclude_dirs)`  
+    --   This will match a directory named exactly `.obsidian` (so adding `".obsidian"` is sufficient to exclude *any* `.obsidian` directory anywhere, including `docs/.obsidian`).
+    -- - **relative-path prefix check** (`rel_path:match("^" .. exclude_pattern...)`)  
+
     exclude_dirs = {
       -- Simple directory names
       "fork",
@@ -2105,6 +2110,10 @@ function M.dotfiles_picker()
       ".config/raycast/script-commands",
       ".config/raycast/extensions",
       ".config/raycast/exports",
+      ".claude/worktrees",
+      "ai/pi/sessions/",
+      "ai/claude/tweakcc/system*",
+      ".obsidian", -- ".obsidian/*", -- <-- not work to capture the docs/.obisidian
     },
     extra_files = { "~/.bash.local", "~/.zprofile", "~/.gitconfig.local" },
   }

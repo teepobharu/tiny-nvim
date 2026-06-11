@@ -83,12 +83,28 @@ local isToggleCurrentLazyTerm = function(name, termOpts)
         vim.cmd("startinsert!")
         vim.notify("OPEN " .. name, vim.log.levels.INFO, { title = "Lazygit" })
 
-        -- Allow lazygit to own ctrl + hjkl only when explicitly enabled.
+        -- Avoid accidental terminal/lazygit quit behavior on ctrl-hjkl by swallowing
+        -- these keys locally unless explicit passthrough is enabled.
         if vim.g.lazygit_passthrough_ctrl_hjkl then
           vim.keymap.set("t", "<c-h>", "<c-h>", { buffer = term.bufnr, nowait = true })
           vim.keymap.set("t", "<c-j>", "<c-j>", { buffer = term.bufnr, nowait = true })
           vim.keymap.set("t", "<c-k>", "<c-k>", { buffer = term.bufnr, nowait = true })
           vim.keymap.set("t", "<c-l>", "<c-l>", { buffer = term.bufnr, nowait = true })
+        else
+          vim.keymap.set("t", "<c-j>", "<nop>", { buffer = term.bufnr, nowait = true, silent = true })
+          vim.keymap.set("t", "<c-k>", "<nop>", { buffer = term.bufnr, nowait = true, silent = true })
+          vim.keymap.set("t", "<c-h>", "<nop>", { buffer = term.bufnr, nowait = true, silent = true })
+          vim.keymap.set("t", "<c-l>", "<nop>", { buffer = term.bufnr, nowait = true })
+          -- Still not work will quit when use c-l,j,k,l noremap = true 
+          -- - observation
+          -- below maps will show error that require cmd require <cr> <cmd> stop the lzg ?
+          -- vim.keymap.set("t", "<C-l>", "<cmd>TmuxNavigateRight", optsT)
+          -- vim.keymap.set("t", "<C-l>", ":TmuxNavigateRight", optsT) -- literally write in shell
+          -- vim.keymap.set("t", "<C-l>", "<C-\\><C-n>:TmuxNavigateRight<CR>", optsT) -- normal mode first
+          -- local optsT = { buffer = term.bufnr, nowait = true, silent = true, desc = "Navigate tmux" }
+          -- vim.keymap.set("t", "<C-k>", "<cmd>TmuxNavigateUp<cr>", optsT)
+          -- vim.keymap.set("t", "<C-j>", "<cmd>TmuxNavigateDown<cr>", optsT)
+          -- vim.keymap.set("t", "<C-h>", "<cmd>TmuxNavigateLeft<cr>", optsT)
         end
         vim.keymap.set("t", "<esc>", "<esc>", { buffer = term.bufnr, nowait = true })
         set_lazygit_size_keymap(term)
