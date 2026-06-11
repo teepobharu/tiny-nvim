@@ -73,15 +73,20 @@ M.models = {
 
   -- DeepSeek models
   deepseek = {
-    DEEPSEEK = "deepseek",
     DEEPSEEK_R1 = "deepseek-r1-0528-maas",
+    -- DEEPSEEK = "deepseek", -- bare name broken (400 Invalid model name) as of 2026-06-07
   },
 
   -- Qwen models (AGD proxy IDs)
   qwen = {
     QWEN_3_6_27B = "qwen-3.6-27b",
-    -- QWQ_32B = "qwq-32b", -- does not seem to work/support chat
-    -- QWEN_3_5_27B = "qwen-3.5-27b", -- missing / delted now avoid using
+    -- QWQ_32B = "qwq-32b", -- 400 Invalid model name at chat endpoint
+    -- QWEN_3_5_27B = "qwen-3.5-27b", -- removed from proxy
+  },
+
+  -- Kimi (Moonshot) models
+  kimi = {
+    KIMI_K2_6 = "kimi-k2.6",
   },
 
   others = {
@@ -205,7 +210,7 @@ M.providers = {
           L = env_or("AGD_INHOUSE_GEMMA", M.models.gemini.GEMMA_4),
         },
         alt = {
-          -- S = env_or("AGD_INHOUSE_QWEN_PREV", M.models.qwen.QWQ_32B),
+          M = env_or("AGD_INHOUSE_KIMI", M.models.kimi.KIMI_K2_6),
         },
       },
       -- not exists
