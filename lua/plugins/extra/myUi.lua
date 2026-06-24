@@ -33,6 +33,27 @@ return {
       "MunifTanjim/nui.nvim",
     },
   },
+    {
+    "dmtrKovalenko/fff.nvim",
+    -- Disable conflicting picker keys inherited from upstream fff.lua;
+    -- let snacks keep <leader><space>, <leader>/, <C-e>, etc.
+    keys = {
+      { "<leader><space>", false },
+      { "<leader>/", false },
+      { "<C-e>", false },
+      { "<leader>ff", false },
+      { "<leader>fr", false },
+      { "<leader>sw", false },
+      { "<leader>fw", false },
+      {
+        "<leader>'f",
+        function()
+          require("fff").find_files()
+        end,
+        desc = "FFF Files",
+      },
+    },
+  },
   {
     "akinsho/bufferline.nvim",
     event = "VeryLazy",
