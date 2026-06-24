@@ -85,7 +85,7 @@ return {
   },
   {
     "olimorris/codecompanion.nvim",
-    version = "19.13.x", -- exact pin: v19.13.0 / 9d985b1cc4e650a676a977ab1f9ed50dc6d0f4d8
+    version = "19.17.x", -- exact pin: v19.13.0 / 9d985b1cc4e650a676a977ab1f9ed50dc6d0f4d8
     dependencies = {
       -- "ibhagwan/fzf-lua", -- For fzf provider, file or buffer picker
       -- "nvim-lua/plenary.nvim",
@@ -232,7 +232,6 @@ return {
     -- at the plugin spec level (not inside opts) so Lazy.nvim ignored them.
     -- To re-enable, move into opts.adapters.http below.
     opts = {
-      system_prompt = require("utils.my_ai_prompts").COPILOT_SYSTEM_PROMPT,
       log_level = "DEBUG", -- TRACE|DEBUG|ERROR|INFO not work
       -- see logs in ~/.local/state/nvim/codecompanion.log -- not sure why not see
       --
@@ -259,6 +258,9 @@ return {
           -- Ref: https://deepwiki.com/search/default-thinking-level-and-doe_48a90378-1b06-4d69-98e5-fcf9808fc350?mode=fast
           adapter = DEFAULT_ADAPTER,
           model = DEFAULT_MODEL,
+          opts = {
+            system_prompt = require("utils.my_ai_prompts").COPILOT_SYSTEM_PROMPT,
+          },
           -- adapter = {
           -- dont know why override model in interaction not work need replace in adpaters schema
           -- https://codecompanion.olimorris.dev/configuration/adapters-http#changing-the-default-model
@@ -338,8 +340,14 @@ return {
         },
       },
       adapters = {
-        cache_models_for = 5000, -- local cached inside var - def 1800 (30m)
-        http = require("utils.my_codecompanion_utils").merge_agoda_responses_adapters(
+        http = vim.tbl_deep_extend(
+          "force",
+          {
+            opts = {
+              cache_models_for = 5000, -- local cached inside var - def 1800 (30m)
+            },
+          },
+          require("utils.my_codecompanion_utils").merge_agoda_responses_adapters(
           require("utils.my_codecompanion_utils").merge_agoda_adapters(vim.tbl_extend(
             "force",
             ENABLE_COPILOT and {
@@ -358,6 +366,7 @@ return {
             } or {},
             {}
           ))
+        )
         ),
         acp = { -- codex and claude_code works without extra settings just make sure acp cli is installed
           -- claude_code = function()
@@ -382,14 +391,6 @@ return {
         },
       },
       -- NOTE: strategies block merged into interactions above (v19 migration)
-      keymaps = {
-        completion = {
-          modes = {
-            -- i = "<C-/>",
-            -- i = "<C-Space>",
-          },
-        },
-      },
       extensions = {
         history = {
           enabled = true,
