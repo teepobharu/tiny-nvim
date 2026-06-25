@@ -64,6 +64,233 @@ local function run_codecompanion_slash_picker(name)
     :execute(require("codecompanion.interactions.chat.slash_commands").new())
 end
 
+local function json_text(value)
+  local ok, encoded = pcall(vim.json.encode, value)
+  return ok and encoded or vim.inspect(value)
+end
+
+local function build_mcphub_lean_group()
+  local function list_servers_handler(self, action, cmd_opts)
+    local hub = require("mcphub").get_hub_instance()
+    if not hub or not hub.is_ready or not hub:is_ready() then
+      cmd_opts.output_cb({ status = "error", data = "MCP Hub is not ready yet" })
+      return
+    end
+
+    local include_disabled = action and action.include_disabled == true
+    local items = {}
+    for _, server in ipairs(hub:get_servers(include_disabled)) do
+      local tools = (server.capabilities and server.capabilities.tools) or {}
+      local readonly = 0
+      for _, tool in ipairs(tools) do
+        if tool.annotations and tool.annotations.readOnlyHint == true then
+          readonly = readonly + 1
+        end
+      end
+      table.insert(items, {
+        name = server.name,
+        description = server.description or "",
+        status = server.status,
+        disabled = server.disabled == true,
+        tool_count = #tools,
+        readonly_count = readonly,
+      })
+    end
+
+    cmd_opts.output_cb({
+      status = "success",
+      data = { text = json_text(items) },
+    })
+  end
+
+  local function list_tools_handler(self, action, cmd_opts)
+    local hub = require("mcphub").get_hub_instance()
+    if not hub or not hub.is_ready or not hub:is_ready() then
+      cmd_opts.output_cb({ status = "error", data = "MCP Hub is not ready yet" })
+      return
+    end
+
+    local server_name = action and action.server
+    if not server_name or server_name == "" then
+      cmd_opts.output_cb({ status = "error", data = "Missing required argument: server" })
+      return
+    end
+
+    local server = hub:get_server(server_name)
+    if not server or server.status ~= "connected" or server.disabled then
+      cmd_opts.output_cb({ status = "success", data = { text = "[]" } })
+      return
+    end
+
+    local tools = (server.capabilities and server.capabilities.tools) or {}
+    local name_filter = vim.trim((action and action.filter) or ""):lower()
+    local desc_filter = vim.trim((action and action.filter_description) or ""):lower()
+    local any_filter = vim.trim((action and action.filter_any) or ""):lower()
+    local readonly_only = action and action.readonly_only == true
+    local include_schema = action and action.include_schema == true
+    local items = {}
+
+    for _, tool in ipairs(tools) do
+      local name = (tool.name or "")
+      local desc = (tool.description or "")
+      local lname = name:lower()
+      local ldesc = desc:lower()
+      local readonly = tool.annotations and tool.annotations.readOnlyHint == true
+
+      if (name_filter == "" or lname:find(name_filter, 1, true))
+        and (desc_filter == "" or ldesc:find(desc_filter, 1, true))
+        and (any_filter == "" or lname:find(any_filter, 1, true) or ldesc:find(any_filter, 1, true))
+        and (not readonly_only or readonly)
+      then
+        local item = {
+          name = name,
+          description = desc,
+          readonly = readonly,
+        }
+        if include_schema then
+          item.inputSchema = tool.inputSchema or { type = "object" }
+        end
+        table.insert(items, item)
+      end
+    end
+
+    cmd_opts.output_cb({
+      status = "success",
+      data = { text = json_text(items) },
+    })
+  end
+
+  local function call_tool_handler(self, action, cmd_opts)
+    local core = require "mcphub.extensions.codecompanion.core"
+    local params = {
+      server_name = action and action.server,
+      tool_name = action and action.tool,
+      tool_input = (action and action.arguments) or {},
+    }
+    core.execute_mcp_tool(params, self, cmd_opts.output_cb, {
+      tool_display_name = "mcphub_call_tool",
+      is_individual_tool = false,
+      action = "use_mcp_tool",
+    })
+  end
+
+  return {
+    groups = {
+      mcp_lean = {
+        description = " Context-light MCPHub lean proxy tools: list servers, inspect a server's tools, and call a selected tool.",
+        hide_in_help_window = false,
+        tools = {
+          "mcphub_list_servers",
+          "mcphub_list_tools",
+          "mcphub_call_tool",
+        },
+        opts = {
+          collapse_tools = true,
+        },
+      },
+    },
+    mcphub_list_servers = {
+      description = "List MCPHub servers available through the lean proxy",
+      hide_in_help_window = true,
+      visible = false,
+      callback = function()
+        return {
+          name = "mcphub_list_servers",
+          cmds = { list_servers_handler },
+          output = require("mcphub.extensions.codecompanion.core").create_output_handlers(
+            "mcphub_list_servers",
+            true,
+            { show_result_in_chat = true }
+          ),
+          schema = {
+            type = "function",
+            ["function"] = {
+              name = "mcphub_list_servers",
+              description = "List connected MCP servers visible to the lean proxy.",
+              parameters = {
+                type = "object",
+                properties = {
+                  include_disabled = {
+                    type = "boolean",
+                    description = "Include disabled/disconnected servers.",
+                  },
+                },
+              },
+            },
+          },
+        }
+      end,
+    },
+    mcphub_list_tools = {
+      description = "List tools for one server through the lean proxy",
+      hide_in_help_window = true,
+      visible = false,
+      callback = function()
+        return {
+          name = "mcphub_list_tools",
+          cmds = { list_tools_handler },
+          output = require("mcphub.extensions.codecompanion.core").create_output_handlers(
+            "mcphub_list_tools",
+            true,
+            { show_result_in_chat = true }
+          ),
+          schema = {
+            type = "function",
+            ["function"] = {
+              name = "mcphub_list_tools",
+              description = "List tools for a specific MCP server, with optional filtering.",
+              parameters = {
+                type = "object",
+                properties = {
+                  server = { type = "string", description = "Server name." },
+                  filter = { type = "string", description = "Match tool name." },
+                  filter_description = { type = "string", description = "Match description only." },
+                  filter_any = { type = "string", description = "Match name or description." },
+                  readonly_only = { type = "boolean", description = "Only readonly tools." },
+                  include_schema = { type = "boolean", description = "Include inputSchema in output." },
+                },
+                required = { "server" },
+              },
+            },
+          },
+        }
+      end,
+    },
+    mcphub_call_tool = {
+      description = "Call a selected MCP server tool through the lean proxy",
+      hide_in_help_window = true,
+      visible = false,
+      callback = function()
+        return {
+          name = "mcphub_call_tool",
+          cmds = { call_tool_handler },
+          output = require("mcphub.extensions.codecompanion.core").create_output_handlers(
+            "mcphub_call_tool",
+            true,
+            { show_result_in_chat = true }
+          ),
+          schema = {
+            type = "function",
+            ["function"] = {
+              name = "mcphub_call_tool",
+              description = "Execute one tool on a chosen MCP server.",
+              parameters = {
+                type = "object",
+                properties = {
+                  server = { type = "string", description = "Server name." },
+                  tool = { type = "string", description = "Tool name from mcphub_list_tools." },
+                  arguments = { type = "object", description = "Tool input arguments." },
+                },
+                required = { "server", "tool" },
+              },
+            },
+          },
+        }
+      end,
+    },
+  }
+end
+
 -- Import AI prompts from centralized location
 local ai_prompts = require "utils.my_ai_prompts"
 local EMPTY_PROMPT_CCOMP = ai_prompts.EMPTY_PROMPT_CODECOMPANION
@@ -280,6 +507,7 @@ return {
             ["image"] = { opts = { provider = "snacks" } },
             ["symbols"] = { opts = { provider = "snacks" } },
           },
+          tools = build_mcphub_lean_group(),
           -- Chat buffer keymaps (from jellydn/tiny-nvim codecompanion.lua)
           -- Custom insert-mode pickers — <M-b>/<M-f> to avoid blink.cmp <C-b>/<C-f> scroll-docs conflict
           keymaps = {
@@ -345,6 +573,7 @@ return {
           {
             opts = {
               cache_models_for = 5000, -- local cached inside var - def 1800 (30m)
+              show_model_choices = true, -- show model picker in ga (change_adapter) flow
             },
           },
           require("utils.my_codecompanion_utils").merge_agoda_responses_adapters(
@@ -390,7 +619,6 @@ return {
           provider = "snacks",
         },
       },
-      -- NOTE: strategies block merged into interactions above (v19 migration)
       extensions = {
         history = {
           enabled = true,
