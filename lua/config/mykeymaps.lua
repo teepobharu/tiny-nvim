@@ -544,8 +544,14 @@ function _G.set_toggleterm_keymaps()
     pcall(vim.keymap.del, "t", "<Esc>", { buffer = bufnum })
   end
 
+  -- Ctrl+Shift+U in terminal mode: enter Normal + scroll up 1 line
+  -- Skipped in tmux (tmux intercepts <C-S-u> for pane navigation)
+  if not vim.g.is_tmux then
+    opts.desc = "Enter normal + scroll up"
+    vim.keymap.set("t", "<C-S-u>", [[<C-\><C-n><C-y>]], opts)
+  end
+
   if is_lazygit then
-    print "Lazygit buffer"
     if vim.g.lazygit_passthrough_ctrl_hjkl then
       vim.keymap.set("t", "<C-h>", "<C-h>", { buffer = bufnum, nowait = true })
       vim.keymap.set("t", "<C-j>", "<C-j>", { buffer = bufnum, nowait = true })
@@ -1847,3 +1853,5 @@ vim.api.nvim_create_user_command("FzfSessionDelayed", function()
     vim.cmd [[execute "normal \<Esc>:FzfSession\<CR>"]]
   end)
 end, { desc = "Open FzfSession picker with delay (for vs alias)" })
+
+

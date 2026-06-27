@@ -49,6 +49,18 @@ local PRESETS = {
       return profile.config_path or "~/.config/opencode/opencode.jsonc"
     end,
   },
+  pi = {
+    command = "pi",
+    config_path = function(profile, scope)
+      if profile.config_path then
+        return profile.config_path
+      end
+      if scope == "project" then
+        return vim.fn.getcwd() .. "/.pi/settings.json"
+      end
+      return "~/.pi/agent/settings.json"
+    end,
+  },
 }
 
 ---@class McphubAgents.Binding
@@ -99,6 +111,8 @@ function M.env(profile)
   local env = vim.deepcopy(profile.env or {})
   if profile.preset == "claude" and profile.config_dir and profile.config_dir ~= "" then
     env.CLAUDE_CONFIG_DIR = profile.config_dir
+  elseif profile.preset == "pi" and profile.config_dir and profile.config_dir ~= "" then
+    env.PI_CODING_AGENT_DIR = profile.config_dir
   end
   return next(env) and env or nil
 end
@@ -248,6 +262,26 @@ function M.parse_opencode_output(stdout)
   return bindings
 end
 
+---@param stdout string
+---@return McphubAgents.Binding[]
+function M.parse_pi_output(stdout)
+  local bindings = {}
+  for line in stdout:gmatch "[^\r\n]+" do
+    local clean = vim.trim(line:gsub("\27%[[%d;]*m", ""))
+    local name, url = clean:match("^%-?%s*([%w%._%-]+)%s+%(http%)%s+(.+)$")
+    if name and url then
+      table.insert(bindings, {
+        name = name,
+        url = vim.trim(url),
+        transport = "HTTP",
+        status = "connected",
+        raw = line,
+      })
+    end
+  end
+  return bindings
+end
+
 -- ─────────────── public API ─────────────────────────────────────────────────
 
 ---Run `<agent> mcp list` async. on_done receives {ok, bindings, stdout, stderr}.
@@ -275,6 +309,8 @@ function M.list(agent, on_done)
       bindings = M.parse_codex_output(stdout)
     elseif profile.preset == "opencode" then
       bindings = M.parse_opencode_output(stdout)
+    elseif profile.preset == "pi" then
+      bindings = M.parse_pi_output(stdout)
     end
     vim.schedule(function()
       on_done { ok = o.code == 0, bindings = bindings, stdout = stdout, stderr = stderr }
@@ -305,6 +341,15 @@ function M.register(agent, name, url, scope, on_done)
       stdout = "",
       stderr = "opencode does not support 'mcp add' via CLI. Press 'e' to edit "
         .. M.config_path(profile, nil),
+    }
+    return
+  end
+
+  if profile.preset == "pi" then
+    on_done {
+      ok = false,
+      stdout = "",
+      stderr = "pi does not expose 'mcp add' via CLI. Use the installed pi mcphub extension and settings.json package configuration instead.",
     }
     return
   end
@@ -345,6 +390,15 @@ function M.unregister(agent, name, scope, on_done)
       stdout = "",
       stderr = "opencode does not support 'mcp remove' via CLI. Press 'e' to edit "
         .. M.config_path(profile, nil),
+    }
+    return
+  end
+
+  if profile.preset == "pi" then
+    on_done {
+      ok = false,
+      stdout = "",
+      stderr = "pi does not expose 'mcp remove' via CLI. Use the installed pi mcphub extension and settings.json package configuration instead.",
     }
     return
   end

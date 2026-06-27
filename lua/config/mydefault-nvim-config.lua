@@ -96,6 +96,7 @@ vim.g.picker_source_default_opts = vim.g.picker_source_default_opts
 -- ~/.config/nvim3_jelly_tinynvim/lua/config/myopts.lua
 -- vim.opt.tabstop = 2 -- show tab as n<space> default 8 ?
 -- vim.opt.shiftwidth = 2 -- ts_ls format
+vim.g.is_tmux = (vim.env.TMUX ~= nil)
 vim.g.disable_autoformat = true
 vim.g.snacks_debug_external_filter = true
 -- vim.g.snacks_debug_picker_persist = true

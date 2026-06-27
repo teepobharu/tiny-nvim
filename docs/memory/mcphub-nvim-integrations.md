@@ -134,6 +134,29 @@ require("codecompanion").setup({
 
 Use with: `@{github_workflow} Fix issue #123 and create a PR`
 
+### `@{mcp_lean}` group
+
+This config also adds a dedicated CodeCompanion group named `@{mcp_lean}`.
+
+It mirrors the MCPHub lean proxy surface rather than exposing the full `/mcp`
+tool catalog directly. The group is intended for lower-context discovery and
+routing:
+
+- `mcphub_list_servers` — list connected servers with tool counts
+- `mcphub_list_tools` — inspect tools for a specific server
+- `mcphub_call_tool` — execute one selected tool on a chosen server
+
+Typical flow:
+
+1. `@{mcp_lean}` list available servers
+2. call `mcphub_list_tools` for the target server
+3. call `mcphub_call_tool` with the exact server + tool name
+
+This is different from:
+- `@{mcp}` — generic MCP bridge tools with full server prompt injection
+- `@{server}` — full direct server group created from connected MCP servers
+- `@{server__tool}` — one concrete direct tool
+
 ---
 
 ## Avante Integration

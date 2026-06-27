@@ -120,7 +120,7 @@
     ],
     "body": [
       "```${1:lang}",
-      "${TM_SELECTED_TEXT:code}",
+      "${TM_SELECTED_TEXT}",
       "```",
       "$0"
     ],

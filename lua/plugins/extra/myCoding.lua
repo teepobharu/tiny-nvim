@@ -19,6 +19,8 @@ local specs = {
     config = function(_, opts)
       local ls = require "luasnip"
       local s = ls.snippet
+      local t = ls.text_node
+      local i = ls.insert_node
       local f = ls.function_node
 
       ls.config.setup(opts)
@@ -32,6 +34,38 @@ local specs = {
             local col = vim.fn.col "." -- 1-based
             return string.format("%s:%d:%d", path, line, col)
           end, {}),
+        }),
+
+        -- OKF (Open Knowledge Format) frontmatter snippet
+        -- Type "okf" in insert mode on markdown files to expand
+        -- Spec: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
+        s("okffmter", {
+          t "---",
+          t { '', 'type: "' }, i(1), -- type (required) — "Concept" default
+          t '",',
+          t { '', 'title: "' }, i(2), -- title (recommended)
+          t '",',
+          t { '', 'description: "' }, i(3), -- description (recommended)
+          t '",',
+          t { '', 'tags:' },
+          t { '', '  - ' }, i(4), -- first tag
+          t { '', 'timestamp: "' },
+          f(function()
+            -- UTC time (correct Zulu suffix)
+            return os.date("!%Y-%m-%dT%H:%M:%SZ")
+          end, {}),
+          t '",',
+          t { '', 'updated: "' },
+          f(function()
+            -- Local time (no timezone marker)
+            return os.date("%Y-%m-%dT%H:%M:%S")
+          end, {}),
+          t '",',
+          t { '', 'resource: "' }, i(5), -- canonical URI (optional)
+          t '"',
+          t { '', '---' },
+          t { '', '' },
+          i(0), -- final cursor position
         }),
       })
     end,

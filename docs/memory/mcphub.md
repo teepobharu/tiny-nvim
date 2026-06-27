@@ -871,6 +871,23 @@ example, the alternate Claude profile at `/Users/tharutaipree/.claude-agd` has
 its own `settings.json` and `.claude.json`, and `claude mcp ...` can target it
 by running with `CLAUDE_CONFIG_DIR=/Users/tharutaipree/.claude-agd`.
 
+PI is also supported as a profile entry in the local MCPHub UI config, but with
+an important caveat: current PI builds do not expose `pi mcp add/remove/list`
+CLI subcommands. The MCPHub CLI Agents panel can still show the PI profile and
+jump to its config targets:
+
+- `~/.pi/agent/settings.json`
+- `~/dotfiles/ai/pi/settings.json`
+
+The local PI MCPHub integration is handled by the installed `pi-mcphub-bridge`
+extension package instead of native `pi mcp ...` registration commands. That
+bridge connects PI to either `/mcp` or `/mcp-lean` and exposes tools inside PI
+via `/mcph-on`, `/mcph-lean`, `/mcph-full`, `/mcph-off`, and `/mcph-tools`.
+
+For config discovery in the local MCPHub UI, PI now supports both:
+- user settings: `~/.pi/agent/settings.json`
+- project-local settings: `./.pi/settings.json`
+
 **Fix**:
 
 - `patches/mcphub.nvim/10-configurable-agent-profiles.patch` makes the CLI

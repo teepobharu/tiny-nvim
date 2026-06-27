@@ -1,6 +1,6 @@
 ---@return overseer.TemplateDefinition
 return {
-  name = "Run TW Tripviewbff checkall",
+  name = "Run TripsWeb Tripviewbff check-all",
   tags = vim.list_extend({ "agoda", "custom" }, require("overseer").TAG.values),
   description = "Run tripviewbff checkall script",
   builder = function(params)
@@ -17,11 +17,11 @@ return {
 
     -- __AUTO_GENERATED_PRINT_VAR_START__
     print([==[builder sel_command:]==], vim.inspect(sel_command)) -- __AUTO_GENERATED_PRINT_VAR_END__
-    local base_command = "sh " .. vim.fn.expand "$HOME" .. "/Personal/mynotes/work/AgodaCoding/agodaSnip.sh mmba"
+    local base_command = "sh " .. vim.fn.expand "$HOME" .. "/Personal/mynotes/work/AgodaCoding/agodaSnip.sh tw"
 
     -- NOTES: ONLY CHANGE IS HERE FROM the ./tripviewbff_pick.lua
     local is_select = sel_command and sel_command ~= ""
-    local finalcmd = base_command .. " " .. (is_select and sel_command or "tw_checkall_choose")
+    local finalcmd = base_command .. " " .. (is_select and sel_command or "tvbff_check_all")
 
     ---@type overseer.TaskDefinition
     return {
@@ -39,14 +39,13 @@ return {
       command = {
         -- /Users/tharutaipree/Personal/mynotes/work/AgodaCoding/agodaSnip.sh
         optional = true, -- will not prompt
-        description = "Additional command line arguments for mmba",
+        description = "Additional command line arguments for TripsWeb (tw)",
         choices = {
-          "mmb_entry -s -n", -- default sv no build
-          "mmb_entry -s",
-          "mmb_entry -dev",
-          "mmb_entry -ci",
-          "mmb_entry -o",
-          "mmb_entry",
+          "tvbff_check_all",
+          "tw_checkall_choose",
+          "tvbff_sv_run",
+          "tvbff_cs_run",
+          "tvbff_cs_run build",
         },
         default = "",
       },

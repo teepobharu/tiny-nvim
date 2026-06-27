@@ -184,6 +184,10 @@ return {
             cmd = { vim.env.DOTFILES_DIR .. "/ai/claude/cc-agd/cag.sh" },
             env = common_agent_env,
           },
+          claude_AgdQFree = {
+            cmd = { vim.env.DOTFILES_DIR .. "/ai/claude/cc-agd/cag.sh", "--hrs", "--m", "q" },
+            env = common_agent_env,
+          },
           claude_AgdOm = {
             cmd = { vim.env.DOTFILES_DIR .. "/ai/claude/cc-agd/cag.sh", "--om" },
             env = common_agent_env,
@@ -597,6 +601,34 @@ return {
                   label = "p_mcp",
                   path = "./.cursor/mcp.json",
                   matcher = ".mcpServers",
+                },
+              },
+            },
+            {
+              id = "pi",
+              preset = "pi",
+              label = "pi",
+              command = "pi",
+              config_dir = "~/.pi/agent",
+              config_path = "~/.pi/agent/settings.json",
+              binding_flat = "mcphub",
+              binding_lean = "mcphub-lean",
+              scopes = { "user", "project" },
+              config_alternates = {
+                {
+                  key = "1",
+                  label = "usr_set",
+                  path = "~/.pi/agent/settings.json",
+                },
+                {
+                  key = "2",
+                  label = "og_set",
+                  path = "~/dotfiles/ai/pi/settings.json",
+                },
+                {
+                  key = "3",
+                  label = "p_set",
+                  path = "./.pi/settings.json",
                 },
               },
             },

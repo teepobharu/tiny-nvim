@@ -1,4 +1,6 @@
 -- NVIM_APPNAME is manual requirement to change to use the right settings vscode://settings.json
+-- vscode://workbench.action.tasks.configureTaskRunner
+-- "~/Library/Application Support/Code/User/tasks.json"
 if not vim.g.vscode then
   return {}
 end
