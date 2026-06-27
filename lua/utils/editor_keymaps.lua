@@ -1261,6 +1261,21 @@ M.snacks_common_actions = {
   reset_picker_depth = function(picker, item)
     require("utils.snacks_actions").adjust_picker_depth(picker, item, 0)
   end,
+  toggle_filter_preset = function(picker, item)
+    require("utils.snacks_filter_presets").toggle_filter_preset(picker, item)
+  end,
+  insert_item_filename = function(picker)
+    require("utils.snacks_filter_presets").insert_item_filename(picker)
+  end,
+  insert_item_dirname = function(picker)
+    require("utils.snacks_filter_presets").insert_item_dirname(picker)
+  end,
+  insert_item_extension = function(picker)
+    require("utils.snacks_filter_presets").insert_item_extension(picker)
+  end,
+  insert_item_relpath = function(picker)
+    require("utils.snacks_filter_presets").insert_item_relpath(picker)
+  end,
 }
 
 -- Common keymap groups for snacks pickers
@@ -1284,6 +1299,12 @@ local snacks_picker_shared_keys = {
       ["<M-->"] = { "decrease_picker_depth", mode = { "n", "i" }, desc = "Decrease search depth" },
       ["<M-0>"] = { "reset_picker_depth", mode = { "n", "i" }, desc = "Reset search depth" },
       ["<M-g>"] = { "toggle_grep_picker", mode = { "n", "i" }, desc = "Toggle Grep <-> Source" },
+      ["<M-/>"] = { "toggle_filter_preset", mode = { "n", "i" }, desc = "Toggle Filter Preset (!test !snap ...)" },
+      -- <C-r> prefix: insert path components from selected picker item
+      ["<C-r>f"] = { "insert_item_filename", mode = "i", desc = "cf: fname" },
+      ["<C-r>d"] = { "insert_item_dirname", mode = "i", desc = "cd: dir" },
+      ["<C-r>e"] = { "insert_item_extension", mode = "i", desc = "ce: ext" },
+      ["<C-r>p"] = { "insert_item_relpath", mode = "i", desc = "cp: path" },
     },
   },
   -- Common keys used across multiple pickers
