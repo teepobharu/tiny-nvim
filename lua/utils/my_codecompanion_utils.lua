@@ -76,6 +76,77 @@ function M.get_agoda_adapters(use_dynamic_fetch)
           chat_url = "/v1/chat/completions", -- Chat endpoint path
           models_endpoint = "/v1/models", -- Models listing endpoint
         },
+        -- Keep builtins first, then preserve the lean MCP proxy group when present,
+        -- then fill remaining MCP tools up to OpenAI's hard 128-tool limit.
+        form_tools = function(self, tools)
+          local transformed = {}
+          if self.opts.tools and tools then
+            for _, tool_group in pairs(tools) do
+              for _, schema in pairs(tool_group) do
+                table.insert(transformed, schema)
+              end
+            end
+          end
+
+          local OPENAI_TOOL_LIMIT = 128
+          if #transformed > OPENAI_TOOL_LIMIT then
+            local original_count = #transformed
+            local builtin = {}
+            local lean = {}
+            local mcp = {}
+            for _, s in ipairs(transformed) do
+              if not s.name or not s.name:match("__") then
+                table.insert(builtin, s)
+              elseif s.name:match("^mcphub_") then
+                table.insert(lean, s)
+              else
+                table.insert(mcp, s)
+              end
+            end
+            table.sort(lean, function(a, b)
+              return (a.name or "") < (b.name or "")
+            end)
+            table.sort(mcp, function(a, b)
+              return (a.name or "") < (b.name or "")
+            end)
+
+            local kept = {}
+            local dropped = {}
+            local function take(group)
+              for _, s in ipairs(group) do
+                if #kept < OPENAI_TOOL_LIMIT then
+                  table.insert(kept, s)
+                else
+                  table.insert(dropped, s.name or "<unknown>")
+                end
+              end
+            end
+
+            take(builtin)
+            take(lean)
+            take(mcp)
+            transformed = kept
+
+            local servers = {}
+            for _, name in ipairs(dropped) do
+              local server = name:match("^([^_]+)__") or name:match("^mcphub_") and "mcphub_lean" or name:match("^(.-)__")
+              if server then
+                servers[server] = (servers[server] or 0) + 1
+              end
+            end
+            local summary = {}
+            for srv, cnt in pairs(servers) do
+              table.insert(summary, srv .. " (" .. cnt .. ")")
+            end
+            table.sort(summary)
+            vim.notify(
+              "CodeCompanion: Tool limit exceeded (" .. original_count .. "/128). Dropped " .. #dropped .. " tool(s)" .. (#summary > 0 and " from: " .. table.concat(summary, ", ") or "") .. ". Builtins and mcphub_lean are prioritized.",
+              vim.log.levels.WARN
+            )
+          end
+
+          return #transformed > 0 and { tools = transformed } or nil
+        end,
         url = "${url}${chat_url}",
         schema = {
           model = {
