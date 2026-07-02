@@ -1,13 +1,13 @@
-diff --git c/lua/mcphub/hub.lua w/lua/mcphub/hub.lua
-index 7881112..69b25ed 100644
---- c/lua/mcphub/hub.lua
+diff --git i/lua/mcphub/hub.lua w/lua/mcphub/hub.lua
+index 7881112..b10031b 100644
+--- i/lua/mcphub/hub.lua
 +++ w/lua/mcphub/hub.lua
 @@ -727,6 +727,53 @@ function MCPHub:authorize_mcp_server(name, _)
      })
  end
  
 +--- Clear stored OAuth credentials for a server and reconnect it so fresh DCR runs
-+--- automatically. Server transitions: disconnected → connecting → unauthorized.
++--- automatically. Server transitions: disconnected -> connecting -> unauthorized.
 +--- Once the row shows unauthorized, press <l> to open the browser and complete auth.
 +--- Requires mcp-hub fork patch 03 (POST /servers/clear-auth).
 +--- Falls back to notify on error so callers can use the file-edit path.
@@ -26,7 +26,7 @@ index 7881112..69b25ed 100644
 +                return
 +            end
 +            -- Immediately reconnect so the server runs fresh DCR and lands on
-+            -- "unauthorized" — the user just presses <l> to complete auth.
++            -- "unauthorized" - the user just presses <l> to complete auth.
 +            self:api_request("POST", "servers/start", {
 +                body = { server_name = name },
 +                callback = function(_, start_err)
@@ -40,7 +40,7 @@ index 7881112..69b25ed 100644
 +                        vim.notify(
 +                            "[MCPHub] OAuth cleared for '"
 +                                .. name
-+                                .. "'. Reconnecting… press <l> when row shows 'unauthorized'.",
++                                .. "'. Reconnecting... press <l> when row shows 'unauthorized'.",
 +                            vim.log.levels.INFO
 +                        )
 +                    end
@@ -56,11 +56,11 @@ index 7881112..69b25ed 100644
  --- Start a disabled/disconnected MCP server
  ---@param name string Server name to start
  ---@param opts? { via_curl_request?:boolean,callback?: function }
-diff --git c/lua/mcphub/ui/views/main.lua w/lua/mcphub/ui/views/main.lua
-index dba272f..2c4ed8c 100644
---- c/lua/mcphub/ui/views/main.lua
+diff --git i/lua/mcphub/ui/views/main.lua w/lua/mcphub/ui/views/main.lua
+index dbeb7cf..30b80cf 100644
+--- i/lua/mcphub/ui/views/main.lua
 +++ w/lua/mcphub/ui/views/main.lua
-@@ -352,6 +352,50 @@ function MainView:handle_delete()
+@@ -398,6 +398,50 @@ function MainView:handle_delete()
      end
  end
  
@@ -111,18 +111,18 @@ index dba272f..2c4ed8c 100644
  function MainView:handle_action(line_override, context_override)
      local go_to_cap_line = false
      -- Get current line
-@@ -422,6 +466,10 @@ function MainView:handle_action(line_override, context_override)
+@@ -468,6 +512,10 @@ function MainView:handle_action(line_override, context_override)
              State.hub_instance:authorize_mcp_server(context.name)
              -- Show popup for the user
              ui_utils.open_auth_popup(context.name, authUrl)
 +        elseif context.status == "disconnected" then
-+            -- Patch 04: reconnect a disconnected server (e.g. after clear-auth).
++            -- Patch 04: reconnect a disconnected server (for example after clear-auth).
 +            -- Mirrors the toggle-on path so <l> works instead of requiring t/t.
 +            State.hub_instance:start_mcp_server(context.name, { via_curl_request = true })
          end
      elseif type == "create_server" then
          -- Store browse mode position before switching
-@@ -775,6 +823,17 @@ function MainView:setup_active_mode()
+@@ -821,6 +869,17 @@ function MainView:setup_active_mode()
          desc = "Yank path",
          silent = true,
      }
@@ -137,14 +137,14 @@ index dba272f..2c4ed8c 100644
 +        desc = "Clear OAuth / re-auth",
 +        silent = true,
 +    }
-     -- Endpoint and agent keys dispatch by line type here, so cursor movement
-     -- never deletes normal server/tool/native-server actions.
- 
-diff --git c/lua/mcphub/utils/renderer.lua w/lua/mcphub/utils/renderer.lua
-index 183b68c..40b10f7 100644
---- c/lua/mcphub/utils/renderer.lua
+     if not self.active_capability then
+         -- Endpoint and agent keys dispatch by line type here, so cursor movement
+         -- never deletes normal server/tool/native-server actions.
+diff --git i/lua/mcphub/utils/renderer.lua w/lua/mcphub/utils/renderer.lua
+index 15669ad..2ce2a76 100644
+--- i/lua/mcphub/utils/renderer.lua
 +++ w/lua/mcphub/utils/renderer.lua
-@@ -539,14 +539,18 @@ function M.render_server_capabilities(server, lines, current_line, server_config
+@@ -615,14 +615,18 @@ function M.render_server_capabilities(server, lines, current_line, server_config
      local needs_authorization = server.status == "unauthorized"
      local enabled_hint = is_native and "[<l> Expand, <t> Toggle, <a> Auto-approve, <e> Edit, <y> Copy, <Y> Copy path]"
          or needs_authorization
@@ -164,5 +164,5 @@ index 183b68c..40b10f7 100644
 +    elseif server.status == "disabled" then
 +        hint = base_hint_disabled
      else
-         hint = view.expanded_server == server.name and expanded_hint or enabled_hint
+         hint = view:is_server_expanded(server.name) and expanded_hint or enabled_hint
      end

@@ -44,45 +44,20 @@ Hub lifecycle hardening. Contains env-tool-filters which is the root dependency 
 
 ## 03-main-ui_v1.patch
 
-All main-view UI work. Depends on `02-hub-stability_v1` for hub.lua and main.lua context.
+Main-view UI work. Depends on `02-hub-stability_v1` for hub.lua and main.lua context.
 
-- **Tool input navigation keys** — configurable capability-form navigation: `<C-j>` next field, `<C-k>` previous field. Config path: `ui.input_navigation.{next_field, prev_field}`.
+- **Config defaults** — adds `ui.endpoints`, `ui.agent_registry`, `ui.input_navigation`, and `ui.token_counts`. Active capability form navigation defaults to `J` next field and `K` previous field.
+- **Multi-server expansion** — replaces the single `expanded_server` field with an `expanded_servers` set. Multiple connected servers can remain expanded at once. `h` on an expanded server collapses only that server; `h` inside an expanded server section collapses the owning server; `h` on an already-collapsed connected server row collapses all expanded servers.
+- **Section navigation/folding** — adds `collapsed_sections`, `J/K` section-header navigation, and `T` toggle-all for foldable sections. MCP Servers is a navigation anchor; Global/Project groups, Native Servers, Endpoints, CLI Agents, and Active Hubs are foldable.
+- **Endpoints panel** — shows `/mcp` and `/mcp-lean` endpoint rows with inspector/register/unregister/copy actions.
+- **CLI Agents panel** — shows configured agent profile bindings by endpoint, with add/remove/toggle/refresh/edit actions and alternate config targets. Claude bindings are resolved by user/project config scope; non-scoped CLIs render as `global` to avoid projecting one flat list into multiple scopes.
+- **Context-aware dispatch and copy actions** — keeps endpoint/agent row actions separate from default server/tool/native actions, and adds copy helpers for browse rows and active capability payload/result rows.
+- **Strict-hidden tools in the main view** — adds `x` on tool rows to toggle `removed_tools`. Removed tools render in the error style, sort after disabled tools, cannot be opened, cannot be auto-approved, and cannot be toggled with the regular `t` handler until restored with `x`.
+- **Capability summaries and token estimates** — server rows show token estimates before active-only capability summaries such as `(tool: 3, prompt: 2, resource: 1, template: 1)`. Expanded capability section headers show enabled/total counts. Server and tool token estimates respect disabled/removed/env-regex filters.
+- **SSE recovery** — recovers transient SSE disconnects by probing the existing hub before tearing down state.
+- **Deduped log badge rendering** — repeated log entries with `entry.count > 1` display a muted `xN` suffix in server entry rendering.
 
-- **Endpoints panel** — shows `/mcp` (flat) and `/mcp-lean` (lean) rows below MCP Servers with hub-up status dot. Per-row hover-only key hints via `context.hint` / `hover_ns`.
-  - `e` launches `npx @modelcontextprotocol/inspector -y` (reuses running) and opens browser with proxy auth token.
-  - `s` stops the inspector. `i` edits `~/.config/mcp-inspector/config.json`.
-  - `y` copies the endpoint URL.
-
-- **CLI Agents panel** — shows registered bindings for each configured agent profile × scope × endpoint. Profile-aware: `{ name = "claude" }` normalises to the `claude` preset; explicit profiles support `id`, `preset`, `label`, `command`, `config_dir`, `config_path`, `scopes`. Agent commands run with `CLAUDE_CONFIG_DIR=<config_dir>`. Row keys: `t` toggle flat↔lean, `d` remove, `a` add lean, `A` add flat, `R` refresh, `e` edit config.
-
-- **Main-view keymap dispatch fix** — routes endpoint/agent keys through a persistent main-view dispatch instead of cursor-move key deletion, so normal server/tool/native actions (`e`, `t`, `d`, `a`, `A`, `r`, `R`) are never wiped on non-endpoint/agent rows.
-
-- **Copy actions** — `y`/`Y` on server rows copies server name; on tool/prompt/resource rows `y` copies item name/URI, `Y` copies `server_name_item_name`. Inside capability views, `y` on input rows copies field value; on submit row copies JSON payload; on result rows copies full result text.
-
-- **Token estimates** — server rows show `~N` / `~Nk` approximate prompt-token count after tool filters. Tool rows show per-tool estimate while visible. Controlled by `ui.token_counts.{enabled, servers, tools}`. Uses `ceil(chars / 4)` — sizing hints, not exact values.
-
-- **SSE recovery** — recovers from transient disconnects by probing the hub before tearing down state; reconnects SSE when reachable. Main-view `r` tries soft reconnect when disconnected, falls back to hard-refresh when connected.
-
-- **Agent alternate config targets** — `config_alternates` list on each agent profile registers extra keys (non-conflicting with existing main-view keys). Pressing the key on an agent row opens the target file and jumps to the `matcher` location.
-  - Matcher: dot-path navigation for JSON/TOML/YAML, plain-text fallback. JSON prefers the shallowest (root-level) match so `.mcpServers` lands on the root key, not a nested duplicate inside `projects[]`.
-  - Paths expand `~` and `$HOME`.
-
-  ```lua
-  config_alternates = {
-    { key = "1", label = "perms",  path = "~/.claude/settings.json", matcher = ".permissions" },
-    { key = "2", label = "c_json", path = "~/.claude.json",          matcher = ".mcpServers"  },
-  }
-  ```
-
-- **Cursor persists on toggle** — `cleanup()` calls `before_leave()` before closing so browse position is saved and restored when the UI is reopened.
-
-- **Section navigation / fold** — in main browse mode:
-  - `J` / `K` — jump to next / previous section header (wraps); shown in footer.
-  - `h` / `l` on a section header — fold / unfold (`▶` collapsed, `▼` open); on any other line — original server collapse/expand.
-  - `T` (outside any section line) — toggle all foldable sections at once; collapses all if any are open, expands all if all are collapsed.
-  - Foldable sections: Global group, Project group, Native Servers, Endpoints, CLI Agents, Active Hubs. MCP Servers is a nav anchor only (not foldable).
-
-**Files**: `lua/mcphub/config.lua`, `lua/mcphub/ui/init.lua`, `lua/mcphub/ui/views/main.lua`, `lua/mcphub/ui/capabilities/` (base, prompt, resource, resourceTemplate, tool), `lua/mcphub/utils/renderer.lua`
+**Files**: `lua/mcphub/config.lua`, `lua/mcphub/hub.lua`, `lua/mcphub/ui/init.lua`, `lua/mcphub/ui/views/main.lua`, `lua/mcphub/ui/capabilities/`, `lua/mcphub/utils/renderer.lua`
 
 ---
 
@@ -109,10 +84,16 @@ Also: `lua/utils/mcphub_auth.lua` (project-local helper) updated to try API path
 
 ## Validation note
 
-- All 4 patches validated by applying in order from clean `163b3ad` (v6.2.0) with `git apply --check` then `git apply`.
-- `lazy-local-patcher` can show a contradictory notification (`Error applying...` and `Applied ...`) due to notifier race behavior; use manual `git apply --check` for authoritative validation.
+- Current review on 2026-07-03 regenerated `03-main-ui_v1.patch` from an `01+02` baseline and confirmed `04-clear-auth_v1.patch` still applies against the new `03` baseline. A fresh sequential apply of `01 -> 02 -> 03 -> 04` from clean `163b3ad` passes, including `git diff --check` and `luac -p` over the touched Lua files.
+- `git apply --check` with multiple patch files can be misleading here; validate by applying each patch one at a time in a temporary worktree.
+- If `lazy-local-patcher` shows both `Applied ...` and `Error applying ...`, inspect the plugin checkout first. `restore_all()` restores files to the checkout's current `HEAD`; if `HEAD` is a leftover local patch-baseline commit instead of the lockfile commit, early patches may already be in `HEAD` and fail when reapplied.
 
 ## User notes
+
+Current follow-up requirements for the `03-main-ui_v1.patch` review are tracked in
+[reconcile-mcphub-03-main-ui-patch](../../tasks/open/reconcile-mcphub-03-main-ui-patch.md).
+
+Historical notes from the earlier larger main-UI patch:
 
 Fix
 - [ ]

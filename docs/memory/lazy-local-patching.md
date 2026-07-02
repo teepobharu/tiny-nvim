@@ -255,6 +255,8 @@ When the upstream fix is merged:
 
 - **First-time application**: After installing `lazy-local-patcher.nvim` for the first time, you need to run `:Lazy sync` or `:lua require("lazy-local-patcher").apply_all()` to apply patches. They don't auto-apply on startup — they persist from the previous sync.
 
+- **Errors after "Restored" + mixed "Applied" notifications**: `restore_all()` runs `git restore .` against the plugin checkout's current `HEAD`; it does not reset the repo to the commit in `lazy-lock.json`. If the plugin checkout is accidentally left on a local patch-baseline commit, earlier patches may already be part of `HEAD` and then fail when `apply_all()` reapplies them. Fix by stashing any current plugin changes, switching the plugin checkout back to the lockfile commit, cleaning it, then applying the patches once in sorted order.
+
 ---
 
 **Last Updated**: 2026-03-21
