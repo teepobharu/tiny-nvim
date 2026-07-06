@@ -647,6 +647,27 @@ Keymap: `<leader>aHx` (under MCPHub which-key group).
 Implementation: `lua/utils/mcphub_auth.lua` — `pick_and_clear()` / `clear_notify()`.
 Registered in `lua/plugins/extra/myAi.lua`.
 
+## OAuth — Stdio Bridge Auth On Demand
+
+Some stdio bridges, such as `slack_official_bridge`, own their OAuth flow
+inside the bridge process instead of using MCPHub's HTTP OAuth provider. Do not
+let these bridges auto-open auth during `initialize`; that can block startup and
+hide the MCPHub server list behind logs.
+
+Local pattern:
+
+- Set the bridge env to passive auth, e.g. `SLACK_MCP_BRIDGE_AUTO_AUTH=0`.
+- Add a server-level `authCommand` in `mcphub.json`, e.g. `node .../build/index.js auth`.
+- Apply/rebuild `external-patches/mcp-hub/04-stdio-auth-command.patch`.
+- Apply `patches/mcphub.nvim/05-stdio-auth-command_v1.patch`.
+
+With those pieces in place, a passive auth-required startup error marks the row
+`unauthorized`. Pressing `l` on that row calls `/servers/authorize`, which
+starts the configured auth command on demand. When the command exits
+successfully, the mcp-hub fork reconnects the stdio server and broadcasts a
+server update so the UI can move to `connected` without toggling the server.
+HTTP OAuth servers still use the existing `authorizationUrl` flow and popup.
+
 ### Manual fallback (if Neovim isn't open)
 
 ```bash

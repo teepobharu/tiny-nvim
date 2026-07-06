@@ -3,7 +3,7 @@ title: "MCPHub startup should not block on Slack bridge auth"
 status: "open"
 priority: "high"
 created: 2026-07-03
-updated: 2026-07-03
+updated: 2026-07-06
 refs:
   - 163b3ad [tag:v6.2.0] chore(release): v6.2.0
 related:
@@ -46,6 +46,10 @@ The desired behavior is:
   auth-required/fail status.
 - User action, likely pressing `l` on the server row, should explicitly start
   the auth step.
+- For stdio servers, explicit auth should be config-driven: the server can
+  return an auth-required MCP error on startup, MCPHub should render the row as
+  unauthorized, and `l` should run a configured `authCommand` instead of relying
+  on the bridge to auto-auth during initialize.
 - A soft refresh/reconnect key should refresh UI status even while the hub is
   still starting. Current `r` is not that key.
 
@@ -59,8 +63,10 @@ The desired behavior is:
   `~/dotfiles/ai/mcp/mcphub.json`.
 - In `~/dotfiles/ai/mcp/mcphub.json`, `slack_official_bridge` runs:
   `node ${HOME}/projects/ai/slack-official-mcp-bridge/build/index.js`.
-- The `slack_official_bridge` config note says missing token auto-starts auth
-  inline and opens a browser.
+- As of 2026-07-06, `slack_official_bridge` passes
+  `SLACK_MCP_BRIDGE_AUTO_AUTH=0`, and its config note says startup is passive.
+  This should stop bridge-owned browser auth popups on startup after MCPHub is
+  restarted so the new env is inherited.
 
 ### Slack auth popup root cause
 
@@ -307,26 +313,100 @@ Benefit of showing UI first:
 
 ## Implementation Plan
 
-- [ ] Add/confirm passive auth support in the Slack official bridge.
-- [ ] Configure `slack_official_bridge` in `~/dotfiles/ai/mcp/mcphub.json` to
-      use passive auth on startup.
-- [ ] If Cursor still opens after passive auth is disabled, run the Cursor
+### Refined rollout order
+
+1. **Slack bridge passive auth first.**
+   This is the highest-impact and least-coupled slice. It stops browser/Cursor
+   popups regardless of whether the later MCPHub async startup refactor is
+   complete. Own this in the Slack bridge repo first, then wire the env in
+   `mcphub.json`.
+2. **MCPHub backend async startup second.**
+   Backend readiness currently blocks the UI from having useful state. Change
+   backend initialization to create server records and emit/update status before
+   individual MCP connections settle.
+3. **Neovim UI/status refresh third.**
+   Once backend exposes useful startup state, update the main view and add a
+   pre-ready-safe soft refresh key. A frontend-only change before backend state
+   exists may improve redraw behavior but will not fully solve the blocking
+   model.
+4. **Manual stdio auth action last or alongside UI work.**
+   Pressing `l` for stdio Slack auth needs an explicit contract
+   (`authCommand`, action metadata, or a bridge subcommand). Do not overload the
+   existing HTTP OAuth `authorizationUrl` path without a clear server type/action
+   distinction.
+
+### Slice 1: Slack bridge passive auth
+
+- [ ] Add passive auth support in
+      `/Users/tharutaipree/projects/ai/slack-official-mcp-bridge`.
+  - Suggested env: `SLACK_MCP_BRIDGE_AUTO_AUTH=0`.
+  - Missing token should return a quick JSON-RPC error with an auth-required
+    message and **must not** call `runOAuthFlow()`.
+  - 401/expired token should return auth-required without forced auto-auth when
+    passive mode is enabled.
+  - Existing `auth` subcommand should continue to run PKCE OAuth and save the
+    token.
+  - Existing valid-token startup should continue to proxy `initialize`.
+- [ ] Build or typecheck the bridge with `npm run build`.
+- [x] Configure `slack_official_bridge` in `~/dotfiles/ai/mcp/mcphub.json` to
+      pass `SLACK_MCP_BRIDGE_AUTO_AUTH=0`.
+- [x] Update the `slack_official_bridge` config note so it says startup is
+      passive and manual auth is `node .../build/index.js auth`.
+
+### Slice 2: Cursor validation if popup persists
+
+- [ ] If Cursor still opens after passive auth is enabled, run the Cursor
       follow-up validation commands and capture the exact launch chain before
       attributing it to URL handler state.
-- [ ] Add a deliberate user-triggered auth action for stdio auth-required rows,
-      ideally reusing `l`.
+
+### Slice 3: Backend async startup
+
 - [ ] Change mcp-hub startup to create server rows and schedule connections
       without awaiting every connection before `READY`.
 - [ ] Ensure `/api/health` returns useful per-server status during startup.
 - [ ] Emit server status events as each startup connection settles.
+- [ ] Preserve the existing all-server startup summary log, but generate it from
+      a background `Promise.allSettled` path instead of blocking readiness.
+
+### Slice 4: Neovim UI and refresh
+
 - [ ] Update `mcphub.nvim` main view so `STARTING` can render known server rows
       instead of logs-only.
 - [ ] Add `<C-r>` as soft status refresh / SSE reconnect, keeping `r` as hard
       capability refresh and `R` as hard restart.
-- [ ] Decide whether any part belongs in the existing
+- [x] Add a deliberate user-triggered auth action for stdio auth-required rows,
+      ideally reusing `l` only when the row exposes an explicit stdio auth
+      action.
+- [x] Add config-driven `authCommand` support for `slack_official_bridge` so a
+      passive auth-required startup error can render as unauthorized and `l`
+      can start auth on demand.
+- [x] Reconnect the stdio server automatically after the manual auth command
+      exits successfully, and broadcast `SERVERS_UPDATED` so the UI can redraw
+      without a server toggle.
+- [x] Decide whether any UI changes belong in the existing
       [03 main UI patch](patches/mcphub.nvim/03-main-ui_v1.patch) or a new patch.
-- [ ] Update [docs/memory/mcphub.md](docs/memory/mcphub.md) after the behavior
-      is implemented and verified.
+- [x] Update [docs/memory/mcphub.md](docs/memory/mcphub.md) for stdio
+      `authCommand` / on-demand Slack auth behavior.
+- [ ] Update [docs/memory/mcphub.md](docs/memory/mcphub.md) after the async
+      startup/status behavior is implemented and verified.
+
+### Worker delegation state
+
+- Worker 1 (`Schrodinger`, agent id `019f247d-8aaa-70a2-aad8-8507ddd7274a`)
+  was delegated on 2026-07-03 to own only the Slack bridge passive-auth slice
+  and avoid editing MCPHub backend/UI files.
+- Worker 1 completed the bridge implementation on 2026-07-03. Main-agent review
+  reran `npm run build`, passive missing-token smoke, passive no-token
+  non-initialize smoke, mocked valid-token `initialize`, mocked passive 401
+  `initialize`, and `git diff --check`; all passed. No blocking review issues
+  found. Minor caveat: the manual-auth error includes this machine's absolute
+  bridge path, which is useful locally but should be made dynamic if the bridge
+  is packaged or shared broadly.
+- Later workers, if used, should have disjoint ownership:
+  - backend worker: `/Users/tharutaipree/projects/mcp-hub/src/**`
+  - UI worker: `patches/mcphub.nvim/**` and installed/worktree
+    `mcphub.nvim` Lua source used for patch generation
+  - docs/config worker: task/memory docs and `~/dotfiles/ai/mcp/mcphub.json`
 
 ## Success Criteria
 

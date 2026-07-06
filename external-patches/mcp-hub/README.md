@@ -14,6 +14,7 @@ cd ~/projects/mcp-hub
 git apply --ignore-space-change external-patches/mcp-hub/01-idempotent-endpoint-cleanup.patch
 git apply --ignore-space-change external-patches/mcp-hub/02-hard-restart-response-before-shutdown.patch
 git apply --ignore-space-change external-patches/mcp-hub/03-clear-auth-endpoint.patch
+git apply --ignore-space-change external-patches/mcp-hub/04-stdio-auth-command.patch
 npm run build
 ```
 
@@ -50,6 +51,22 @@ Commit context: `6a4ce7e` (upstream v4.2.1), after patches 01 and 02
 - This avoids a full hard-restart when an upstream MCP server's DCR registry is
   reset (pod restart / in-memory only). mcphub.nvim patch `04-clear-auth_v1`
   exposes this as the `X` key on server rows in `:MCPHub`.
+
+## 04-stdio-auth-command.patch
+
+Commit context: `6a4ce7e` (upstream v4.2.1), after patches 01, 02, and 03
+
+- Adds optional stdio server `authCommand` support.
+- If a stdio server with `authCommand` fails initialize with an
+  auth-required/authorization-required MCP error, the connection is marked
+  `unauthorized` instead of plain `disconnected`.
+- Exposes the resolved `authCommand` in `getServerInfo()`.
+- Lets `POST /servers/authorize` start the configured command when no
+  HTTP `authorizationUrl` is available. This makes `l` in mcphub.nvim usable for
+  stdio auth flows such as `slack_official_bridge`.
+- When the manual auth command exits successfully, reconnects the server and
+  broadcasts `SERVERS_UPDATED`, so the UI can move from `unauthorized` to
+  `connected` without a manual toggle.
 
 ---
 

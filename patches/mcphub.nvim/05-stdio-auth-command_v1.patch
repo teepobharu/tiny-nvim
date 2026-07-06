@@ -1,0 +1,51 @@
+diff --git a/lua/mcphub/hub.lua b/lua/mcphub/hub.lua
+--- a/lua/mcphub/hub.lua
++++ b/lua/mcphub/hub.lua
+@@ -720,8 +720,10 @@ function MCPHub:authorize_mcp_server(name, _)
+             --Errors will be handled automatically
+             if response and response.authorizationUrl then
+                 vim.notify("Opening Authorization URL: " .. response.authorizationUrl, vim.log.levels.INFO)
++            elseif response and response.authCommand then
++                vim.notify("Started authorization command for server: " .. name, vim.log.levels.INFO)
+             else
+-                vim.notify("No Authorization URL found for server: " .. name, vim.log.levels.WARN)
++                vim.notify("No authorization action found for server: " .. name, vim.log.levels.WARN)
+             end
+         end,
+     })
+diff --git a/lua/mcphub/types.lua b/lua/mcphub/types.lua
+--- a/lua/mcphub/types.lua
++++ b/lua/mcphub/types.lua
+@@ -64,6 +64,7 @@
+ ---@field uptime number
+ ---@field lastStarted string
+ ---@field authorizationUrl string
++---@field authCommand? table
+ ---@field config_source string Include which config file this server came from
+ 
+ ---@class LogEntry
+diff --git a/lua/mcphub/ui/views/main.lua b/lua/mcphub/ui/views/main.lua
+--- a/lua/mcphub/ui/views/main.lua
++++ b/lua/mcphub/ui/views/main.lua
+@@ -506,12 +506,16 @@ function MainView:handle_action(line_override, context_override)
+         elseif context.status == "unauthorized" then
+-            local authUrl = State.hub_instance:get_server(context.name)["authorizationUrl"]
+-            if not authUrl then
+-                return vim.notify("No authorization URL found for server " .. context.name, vim.log.levels.ERROR)
++            local server = State.hub_instance:get_server(context.name)
++            local authUrl = server and server["authorizationUrl"]
++            local authCommand = server and server["authCommand"]
++            if not authUrl and not authCommand then
++                return vim.notify("No authorization action found for server " .. context.name, vim.log.levels.ERROR)
+             end
+-            ---Auto opens the browser with authorization URL
++            ---Auto opens the browser or starts a configured manual auth command.
+             State.hub_instance:authorize_mcp_server(context.name)
+             -- Show popup for the user
+-            ui_utils.open_auth_popup(context.name, authUrl)
++            if authUrl then
++                ui_utils.open_auth_popup(context.name, authUrl)
++            end
+         elseif context.status == "disconnected" then
+             -- Patch 04: reconnect a disconnected server (for example after clear-auth).
+             -- Mirrors the toggle-on path so <l> works instead of requiring t/t.

@@ -1,6 +1,6 @@
 # mcphub.nvim patches
 
-Patch files are applied in order by `lazy-local-patcher`. Four grouped patch files cover all local changes against `163b3ad` (v6.2.0).
+Patch files are applied in order by `lazy-local-patcher`. Five grouped patch files cover all local changes against `163b3ad` (v6.2.0).
 
 **Application order** (required):
 ```bash
@@ -8,10 +8,12 @@ git apply --ignore-space-change 01-compat_v1.patch
 git apply --ignore-space-change 02-hub-stability_v1.patch
 git apply --ignore-space-change 03-main-ui_v1.patch
 git apply --ignore-space-change 04-clear-auth_v1.patch
+git apply --ignore-space-change 05-stdio-auth-command_v1.patch
 ```
 
 `02` must precede `03` — env-tool-filters (in `02`) adds hub.lua and main.lua context that `03` depends on.
 `04` depends on `03` for the keymap dispatch infrastructure in main.lua.
+`05` depends on `03` and requires mcp-hub fork patch `external-patches/mcp-hub/04-stdio-auth-command.patch`.
 
 To add a new patch on top, apply all groups first, make changes, then `git diff HEAD -- <files>`. Save as a new `_v2` file rather than overwriting `_v1`.
 
@@ -53,7 +55,7 @@ Main-view UI work. Depends on `02-hub-stability_v1` for hub.lua and main.lua con
 - **CLI Agents panel** — shows configured agent profile bindings by endpoint, with add/remove/toggle/refresh/edit actions and alternate config targets. Claude bindings are resolved by user/project config scope; non-scoped CLIs render as `global` to avoid projecting one flat list into multiple scopes.
 - **Context-aware dispatch and copy actions** — keeps endpoint/agent row actions separate from default server/tool/native actions, and adds copy helpers for browse rows and active capability payload/result rows.
 - **Strict-hidden tools in the main view** — adds `x` on tool rows to toggle `removed_tools`. Removed tools render in the error style, sort after disabled tools, cannot be opened, cannot be auto-approved, and cannot be toggled with the regular `t` handler until restored with `x`.
-- **Capability summaries and token estimates** — server rows show token estimates before active-only capability summaries such as `(tool: 3, prompt: 2, resource: 1, template: 1)`. Expanded capability section headers show enabled/total counts. Server and tool token estimates respect disabled/removed/env-regex filters.
+- **Capability summaries and token estimates** — server rows show token estimates before active-only capability summaries using the same capability icons as expanded sections, for example `(<tool icon> 3, <prompt icon> 2, <resource icon> 1, <template icon> 1)`. Expanded capability section headers show enabled/total counts. Server and tool token estimates respect disabled/removed/env-regex filters.
 - **SSE recovery** — recovers transient SSE disconnects by probing the existing hub before tearing down state.
 - **Deduped log badge rendering** — repeated log entries with `entry.count > 1` display a muted `xN` suffix in server entry rendering.
 
@@ -79,6 +81,22 @@ Also: `lua/utils/mcphub_auth.lua` (project-local helper) updated to try API path
 **Server build dependency**: requires mcp-hub fork with `external-patches/mcp-hub/03-clear-auth-endpoint.patch` applied and rebuilt. Without it, `X` falls back to the file-edit path which still needs manual `R` to flush in-memory state.
 
 **Files**: `lua/mcphub/hub.lua`, `lua/mcphub/ui/views/main.lua`, `lua/mcphub/utils/renderer.lua`
+
+---
+
+## 05-stdio-auth-command_v1.patch
+
+Depends on `03-main-ui_v1` for the server-row action flow. Requires mcp-hub fork
+`external-patches/mcp-hub/04-stdio-auth-command.patch` so `/servers/authorize`
+can launch a configured stdio `authCommand`.
+
+- **`lua/mcphub/ui/views/main.lua`** — `l` on an unauthorized server row now accepts either an HTTP `authorizationUrl` or a stdio `authCommand`; only HTTP auth opens the callback popup.
+- **`lua/mcphub/hub.lua`** — `authorize_mcp_server` reports command-based auth launches instead of warning that no URL exists.
+- **`lua/mcphub/types.lua`** — documents optional `authCommand` server metadata.
+
+**Server build dependency**: requires mcp-hub fork patch `04-stdio-auth-command.patch` applied and rebuilt. Without it, the UI can call `/servers/authorize`, but stdio auth-required rows will not expose or launch an auth command.
+
+**Files**: `lua/mcphub/hub.lua`, `lua/mcphub/types.lua`, `lua/mcphub/ui/views/main.lua`
 
 ---
 

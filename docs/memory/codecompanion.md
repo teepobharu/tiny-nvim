@@ -687,6 +687,28 @@ extensions = {
 
 Saved to `~/.local/share/nvim3_jelly_tinynvim/codecompanion-history/` (stdpath data).
 
+### Title Generation vs Core Background Titles
+
+CodeCompanion core and `codecompanion-history.nvim` have separate title systems:
+
+- Core CodeCompanion background title generation is configured with
+  `interactions.background.chat.opts.enabled = true` and action
+  `interactions.background.builtin.chat_make_title`.
+- The core title generator filters out rules and config system prompts before
+  generating a title, then calls `chat:set_title(title)`.
+- `chat:set_title(title)` updates `chat.title`, the UI title, registry
+  description, and buffer name, but it does not write `chat.opts.title`.
+- The history extension persists `chat.opts.title`, not `chat.title`.
+- The history extension already has its own title generator. It runs on
+  `CodeCompanionChatSubmitted`, filters tagged/reference/context messages, sets
+  `chat.opts.title`, updates the buffer title, and saves the chat.
+
+Practical implication: enabling CodeCompanion core background title generation
+alongside history auto-title creates a second title request and does not
+reliably populate the history picker. Prefer the history extension's title
+generator for persisted titles, or patch/bridge core title updates into
+`chat.opts.title` before saving.
+
 ### Compatibility Note
 
 This extension integrates with CodeCompanion's internal APIs. If pinned version `19.6.x` causes issues, check [ravitemer/codecompanion-history.nvim](https://github.com/ravitemer/codecompanion-history.nvim) for a compatible release.

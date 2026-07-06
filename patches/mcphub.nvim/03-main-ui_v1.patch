@@ -1066,7 +1066,7 @@ index e275e30..dbeb7cf 100644
 +    end
 +    local path = vim.fs.normalize(vim.fn.expand(target.path))
 +    if vim.fn.filereadable(path) == 0 then
-+        vim.notify("Config file not found: " .. path, vim.log.levels.WARN); return
++        vim.notify("Config file not found: " .. path .. " (opening anyway)", vim.log.levels.WARN)
 +    end
 +    self:_open_with_back_key(path)
 +    vim.schedule(function()
@@ -2135,7 +2135,7 @@ index 5a702f6..688f08f 100644
          })
          table.insert(lines, Text.empty_line())
          current_line = current_line + 1
-@@ -653,61 +825,26 @@ function M.render_server_line(server, active)
+@@ -653,61 +825,32 @@ function M.render_server_line(server, active)
              line:append(" " .. Text.icons.auto .. " " .. tostring(count) .. " ", Text.highlights.warn)
          end
  
@@ -2159,11 +2159,17 @@ index 5a702f6..688f08f 100644
 +            append_token_count(line, M.estimate_server_tokens(server, server_config))
 +        end
 +
++        local capability_icons = {
++            tool = Text.icons.tool,
++            prompt = Text.icons.prompt,
++            resource = Text.icons.resource,
++            resourceTemplate = Text.icons.resourceTemplate,
++        }
 +        local capability_parts = {}
-+        local function add_capability_count(label, items, line_type)
++        local function add_capability_count(items, line_type)
 +            local enabled, total = M.get_capability_count_summary(items, line_type, server_config)
 +            if total > 0 then
-+                table.insert(capability_parts, label .. ": " .. tostring(enabled))
++                table.insert(capability_parts, capability_icons[line_type] .. " " .. tostring(enabled))
              end
          end
 -        -- line:append(" [", Text.highlights.muted)
@@ -2204,10 +2210,10 @@ index 5a702f6..688f08f 100644
 -        -- )
 -        -- line:append("]", Text.highlights.muted)
 +
-+        add_capability_count("tool", server.capabilities.tools, "tool")
-+        add_capability_count("prompt", server.capabilities.prompts, "prompt")
-+        add_capability_count("resource", server.capabilities.resources, "resource")
-+        add_capability_count("template", server.capabilities.resourceTemplates, "resourceTemplate")
++        add_capability_count(server.capabilities.tools, "tool")
++        add_capability_count(server.capabilities.prompts, "prompt")
++        add_capability_count(server.capabilities.resources, "resource")
++        add_capability_count(server.capabilities.resourceTemplates, "resourceTemplate")
 +
 +        if #capability_parts > 0 then
 +            line:append(" (" .. table.concat(capability_parts, ", ") .. ")", Text.highlights.muted)
@@ -2215,7 +2221,7 @@ index 5a702f6..688f08f 100644
      end
  
      -- Add status description if any
-@@ -1050,8 +1187,17 @@ function M.render_workspaces_section(line_offset, view)
+@@ -1050,8 +1193,17 @@ function M.render_workspaces_section(line_offset, view)
      local current_line = line_offset
  
      -- Section header
