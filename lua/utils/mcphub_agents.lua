@@ -1,7 +1,8 @@
 -- mcphub_agents.lua — CLI agent MCP-binding helper for mcphub.nvim patch 05
 --
--- Wraps `<agent> mcp add|remove|list` (claude / codex / opencode) as async
--- vim.system calls. Returns simple {ok, stdout, stderr} tables; consumers
+-- Wraps known-safe `<agent> mcp add|remove|list` CLIs (claude / codex /
+-- opencode / pi) as async vim.system calls. Config-only agents are read from
+-- disk and never shell out during render. Returns simple {ok, stdout, stderr} tables; consumers
 -- (the patch's render_agent_registry) re-render the row on completion.
 --
 -- Why a thin module instead of inline in the patch:
@@ -18,6 +19,8 @@
 --             mcp list  → table with headers: Name Command Args Env Cwd Status Auth
 --   opencode: no CLI add/remove → users must edit ~/.config/opencode/opencode.jsonc
 --             mcp list  → boxed output: "●  ✓/○ <name>" + indented url line
+--   cursor:   no safe `mcp list` CLI; `cursor mcp list` opens/foregrounds the
+--             IDE because Cursor treats the args as editor input. Read mcp.json.
 
 local M = {}
 
@@ -48,6 +51,7 @@ local PRESETS = {
     config_path = function(profile, _)
       return profile.config_path or "~/.config/opencode/opencode.jsonc"
     end,
+    cli_list = true,
   },
   pi = {
     command = "pi",
@@ -60,8 +64,23 @@ local PRESETS = {
       end
       return "~/.pi/agent/settings.json"
     end,
+    cli_list = true,
+  },
+  cursor = {
+    command = "cursor",
+    config_path = function(profile, _)
+      return profile.config_path or "~/.cursor/mcp.json"
+    end,
+    config_list = true,
   },
 }
+
+PRESETS.claude.cli_list = true
+PRESETS.claude.cli_register = true
+PRESETS.claude.cli_unregister = true
+PRESETS.codex.cli_list = true
+PRESETS.codex.cli_register = true
+PRESETS.codex.cli_unregister = true
 
 ---@class McphubAgents.Binding
 ---@field name string             registration name (e.g. "mcphub-lean")
@@ -123,6 +142,22 @@ end
 function M.is_available(agent)
   local profile = M.normalize_profile(agent)
   return vim.fn.executable(profile.command) == 1
+end
+
+---@param agent string|table
+---@return boolean
+function M.can_list(agent)
+  local profile = M.normalize_profile(agent)
+  local preset = PRESETS[profile.preset]
+  return preset ~= nil and (preset.cli_list == true or preset.config_list == true)
+end
+
+---@param agent string|table
+---@return boolean
+function M.can_modify(agent)
+  local profile = M.normalize_profile(agent)
+  local preset = PRESETS[profile.preset]
+  return preset ~= nil and preset.cli_register == true and preset.cli_unregister == true
 end
 
 ---Return the config file path for a given agent + scope.
@@ -282,6 +317,44 @@ function M.parse_pi_output(stdout)
   return bindings
 end
 
+---@param path string
+---@return McphubAgents.Binding[]
+local function read_config_bindings(path)
+  path = vim.fn.expand(path or "")
+  if path == "" or vim.fn.filereadable(path) == 0 then
+    return {}
+  end
+
+  local ok, lines = pcall(vim.fn.readfile, path)
+  if not ok then
+    return {}
+  end
+
+  local decoded_ok, decoded = pcall(vim.json.decode, table.concat(lines, "\n"))
+  if not decoded_ok or type(decoded) ~= "table" or type(decoded.mcpServers) ~= "table" then
+    return {}
+  end
+
+  local bindings = {}
+  for name, cfg in pairs(decoded.mcpServers) do
+    if type(cfg) == "table" then
+      local url = cfg.url or cfg.serverUrl or ""
+      local transport = cfg.type or cfg.transport or (url ~= "" and "HTTP" or (cfg.command and "STDIO" or "?"))
+      table.insert(bindings, {
+        name = tostring(name),
+        url = tostring(url),
+        transport = transport,
+        status = "unknown",
+        raw = path,
+      })
+    end
+  end
+  table.sort(bindings, function(a, b)
+    return a.name < b.name
+  end)
+  return bindings
+end
+
 -- ─────────────── public API ─────────────────────────────────────────────────
 
 ---Run `<agent> mcp list` async. on_done receives {ok, bindings, stdout, stderr}.
@@ -289,6 +362,22 @@ end
 ---@param on_done fun(result: { ok: boolean, bindings: McphubAgents.Binding[], stdout: string, stderr: string })
 function M.list(agent, on_done)
   local profile = M.normalize_profile(agent)
+  local preset = PRESETS[profile.preset]
+  if not preset then
+    on_done { ok = false, bindings = {}, stdout = "", stderr = profile.preset .. " MCP registry is not supported" }
+    return
+  end
+
+  if preset.config_list then
+    on_done { ok = true, bindings = read_config_bindings(M.config_path(profile, nil)), stdout = "", stderr = "" }
+    return
+  end
+
+  if not preset.cli_list then
+    on_done { ok = false, bindings = {}, stdout = "", stderr = profile.preset .. " does not expose a safe MCP list CLI" }
+    return
+  end
+
   if not M.is_available(profile) then
     on_done { ok = false, bindings = {}, stdout = "", stderr = profile.command .. " not on PATH" }
     return
@@ -330,6 +419,16 @@ end
 ---@param on_done fun(result: { ok: boolean, stdout: string, stderr: string })
 function M.register(agent, name, url, scope, on_done)
   local profile = M.normalize_profile(agent)
+  if not M.can_modify(profile) then
+    on_done {
+      ok = false,
+      stdout = "",
+      stderr = profile.label .. " does not expose a safe MCP add/remove CLI. Press 'e' or a config shortcut to edit "
+        .. M.config_path(profile, scope),
+    }
+    return
+  end
+
   if not M.is_available(profile) then
     on_done { ok = false, stdout = "", stderr = profile.command .. " not on PATH" }
     return
@@ -379,6 +478,16 @@ end
 ---@param on_done fun(result: { ok: boolean, stdout: string, stderr: string })
 function M.unregister(agent, name, scope, on_done)
   local profile = M.normalize_profile(agent)
+  if not M.can_modify(profile) then
+    on_done {
+      ok = false,
+      stdout = "",
+      stderr = profile.label .. " does not expose a safe MCP add/remove CLI. Press 'e' or a config shortcut to edit "
+        .. M.config_path(profile, scope),
+    }
+    return
+  end
+
   if not M.is_available(profile) then
     on_done { ok = false, stdout = "", stderr = profile.command .. " not on PATH" }
     return

@@ -812,7 +812,7 @@ index e275e30..dbeb7cf 100644
  
      -- Add silent keymap aliases for common expand/action keys
      if self.active_capability then
-@@ -642,6 +884,900 @@ function MainView:setup_active_mode()
+@@ -642,6 +884,903 @@ function MainView:setup_active_mode()
      self:apply_keymaps()
  end
  
@@ -1625,6 +1625,7 @@ index e275e30..dbeb7cf 100644
 +        local profile = mcphub_agents.normalize_profile(agent_cfg)
 +        local agent_name = profile.label
 +        local available = mcphub_agents.is_available(profile)
++        local can_modify = mcphub_agents.can_modify(profile)
 +        local bindings = cache[profile.id] or {}
 +        local scopes = self:_get_agent_scopes(agent_cfg)
 +        local binding_flat = agent_cfg.binding_flat or "mcphub"
@@ -1658,7 +1659,7 @@ index e275e30..dbeb7cf 100644
 +                    binding = lean_b, binding_flat = binding_flat,
 +                    binding_lean = binding_lean,
 +                    config_alternates = agent_cfg.config_alternates,
-+                    hint = with_alternate_hint("t:toggle d:remove e:cfg"),
++                    hint = with_alternate_hint(can_modify and "t:toggle d:remove e:cfg" or "e:cfg"),
 +                })
 +            end
 +
@@ -1678,7 +1679,7 @@ index e275e30..dbeb7cf 100644
 +                    binding = flat_b, binding_flat = binding_flat,
 +                    binding_lean = binding_lean,
 +                    config_alternates = agent_cfg.config_alternates,
-+                    hint = with_alternate_hint("t:toggle d:remove e:cfg"),
++                    hint = with_alternate_hint(can_modify and "t:toggle d:remove e:cfg" or "e:cfg"),
 +                })
 +            end
 +
@@ -1690,8 +1691,10 @@ index e275e30..dbeb7cf 100644
 +                table.insert(lines, Text.pad_line(row))
 +                current_line = current_line + 1
 +                local hint
-+                if available then
++                if can_modify then
 +                    hint = "a:add-lean A:add-flat e:cfg"
++                elseif available then
++                    hint = "e:cfg"
 +                else
 +                    hint = profile.command .. " not on PATH — e:cfg"
 +                end
@@ -1713,7 +1716,7 @@ index e275e30..dbeb7cf 100644
  -- Helper function to get all tool names for a server
  local function get_server_tool_names(server_name)
      if not State.hub_instance or not State.hub_instance:is_ready() then
-@@ -979,7 +2115,7 @@ function MainView:render_servers(line_offset)
+@@ -979,7 +2118,7 @@ function MainView:render_servers(line_offset)
  
              if total_tokens > 0 then
                  left_section:append(
@@ -1722,7 +1725,7 @@ index e275e30..dbeb7cf 100644
                      Text.highlights.muted
                  )
              end
-@@ -1008,6 +2144,8 @@ function MainView:render_servers(line_offset)
+@@ -1008,6 +2147,8 @@ function MainView:render_servers(line_offset)
  
      table.insert(lines, Text.pad_line(header_line))
      current_line = current_line + 1
@@ -1731,7 +1734,7 @@ index e275e30..dbeb7cf 100644
      -- Track breadcrumb line for interaction
      -- self:track_line(current_line, "breadcrumb", {
      --     hint = "<CR> to preview servers prompt",
-@@ -1038,36 +2176,41 @@ function MainView:render_servers(line_offset)
+@@ -1038,36 +2179,41 @@ function MainView:render_servers(line_offset)
      current_line = current_line + 1
  
      -- Native servers section header
@@ -1797,7 +1800,7 @@ index e275e30..dbeb7cf 100644
  function MainView:before_enter()
      View.before_enter(self)
      self:setup_active_mode()
-@@ -1130,6 +2273,14 @@ function MainView:render()
+@@ -1130,6 +2276,14 @@ function MainView:render()
          if #errors > 0 then
              vim.list_extend(lines, errors)
          end
@@ -1812,7 +1815,7 @@ index e275e30..dbeb7cf 100644
          return lines
      end
      -- Handle capability mode
-@@ -1152,6 +2303,12 @@ function MainView:render()
+@@ -1152,6 +2306,12 @@ function MainView:render()
      -- Servers section
      vim.list_extend(lines, self:render_servers(#lines))
  

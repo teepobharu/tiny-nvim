@@ -943,6 +943,27 @@ behavior only and does not require rebuilding `~/projects/mcp-hub/dist/cli.js`.
 **Suggested commit title**:
 `mcphub: support configurable CLI agent profiles`.
 
+### Cursor agent registry is config-only
+
+Do not probe Cursor with `cursor mcp list` from the MCPHub UI.
+
+Root cause found on 2026-07-07:
+
+- The CLI Agents panel calls `utils.mcphub_agents.list()` during render.
+- Cursor was configured as an agent profile, so render ran `cursor mcp list`.
+- Cursor 3.10.17 supports `--add-mcp`, but not a `mcp list` subcommand.
+- The Cursor shell wrapper routes non-`agent` invocations through the
+  Electron-backed editor CLI, so `cursor mcp list` can open or foreground the
+  Cursor app when `:MCPHub` is opened.
+
+Fix:
+
+- `lua/utils/mcphub_agents.lua` only shells out for known-safe CLI list
+  presets.
+- Cursor is treated as `config_list` and read from `~/.cursor/mcp.json`.
+- Config-only rows expose `e` / configured alternate config shortcuts, but not
+  `a`/`A`/`t`/`d`.
+
 ### Active capability copy and token estimates
 
 **Copy behavior**:

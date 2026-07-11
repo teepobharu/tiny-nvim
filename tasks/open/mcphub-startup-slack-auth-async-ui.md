@@ -3,7 +3,7 @@ title: "MCPHub startup should not block on Slack bridge auth"
 status: "open"
 priority: "high"
 created: 2026-07-03
-updated: 2026-07-06
+updated: 2026-07-12
 refs:
   - 163b3ad [tag:v6.2.0] chore(release): v6.2.0
 related:
@@ -143,28 +143,31 @@ Validated on 2026-07-03:
 
 Current conclusion:
 
-- The direct cause of the popup is still the Slack bridge auto-auth calling
-  macOS `open` during MCP initialization.
-- The specific claim that Cursor opens because it is the default handler for
-  Slack's `https://...` auth URL is **not validated** on this machine now.
-- More likely explanations to test if Cursor still appears:
-  - Edge or Slack redirects to a `cursor:` deep link from a browser extension,
-    saved tab/session, or local automation.
-  - A separate watcher/automation reacts to MCPHub/Slack auth logs and opens
-    Cursor.
-  - Cursor was already restoring a window/session and the timing made it look
-    causally tied to Slack auth.
-  - LaunchServices handler state changed between the observed incident and this
-    validation.
+- Updated 2026-07-07: the Cursor popup was traced to the local CLI Agents panel,
+  not to Slack OAuth.
+- `lua/utils/mcphub_agents.lua` ran `<agent> mcp list` during
+  `render_agent_registry()` for every configured agent. The Cursor profile had
+  `name = "cursor"`, so opening `:MCPHub` ran `cursor mcp list`.
+- Cursor 3.10.17 does not expose a `mcp list` subcommand. Its CLI help shows
+  `--add-mcp`, but no `mcp list`; unknown positional arguments are routed
+  through Cursor's Electron-backed editor CLI, which can open or foreground the
+  Cursor app.
+- MCPHub backend logs did not show a startup `Opening authorization URL...`
+  event, and the active Slack bridge server was connected in the inspected run.
+- Fix applied: Cursor is now treated as a config-backed agent. The registry can
+  read `~/.cursor/mcp.json`, but it no longer shells out to `cursor mcp ...`
+  during render/refresh/add/remove. UI hints for config-only agents now show
+  config editing only.
 
 Follow-up validation if Cursor still opens:
 
-- Capture the exact URL passed to `openBrowser()` before launching it.
-- Temporarily replace macOS `open` in the Slack bridge with a logger or a
-  passive mode that prints the URL only.
-- Run `log stream --predicate 'process == "Cursor" OR process == "open"'` while
-  reproducing, then correlate timestamps with Slack bridge stderr.
-- Check browser extensions/automation that may handle Slack OAuth redirects.
+- Run `:MCPHub` with the CLI Agents panel expanded and confirm no `cursor mcp`
+  process is spawned.
+- Run `ps -axo pid,ppid,lstart,command | rg 'cursor mcp|Cursor.app|mcphub'`
+  while reproducing to separate renderer probes from unrelated Cursor sessions.
+- Run `log stream --predicate 'process == "Cursor" OR process == "open"'` only
+  if Cursor still opens after this patch; then correlate timestamps with
+  MCPHub/SSE logs.
 
 ### Startup blocking root cause
 
@@ -463,10 +466,14 @@ lsof -i :37374
 - [ ] Server rows show `connecting`, `connected`, `failed`, `disabled`, or
       `auth-required` style status individually.
 - [ ] Slack bridge missing-token startup does not open browser auth.
-- [ ] Slack bridge missing-token startup does not open Cursor or another IDE.
-- [ ] If Cursor opens, LaunchServices, Slack bridge stderr, and macOS process
-      logs identify whether the launch came from `open <https://...>`, a
-      `cursor:` deep link, browser/session restore, or another automation.
+- [x] Slack bridge missing-token startup is no longer the leading explanation
+      for Cursor opening; no startup authorization URL was observed in MCPHub
+      logs during the inspected run.
+- [x] Cursor CLI registry probing root cause identified:
+      `render_agent_registry()` -> `utils.mcphub_agents.list()` ->
+      `cursor mcp list`.
+- [x] Cursor profile no longer shells out during registry render/refresh.
+- [ ] Fresh `:MCPHub` does not open or foreground Cursor.
 - [ ] Slack bridge row shows an explicit auth-required/fail status.
 - [ ] Pressing `l` on the Slack bridge row starts the auth flow intentionally.
 - [ ] Pressing `l` on HTTP OAuth servers still uses the existing
