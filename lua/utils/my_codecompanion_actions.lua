@@ -268,7 +268,7 @@ end
 -- Get default model configurations for Vertex Claude AGD adapter (using shared constants)
 function M.get_vertex_claude_agd_models_config()
   return {
-    h = { model = AI.models.claude.CLAUDE_3_7_SONNET, desc = "Claude 3.7 Sonnet" },
+    h = { model = AI.models.claude.CLAUDE_SONNET_5, desc = "Claude Sonnet 5" },
     H = { model = AI.models.claude.CLAUDE_OPUS_4_5, desc = "Claude Opus 4.5" },
   }
 end

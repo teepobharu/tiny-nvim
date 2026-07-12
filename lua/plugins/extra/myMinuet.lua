@@ -1,5 +1,5 @@
 -- AI completion fallback via minuet-ai.nvim (active only when Copilot is OFF)
--- AGD default: openai_compatible → gemini-3-flash-preview via AGD proxy
+-- AGD default: openai_compatible → shared Gemini medium tier via AGD proxy
 -- All provider slots loaded at startup; switch at runtime via:
 --   :Minuet change_provider openai_fim_compatible  (→ FIM / local)
 --   :MinuetFimSwitch ollama|llamacpp               (swap local backend)
@@ -70,6 +70,13 @@ local function rewrite_gpt5_max_tokens(t)
   return t
 end
 
+local function remap_openai_agd_model(model)
+  local agd_remap = (AI.provider_model_remap or {})[AI.providers.openai_agd.adapter_name] or {}
+  return agd_remap[model] or model
+end
+
+local minuet_agd_model = remap_openai_agd_model(AI.providers.openai_agd.top_choices.gemini.default.M)
+
 -- All provider slots populated at load so :Minuet change_provider works without restart.
 -- stream=true + request_timeout=3: timeout cancels mid-flight but keeps partial tokens.
 -- If AGD proxy doesn't forward SSE → completions empty → flip stream=false + timeout=10.
@@ -85,7 +92,7 @@ local setup_opts = {
     openai_compatible = {
       end_point = AI.endpoints.agoda.OPENAI_PROXY_CHAT,
       api_key = "GENAIAG",
-      model = AI.models.gemini.GEMINI_3_FLASH .. "-preview",
+      model = minuet_agd_model,
       name = "AGD",
       stream = true,
       optional = { max_tokens = 256, top_p = 0.9 },
@@ -127,7 +134,7 @@ setup_opts.duet = {
     openai_compatible = {
       end_point = AI.endpoints.agoda.OPENAI_PROXY_CHAT,
       api_key = "GENAIAG",
-      model = AI.models.gemini.GEMINI_3_FLASH .. "-preview",
+      model = minuet_agd_model,
       name = "AGD",
       optional = { max_tokens = 512, top_p = 0.9 },
       transform = { rewrite_gpt5_max_tokens },
@@ -144,7 +151,7 @@ setup_opts.presets = {
       openai_compatible = {
         end_point = AI.endpoints.agoda.OPENAI_PROXY_CHAT,
         api_key = "GENAIAG",
-        model = AI.models.gemini.GEMINI_3_FLASH .. "-preview",
+        model = minuet_agd_model,
         name = "AGD",
         stream = true,
         optional = { max_tokens = 256, top_p = 0.9 },
@@ -180,10 +187,9 @@ return {
       local modelcard = require "minuet.modelcard"
       modelcard.models.openai_compatible = modelcard.models.openai_compatible or {}
       local agd_models = AI.get_top_choice_models "openai_agd"
-      local agd_remap = (AI.provider_model_remap or {})[AI.providers.openai_agd.adapter_name] or {}
       local agd_models_remapped = {}
       for _, m in ipairs(agd_models) do
-        table.insert(agd_models_remapped, agd_remap[m] or m)
+        table.insert(agd_models_remapped, remap_openai_agd_model(m))
       end
       modelcard.models.openai_compatible.agd = agd_models_remapped
 

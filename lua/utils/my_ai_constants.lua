@@ -34,6 +34,7 @@ M.models = {
     GPT_5_4 = "gpt-5.4",
     GPT_5_1_CODEX_MAX = "gpt-5.1-codex-max",
     GPT_5_1_CODEX_MINI = "gpt-5.1-codex-mini",
+    GPT_5_3_CHAT_LATEST = "gpt-5.3-chat-latest",
     GPT_4O = "gpt-4o",
     GPT_4O_MINI = "gpt-4o-mini",
     GPT_3_5_TURBO = "gpt-3.5-turbo",
@@ -42,26 +43,29 @@ M.models = {
   -- Claude models
   claude = {
     CLAUDE_3_5_HAIKU = "claude-3-5-haiku",
-    CLAUDE_3_7_SONNET = "claude-3-7-sonnet",
     CLAUDE_SONNET_4 = "claude-sonnet-4",
     CLAUDE_HAIKU_4_5 = "claude-haiku-4-5",
+    CLAUDE_SONNET_5 = "claude-sonnet-5",
     CLAUDE_SONNET_4_5 = "claude-sonnet-4-5",
     CLAUDE_SONNET_4_6 = "claude-sonnet-4-6",
     CLAUDE_OPUS_4_5 = "claude-opus-4-5",
     CLAUDE_OPUS_4_6 = "claude-opus-4-6",
     CLAUDE_OPUS_4_7 = "claude-opus-4-7",
+    CLAUDE_OPUS_4_8 = "claude-opus-4-8",
   },
 
   gemini = {
     GEMINI_3_1_PRO = "gemini-3.1-pro",
     GEMINI_3_1_PRO_PREVIEW = "gemini-3.1-pro-preview",
     GEMINI_3_1_FLASH_LITE = "gemini-3.1-flash-lite",
+    GEMINI_3_5_FLASH = "gemini-3.5-flash",
     GEMINI_3_PRO = "gemini-3-pro",
     GEMINI_3_FLASH = "gemini-3-flash",
     GEMINI_2_5_PRO = "gemini-2.5-pro",
     GEMINI_2_5_FLASH = "gemini-2.5-flash",
     GEMINI_2_5_FLASH_LITE = "gemini-2.5-flash-lite",
     GEMMA_4 = "gemma4",
+    GEMMA_4_26B_A4B_IT_MAAS = "gemma-4-26b-a4b-it-maas",
   },
 
   -- O-series reasoning models
@@ -87,6 +91,7 @@ M.models = {
   -- Kimi (Moonshot) models
   kimi = {
     KIMI_K2_6 = "kimi-k2.6",
+    KIMI_K2_7_CODE = "kimi-k2.7-code",
   },
 
   others = {
@@ -145,12 +150,27 @@ M.models_sizing = {
 -- Agoda Endpoints
 -- ============================================================================
 
+-- AG_OPENAIPROXY is the local canonical variable. OPENAI_BASE_URL remains a
+-- compatible fallback for shells/tools that only expose the OpenAI convention.
+-- Normalize both forms so consumers can safely append either /v1/* or /*.
+local function normalize_openai_proxy_base(url)
+  url = (url or "http://openai-proxy.agoda.is"):gsub("/+$", "")
+  return (url:gsub("/v1$", ""))
+end
+
+local BASE_OPENAPI_URL = normalize_openai_proxy_base(vim.env.AG_OPENAIPROXY or vim.env.OPENAI_BASE_URL)
+local OPENAI_PROXY_V1 = BASE_OPENAPI_URL .. "/v1"
+
+local GEN_AI_GATEWAY_BASE = vim.env.AG_GENAIGW or "https://genai-gateway.agoda.is"
+local CLAUDE_AGD = GEN_AI_GATEWAY_BASE:gsub("/?$", "") .. "/claude"
+
 M.endpoints = {
   agoda = {
-    GENAI_GATEWAY_CLAUDE = "https://genai-gateway.agoda.is/claude",
-    OPENAI_PROXY = "http://openai-proxy.agoda.is/v1",
-    OPENAI_PROXY_MODELS = "http://openai-proxy.agoda.is/v1/models",
-    OPENAI_PROXY_CHAT = "http://openai-proxy.agoda.is/v1/chat/completions",
+    GENAI_GATEWAY_CLAUDE = CLAUDE_AGD,
+    OPENAI_PROXY_BASE = BASE_OPENAPI_URL,
+    OPENAI_PROXY = OPENAI_PROXY_V1,
+    OPENAI_PROXY_MODELS = OPENAI_PROXY_V1 .. "/models",
+    OPENAI_PROXY_CHAT = OPENAI_PROXY_V1 .. "/chat/completions",
   },
 }
 
@@ -183,27 +203,27 @@ M.providers = {
         -- default=current tier, alt=previous tier; env overrides from ~/dotfiles/.bash_exports
         default = {
           S = env_or("AGD_CLAUDE_S", M.models.claude.CLAUDE_HAIKU_4_5),
-          M = env_or("AGD_CLAUDE_SONNET", M.models.claude.CLAUDE_SONNET_4_6),
-          L = env_or("AGD_CLAUDE_L", M.models.claude.CLAUDE_OPUS_4_7),
+          M = env_or("AGD_CLAUDE_SONNET", M.models.claude.CLAUDE_SONNET_5),
+          L = env_or("AGD_CLAUDE_L", M.models.claude.CLAUDE_OPUS_4_8),
         },
         alt = {
-          M = env_or("AGD_CLAUDE_M_PREV", M.models.claude.CLAUDE_SONNET_4_5),
-          L = env_or("AGD_CLAUDE_L_PREV", M.models.claude.CLAUDE_OPUS_4_6),
+          M = env_or("AGD_CLAUDE_M_PREV", M.models.claude.CLAUDE_SONNET_4_6),
+          L = env_or("AGD_CLAUDE_L_PREV", M.models.claude.CLAUDE_OPUS_4_7),
         },
       },
       gemini = {
         -- default=current tier, alt=previous tier; env overrides from ~/dotfiles/.bash_exports
         default = {
           S = env_or("AGD_GEMINI_FLASH_LITE", M.models.gemini.GEMINI_3_1_FLASH_LITE),
-          M = env_or("AGD_GEMINI_PRO", M.models.gemini.GEMINI_3_1_PRO_PREVIEW),
-          L = M.models.gemini.GEMINI_3_FLASH,
+          M = env_or("AGD_GEMINI_FLASH_BALANCED", M.models.gemini.GEMINI_3_5_FLASH),
+          L = env_or("AGD_GEMINI_PRO", M.models.gemini.GEMINI_3_1_PRO_PREVIEW),
         },
         alt = {
           S = env_or("AGD_GEMINI_FLASH_LITE_PREV", M.models.gemini.GEMINI_2_5_FLASH_LITE),
           M = env_or("AGD_GEMINI_PRO_PREV", M.models.gemini.GEMINI_2_5_FLASH),
         },
       },
-      inhouse = { -- cost 0 / free; env overrides from ~/dotfiles/.bash_exports
+      inhouse = { -- in-house / MaaS; env overrides from ~/dotfiles/.bash_exports
         default = {
           S = env_or("AGD_INHOUSE_QWEN", M.models.qwen.QWEN_3_6_27B),
           M = env_or("AGD_INHOUSE_DEEPSEEK", M.models.deepseek.DEEPSEEK_R1),
@@ -211,6 +231,7 @@ M.providers = {
         },
         alt = {
           M = env_or("AGD_INHOUSE_KIMI", M.models.kimi.KIMI_K2_6),
+          L = env_or("AGD_INHOUSE_GEMMA_MAAS", M.models.gemini.GEMMA_4_26B_A4B_IT_MAAS),
         },
       },
       -- not exists
@@ -384,6 +405,8 @@ M.static_models = { -- Fast models (for quick operations)
   -- Heavy models (for complex operations)
   heavy = {
     env_or("AGD_CODE_LARGE", M.models.gpt.GPT_5_5),
+    env_or("AGD_CLAUDE_L", M.models.claude.CLAUDE_OPUS_4_8),
+    env_or("AGD_CLAUDE_SONNET", M.models.claude.CLAUDE_SONNET_5),
     M.models.claude.CLAUDE_OPUS_4_7,
     M.models.claude.CLAUDE_SONNET_4_6,
     M.models.claude.CLAUDE_SONNET_4_5,
@@ -407,6 +430,10 @@ M.static_models = { -- Fast models (for quick operations)
     M.models.gpt.GPT_5_2,
     M.models.gpt.GPT_5_1,
     M.models.gpt.GPT_5_MINI,
+    env_or("AGD_GEMINI_FLASH_BALANCED", M.models.gemini.GEMINI_3_5_FLASH),
+    env_or("AGD_GEMINI_FLASH_LITE", M.models.gemini.GEMINI_3_1_FLASH_LITE),
+    env_or("AGD_INHOUSE_QWEN", M.models.qwen.QWEN_3_6_27B),
+    env_or("AGD_INHOUSE_GEMMA_MAAS", M.models.gemini.GEMMA_4_26B_A4B_IT_MAAS),
     M.models.gpt.GPT_4O,
     M.models.gpt.GPT_4O_MINI,
     M.models.gpt.GPT_3_5_TURBO,
@@ -422,7 +449,7 @@ M.static_models = { -- Fast models (for quick operations)
 
 M.defaults = {
   adapter = M.providers.openai_agd.adapter_name,
-  model = M.models.gpt.GPT_5_MINI,
+  model = M.models.qwen.QWEN_3_6_27B,
   -- Default parameters
   temperature = 0.75,
   max_tokens = 20480,
@@ -521,7 +548,7 @@ end
 
 -- M.DEFAULT_COPILOT_MODEL = M.models.others.GROK_FAST_1 -- x0.33
 M.DEFAULT_COPILOT_MODEL = env_or("AGD_LATEST", M.models.gpt.GPT_5_MINI)
-M.DEFAULT_AGD_MODEL = env_or("AGD_LATEST", M.models.gpt.GPT_5_2)
+M.DEFAULT_AGD_MODEL = env_or("AGD_INHOUSE_QWEN", M.models.qwen.QWEN_3_6_27B)
 
 -- ============================================================================
 -- Provider Keymap Slot Pattern

@@ -21,9 +21,9 @@ M.DEFAULT_ADAPTER = (AI.providers[M.DEFAULT_PROVIDER] and AI.providers[M.DEFAULT
 --- Preferred tier choice for defaults.
 --- Override via `vim.g.ai_default_family`, `vim.g.ai_default_tier`, `vim.g.ai_model_size_preference`.
 M.PREFERRED = {
-  family = vim.g.ai_default_family or "gpt",
+  family = vim.g.ai_default_family or "inhouse",
   tier = vim.g.ai_default_tier or "default",
-  size = vim.g.ai_model_size_preference or "M", -- "S"|"M"|"L"
+  size = vim.g.ai_model_size_preference or "S", -- "S"|"M"|"L"
 }
 
 --- Pick a model from provider top_choices using family/tier/size preferences.

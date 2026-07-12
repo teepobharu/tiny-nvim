@@ -181,7 +181,7 @@ return {
             env = vim.tbl_extend("force", common_agent_env, { CLAUDE_CODE_NO_FLICKER = "0" }),
           },
           claude_Agd = {
-            cmd = { vim.env.DOTFILES_DIR .. "/ai/claude/cc-agd/cag.sh" },
+            cmd = { vim.env.DOTFILES_DIR .. "/ai/claude/cc-agd/cag.sh", "--m", "q" },
             env = common_agent_env,
           },
           claude_AgdQFree = {
@@ -698,7 +698,7 @@ return {
     "coder/claudecode.nvim",
     opts = {
       -- terminal_cmd = "claude --allow-dangerously-skip-permissions",
-      terminal_cmd = vim.env.HOME .. "/dotfiles/ai/claude/cc-agd/cag.sh --allow-dangerously-skip-permissions",
+      terminal_cmd = vim.env.HOME .. "/dotfiles/ai/claude/cc-agd/cag.sh --m q --allow-dangerously-skip-permissions",
       -- terminal_cmd = "claude",
     },
     -- lua/plugins/extra/claude-code.lua:194

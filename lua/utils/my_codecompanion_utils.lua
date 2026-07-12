@@ -63,7 +63,7 @@ function M.get_agoda_adapters(use_dynamic_fetch)
     -- end,
 
     -- OpenAI/GPT via Agoda OpenAI Proxy
-    -- Uses env-based URL templating: AG_OPENAIPROXY provides base URL (e.g. http://openai-proxy.agoda.is)
+    -- Uses the normalized AGD proxy base from my_ai_constants.
     -- Uses dynamic model fetching via fetch_model_helper from my_codecompanion_actions
     [myAiC.providers.openai_agd.adapter_name] = function()
       return require("codecompanion.adapters").extend("openai", {
@@ -72,7 +72,7 @@ function M.get_agoda_adapters(use_dynamic_fetch)
         formatted_name = "OpenAI AGD",
         env = {
           api_key = "OPENAI_API_KEY",
-          url = "AG_OPENAIPROXY", -- Base URL from env var
+          url = myAiC.endpoints.agoda.OPENAI_PROXY_BASE,
           chat_url = "/v1/chat/completions", -- Chat endpoint path
           models_endpoint = "/v1/models", -- Models listing endpoint
         },
@@ -237,7 +237,7 @@ function M.get_agoda_responses_adapters()
         formatted_name = "OpenAI Responses AGD",
         env = {
           api_key = "OPENAI_API_KEY",
-          url = "AG_OPENAIPROXY",
+          url = myAiC.endpoints.agoda.OPENAI_PROXY_BASE,
         },
         -- Override the hardcoded upstream URL with the AGD proxy responses endpoint.
         -- model.choices is inherited from upstream (openai_responses.lua:586-661) which
