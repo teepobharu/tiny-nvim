@@ -1,8 +1,31 @@
+---
+title: "Create Dotfiles Config Picker"
+status: open
+priority: medium
+created: 2026-07-02
+updated: 2026-07-02
+related:
+  - [snacks_pickers.lua](lua/utils/snacks_pickers.lua)
+  - [Snacks config](lua/plugins/extra/snacks.lua)
+---
+
 **Create Dotfiles Config Picker**
 
 - What: Create a custom Snacks picker in `lua/utils/snacks_pickers.lua` to quickly access dotfiles configuration files with configurable include/exclude patterns
 - Why: Quick access to frequently edited config files across `~/dotfiles/` directory with easy-to-maintain filtering rules
 - Acceptance: Picker opens with `<leader>fD`, shows bash config files, includes `~/.bash.local`, excludes `fork` and `nvim*` directories, config table is easily editable for adding new patterns
+
+## Action Items
+
+- [ ] Run the manual testing checklist in the daily-driver profile.
+- [ ] Confirm whether the picker should include only shell config files or also Lua/Vim/JSON config files.
+- [ ] If verified, fill a proper `## Verification` section and move to `tasks/review/`.
+
+## Points to Confirm
+
+- [ ] Confirm `<leader>fD` is the final keymap and does not collide with another preferred dotfiles picker.
+- [ ] Confirm whether excluding `nvim*` should exclude this Neovim config repo too.
+- [ ] Confirm whether `~/.bash.local` should appear even when outside the `~/dotfiles/` base directory.
 
 ## Implementation Tasks
 
@@ -31,7 +54,7 @@
 - [x] Test with symbolic links if present
 
 ### 5. Register Keybinding ✅
-- [x] Add keybinding in `lua/plugins/snacks.lua` under the `keys` section
+- [x] Add keybinding in `lua/plugins/extra/snacks.lua` under the `keys` section
 - [x] Use `<leader>fD` mapping
 - [x] Add description: "Dotfiles Config"
 - [x] Place near other file-related keybindings (after `<leader>fc`)
@@ -71,5 +94,5 @@ end
 
 ## References
 - Existing pickers: `M.session_picker()`, `M.pick_tmux_window()`
-- Snacks plugin config: `lua/plugins/snacks.lua`
+- Snacks plugin config: `lua/plugins/extra/snacks.lua`
 - Similar pattern-based filtering in: `M.custom_git_pickers`

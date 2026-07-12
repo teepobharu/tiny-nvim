@@ -3,7 +3,7 @@ title: "Upgrade blink.cmp to v2"
 status: open
 priority: medium
 created: 2026-05-07
-updated: 2026-05-07
+updated: 2026-07-02
 related:
   - [lua/plugins/extra/myCoding.lua](lua/plugins/extra/myCoding.lua)
   - [lua/plugins/coding.lua](lua/plugins/coding.lua)
@@ -69,6 +69,19 @@ All edits go in `myCoding.lua` (project convention — no upstream edits):
 ### Lock file
 
 After upgrade, `lazy-lock.json` entry for `blink.cmp` should track v2 SHA (no `branch` field needed once commit pin removed and version properly set upstream).
+
+## Action Items
+
+- [ ] Re-check current Neovim version before starting; v2 is blocked unless it is 0.12+.
+- [ ] Re-read current blink.cmp v2 upgrade notes before editing because the plugin API may have changed.
+- [ ] Keep all blink/LuaSnip overrides in [myCoding.lua](lua/plugins/extra/myCoding.lua).
+- [ ] Run the full completion smoke test across Lua, Markdown, and snippet expansion after `:Lazy sync`.
+
+## Points to Confirm
+
+- [ ] Confirm it is acceptable to upgrade Homebrew Neovim for the daily-driver profile before changing the config.
+- [ ] Confirm whether to test first in `NVIM_APPNAME=nvimwt3a` only, then apply to `nvim3_jelly_tinynvim`.
+- [ ] Confirm whether Copilot and Minuet both need to be verified in the same session.
 
 ## Implementation Plan
 

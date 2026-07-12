@@ -3,14 +3,14 @@ title: "CodeCompanion markdown prompts with skills_loader from extra dirs"
 status: open
 priority: medium
 created: 2026-05-17
-updated: 2026-05-17
+updated: 2026-07-02
 related:
   - [CC config (worktree)](lua/plugins/extra/codecompanion.lua)
   - [CC config (main)](lua/plugins/extra/codecompanion.lua)
-  - [Prompts dir](~/Personal/mynotes/Extras/Template/copilot-custom-prompts/codecompanion/)
-  - [CC actions dispatch](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/actions/init.lua)
-  - [CC markdown parser](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/actions/markdown.lua)
-  - [Memory doc](docs/memory/codecompanion-markdown-prompts.md)
+  - "Prompts dir: ~/Personal/mynotes/Extras/Template/copilot-custom-prompts/codecompanion/"
+  - "CC actions dispatch: ~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/actions/init.lua"
+  - "CC markdown parser: ~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/actions/markdown.lua"
+  - [CodeCompanion memory](docs/memory/codecompanion.md)
 ---
 
 ## Objective
@@ -55,6 +55,20 @@ Placeholders use the syntax `${<luafile>.<key>}` and are resolved at **chat-star
 | **Frontmatter is NOT included in chat content** | `parse_prompt` passes full file to treesitter, but `chat.scm` query only captures children of `## heading` (`atx_h2_marker`) sections — everything before the first `##` is ignored | No action needed — by design. Body content before any `##` is also silently dropped. |
 | **Body content must be under `## system` or `## user` headings** | Text outside these sections (e.g. under `# h1` headings or bare paragraphs) is captured by the `content` query but assigned to whichever `current_role` was last set — or dropped if no role was set yet | Wrap all content under `## user` or `## system` sections |
 
+## Action Items
+
+- [ ] Add `prompt_library.markdown.dirs` in [codecompanion.lua](lua/plugins/extra/codecompanion.lua) using the external prompt directory.
+- [ ] Create or update `skills_loader.lua` beside the external markdown prompts with trimmed skill text.
+- [ ] Rewrite `Review_verify_research.prompt.md` to use CodeCompanion frontmatter, `## system`, and `## user` sections.
+- [ ] Run the cache-refresh command after prompt edits and smoke test via `:CodeCompanionActions`.
+- [ ] Update [CodeCompanion memory](docs/memory/codecompanion.md) with the final loader pattern.
+
+## Points to Confirm
+
+- [ ] Confirm the external prompt directory path is still `~/Personal/mynotes/Extras/Template/copilot-custom-prompts/codecompanion/`.
+- [ ] Confirm which skills should be injected in the first prompt and which should stay as manual references.
+- [ ] Confirm the target prompt name shown in the palette, especially whether `Review & Verify Research` is final.
+
 ## Implementation Plan
 
 - [ ] **Step 1**: Add `markdown.dirs` to `lua/plugins/extra/codecompanion.lua` opts
@@ -89,7 +103,7 @@ Placeholders use the syntax `${<luafile>.<key>}` and are resolved at **chat-star
   - Tools listed in frontmatter are available
   - Cache refresh works after edits
 
-- [ ] **Step 5**: Write memory doc `docs/memory/codecompanion-markdown-prompts.md`
+- [ ] **Step 5**: Update `docs/memory/codecompanion.md` with the durable loader pattern.
   - Placeholder mechanism (dot-notation requirement)
   - Cache behavior and refresh command
   - Difference between `${...}` placeholders and CC tools
@@ -138,6 +152,6 @@ NVIM_APPNAME=nvimwt3a nvim
 ## References
 
 - [CC markdown prompt feature PR](https://github.com/olimorris/codecompanion.nvim/issues/2471)
-- [CC actions dispatch](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/actions/init.lua)
-- [CC markdown parser + placeholder resolver](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/actions/markdown.lua)
-- [Existing with-opts.md example](~/Personal/mynotes/Extras/Template/copilot-custom-prompts/codecompanion/with-opts.md)
+- CC actions dispatch: `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/actions/init.lua`
+- CC markdown parser + placeholder resolver: `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/actions/markdown.lua`
+- Existing `with-opts.md` example: `~/Personal/mynotes/Extras/Template/copilot-custom-prompts/codecompanion/with-opts.md`

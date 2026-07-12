@@ -1,3 +1,15 @@
+---
+title: "Fix git_last_commit_show picker C-s key and title format"
+status: wip
+priority: high
+created: 2026-02-09
+updated: 2026-07-02
+related:
+  - [snacks_pickers.lua](lua/utils/snacks_pickers.lua)
+  - [editor_keymaps.lua](lua/utils/editor_keymaps.lua)
+  - [git.lua](lua/utils/git.lua)
+---
+
 # Task: Fix git_last_commit_show() picker - C-s key and title format
 
 ## Status: IN PROGRESS
@@ -34,6 +46,20 @@
 1. Confirm `open_file_diff` action is being called
 2. Check if `git_util.open_file_with_gitsigns_diff()` is working with the base ref
 3. Verify action registration in snacks picker
+
+## Action Items
+
+- [ ] Add a temporary notification/log around `custom_actions.open_file_diff` to confirm whether `<C-s>` reaches the expected action.
+- [ ] Compare the resolved action path for `<C-s>` and `<C-g>` in the active picker key table.
+- [ ] Verify `git_util.open_file_with_gitsigns_diff(item.file, get_base_ref())` works when called manually.
+- [ ] Remove debug logging once the key resolution issue is fixed.
+- [ ] Fill a template-style `## Verification` section before moving this task to review.
+
+## Points to Confirm
+
+- [ ] Confirm whether this task supersedes [snacks_git_keymap_diff.md](tasks/open/snacks_git_keymap_diff.md) or should be merged into it.
+- [ ] Confirm whether `<C-s>` should exactly mirror `<C-g>` or use separate split/tab semantics.
+- [ ] Confirm the final title format should stay `<branch:shorthash>..<HEAD:shorthash> (N commits)`.
 
 ## Code Locations
 

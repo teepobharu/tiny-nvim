@@ -3,12 +3,12 @@ title: "MCPHub multi-profile port conflict causes SIGTERM and bulk disconnects"
 status: open
 priority: high
 created: 2026-03-25
-updated: 2026-05-21
+updated: 2026-07-02
 related:
   - [MCPHub config](lua/plugins/extra/myAi.lua)
   - [MCPHub memory doc](docs/memory/mcphub.md)
-  - [MCPHub integration task](tasks/open/mcphub_integration.md)
-  - [Shared server config](~/dotfiles/ai/mcp/mcphub.json)
+  - [MCPHub integration task](tasks/review/mcphub_integration.md)
+  - "Shared server config: ~/dotfiles/ai/mcp/mcphub.json"
 ---
 
 ## Objective
@@ -40,13 +40,13 @@ burst is now confirmed as an additional `mcp-hub` endpoint cleanup issue:
 `src/mcp/server.js` attaches the same cleanup function to both `res.close` and
 `transport.onclose`; cleanup calls `server.close()`, so mass disconnects can
 re-enter cleanup. See [MCPHub memory](docs/memory/mcphub.md).
-Added [mcp-hub patch 01](patches/mcp-hub/01-idempotent-endpoint-cleanup.patch)
+Added [mcp-hub patch 01](external-patches/mcp-hub/01-idempotent-endpoint-cleanup.patch)
 to make endpoint cleanup idempotent for both `/mcp` and `/mcp-lean`.
 
 Also confirmed: `mcphub.nvim` v6.2.0 accepted local `mcp-hub` `4.2.1` during
 setup, then treated the same running hub as a mismatch during `check_server()`
 because the health check used exact equality against required string `4.2.0`.
-Added [patch 06](patches/mcphub.nvim/06-compatible-health-version-check.patch)
+The compatible health-version check now lives in [grouped hub stability patch 02](patches/mcphub.nvim/02-hub-stability_v1.patch).
 to reuse the existing semver-compatible validator.
 
 ### Historical Config (`myAi.lua:256-274`, identical in both profiles)
@@ -166,6 +166,19 @@ Servers still using `USE_PIPELINE`/`USE_GITLAB_WIKI`/`USE_MILESTONE` alongside `
 - [ ] `gitlab_upload`: Same pattern (disabled server, low priority)
 - [ ] `gitlab_localupload`: Same pattern (disabled server, low priority)
 
+## Action Items
+
+- [ ] Confirm the current profile/port behavior against `nvim3_jelly_tinynvim` and `nvimwt3a`.
+- [ ] Remove remaining legacy GitLab flags from `~/dotfiles/ai/mcp/mcphub.json` if they still exist.
+- [ ] Decide whether main workspace mode should keep fixed port `47474` or use per-profile workspace ports.
+- [ ] Update [mcphub memory](docs/memory/mcphub.md) after the final port strategy is verified.
+
+## Points to Confirm
+
+- [ ] Confirm whether multiple main-profile Neovim instances with different CWDs must be supported.
+- [ ] Confirm which ports should be reserved for CLI agents: `37373/37374`, `47474/47475`, or another pair.
+- [ ] Confirm whether workspace mode is still required for the daily-driver profile.
+
 ## Success Criteria
 
 - Two Neovim profiles can open `:MCPHub` simultaneously without killing each other
@@ -208,6 +221,6 @@ curl http://localhost:47475/health
 
 ## References
 
-- [MCPHub plugin source](~/.local/share/nvim3_jelly_tinynvim/lazy/mcphub.nvim/)
+- MCPHub plugin source: `~/.local/share/nvim3_jelly_tinynvim/lazy/mcphub.nvim/`
 - [MCPHub docs](https://ravitemer.github.io/mcphub.nvim/)
 - [Worktree testing guide](docs/memory/nvim-worktree-testing.md)

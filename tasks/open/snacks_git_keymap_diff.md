@@ -3,6 +3,7 @@ title: "snacks: improve git keymaps C-s and C-g to diff selected files"
 status: "open"
 assignee: "ai"
 created: 2026-02-09
+updated: 2026-07-02
 priority: "high"
 ---
 
@@ -22,11 +23,26 @@ Acceptance criteria
 - Diff shown corresponds to the picker's current context ref (base/ref shown in picker header).
 - Provide small unit/manual test steps in the task so reviewer can validate.
 
-Implementation notes
+## Action Items
+
+- [ ] Inspect current picker action registration for `C-s` and `C-g` in [snacks_pickers.lua](lua/utils/snacks_pickers.lua) and [editor_keymaps.lua](lua/utils/editor_keymaps.lua).
+- [ ] Reuse the existing file-open/diff helper if it already handles buffer reuse and tab creation.
+- [ ] Add a debug notification temporarily only if `C-s` still resolves to the wrong action.
+- [ ] Remove any temporary debug output before moving the task to review.
+- [ ] Fill a template-style `## Verification` section after implementation.
+
+## Points to Confirm
+
+- [ ] Confirm whether multi-selected files should open one tab per file or reuse the current tab workflow.
+- [ ] Confirm whether `C-s` and `C-g` should remain aliases or keep distinct split/tab behavior.
+- [ ] Confirm whether the diff base should always be the picker header ref or support an override.
+
+## Implementation Notes
+
 - Files to inspect/modify:
   - `lua/utils/snacks_actions.lua`
   - `lua/utils/snacks_pickers.lua`
-  - `lua/plugins/snacks.lua` (if keymaps are defined there)
+  - `lua/plugins/extra/snacks.lua` (if keymaps are defined there)
 - Use Neovim API to check open buffers (`vim.fn.bufloaded` / `vim.fn.buflisted`) and to open file in new tab (`vim.cmd('tabnew ' .. filepath)` or `vim.api.nvim_command`).
 - After opening/ensuring buffer, run gitsigns action programmatically: `require('gitsigns').diffthis(ref)` or `vim.cmd('Gitsigns diffthis ' .. ref)` depending on gitsigns API availability.
 - Ensure actions run per-file sequentially and do not close the picker until actions complete.

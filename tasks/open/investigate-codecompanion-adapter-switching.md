@@ -1,3 +1,16 @@
+---
+title: "Investigate CodeCompanion adapter/model switch parameter errors"
+status: open
+priority: high
+created: 2026-01-29
+updated: 2026-07-02
+related:
+  - [my_codecompanion_utils.lua](lua/utils/my_codecompanion_utils.lua)
+  - [my_codecompanion_actions.lua](lua/utils/my_codecompanion_actions.lua)
+  - [my_ai_constants.lua](lua/utils/my_ai_constants.lua)
+  - [CodeCompanion memory](docs/memory/codecompanion.md)
+---
+
 Title: Investigate adapter/model switch mid-chat causing unsupported-parameter errors
 
 Short description
@@ -20,6 +33,20 @@ Why this matters
 Goals
 
 - Reproduce reliably, find the code path that performs adapter/model switching, add parameter-capability checks, add tests and improved logging, and provide a safe fallback strategy.
+
+## Action Items
+
+- [ ] Reproduce the unsupported `temperature` failure in `NVIM_APPNAME=nvimwt3a` with a captured request body.
+- [ ] Trace the active model location during runtime switching; do not rely only on `self.schema.model.default`.
+- [ ] Decide whether sanitization belongs in adapter setup, request serialization, or the local model-selection action.
+- [ ] Add a minimal model capability map only after confirming the active-model lookup path.
+- [ ] Document the final CodeCompanion adapter-switching caveat in [CodeCompanion memory](docs/memory/codecompanion.md).
+
+## Points to Confirm
+
+- [ ] Confirm the exact failing model pair, for example `gpt-4o` -> `gpt-5-mini` or the reverse.
+- [ ] Confirm whether the fix should cover Copilot only or all Agoda/OpenAI-compatible adapters.
+- [ ] Confirm whether unsupported optional parameters should be silently dropped or surfaced in a user notification.
 
 Notes (initial research, 2026-01-29)
 

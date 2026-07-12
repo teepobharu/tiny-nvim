@@ -3,13 +3,13 @@ title: "Fix tmux AI env propagation for fzf Ctrl-V Neovim"
 status: open
 priority: medium
 created: 2026-06-08
-updated: 2026-06-08
+updated: 2026-07-02
 related:
-  - [.tmux.conf](.tmux.conf)
-  - [sidekick config](.config/nvim3_jelly_tinynvim/lua/plugins/extra/myAi.lua)
-  - [CodeCompanion AGD adapters](.config/nvim3_jelly_tinynvim/lua/utils/my_codecompanion_utils.lua)
-  - [Claude AGD wrapper](ai/claude/cc-agd/cag.sh)
-  - [Codex AGD wrapper](ai/codex/codex-agd.sh)
+  - "tmux config: ~/dotfiles/.tmux.conf"
+  - [Sidekick config](lua/plugins/extra/myAi.lua)
+  - [CodeCompanion AGD adapters](lua/utils/my_codecompanion_utils.lua)
+  - "Claude AGD wrapper: ~/dotfiles/ai/claude/cc-agd/cag.sh"
+  - "Codex AGD wrapper: ~/dotfiles/ai/codex/codex-agd.sh"
 ---
 
 ## Objective
@@ -81,6 +81,19 @@ Relevant paths:
   - previous command: `EVERYTHING_FZF_TMUX_TARGET_PANE=#{pane_id} bash "#{@dotfiles_dir}/scripts/everything.fzf/fzfinit.sh"`
   - that path is a non-login bash launched from tmux server env, so it can miss `GENAIAG`, `OPENAI_API_KEY`, and `AG_OPENAIPROXY`.
   - changed the menu to call `scripts/tmux/tmux-fzfinit-popup.sh`, which sources `.bash_exports` and `~/.bash.local`, applies AGD env defaults, then launches `fzfinit.sh`.
+
+## Action Items
+
+- [ ] Re-run the tmux environment commands in a fresh tmux server and a reused tmux server.
+- [ ] Test the actual `M-t` -> `f` -> fzf Ctrl-V path, not only direct shell `fzfs`.
+- [ ] Add Neovim-side env fallbacks only if tmux and popup wrapper propagation still miss required values.
+- [ ] If `cag.sh` still lacks env backfill, mirror the `load_agoda_env` behavior from `~/dotfiles/ai/codex/codex-agd.sh`.
+
+## Points to Confirm
+
+- [ ] Confirm whether tmux popup workflows are required to work without restarting the tmux server.
+- [ ] Confirm whether AGD defaults such as `http://openai-proxy.agoda.is` are acceptable as fallback literals in Neovim config.
+- [ ] Confirm which token env vars should be considered canonical: `GENAIAG`, `OPENAI_API_KEY`, or both.
 
 ## Success Criteria
 

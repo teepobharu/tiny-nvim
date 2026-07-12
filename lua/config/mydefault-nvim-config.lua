@@ -52,6 +52,7 @@ vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
     "myAi",
     "myLazyPatcher",
     "myMdPreview",
+    "myTmuxNavigator", -- herdr+tmux aware C-h/j/k/l, overrides plugins/tmux-navigator.lua
     -- Disable mechanism (must be LAST)
     "disablePlugins",
   }

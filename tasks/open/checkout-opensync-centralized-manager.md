@@ -3,6 +3,7 @@ title: "Checkout centralized manager for CLI agents (opensync)"
 status: "open"
 assignee: "ai"
 created: 2026-02-10
+updated: 2026-07-02
 priority: "high"
 ---
 
@@ -18,7 +19,8 @@ Acceptance criteria
 - A one-page mapping is produced showing where our agents would attach (endpoints, protocols, auth).
 - A recommended integration approach with estimated effort (low/medium/high) and any blocking issues.
 
-Suggested steps
+## Action Items
+
 1. Clone the repository and list supported runtimes and dependencies.
    - `git clone https://github.com/waynesutton/opensync.git`
 2. Follow the project's README to build/run the manager and run any included examples or tests.
@@ -26,6 +28,12 @@ Suggested steps
 4. Compare with MCPHub's features (porting, workspace mode, fixed port requirement) and identify mismatches.
 5. Draft an integration plan with 3 options: (1) adapter layer, (2) lightweight fork, (3) replace MCPHub — include pros/cons and estimate.
 6. Add follow-up tasks (implementation, docs, CI) based on the chosen option.
+
+## Points to Confirm
+
+- [ ] Confirm whether this evaluation still matters after the current MCPHub setup and sidekick workflows.
+- [ ] Confirm where the local `opensync` clone and notes should live if the investigation proceeds.
+- [ ] Confirm the preferred success artifact: short markdown mapping only, or runnable proof-of-concept config too.
 
 References
 - https://github.com/waynesutton/opensync

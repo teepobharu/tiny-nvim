@@ -1,3 +1,15 @@
+---
+title: "Code ref helper polish"
+status: wip
+priority: medium
+created: 2026-02-12
+updated: 2026-07-02
+related:
+  - [code_ref.lua](lua/utils/code_ref.lua)
+  - [snacks_pickers.lua](lua/utils/snacks_pickers.lua)
+  - [mykeymaps.lua](lua/config/mykeymaps.lua)
+---
+
 # Pending Task: Code ref helper polish
 
 ## Status Summary
@@ -5,6 +17,21 @@
 - **Completed:** 10/11
 - **In Progress:** 0/11
 - **Pending:** 1/11
+
+## Action Items
+
+- [ ] Resolve the user review items at the top of the task, especially copy behavior in picker and range parsing.
+- [ ] Add Relative CWD and subproject-relative variants if they are still missing from the picker.
+- [ ] Add which-key grouping for the `<localleader>cr` prefix.
+- [ ] Decide what to do with the legacy `refAbs` LuaSnip helper.
+- [ ] Move durable usage notes to `docs/memory/` before moving this task to review.
+
+## Points to Confirm
+
+- [ ] Confirm whether the `#` hash format should support single-mode char toggling or intentionally stay line-oriented.
+- [ ] Confirm expected behavior for range identification when a visual selection is backward, blockwise, or stale.
+- [ ] Confirm the exact labels for Git-relative, CWD-relative, subproject-relative, and absolute picker variants.
+- [ ] Confirm whether `refAbs` is still used anywhere before removing or deprecating it.
 
 ## User Review Checkboxes ✨
 

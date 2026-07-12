@@ -1,7 +1,7 @@
 ---
 title: CodeCompanion Dynamic Model Toggle & Inline Adapter Support
 created: 2026-01-25
-updated: 2026-02-09
+updated: 2026-07-02
 status: wip
 priority: medium
 tags: [codecompanion, feature, model-selection, inline-chat]
@@ -20,6 +20,19 @@ Enhance CodeCompanion integration with three key features:
 1. **Toggle inline with adapter** - Enable inline edits with adapter selection
 2. **Toggle chat with model select** - Quick chat toggle with model picker
 3. **Dynamic model list for openai_agd** - Fetch models from API instead of hardcoded choices
+
+## Action Items
+
+- [ ] Decide whether this task is still active or should be split into review items because phases 0-2 are already checked off.
+- [ ] Finish the remaining model-specific parameter rules for Claude and other provider families.
+- [ ] If upstream contribution is still desired, isolate the inline `model=` parser work into a separate task or PR note.
+- [ ] Complete the testing checklist for static and dynamic picker paths.
+
+## Points to Confirm
+
+- [ ] Confirm whether dynamic AGD model fetching should remain behind explicit dynamic keymaps or become the default.
+- [ ] Confirm which model-specific parameters should be applied automatically per provider.
+- [ ] Confirm whether the upstream CodeCompanion inline parser PR is still worth pursuing after local wrappers landed.
 
 ## Problem Statement
 

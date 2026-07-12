@@ -3,7 +3,7 @@ title: "CC: model+effort presets (gpt-5.5-high, gpt-5.3-codex-medium, etc.)"
 status: open
 priority: low
 created: 2026-06-01
-updated: 2026-06-01
+updated: 2026-07-02
 related:
   - [my_codecompanion_utils.lua](lua/utils/my_codecompanion_utils.lua)
   - [my_ai_constants.lua](lua/utils/my_ai_constants.lua)
@@ -61,6 +61,19 @@ Update `my_ai_constants.lua:289-298` so `provider_model_remap` can return `{ mod
 
 **Recommendation:** Option A is closer to how CodeCompanion's `opts` mechanism already works. Option B is simpler to understand but requires more plumbing.
 
+## Action Items
+
+- [ ] Decide on Option A (`handlers.setup` override) or Option B (`provider_model_remap` structured return).
+- [ ] Define the first preset set in [my_ai_constants.lua](lua/utils/my_ai_constants.lua).
+- [ ] Implement the chosen remap/setup path in [my_codecompanion_utils.lua](lua/utils/my_codecompanion_utils.lua).
+- [ ] Verify the outgoing request payload uses the base model name plus `reasoning_effort`.
+
+## Points to Confirm
+
+- [ ] Confirm the exact model IDs are available in the Agoda proxy before adding presets.
+- [ ] Confirm display-name style: `gpt-5.5 [high]`, `gpt-5.5-high`, or grouped picker labels.
+- [ ] Confirm YAML header `reasoning_effort` should override picker presets when both are present.
+
 ## Implementation Plan
 
 - [ ] Decide between Option A and Option B
@@ -105,6 +118,6 @@ grep -i "reasoning_effort\|model" ~/.local/state/nvimwt3a/log | tail -10
 ## References
 
 - [Adapter factory](lua/utils/my_codecompanion_utils.lua:65-158)
-- [model_choice utility](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/utils/adapters.lua:423)
-- [map_schema_to_params](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/init.lua:192)
+- model choice utility: `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/utils/adapters.lua:423`
+- `map_schema_to_params`: `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/init.lua:192`
 - [Reasoning effort task](tasks/review/codecompanion-reasoning-effort.md)

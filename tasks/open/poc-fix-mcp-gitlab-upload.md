@@ -3,9 +3,10 @@ title: "POC: Fix @zereight/mcp-gitlab upload_markdown (local fork)"
 status: "open"
 assignee: "user"
 created: 2026-03-17
+updated: 2026-07-02
 priority: "high"
 related:
-  - tasks/review/investigate-gitlab-upload-issues.md
+  - tasks/completed/investigate-gitlab-upload-issues.md
   - docs/memory/mcphub.md
 ---
 
@@ -16,7 +17,7 @@ related:
 Local fork of `@zereight/mcp-gitlab` with the `upload_markdown` 406 fix applied.
 MCP config has a new `gitlab_zz_local` server entry pointing to the local build.
 
-See [investigate-gitlab-upload-issues.md](tasks/review/investigate-gitlab-upload-issues.md) for root cause analysis.
+See [investigate-gitlab-upload-issues.md](tasks/completed/investigate-gitlab-upload-issues.md) for root cause analysis.
 
 ## Fix Applied
 
@@ -62,6 +63,19 @@ If you edit the source again, rebuild with:
 ```bash
 cd ~/worktree/zereight-mcp-gitlab && npm run build
 ```
+
+## Action Items
+
+- [ ] Start `gitlab_zz_local` in MCPHub and disable the old upload server during the test.
+- [ ] Run one upload through MCPHub and capture whether the response is HTTP 201 or still 406.
+- [ ] If verified, upstream the multipart upload fix to the `@zereight/mcp-gitlab` project.
+- [ ] Update [mcphub memory](docs/memory/mcphub.md) with the working local-fork behavior and any upstream PR link.
+
+## Points to Confirm
+
+- [ ] Confirm the local fork path is `~/worktree/zereight-mcp-gitlab/` or correct it to the actual checkout path.
+- [ ] Confirm which GitLab project should be used for the upload smoke test.
+- [ ] Confirm whether `gitlab_zz_local` should remain as a fallback after upstreaming.
 
 ## Verification
 

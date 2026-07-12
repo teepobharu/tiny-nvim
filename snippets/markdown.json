@@ -52,6 +52,15 @@
     ],
     "description": "Insert YAML frontmatter block with cursor inside"
   },
+  "_testcycle": {
+    "prefix": "_luasniptestcycle",
+    "body": [
+      "---",
+      "${1|true,false,fee|}",
+      "---"
+    ],
+    "description": "Insert YAML frontmatter block with cursor inside"
+  },
   "CodeCompanionPromptFrontmatter": {
     "prefix": "fmterccomp",
     "body": [

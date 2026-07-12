@@ -1,8 +1,9 @@
 ---
 title: "Cursor Migration - AI Tools Container Setup"
-status: "wip"
+status: "open"
 assignee: "ai"
 created: 2026-01-28
+updated: 2026-07-02
 priority: "medium"
 category: "ai-tooling"
 related:
@@ -23,6 +24,19 @@ Explore and setup Cursor-like AI capabilities for Neovim via containerized envir
 
 *Done*
 - [x] Find alternatives for nvim plugins copilot.vim auto completion → **minuet-ai.nvim** (see Minuet completion phase below)
+
+## Action Items
+
+- [ ] Split completed Minuet notes into a permanent memory doc if they should outlive this migration task.
+- [ ] Decide whether the remaining work is container testing, Cursor ACP integration, or Minuet completion verification.
+- [ ] Run the unchecked container profile tests only if the container path is still relevant.
+- [ ] Update this task's lifecycle location after deciding whether it belongs in `tasks/open/` or `tasks/wip/`.
+
+## Points to Confirm
+
+- [ ] Confirm whether Cursor CLI/ACP integration is still the goal, or whether Minuet plus CodeCompanion is enough.
+- [ ] Confirm whether Docker/container testing should continue on this repo or be archived as superseded.
+- [ ] Confirm the final completion stack when Copilot is disabled: Minuet AGD, local FIM, or both.
 
 ## Checklist
 

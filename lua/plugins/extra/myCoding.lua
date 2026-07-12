@@ -24,6 +24,24 @@ local specs = {
       local f = ls.function_node
 
       ls.config.setup(opts)
+      vim.keymap.set({ "i", "s" }, "<C-n>", function()
+        if require("luasnip").choice_active() then
+          require("luasnip").change_choice(1)
+        else
+          -- Fallback: let blink.cmp or native completion handle C-n
+          vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-n>", true, true, true), "n", true)
+        end
+      end, { desc = "Cycle Luasnip choices or use next completion" })
+
+      vim.keymap.set({ "i", "s" }, "<C-p>", function()
+        if require("luasnip").choice_active() then
+          require("luasnip").change_choice(-1)
+        else
+          -- Fallback: let blink.cmp or native completion handle C-p
+          vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-p>", true, true, true), "n", true)
+        end
+      end, { desc = "Cycle Luasnip choices backward or use prev completion" })
+
 
       -- Add minimal absolute ref snippet (kept for backward compat)
       ls.add_snippets("all", {

@@ -155,6 +155,66 @@ Always prefer active picker scope first; persisted state should be fallback.
 
 This keeps custom external traversal logic intact while still using the `external` toggle state for UI/title indicators.
 
+### 10. Custom Buffer Ordering Belongs in the Finder, Not Only in `transform`
+
+**Problem**: A custom buffer grouping sort added in `transform` does not reliably control the final default ordering, and sorting after `ctx.filter:filter(items)` can override Snacks matcher relevance when the user types a search.
+
+**Pattern**:
+
+- Override the `buffers` source `finder` for source-specific ordering.
+- Build the same item shape as the built-in buffers source.
+- Apply custom ordering **before** `ctx.filter:filter(items)`.
+- Use a separate picker opt (for example `group_by_kind`) toggled by a custom action/key.
+
+Sketch:
+
+```lua
+finder = function(opts, ctx)
+  local items = build_buffer_items(opts)
+  if opts.group_by_kind then
+    sort_by_group_then_lastused(items)
+  elseif opts.sort_lastused then
+    sort_by_lastused(items)
+  end
+  return ctx.filter:filter(items)
+end
+```
+
+This preserves default matcher behavior while still giving a stable grouped default order when no search is active.
+
+### 11. Buffer Hidden Focus Is Separate From Default `hidden`
+
+**Problem**: The buffer picker started showing hidden/unlisted buffers by default, and `<A-r>` was wired to grouping instead of the intended hidden terminal/agent focus mode.
+
+**Root Cause**: The custom `buffers` source override set `hidden = true`. For Snacks buffers, `hidden` broadens the source beyond listed buffers. It should stay `false` for the normal picker and only be enabled by a dedicated focused mode.
+
+**Pattern**:
+
+- Keep `sources.buffers.hidden = false` by default.
+- Use separate picker opts such as `focus_hidden` and `focus_hidden_mode`.
+- In the custom buffers finder, make focused modes identity-based, not visibility-state-based. Require terminal or AI/agent identity via `buftype`, `filetype`, or buffer name, regardless of whether the buffer is currently `hidden`, `listed`, or visible in a window.
+- Exclude normal file buffers (`buftype == ""`) before AI path matching; files under paths like `.claude/` are still files and should not appear in the focused terminal/agent view.
+- Map `<A-r>` / `<M-r>` to cycle `off -> terminal/agent hidden buffers -> agent/chat buffers only -> off`.
+- In agent/chat-only mode, include chat filetypes such as `codecompanion`, while filtering out common terminals that do not identify as AI/agent buffers.
+- Do not gate focused modes on `hidden`/`listed`. Opening a CodeCompanion or terminal buffer through Snacks can make it `listed = 1` and `hidden = 0`, but it should still appear in the same focused cycle.
+
+This avoids mixing normal buffer listing, grouped sorting, and hidden terminal discovery into one option.
+
+### 12. Buffer Group Classification Order
+
+**Problem**: Sidekick and Claude/cag terminal buffers were classified as `term` because `classify()` checked `buftype == "terminal"` before looking at `filetype` or command/name patterns.
+
+**Pattern**:
+
+- Protect normal file buffers first: `buftype == ""` should stay `file` unless it has an explicit AI chat filetype like `codecompanion`.
+- Then classify AI identities from `filetype` and name/command patterns: `codecompanion`, `claude`, `claudecode`, `cag`, `cc-agd`, `sidekick`, `pi`, etc.
+- Then classify `lazygit` separately so it ranks after regular terminals.
+- Then classify generic terminals.
+
+Current group priority is: `ai -> term -> lazygit -> file -> util`.
+
+Focused modes sort by group priority even when the optional grouping toggle is off. AI sub-priority is `codecompanion -> claude/cag -> sidekick/pi -> other AI`, then last-used within each sub-priority. Buffer rows include short labels: `[AI]`, `[T]`, `[LG]`, `[F]`, `[U]`.
+
 ## Actions
 
 https://github.com/folke/snacks.nvim/blob/main/lua/snacks/picker/actions.lua

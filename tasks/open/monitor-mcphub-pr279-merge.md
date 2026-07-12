@@ -3,9 +3,9 @@ title: "Monitor mcphub.nvim PR #279 merge — remove patch when merged"
 status: open
 priority: low
 created: 2026-03-15
-updated: 2026-03-15
+updated: 2026-07-02
 related:
-  - [Patch task](tasks/review/patch-mcphub-codecompanion-v19.md)
+  - [Patch task](tasks/completed/patch-mcphub-codecompanion-v19.md)
   - [MCPHub config](lua/plugins/extra/myAi.lua)
   - [Upstream PR #279](https://github.com/ravitemer/mcphub.nvim/pull/279)
 ---
@@ -26,8 +26,21 @@ Once the fix lands upstream, the patch is no longer needed and should be
 removed to avoid drift. This is a watch-and-cleanup task.
 
 **PR to monitor**: https://github.com/ravitemer/mcphub.nvim/pull/279
-**Companion patch task**: `tasks/review/patch-mcphub-codecompanion-v19.md`
+**Companion patch task**: `tasks/completed/patch-mcphub-codecompanion-v19.md`
 (move to archive once this task is completed)
+
+## Action Items
+
+- [ ] Re-check PR #279 status with `gh pr view 279 --repo ravitemer/mcphub.nvim --json state,mergedAt`.
+- [ ] If merged, update `mcphub.nvim` in the worktree profile before touching the daily-driver profile.
+- [ ] Remove only the patch files that are obsolete after confirming upstream contains the fix.
+- [ ] Archive the companion patch task only after the replacement is verified.
+
+## Points to Confirm
+
+- [ ] Confirm PR #279 is still the relevant upstream fix; if superseded, update this task with the replacement PR/commit.
+- [ ] Confirm whether any newer local mcphub patches should stay even after PR #279 lands.
+- [ ] Confirm whether `lazy-local-patcher.nvim` is still needed by any other plugin patches before removing it.
 
 ## Implementation Plan
 
@@ -89,6 +102,6 @@ NVIM_APPNAME=nvimwt3a nvim
 ## References
 
 - [Upstream PR #279](https://github.com/ravitemer/mcphub.nvim/pull/279)
-  - [Companion patch task](tasks/review/patch-mcphub-codecompanion-v19.md)
+  - [Companion patch task](tasks/completed/patch-mcphub-codecompanion-v19.md)
 - [lazy-local-patcher.nvim](https://github.com/polirritmico/lazy-local-patcher.nvim)
 - [MCPHub config](lua/plugins/extra/myAi.lua)

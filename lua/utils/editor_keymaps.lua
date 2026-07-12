@@ -96,6 +96,23 @@ local function open_file_in_remote(file_path, ref)
   gitUtil.open_file_in_remote(file_path, ref)
 end
 
+local function with_buffer_group_suffix(picker, base_title)
+  base_title = (base_title or picker.title or "Buffers")
+    :gsub("%s+•%s+grouped$", "")
+    :gsub("%s+•%s+hidden focus$", "")
+    :gsub("%s+•%s+agent chats$", "")
+  if picker and picker.opts and picker.opts.group_by_kind then
+    base_title = base_title .. " • grouped"
+  end
+  local focus_mode = picker and picker.opts and (picker.opts.focus_hidden_mode or (picker.opts.focus_hidden and 1 or 0)) or 0
+  if focus_mode == 1 then
+    base_title = base_title .. " • hidden focus"
+  elseif focus_mode == 2 then
+    base_title = base_title .. " • agent chats"
+  end
+  return base_title
+end
+
 -- Export helper functions that are used in opts
 M.helpers = {
   get_current_buffer_path = get_current_buffer_path,
@@ -1344,8 +1361,8 @@ local snacks_picker_group_keys = {
       snacks_picker_shared_keys.files_and_grep.input,
       {
         ["<C-space>"] = { "toggle_picker_source", mode = { "n", "i" }, desc = "Cycle File/Buffer/Grep" },
-        ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
-        ["<M-S>"] = { "select_subproject_cwd", mode = { "n", "i" }, desc = "Pick Subproject CWD" },
+        ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "🔀 Scope" },
+        ["<M-S>"] = { "select_subproject_cwd", mode = { "n", "i" }, desc = "Pick subproj CWD" },
       }
     ),
   },
@@ -1359,8 +1376,8 @@ local snacks_picker_group_keys = {
       {
         ["<C-space>"] = { "toggle_picker_source", mode = { "n", "i" }, desc = "Cycle File/Buffer/Grep" },
         ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove QF Item" },
-        ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "Cycle CWD Scope" },
-        ["<M-S>"] = { "select_subproject_cwd", mode = { "n", "i" }, desc = "Pick Subproject CWD" },
+        ["<A-s>"] = { "toggle_cwd_files_grep", mode = { "n", "i" }, desc = "🔀 Scope" },
+        ["<M-S>"] = { "select_subproject_cwd", mode = { "n", "i" }, desc = "Pick subproj CWD" },
       }
     ),
   },
@@ -1475,6 +1492,14 @@ local snacks_picker_group_keys = {
 --- Toggle keys: <a-h> hidden, <a-i> ignored, <a-f> follow, <a-r> regex (grep only)
 --- @param source string  picker source name ("files" | "grep" | "grep_word")
 --- @param has_regex boolean  whether to include the regex toggle key
+local function picker_scope_footer(parts)
+  return table.concat(parts or {
+    "a-e: ext",
+    "a-s: 🔀",
+    "a-S: subproj",
+  }, ", ")
+end
+
 local function make_persist_toggle_keys(source, has_regex)
   local sa = require "utils.snacks_actions"
 
@@ -1555,6 +1580,7 @@ M.sources_n_keys = {
     files = {
       win = {
         input = {
+          footer = picker_scope_footer(),
           -- Inline persist wrappers override <a-h>/<a-i>/<a-f> after Snacks auto-generates
           -- toggle_* actions (which run last in config merge and cannot be overridden via actions table).
           keys = vim.tbl_extend(
@@ -1569,9 +1595,21 @@ M.sources_n_keys = {
     buffers = {
       -- External filter: show buffers outside the current scope CWD
       -- Scope CWD comes from: persisted buffer subproject (a-S) > buffer scope toggle (a-s) > vim.fn.getcwd()
-      -- a-e: toggle external on/off
-      -- a-s: upward traversal through subproject chain (short-lived)
-      -- a-S: subproject picker with separate buffer persistence
+      -- a-e: toggle ext on/off
+      -- a-s: 🔀 upward traversal through subproject chain (short-lived)
+      -- a-S: subproj picker with separate buffer persistence
+      -- a-r: cycle focused hidden buffers: off -> terminal/agent -> agent chats only
+      finder = function(opts, ctx)
+        return require("utils.buffer_groups").finder(opts, ctx)
+      end,
+      format = function(item, picker)
+        return require("utils.buffer_groups").format(item, picker)
+      end,
+      hidden = false,
+      nofile = true,
+      group_by_kind = false,
+      focus_hidden = false,
+      focus_hidden_mode = 0,
       transform = function(item, ctx)
         local show_external = ctx and ctx.picker and ctx.picker.opts.external
         -- Scope can come from:
@@ -1681,6 +1719,32 @@ M.sources_n_keys = {
           else
             vim.notify(string.format("Buffer scope: %s (%d/%d)", short_cwd, next_idx, #chain), vim.log.levels.INFO)
           end
+
+          local title = next_idx == 1 and "Buffers" or string.format("Buffers [%s] (%d/%d)", short_cwd, next_idx, #chain)
+          picker.title = with_buffer_group_suffix(picker, title)
+
+          picker:refresh()
+        end,
+        toggle_focused_hidden_buffers = function(picker)
+          local next_mode = ((picker.opts.focus_hidden_mode or (picker.opts.focus_hidden and 1 or 0)) + 1) % 3
+          picker.opts.focus_hidden_mode = next_mode
+          picker.opts.focus_hidden = next_mode > 0
+          if next_mode > 0 then
+            picker.opts.hidden = true
+            picker.opts.nofile = true
+          else
+            picker.opts.hidden = false
+          end
+          picker.title = with_buffer_group_suffix(picker)
+
+          if next_mode == 1 then
+            vim.notify("Focused hidden buffers: terminal/agent buffers only", vim.log.levels.INFO)
+          elseif next_mode == 2 then
+            vim.notify("Focused hidden buffers: agent chats only", vim.log.levels.INFO)
+          else
+            vim.notify("Focused hidden buffers disabled", vim.log.levels.INFO)
+          end
+
           picker:refresh()
         end,
         select_buffer_subproject = function(picker)
@@ -1692,12 +1756,13 @@ M.sources_n_keys = {
       },
       win = {
         input = {
-          footer = "a-e: external, a-s: scope, a-S: subproject",
+          footer = picker_scope_footer({ "a-e: ext", "a-s: 🔀", "a-S: subproj", "a-r: hidden/agent" }),
           keys = vim.tbl_extend("force", snacks_picker_group_keys.files_keys.input, {
-            ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle external buffers" },
-            ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle external buffers" },
-            ["<A-s>"] = { "toggle_buffer_scope", mode = { "n", "i" }, desc = "Cycle buffer scope" },
-            ["<M-S>"] = { "select_buffer_subproject", mode = { "n", "i" }, desc = "Pick buffer subproject" },
+            ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle ext buffers" },
+            ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle ext buffers" },
+            ["<A-s>"] = { "toggle_buffer_scope", mode = { "n", "i" }, desc = "🔀 buffer scope" },
+            ["<M-S>"] = { "select_buffer_subproject", mode = { "n", "i" }, desc = "Pick buffer subproj" },
+            ["<M-r>"] = { "toggle_focused_hidden_buffers", mode = { "n", "i" }, desc = "Toggle focused hidden buffers" },
           }),
         },
       },
@@ -1765,6 +1830,7 @@ M.sources_n_keys = {
     grep = {
       win = {
         input = {
+          footer = picker_scope_footer(),
           keys = vim.tbl_extend(
             "force",
             snacks_picker_group_keys.grep_keys.input,
@@ -1778,6 +1844,7 @@ M.sources_n_keys = {
     grep_word = {
       win = {
         input = {
+          footer = picker_scope_footer(),
           keys = vim.tbl_extend(
             "force",
             snacks_picker_group_keys.grep_keys.input,
@@ -1791,6 +1858,7 @@ M.sources_n_keys = {
     todo_comments = {
       win = {
         input = {
+          footer = picker_scope_footer(),
           keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.grep_keys.input),
         },
       },
@@ -1800,6 +1868,7 @@ M.sources_n_keys = {
     qflist = {
       win = {
         input = {
+          footer = picker_scope_footer(),
           keys = vim.tbl_extend("force", {}, snacks_picker_group_keys.grep_keys.input, {
             ["<C-x>"] = { "remove_qf_item", mode = { "n", "i" }, desc = "Remove Quickfix Item" },
           }),
