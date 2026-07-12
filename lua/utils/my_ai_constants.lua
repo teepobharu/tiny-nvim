@@ -170,6 +170,7 @@ M.endpoints = {
     OPENAI_PROXY_BASE = BASE_OPENAPI_URL,
     OPENAI_PROXY = OPENAI_PROXY_V1,
     OPENAI_PROXY_MODELS = OPENAI_PROXY_V1 .. "/models",
+    OPENAI_PROXY_MODEL_DETAILS = OPENAI_PROXY_V1 .. "/internal/models?format=detailed",
     OPENAI_PROXY_CHAT = OPENAI_PROXY_V1 .. "/chat/completions",
   },
 }
@@ -299,17 +300,6 @@ M.codecompanion_chat_excluded_models = {
 M.codecompanion_responses_models = {
   M.models.gpt.GPT_5_3_CODEX,
   M.models.gpt.GPT_5_1_CODEX_MAX,
-}
-
--- Models that support reasoning_effort (o-series + DeepSeek R1)
--- Used to inject opts.can_reason = true in the adapter choices table so that
--- CodeCompanion's upstream reasoning_effort.enabled gate activates.
-M.codecompanion_reasoning_models = {
-  M.models.o_series.O3,
-  M.models.o_series.O3_MINI,
-  M.models.o_series.O4_MINI,
-  -- DeepSeek R1 also supports reasoning
-  M.models.deepseek.DEEPSEEK_R1,
 }
 
 M.provider_model_remap = {

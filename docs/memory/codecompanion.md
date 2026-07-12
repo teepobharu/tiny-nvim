@@ -202,6 +202,8 @@ max_tokens = {
 
 **Conditional Parameters** (e.g., reasoning_effort only for reasoning models):
 
+The following is the upstream pattern, but do **not** copy it for a field that must reappear after a model switch. In CodeCompanion 19.17, settings rendering may delete a schema key whose function-valued `enabled` returns false. The local reasoning controller keeps the field present and treats capability as advisory instead.
+
 ```lua
 reasoning_effort = {
   enabled = function(self)
@@ -291,124 +293,33 @@ From OpenAI docs (https://platform.openai.com/docs/guides/latest-model):
 **For chat/completions with GPT-5.2:**
 
 1. Use `max_completion_tokens` instead of `max_tokens`
-2. Keep `temperature` and `top_p`, but they only work when `reasoning_effort` is `none` (default)
-3. If user increases reasoning effort, temperature/top_p will cause errors
-4. **Solution:** Gate temperature/top_p via `enabled = function(self)` to check reasoning_effort is `none`
+2. Keep editable `temperature` and `top_p` in chat settings; they remain useful when effort is unset/`none`
+3. Explicit reasoning can conflict with non-default sampling on OpenAI models
+4. Normalize those conflicts on the outgoing request copy rather than hiding schema fields or deleting user settings
 
 ---
 
-## 7. Current Setup Issues
+## 7. Current Resolution (supersedes the March 2026 setup notes)
 
-### In `lua/utils/my_codecompanion_utils.lua`
+The earlier `max_tokens` / `temperature = 0` investigation is resolved:
 
-```lua
-openai_agd = function()
-  return require("codecompanion.adapters").extend("openai", {
-    schema = {
-      model = { default = MODELS.gpt.GPT_5_2, choices = ... },
-      temperature = { default = 0 },
-      max_tokens = { default = 4096 },  -- ❌ GPT-5.2 rejects this
-    },
-  })
-end
-```
+- `openai_agd` uses `max_completion_tokens = 4096`; the obsolete `max_tokens` override is gone.
+- Thinking effort is optional and defaults to unset, not an implicit local level.
+- The reasoning schema stays present across model switches. Avoid a function-valued `enabled` gate here: CodeCompanion 19.17 can permanently delete a disabled schema key while rendering settings.
+- Clearing effort removes the old flat/nested adapter parameter before remapping, preventing stale request state.
+- Known OpenAI sampling conflicts are normalized only on the outgoing request copy; editable chat settings remain intact.
+- Capability metadata controls advice and warnings, never whether a manual value is mapped.
 
-**Problems:**
+The isolated regression suite is [tests/test_codecompanion_thinking.lua](../../tests/test_codecompanion_thinking.lua). Live Agoda observations and the manual verification checklist are documented in the reasoning-control section below and in [the review task](../../tasks/review/codecompanion-reasoning-effort.md).
 
-1. ✅ `model` default is correct (GPT_5_2)
-2. ✅ `temperature = 0` is OK (only active when reasoning_effort = none, which is default)
-3. ❌ `max_tokens` is wrong; GPT-5.2 expects `max_completion_tokens`
-4. ⚠️ No gating on temperature/top_p if reasoning_effort is set to > none
+## 8. Adapter Best Practices
 
-### In `lua/utils/my_ai_constants.lua`
-
-```lua
-defaults = {
-  agd = {
-    temperature = 0,
-    max_completion_tokens = 4096,  -- ✅ Correct name, but not used by adapter
-  },
-}
-```
-
-The constant `max_completion_tokens` is defined but **not referenced by the adapter schema**, so it has no effect.
-
----
-
-## 8. Fix Approaches
-
-### Option A: Remove max_tokens (Simplest)
-
-Delete `max_tokens` from adapter schema. CodeCompanion won't emit it.  
-**Risk:** May hit internal token limits or get unexpected truncation.  
-**Status:** Testing now.
-
-### Option B: Rename to max_completion_tokens
-
-Change schema key from `max_tokens` to `max_completion_tokens`:
-
-```lua
-max_completion_tokens = {
-  order = 6,
-  mapping = "parameters",
-  type = "integer",
-  optional = true,
-  default = 4096,
-  desc = "...",
-}
-```
-
-**Benefit:** Explicit, correct for GPT-5.2 and other new models.  
-**Caveat:** May break with older OpenAI models if using same adapter.
-
-### Option C: Model-Specific Schema
-
-Gate `max_tokens` vs `max_completion_tokens` based on model:
-
-```lua
-schema = {
-  model = { /* ... */ },
-  max_completion_tokens = {
-    enabled = function(self)
-      local model = self.schema.model.default
-      if type(model) == "function" then model = model(self) end
-      return string.match(model, "gpt%-5")
-    end,
-    mapping = "parameters",
-    type = "integer",
-    default = 4096,
-  },
-}
-```
-
-**Benefit:** Works across multiple model families in one adapter.
-
-### Option D: Proxy-side handling (Not viable)
-
-Configure proxy to rename parameters → **Not applicable** (proxy is pass-through).
-
----
-
-## 9. Best Practices Discovered
-
-1. **Schema maps 1:1 to request params** via `mapping` key; no magic renaming.
-2. **Conditional parameters** use `enabled = function()` to gate visibility.
-3. **Model options** are metadata (opts) not config; use them to control features, enable/disable other params.
-4. **Env vars** are flexible (hardcoded, env, cmd, or function-resolved).
-5. **Custom adapters** should extend a known adapter (`openai`, `anthropic`, etc.) for handler inheritance.
-6. **Proxy endpoints** that are pass-through require correct param names at the client.
-7. **Reasoning models** have constraint conflicts (e.g., GPT-5.2 disallows temp/top_p when reasoning > none).
-
----
-
-## 10. Testing Checklist
-
-- [ ] Remove `max_tokens` from schema; test with GPT-5.2
-- [ ] If that fails, switch to `max_completion_tokens`
-- [ ] Verify temperature/top_p work with default reasoning (none)
-- [ ] Test with reasoning_effort set to "low", "medium", "high" to see if temp/top_p cause errors
-- [ ] Document any errors and workarounds in this file
-- [ ] Update `my_codecompanion_utils.lua` with final fix
+1. Schema keys map directly to request parameters; the proxy does not rename them.
+2. An optional setting that must survive model switches should stay in the schema and use advisory capability metadata rather than a destructive visibility gate.
+3. Model choices/options are useful hints but can be stale or missing for dynamically fetched models.
+4. Extend the correct parent handler shape: flat legacy handlers for OpenAI chat-completions, nested request handlers for Responses.
+5. Reset managed parameter paths before schema mapping because upstream mapping sets values but does not unset absent ones.
+6. Mutate only the deep-copied outgoing request for model-specific conflicts; preserve `chat.settings` and manual YAML/debug edits.
 
 ---
 
@@ -715,18 +626,66 @@ This extension integrates with CodeCompanion's internal APIs. If pinned version 
 
 ---
 
-## 8. Reasoning Effort — Practical Control via `show_settings`
+## Reasoning Effort — Practical Control
 
-`show_settings = true` (set at `myCodecomp.lua:257`) renders an editable YAML block at the top of every chat buffer. This is the canonical way to control `reasoning_effort` — no keymap needed.
+[`lua/utils/my_codecompanion_thinking.lua`](../../lua/utils/my_codecompanion_thinking.lua) provides current-chat controls while keeping manually edited settings authoritative.
 
-### Debugging the settings live
+- `openai_agd` uses the flat `reasoning_effort` proxy field for GPT, Claude, Gemini, DeepSeek, Kimi, and other models routed through the OpenAI-compatible Agoda endpoint.
+- `openai_responses_agd` uses the nested `reasoning.effort` field.
+- Both schema fields are always present, optional, default to `nil`, and accept free-form strings. Capability metadata changes picker advice; it never blocks or deletes an explicit value.
+- Overrides are remembered per chat, adapter, and model. Switching GPT → Claude → GPT restores each model's own override rather than carrying one family's value to another.
+- A toggle/reconcile updates both the editable YAML header and any open `CodeCompanion_debug` snapshot, so neither can overwrite the effective value later.
+- Before each schema mapping, only the managed wire path is reset. Clearing an override therefore cannot leave stale reasoning parameters in `adapter.parameters`.
+- Sampling cleanup happens only on the outgoing request copy for known OpenAI conflicts and only for non-default `temperature` / `top_p`. `chat.settings` is never mutated.
 
+### Commands and keymaps
+
+Commands:
+
+```vim
+:CodeCompanionThinking          " model-aware picker plus free-form input
+:CodeCompanionThinking high     " set current chat override
+:CodeCompanionThinking xhigh    " arbitrary values are allowed
+:CodeCompanionThinking none     " explicitly request no thinking (when supported)
+:CodeCompanionThinking clear    " remove override and inherit provider behavior
+:CodeCompanionThinking inspect  " show model, wire field, source, and capability
+:CodeCompanionThinking refresh  " refresh cached Agoda model metadata
+```
+
+Keymaps:
+
+- `<leader>At`: picker for the current chat
+- `<leader>AT`: inspect effective thinking state
+
+`clear` / `inherit` is intentionally different from `none`: clear omits the parameter, while `none` is an explicit wire value. Required-thinking models may ignore or reject `none`.
+
+### Capability discovery is advisory
+
+At startup, the helper asynchronously caches `GET /v1/internal/models?format=detailed` for one hour. It classifies a model as thinking-capable when `thinkingCapability` is not `None` or its feature list contains `Thinking`; Agoda's `Obligatory` value is normalized to required. The internal endpoint is VPN-dependent and unversioned, so static family hints and runtime registration remain available when discovery fails.
+
+New models remain immediately controllable even before metadata knows about them. Add durable advice without changing the toggle path:
+
+```lua
+require("utils.my_codecompanion_thinking").register_capability("openai_agd", "future-model", {
+  status = "supported",
+  source = "verified_proxy_probe",
+  mode = "optional",
+  levels = { "none", "low", "medium", "high" },
+})
+```
+
+For a future model that needs a different native request shape on the same adapter, the registered capability may also provide `request_transform(params, context)`. The canonical per-chat setting stays the same while the transform maps `context.effort` to that model's wire format.
+
+Known-unsupported models such as the current Qwen proxy deployment show a warning, but a manual value is still passed through unchanged. This is deliberate: proxy behavior can change before local metadata or code is updated.
+
+### Editable settings and live debugging
+
+- `show_settings = true` renders an editable YAML block at the top of every chat buffer
 - Open a chat buffer, position cursor on the YAML block, press `gd` (go-to-definition) — opens the schema so you can inspect all available fields and their current values
 - Edit a value and press `Enter` (or just send the next message) to apply it
+- Picker/command changes rewrite the matching YAML line, because CodeCompanion reparses this block immediately before every request
 
-### Testing if a field is active
-
-Enter an intentionally **invalid value** (e.g. `reasoning_effort: xxhigh`) and send. If the field is schema-gated and active, CodeCompanion will return a validation error. If nothing happens, the field is either disabled or not being read.
+With `show_settings = false`, `/debug` renders the same settings as editable Lua. Manual entries such as `reasoning_effort = "high"` remain valid and are captured before a later model switch.
 
 ### Schema key differs by adapter
 
@@ -737,18 +696,36 @@ Enter an intentionally **invalid value** (e.g. `reasoning_effort: xxhigh`) and s
 
 ### Sample settings block for `openai_responses_agd`
 
-```yaml
+`/debug` form:
+
+```lua
 model = "gpt-5.3-codex"
 -- available models: gpt-5-codex, gpt-5.1-codex, gpt-5.2-codex, gpt-5.3-codex, gpt-5.4-pro, gpt-5.1-codex-max
-["reasoning.effort"] = "high"   -- low / medium / high / minimal
+["reasoning.effort"] = "high"   -- free-form; common values: none / low / medium / high
 temperature = 1
 max_output_tokens = 4096
 verbosity = "medium"
 ```
 
-### Caveat: key removal does not reset to default
+Editable chat-header form:
 
-If you set a value (e.g. `reasoning.effort: xxhigh`) then **delete the line**, the last-set value persists for the session — `chat.settings` retains the previous value; removal means the key is absent from the parsed YAML, but the default is not re-applied until the adapter changes or the buffer reloads. To reset: explicitly set the desired default value rather than removing the line.
+```yaml
+---
+model: gpt-5.3-codex
+reasoning.effort: high
+---
+```
+
+### Agoda proxy observations (2026-07-12)
+
+- GPT-5.4: `high` and `xhigh` changed reported reasoning-token use; `none` disabled it; `minimal` was rejected. Non-default sampling conflicted with active effort.
+- Gemini 2.5 Flash: reasoning effort changed reported reasoning use. Some Gemini/DeepSeek models are obligatory, so `none` does not mean the same as clear/inherit.
+- Claude Sonnet 5 accepted `high` together with `temperature=0.42` and `top_p=0.8`; acceptance is verified, but effort-level differentiation was not observable in the small probe.
+- o3 rejected `none`. Qwen 3.6 rejected `reasoning_effort`; both remain manually forceable with a warning so future proxy changes are not blocked.
+
+### Clearing and stale parameter prevention
+
+Use `:CodeCompanionThinking clear` (or set the debug field to `nil`) to inherit provider behavior. The adapter mapping wrapper removes the old flat/nested parameter path before remapping, so a previously sent effort does not leak into the next request.
 
 ### ACP adapters
 
@@ -763,4 +740,4 @@ For `codex` / `claude_code` ACP adapters: use the `/acp_session_options` slash c
 - **Adapter Code:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/`
 - **Config Schema:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/init.lua`
 - **OpenAI Adapter:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai.lua`
-- **OpenAI Responses Adapter:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai_responses.lua`
+- **OpenAI Responses Adapter:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai_responses.lua`

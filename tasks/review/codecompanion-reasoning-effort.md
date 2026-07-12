@@ -1,121 +1,123 @@
 ---
-title: "Expose reasoning_effort (thinking control) in CodeCompanion"
+title: "Flexible per-model thinking control in CodeCompanion"
 status: review
 priority: medium
 created: 2026-05-31
-updated: 2026-06-01
+updated: 2026-07-12
+refs:
+  - eba3b42f86ed3831b1a473744e94a90d6dee4b6b [tag:v19.17.0] @2026-06-21 chore(main): release 19.17.0 (#3161)
 related:
-  - [my_codecompanion_utils.lua](lua/utils/my_codecompanion_utils.lua)
-  - [my_ai_constants.lua](lua/utils/my_ai_constants.lua)
-  - [myCodecomp.lua](lua/plugins/extra/myCodecomp.lua)
-  - [codecompanion.md](docs/memory/codecompanion.md)
+  - [Thinking controller](lua/utils/my_codecompanion_thinking.lua)
+  - [AGD adapter factory](lua/utils/my_codecompanion_utils.lua)
+  - [CodeCompanion config](lua/plugins/extra/myCodecomp.lua)
+  - [Regression tests](tests/test_codecompanion_thinking.lua)
+  - [Living memory](docs/memory/codecompanion.md)
 ---
 
 ## Objective
 
-CodeCompanion's upstream OpenAI adapter supports `reasoning_effort` (`low` / `medium` / `high`) but the field is hidden behind a `can_reason` gate that no local model declares. Make the thinking level visible and configurable: expose the schema field and mark o-series / thinking-capable models appropriately. Document what the AGD default is (currently unknown to user).
+Provide optional, per-chat and per-model thinking control that works across models routed through the Agoda OpenAI-compatible proxy. It must support picker/command, editable YAML, and `/debug` changes without hard-blocking unknown models or erasing manual values.
 
-## Context
+## Why the previous implementation was replaced
 
-**Upstream support:** `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai.lua:463-484`
-```lua
-reasoning_effort = {
-  optional = true,
-  default = "medium",
-  -- enabled only when model.choices[m].opts.can_reason == true
-}
-```
-The `enabled` function gates on `model.choices[selected].opts.can_reason`. Without `can_reason = true` on any model entry, the field never appears in the adapter schema UI.
+CodeCompanion 19.17 has lifecycle details that made the original allowlist/gate unsafe:
 
-**Local gap:** `lua/utils/my_codecompanion_utils.lua:65-158` builds the `openai_agd` adapter. No `reasoning_effort` entry and no model carried `opts.can_reason = true` until this task.
+- Function-valued schema `enabled` gates can permanently remove a field when settings are rendered.
+- `Chat:change_model()` resets `chat.settings` to adapter defaults.
+- Schema mapping does not remove an absent parameter, so a cleared effort can remain stale.
+- Editable YAML is parsed after `on_submitted`; a submit callback must not rewrite settings before that parse.
+- OpenAI chat-completions uses legacy flat handlers while Responses uses nested request handlers.
+- Agoda metadata may report `thinkingCapability=None` while features still include `Thinking` (GPT-5.4).
 
-**Where model choices come from:** The `choices` closure calls `fetch_model_helper` (`lua/utils/my_codecompanion_actions.lua`) which returns models from the AGD `/v1/models` endpoint dynamically. Static `opts.can_reason` flags must be injected at the adapter-build layer, keyed by model name.
+The old `M.codecompanion_reasoning_models` allowlist and destructive sanitizer were removed. Capability is now advisory; the wire profile remains available for manual/future values.
 
-**Runtime plumbing exists:** Reasoning round-tripping is wired in `interactions/chat/init.lua:347, 1152, 1375-1445` and `types.lua:101-119`. ACP also notes "Change ACP session config options like mode and reasoning level" at `config.lua:372` — the UI change path already exists.
+## Implementation
 
-## Implementation Plan
+- [x] Keep `reasoning_effort` (`openai_agd`) and `reasoning.effort` (`openai_responses_agd`) always present, optional, free-form, and implicitly unset.
+- [x] Clear inherited upstream `medium` defaults after adapter construction (Lua deep-merge cannot erase a parent value with `nil`).
+- [x] Add `:CodeCompanionThinking`, `<leader>At`, inspect, refresh, custom values, explicit `none`, and clear/inherit.
+- [x] Remember overrides per chat + adapter + model and restore them when returning to a model.
+- [x] Capture same-model manual `/debug` and YAML changes while preventing model-only switches from carrying the source model's effort.
+- [x] Synchronize toggle/reconcile changes to editable YAML and open debug snapshots, including while CodeCompanion temporarily locks the chat buffer.
+- [x] Reset only the managed adapter parameter path before mapping to prevent stale flat/nested reasoning.
+- [x] Normalize only the outgoing request copy for verified OpenAI sampling conflicts; do not mutate `chat.settings`.
+- [x] Fetch detailed AGD model metadata asynchronously with a one-hour in-memory cache and static fallback hints.
+- [x] Add runtime capability/profile registration and optional model-specific `request_transform` for future wire shapes.
+- [x] Add isolated regression coverage for real CodeCompanion 19.17 chat lifecycle behavior.
 
-- [x] Read `~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai.lua:460-495` to confirm exact `can_reason` gate and `reasoning_effort` schema shape
-- [x] Identify which models support reasoning on AGD (o-series + deepseek-r1; added `M.codecompanion_reasoning_models` in `my_ai_constants.lua`)
-- [x] In `lua/utils/my_codecompanion_utils.lua:97-122`, updated `choices` to normalize `fetch_model_helper`'s flat array into keyed table and inject `opts.can_reason = true` for reasoning models
-- [x] Added `reasoning_effort` schema entry in the `openai_agd` adapter factory (`my_codecompanion_utils.lua:130-153`) with live-model `enabled` gate (`self.parameters.model` fallback `schema.model.default`)
+## Agoda proxy findings (2026-07-12)
 
-### Iteration 2 notes (2026-06-01)
+- GPT-5.4: `high`, `xhigh`, and `none` accepted; reasoning-token use changed for high/xhigh; `minimal` rejected. Non-default sampling conflicted with active effort.
+- Claude Sonnet 5: flat `reasoning_effort=high` plus `temperature=0.42` and `top_p=0.8` returned HTTP 200. Acceptance is proven; effort-level differentiation was not observable in the small probe.
+- Gemini 2.5 Flash: effort changed reported reasoning use. Gemini 3.5 Flash accepted the bare model ID; the preview alias failed.
+- DeepSeek R1 is obligatory. o3 rejected `none`. Qwen 3.6 rejected `reasoning_effort`.
+- `/v1/responses` accepted `gpt-5.3-codex` with nested `reasoning.effort=low`.
 
-**`show_settings = true` is the canonical control.** The YAML settings block at the top of the chat buffer (`myCodecomp.lua:257`) lets you edit `reasoning_effort: high` directly; it overwrites `chat.settings` on every submit via `interactions/chat/init.lua:1144`. A runtime keymap toggle would conflict and be silently overwritten — the `toggle_reasoning` keymap has been removed.
+These results guide warnings and request normalization only. An explicit unknown/unsupported value is still passed through.
 
-- `openai_agd` adapter: YAML key is `reasoning_effort` (flat)
-- `openai_responses_agd` adapter: YAML key is `reasoning.effort` (dotted, responses API format)
-- ACP adapters (codex/claude_code): use `/acp_session_options` slash command
+## Deferred follow-up
 
-Model+effort preset approach (e.g. `gpt-5.5-high`) requires a `form_parameters` hook — no upstream decoupler exists. Tracked separately in `tasks/open/codecompanion-model-effort-presets.md`.
-
-- [ ] Test that `reasoning_effort` appears in YAML header when o3/o4-mini is active
-- [ ] Document AGD default behavior in `docs/memory/codecompanion.md`
-
-## Success Criteria
-
-- When a `can_reason`-tagged model is active, `reasoning_effort` appears as a tunable field in CodeCompanion's adapter schema (accessible via `change_adapter` keymap)
-- Changing the value to `low`/`medium`/`high` affects outbound requests (verify via `:CodeCompanionDebug` or `nvim.log`)
-- Non-thinking models do not show `reasoning_effort` (gate respected)
-- Default thinking level for AGD is documented
+Synthetic model-picker entries such as `gpt-5.5 [high]` remain separate in [model-effort presets](tasks/open/codecompanion-model-effort-presets.md). The current task controls the active chat after model selection and preserves per-model values.
 
 ## Verification
 
 ### How to verify
 
-With `show_settings = true` the YAML block at the top of the chat buffer is the canonical control. To debug the settings live: open the buffer, position cursor on the YAML block, run `gd` (go-to-definition) — this opens the schema definition so you can inspect all available fields and their current values. Edit a value and press `Enter` to save.
+Run the automated suite from the main repository. It loads CodeCompanion from the isolated `nvimwt3a` data profile but prepends the main tree, so it does not start or alter the daily-driver profile.
 
-**Testing trick:** enter an invalid value (e.g. `reasoning_effort: xxhigh`) and send — CodeCompanion will show a validation error if the field is schema-gated, confirming the field is active and being read.
+After the commit is synced/cherry-picked into the `nvimwt3a` worktree, open that profile for the manual checklist. Do not test through the active `nvim3_jelly_tinynvim` profile until the change is accepted.
 
-**Caveat:** if you set an invalid value and then _remove_ the line entirely, the last-set value persists for that session (`chat.settings` retains the last parsed value; removal just means the YAML key is absent and the default is not re-applied until the next adapter change or buffer reload).
+### Commands
+
+```bash
+cd ~/dotfiles/.config/nvim3_jelly_tinynvim
+NVIM_APPNAME=nvimwt3a nvim --headless -u NONE -i NONE \
+  --cmd 'set rtp^=/Users/tharutaipree/.local/share/nvimwt3a/lazy/plenary.nvim' \
+  --cmd 'set rtp^=/Users/tharutaipree/.local/share/nvimwt3a/lazy/codecompanion.nvim' \
+  --cmd 'set rtp^=/Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim' \
+  -l tests/test_codecompanion_thinking.lua
+```
+
+Optional live metadata check (requires Agoda network/VPN):
+
+```bash
+CODECOMPANION_THINKING_LIVE=1 NVIM_APPNAME=nvimwt3a nvim --headless -u NONE -i NONE \
+  --cmd 'set rtp^=/Users/tharutaipree/.local/share/nvimwt3a/lazy/plenary.nvim' \
+  --cmd 'set rtp^=/Users/tharutaipree/.local/share/nvimwt3a/lazy/codecompanion.nvim' \
+  --cmd 'set rtp^=/Users/tharutaipree/dotfiles/.config/nvim3_jelly_tinynvim' \
+  -l tests/test_codecompanion_thinking.lua
+```
+
+After syncing the worktree:
 
 ```bash
 NVIM_APPNAME=nvimwt3a nvim
 ```
 
 ```vim
-:CodeCompanionChat
-" For openai_agd (chat completions) — edit YAML header directly:
-"   reasoning_effort: high
-" For openai_responses_agd (responses API) — use dotted key:
-"   reasoning.effort: high
-" Send a message to confirm the value is picked up
-```
-
-**Sample settings block** (for `openai_responses_agd` / responses API):
-```yaml
-model = "gpt-5.3-codex"  -- or: gpt-5-codex, gpt-5.1-codex, gpt-5.2-codex, gpt-5.4-pro, gpt-5.1-codex-max
-["reasoning.effort"] = "high"   -- low / medium / high / minimal
-temperature = 1
-max_output_tokens = 4096
-verbosity = "medium"
-```
-
-```bash
-# Confirm reasoning key in the outbound payload
-grep -i "reasoning" ~/.local/state/nvimwt3a/log
+:CodeCompanionChat adapter=openai_agd model=gpt-5.4
+:CodeCompanionThinking high
+:CodeCompanionThinking inspect
 ```
 
 ### Checklist
 
-- [ ] YAML header shows `reasoning_effort` (for `openai_agd`) or `reasoning.effort` (for `openai_responses_agd`) when a reasoning-capable model is active
-- [ ] Setting `reasoning_effort: xxhigh` (invalid) triggers a validation error on send — confirms the field is schema-gated and active
-- [ ] Setting `reasoning_effort: high` → log shows `"reasoning_effort":"high"` in outbound payload
-- [ ] Removing the key after setting it leaves the last value in effect (expected behavior — note in docs)
-- [ ] Non-reasoning model (e.g. `gpt-5.4`) does not show `reasoning_effort` in YAML header
-- [ ] No regressions — regular chat with `gpt-5.4` / `gpt-5.5` still works
-- [ ] `docs/memory/codecompanion.md` updated with AGD default effort findings
+- [ ] `<leader>At` opens a model-aware picker and `<custom value…>` accepts a free-form string.
+- [ ] GPT-5.4 can be set to `high`; `inspect` shows the flat `reasoning_effort` field and current value.
+- [ ] Switch GPT-5.4 → Claude Sonnet 5, set Claude to `low`, then switch back; GPT restores `high` and Claude restores `low`.
+- [ ] In `/debug`, manually change the current effort and save; a later model switch remembers that manual value.
+- [ ] A `/debug` or YAML model-only switch does not copy the source model's effort onto the target model.
+- [ ] `clear` removes the override/inherits provider behavior; `none` remains a distinct explicit value.
+- [ ] A Qwen or unknown model is not blocked from a manual value; known unsupported/out-of-range values show a warning.
+- [ ] `openai_responses_agd` maps the dotted setting to nested `reasoning.effort`.
+- [ ] Regular chats still submit successfully after switching models; temperature/top_p remain visible in chat settings.
+- [ ] The daily-driver profile remains untouched until the user accepts and syncs the commit.
 
 ## References
 
-- [Adapter factory — openai_agd schema](lua/utils/my_codecompanion_utils.lua:65-158)
-- [Reasoning models list](lua/utils/my_ai_constants.lua:278-290)
-- [Model constants](lua/utils/my_ai_constants.lua:25-40)
-- [show_settings comment + YAML reasoning docs](lua/plugins/extra/myCodecomp.lua:255-260)
-- [Upstream reasoning_effort schema (openai.lua)](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai.lua:463-484)
-- [Upstream reasoning.effort schema (openai_responses.lua)](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/adapters/http/openai_responses.lua:663-691)
-- [show_settings YAML parse flow](~/.local/share/nvim3_jelly_tinynvim/lazy/codecompanion.nvim/lua/codecompanion/interactions/chat/init.lua:1144)
-- [Model+effort presets follow-up](tasks/open/codecompanion-model-effort-presets.md)
+- [Thinking controller](lua/utils/my_codecompanion_thinking.lua)
+- [Adapter integration](lua/utils/my_codecompanion_utils.lua)
+- [CodeCompanion setup/keymap](lua/plugins/extra/myCodecomp.lua)
+- [Regression suite](tests/test_codecompanion_thinking.lua)
 - [CodeCompanion memory](docs/memory/codecompanion.md)
-- [CodeCompanion debug memory](docs/memory/codecompanion_debug.md)
+- Installed source: `~/.local/share/nvimwt3a/lazy/codecompanion.nvim/`

@@ -87,10 +87,8 @@ function M.fetch_model_helper(self, opts, provider)
 
   -- Default: return filtered static models (no network dependency)
   local filteredModels = AI.filter_models(AI.static_models.agd_default, filter_opts, provider)
-  -- TODO : after filter -> inject appropriate opts for some model to remove some fields in request
-  -- ie. add appropriate
-  -- for claudeX models get below error
-  -- `temperature` and `top_p` cannot both be specified for this model.
+  -- Model-specific reasoning/sampling normalization lives in
+  -- utils.my_codecompanion_thinking and only mutates the outgoing request copy.
 
   return filteredModels
 end

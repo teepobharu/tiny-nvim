@@ -2,6 +2,7 @@
 -- Similar pattern to my_avante_utils.lua for consistency
 -- TODO: extract common model name, url, env keys to be in common place to be reused in both avante, codecomponion, others
 local myAiC = require "utils.my_ai_constants"
+local thinking = require "utils.my_codecompanion_thinking"
 local M = {}
 
 -- `CodeCompanionChat adapter=<adapter> model=<model>` - Open a chat buffer with a specific http adapter and model
@@ -66,7 +67,7 @@ function M.get_agoda_adapters(use_dynamic_fetch)
     -- Uses the normalized AGD proxy base from my_ai_constants.
     -- Uses dynamic model fetching via fetch_model_helper from my_codecompanion_actions
     [myAiC.providers.openai_agd.adapter_name] = function()
-      return require("codecompanion.adapters").extend("openai", {
+      local adapter = require("codecompanion.adapters").extend("openai", {
         -- Override name so logs/notifications show "openai_agd" not the parent "openai"
         name = myAiC.providers.openai_agd.adapter_name,
         formatted_name = "OpenAI AGD",
@@ -76,6 +77,15 @@ function M.get_agoda_adapters(use_dynamic_fetch)
           chat_url = "/v1/chat/completions", -- Chat endpoint path
           models_endpoint = "/v1/models", -- Models listing endpoint
         },
+        handlers = {
+          form_parameters = function(self, params, messages)
+            params = require("codecompanion.adapters.http.openai").handlers.form_parameters(self, params, messages)
+            return thinking.prepare_request(self, params)
+          end,
+        },
+        map_schema_to_params = function(self, settings)
+          return thinking.map_settings(self, settings)
+        end,
         -- Keep builtins first, then preserve the lean MCP proxy group when present,
         -- then fill remaining MCP tools up to OpenAI's hard 128-tool limit.
         form_tools = function(self, tools)
@@ -165,8 +175,8 @@ function M.get_agoda_adapters(use_dynamic_fetch)
                 finalOpt,
                 myAiC.providers.openai_agd.adapter_name
               )
-              -- Normalize to keyed table so CodeCompanion can attach per-model opts.
-              -- Upstream enabled gate: choices[model].opts.can_reason == true
+              -- Normalize to keyed table. Thinking support is resolved separately from
+              -- live AGD metadata and remains advisory so new/manual values are never blocked.
               local result = {}
               if type(raw) == "table" then
                 for k, v in pairs(raw) do
@@ -179,13 +189,8 @@ function M.get_agoda_adapters(use_dynamic_fetch)
                   end
                 end
               end
-              -- Inject can_reason = true for reasoning-capable models
-              local reasoning_set = {}
-              for _, m in ipairs(myAiC.codecompanion_reasoning_models) do
-                reasoning_set[m] = true
-              end
               for model_name, entry in pairs(result) do
-                if reasoning_set[model_name] then
+                if thinking.resolve_capability(self, model_name).status == "supported" then
                   entry.opts = vim.tbl_extend("force", entry.opts or {}, { can_reason = true })
                 end
               end
@@ -198,32 +203,23 @@ function M.get_agoda_adapters(use_dynamic_fetch)
           max_completion_tokens = {
             default = 4096,
           },
-          -- reasoning_effort: override the upstream enabled gate which reads self.schema.model.default
-          -- (a static string, never the live selection). We read self.parameters.model instead so
-          -- switching to e.g. o3 in the chat actually shows this field.
+          -- Always present: model capability is advisory and arbitrary manual values must map.
           reasoning_effort = {
             order = 2,
             mapping = "parameters",
             type = "string",
             optional = true,
-            enabled = function(self)
-              -- Prefer the live selected model; fall back to the static schema default
-              local model = (self.parameters and self.parameters.model) or self.schema.model.default
-              if type(model) == "function" then
-                model = model()
-              end
-              for _, m in ipairs(myAiC.codecompanion_reasoning_models) do
-                if m == model then
-                  return true
-                end
-              end
-              return false
-            end,
-            default = "medium",
-            choices = { "high", "medium", "low", "minimal" },
+            enabled = true,
+            choices = { "none", "minimal", "low", "medium", "high", "xhigh", "max" },
+            desc = "Optional proxy reasoning effort. Free-form values are allowed; clear/unset is different from none.",
           },
         },
       })
+      -- `vim.tbl_deep_extend` cannot erase an inherited value with nil, so clear
+      -- OpenAI's "medium" default after construction. This also makes /debug render
+      -- the optional field as `nil` instead of silently enabling reasoning.
+      adapter.schema.reasoning_effort.default = nil
+      return adapter
     end,
   }
 end
@@ -232,13 +228,28 @@ end
 function M.get_agoda_responses_adapters()
   return {
     [myAiC.providers.openai_responses_agd.adapter_name] = function()
-      return require("codecompanion.adapters").extend("openai_responses", {
+      local adapter = require("codecompanion.adapters").extend("openai_responses", {
         name = myAiC.providers.openai_responses_agd.adapter_name,
         formatted_name = "OpenAI Responses AGD",
         env = {
           api_key = "OPENAI_API_KEY",
           url = myAiC.endpoints.agoda.OPENAI_PROXY_BASE,
         },
+        handlers = {
+          request = {
+            build_parameters = function(self, params, messages)
+              params = require("codecompanion.adapters.http.openai_responses").handlers.request.build_parameters(
+                self,
+                params,
+                messages
+              )
+              return thinking.prepare_request(self, params)
+            end,
+          },
+        },
+        map_schema_to_params = function(self, settings)
+          return thinking.map_settings(self, settings)
+        end,
         -- Override the hardcoded upstream URL with the AGD proxy responses endpoint.
         -- model.choices is inherited from upstream (openai_responses.lua:586-661) which
         -- already lists gpt-5-codex, 5.1-codex, 5.1-codex-max, 5.2-codex, 5.3-codex, etc.
@@ -250,6 +261,15 @@ function M.get_agoda_responses_adapters()
           max_output_tokens = {
             default = 4096,
           },
+          ["reasoning.effort"] = {
+            order = 2,
+            mapping = "parameters",
+            type = "string",
+            optional = true,
+            enabled = true,
+            choices = { "none", "minimal", "low", "medium", "high", "xhigh", "max" },
+            desc = "Optional Responses API reasoning effort. Free-form values are allowed.",
+          },
           -- Codex models on AGD reject top_p — suppress it (same pattern upstream uses for gpt-5.4-nano)
           top_p = {
             enabled = function()
@@ -258,6 +278,8 @@ function M.get_agoda_responses_adapters()
           },
         },
       })
+      adapter.schema["reasoning.effort"].default = nil
+      return adapter
     end,
   }
 end
