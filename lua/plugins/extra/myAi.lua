@@ -708,6 +708,11 @@ return {
         "<cmd>ClaudeCode --continue <cr>",
         desc = "Toggle Claude Continue",
       },
+      {
+        CLAUDE_CODER_MAPPING_PREFIX .. "E",
+        "<cmd>ClaudeCode --m gpt-o<cr>",
+        desc = "Toggle Claude GPT 5.4",
+      },
       { CLAUDE_CODER_MAPPING_PREFIX .. "M", "<cmd>ClaudeCodeSelectModel<cr>", desc = "Select Claude model" },
       {
         "<leader>as",

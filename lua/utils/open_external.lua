@@ -420,9 +420,22 @@ M.apps = {
     name = "Codex",
     icon = "󱓞",
     category = "Editor",
-    detect = function() return app_exists("Codex.app") end,
-    command_string = function(path) return 'open -a Codex ' .. vim.fn.shellescape(path) end,
-    spawn = function(path) open_app_simple("Codex", path) end,
+    detect = function() return true end,
+    command_string = function(path)
+      local workspace = path_kind(path) == "dir" and path or vim.fn.fnamemodify(path, ":h")
+      local prompt_text = "Review this file: " .. path
+      local encoded_path = uri_encode(workspace)
+      local encoded_prompt = uri_encode(prompt_text)
+      return ("codex://new?path=%s&prompt=%s"):format(encoded_path, encoded_prompt)
+    end,
+    spawn = function(path)
+      local workspace = path_kind(path) == "dir" and path or vim.fn.fnamemodify(path, ":h")
+      local prompt_text = "Review this file: " .. path
+      local encoded_path = uri_encode(workspace)
+      local encoded_prompt = uri_encode(prompt_text)
+      local uri = ("codex://new?path=%s&prompt=%s"):format(encoded_path, encoded_prompt)
+      open_uri(uri)
+    end,
   },
   {
     name = "Xcode",

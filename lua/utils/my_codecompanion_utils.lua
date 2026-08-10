@@ -252,11 +252,39 @@ function M.get_agoda_responses_adapters()
         end,
         -- Override the hardcoded upstream URL with the AGD proxy responses endpoint.
         -- model.choices is inherited from upstream (openai_responses.lua:586-661) which
-        -- already lists gpt-5-codex, 5.1-codex, 5.1-codex-max, 5.2-codex, 5.3-codex, etc.
+        -- lists gpt-5-codex, 5.1-codex, 5.1-codex-max, 5.2-codex, 5.3-codex, etc. `extend()`
+        -- deep-merges this table into the upstream choices rather than replacing it, so any
+        -- model verified working at /v1/responses on the AGD proxy (see
+        -- ai/agents/docs/agoda/proxy-models.md) but missing upstream must be added here too —
+        -- upstream does not auto-track new proxy models.
         url = "${url}/v1/responses",
         schema = {
           model = {
             default = MODELS.gpt.GPT_5_3_CODEX,
+            choices = {
+              -- gpt-5.6 tiers confirmed working at /v1/responses on AGD proxy (2026-07-14).
+              [MODELS.gpt.GPT_5_6_SOL] = {
+                formatted_name = "GPT 5.6 Sol",
+                meta = { context_window = 1050000 },
+                opts = { can_manage_context = true, has_function_calling = true, has_vision = true, can_reason = true },
+              },
+              [MODELS.gpt.GPT_5_6_TERRA] = {
+                formatted_name = "GPT 5.6 Terra",
+                meta = { context_window = 1050000 },
+                opts = { can_manage_context = true, has_function_calling = true, has_vision = true, can_reason = true },
+              },
+              [MODELS.gpt.GPT_5_6_LUNA] = {
+                formatted_name = "GPT 5.6 Luna",
+                meta = { context_window = 1050000 },
+                opts = { can_manage_context = true, has_function_calling = true, has_vision = true, can_reason = true },
+              },
+              -- gpt-5.5 kept as flagship -1 fallback reference — verified working at /v1/responses.
+              [MODELS.gpt.GPT_5_5] = {
+                formatted_name = "GPT 5.5",
+                meta = { context_window = 1050000 },
+                opts = { can_manage_context = true, has_function_calling = true, has_vision = true, can_reason = true },
+              },
+            },
           },
           max_output_tokens = {
             default = 4096,

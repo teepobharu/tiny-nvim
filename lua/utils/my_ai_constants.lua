@@ -35,6 +35,14 @@ M.models = {
     GPT_5_1_CODEX_MAX = "gpt-5.1-codex-max",
     GPT_5_1_CODEX_MINI = "gpt-5.1-codex-mini",
     GPT_5_3_CHAT_LATEST = "gpt-5.3-chat-latest",
+    -- gpt-5.6 codenamed tiers (verified working at chat endpoint, 2026-07-14):
+    -- sol = new flagship (matches gpt-5.5 cost $5/$30), terra = standard (matches
+    -- gpt-5.4 cost $2.5/$15), luna = new cheaper-flagship tier ($1/$6, 1.05M ctx).
+    -- GPT_5_5 is kept as the "flagship -1" fallback (see top_choices.gpt.alt.L)
+    -- rather than removed — do not delete a superseded flagship, demote it.
+    GPT_5_6_SOL = "gpt-5.6-sol",
+    GPT_5_6_TERRA = "gpt-5.6-terra",
+    GPT_5_6_LUNA = "gpt-5.6-luna",
     GPT_4O = "gpt-4o",
     GPT_4O_MINI = "gpt-4o-mini",
     GPT_3_5_TURBO = "gpt-3.5-turbo",
@@ -191,14 +199,17 @@ M.providers = {
           XS = env_or("AGD_GPT_NANO", M.models.gpt.GPT_5_4_NANO),
           S = env_or("AGD_GPT_MINI", M.models.gpt.GPT_5_MINI),
           M = M.models.gpt.GPT_5_2,
-          L = env_or("AGD_GPT_FLAGSHIP", M.models.gpt.GPT_5_5),
+          -- gpt-5.6-sol matches gpt-5.5 cost ($5/$30) and supersedes it as flagship
+          L = env_or("AGD_GPT_FLAGSHIP", M.models.gpt.GPT_5_6_SOL),
         },
         alt = {
           S = M.models.gpt.GPT_4_1_MINI,
-          L = env_or("AGD_GPT_PREV_FLAGSHIP", M.models.gpt.GPT_5_4),
+          -- flagship -1: gpt-5.5 was the flagship before gpt-5.6-sol. Kept here
+          -- (not deleted) as the previous-flagship fallback reference.
+          L = env_or("AGD_GPT_PREV_FLAGSHIP", M.models.gpt.GPT_5_5),
         },
         -- avante works but codex models fail codecompanion /completions (not a chat model)
-        max = { L = M.models.gpt.GPT_5_5, M = M.models.gpt.GPT_5_1_CODEX_MAX },
+        max = { L = M.models.gpt.GPT_5_6_SOL, M = M.models.gpt.GPT_5_1_CODEX_MAX },
       },
       claude = {
         -- default=current tier, alt=previous tier; env overrides from ~/dotfiles/.bash_exports
@@ -394,7 +405,7 @@ M.static_models = { -- Fast models (for quick operations)
 
   -- Heavy models (for complex operations)
   heavy = {
-    env_or("AGD_CODE_LARGE", M.models.gpt.GPT_5_5),
+    env_or("AGD_CODE_LARGE", M.models.gpt.GPT_5_6_SOL),
     env_or("AGD_CLAUDE_L", M.models.claude.CLAUDE_OPUS_4_8),
     env_or("AGD_CLAUDE_SONNET", M.models.claude.CLAUDE_SONNET_5),
     M.models.claude.CLAUDE_OPUS_4_7,
@@ -407,7 +418,7 @@ M.static_models = { -- Fast models (for quick operations)
 
   -- Codex models (for code-specific operations); env AGD_CODE_CODEX → ~/dotfiles/.bash_exports
   codex = {
-    env_or("AGD_CODE_CODEX", M.models.gpt.GPT_5_5),
+    env_or("AGD_CODE_CODEX", M.models.gpt.GPT_5_6_SOL),
     M.models.gpt.GPT_5_3_CODEX,
     M.models.gpt.GPT_5_1_CODEX_MAX,
     M.models.gpt.GPT_5_1_CODEX_MINI,
@@ -415,7 +426,10 @@ M.static_models = { -- Fast models (for quick operations)
 
   -- Default priority order for CodeCompanion
   agd_default = {
-    env_or("AGD_CODE_LARGE", M.models.gpt.GPT_5_5),
+    env_or("AGD_CODE_LARGE", M.models.gpt.GPT_5_6_SOL),
+    M.models.gpt.GPT_5_6_TERRA,
+    M.models.gpt.GPT_5_6_LUNA,
+    M.models.gpt.GPT_5_5, -- flagship -1: kept as fallback reference, not removed
     M.models.gpt.GPT_5_4,
     M.models.gpt.GPT_5_2,
     M.models.gpt.GPT_5_1,
