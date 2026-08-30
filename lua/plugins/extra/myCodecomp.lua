@@ -657,6 +657,27 @@ return {
               ---Number of user prompts after which to refresh the title (0 to disable)
               refresh_every_n_prompts = 0, -- e.g., 3 to refresh after every 3rd user prompt
               max_refreshes = 1,
+              -- Requires patches/codecompanion-history.nvim/01-title-prompt-v1.patch.
+              -- Layer 1 (patch, deterministic): removes tagged/reference/hidden
+              -- context lines (rules, @{file}/buffer/URL attachments, tool prompts
+              -- and outputs) and strips picker-expanded annotations ("the X tool",
+              -- tool-group prompts, "file `path` (with buffer number: N)") when
+              -- the remainder is a trivial greeting.
+              -- Layer 2 (these rules, model-side fallback): ignore any boilerplate
+              -- layer 1 cannot strip (prompt-library names, instruction-file
+              -- labels, tool/file annotations), title whatever real text remains
+              -- (a greeting chat is simply titled as a greeting), and never title
+              -- the title-generation request itself.
+              prompt = [[Generate a concise title of at most five words for this chat.
+Ignore prompt-library names, instruction/rule/help/buffer labels, file metadata,
+generic headings, tool-access announcements, and attachment notes unless the
+user explicitly asks about them. Never describe this title request itself.
+Do not include quotes, numbering, or commentary.
+Examples:
+1. User: How do I create a new file in Vim?
+   Title: Vim File Creation
+2. User: hi
+   Title: Greeting]],
             },
             -- TODO: memory opts  require vector search
             dir_to_save = vim.fn.stdpath "data" .. "/codecompanion-history",

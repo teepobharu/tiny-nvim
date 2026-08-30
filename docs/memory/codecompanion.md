@@ -620,6 +620,114 @@ reliably populate the history picker. Prefer the history extension's title
 generator for persisted titles, or patch/bridge core title updates into
 `chat.opts.title` before saving.
 
+### History Title Prompt Override
+
+The local patch
+[`patches/codecompanion-history.nvim/01-title-prompt-v1.patch`](../../patches/codecompanion-history.nvim/01-title-prompt-v1.patch)
+adds `title_generation_opts.prompt` to the history extension. A string is used
+as title rules and receives the filtered conversation plus a trailing `Title:`;
+a function receives `conversation_context`, `is_refresh`, `original_title`, and
+`default_prompt`, and may return a complete prompt.
+
+The configured rules keep titles to five words, ignore prompt-library names
+and instruction/rule/help/buffer labels, file metadata, generic headings,
+tool-access announcements, and attachment notes unless the user explicitly
+asks about them, forbid describing the title request itself, and include a
+few-shot example so greeting-only chats are titled naturally (for example
+`Greeting`) instead of falling back to the title-generation task. The patch
+also filters
+CodeCompanion v19 context stored in top-level `_meta` and `context`, not only
+the legacy `msg.opts` fields. This prevents injected `AGENTS.md`, `CLAUDE.md`,
+and editor context from becoming the title.
+
+`tests/test_codecompanion_history_title_prompt.lua` exercises the patched
+upstream generator with an adapter stub. It covers top-level and nested v19
+metadata/context fields, hidden (`visible = false`) context lines, and
+picker-annotation stripping for both initial and refresh title prompts,
+without sending an authenticated model request. It proves which text reaches
+the model; evaluating the model's returned title remains a user-owned smoke
+check.
+
+### v19 Message Storage and Hidden Context Lines
+
+CodeCompanion v19 stores injected context metadata at message top level
+(`msg._meta.tag`, `msg.context.id`), while `Chat:add_message` persists the
+remaining options as `msg.opts`, including `opts.visible`. Every injected
+context line (rules, file/buffer/URL attachments, tool prompts) is stored with
+`visible = false`, so the patch excludes `opts.visible == false` as a fallback
+for context lines that carry no tag or context id. Tool outputs use
+`role = "tool"` (adapter `roles.tool`), so the user/llm role filter excludes
+them even though `add_tool_output` gives them `visible = true` and no tag.
+
+### Picker Annotation Expansion (`@{tool}` / `#{buffer}`)
+
+When a prompt with `@{tool}`, `@{group}`, or `#{buffer}` references is
+submitted, `codecompanion.interactions.chat.tools.Tools:replace` expands the
+references into prose inside the user message content: per-tool text from
+`tools.opts.tool_replacement_message` (default `"the ${tool} tool"`), the
+group `prompt` (for example the `files` group: "I'm giving you access to
+${tools} to help you perform file operations"), and the buffer note
+(`file `<path>` (with buffer number: N)` from
+`shared/editor_context/buffer.lua`). That message is a genuine user message
+(`visible = true`, no tag or context id), so the message-level filter cannot
+exclude it, and a small titling model will title the boilerplate (observed
+titles: `File Operations Tool Access`).
+
+The patch therefore also strips those annotations from user message content
+via `strip_picker_annotations()`. It rebuilds the annotation fragments from the
+live `codecompanion.config.interactions.chat.tools` templates (so config
+changes are followed) and only replaces the content when the remainder is
+trivial (empty or at most two words); a real request that mentions tools keeps
+its full text. The custom `title_generation_opts.prompt` remains a model-side
+fallback for boilerplate that stripping cannot remove. It uses a few-shot
+example so greeting-only chats are titled naturally (for example `Greeting`)
+and forbids titling the title-generation request itself (the source of
+`Chat Title Request`). It does not force a fixed neutral title. Actual-model
+A/B (`gpt-4.1-mini` via the AGD proxy, exact generator prompts for the two
+saved failing chats) confirmed both degenerate titles become a natural
+greeting title while a real request still gets its own topic title.
+
+The patch is applied per profile: the `nvimwt3a` worktree profile carries it,
+while the main `nvim3_jelly_tinynvim` profile checkout is unpatched until the
+branch is merged and `Lazy install` reruns there.
+
+If a title ends in `(1)`, inspect both the saved history JSON and the buffer
+name before changing the generation prompt. Duplicating a saved chat can
+persist `(1)`, while `history/ui.lua` can add the same suffix only to resolve a
+buffer-name collision. An existing `chat.opts.title` also prevents initial
+history title generation, so a prompt-library title may bypass the prompt
+entirely.
+
+### MCP Resource Refresh for Open Chats
+
+CodeCompanion snapshots `shared.editor_context` into a chat when it is created,
+and its completion provider caches the derived candidate list. MCPHub resource
+updates must therefore update both layers: the paired local patches
+[`patches/mcphub.nvim/07-codecompanion-resource-refresh_v1.patch`](../../patches/mcphub.nvim/07-codecompanion-resource-refresh_v1.patch)
+and
+[`patches/codecompanion.nvim/01-editor-context-refresh_v1.patch`](../../patches/codecompanion.nvim/01-editor-context-refresh_v1.patch)
+replace only `mcp:` entries in open chats and invalidate completion candidates.
+Do not replace the entire chat context because that can discard non-MCP,
+chat-local entries. Verify the pair with the live-chat regression test before
+updating either plugin pin.
+
+### Isolated-profile carryover regression
+
+[`tests/test_main_worktree_carryover.lua`](../../tests/test_main_worktree_carryover.lua)
+checks the static model registry, Responses adapter choices, direct AGD model
+shortcuts, CodeCompanion actions mapping, and the Codex external-app deep link.
+It must run after the normal worktree profile has initialized:
+
+```bash
+NVIM_APPNAME=nvimwt3a nvim --headless \
+  -c 'luafile tests/test_main_worktree_carryover.lua' +qa
+```
+
+Do not use `-l` for this suite: Lua script mode bypasses normal initialization,
+so Lazy has neither registered the keymaps nor added CodeCompanion to the
+runtime path. A failed `-l` run is a harness error, not evidence that the
+configured mappings are missing.
+
 ### Compatibility Note
 
 This extension integrates with CodeCompanion's internal APIs. If pinned version `19.6.x` causes issues, check [ravitemer/codecompanion-history.nvim](https://github.com/ravitemer/codecompanion-history.nvim) for a compatible release.

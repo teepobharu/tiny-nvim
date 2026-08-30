@@ -1,0 +1,183 @@
+diff --git a/lua/codecompanion/_extensions/history/title_generator.lua b/lua/codecompanion/_extensions/history/title_generator.lua
+index e88afe0..d9fd59c 100644
+--- a/lua/codecompanion/_extensions/history/title_generator.lua
++++ b/lua/codecompanion/_extensions/history/title_generator.lua
+@@ -8,6 +8,83 @@ local CONSTANTS = {
+     STATUS_SUCCESS = "success",
+ }
+ 
++---Return false for editor context, rules, and hidden context lines stored
++---outside msg.opts by CodeCompanion v19.
++---@param msg CodeCompanion.History.ChatMessage
++---@return boolean
++local function is_title_relevant_message(msg)
++    local opts = msg.opts or {}
++    local meta = msg._meta or opts._meta or {}
++    local context = msg.context or opts.context or {}
++    local has_content = msg.content and vim.trim(msg.content) ~= ""
++    local is_context = opts.tag or opts.reference or opts.context_id
++        or meta.tag or meta.reference or meta.context_id
++        or context.id or context.reference or context.context_id
++    -- v19 sets visible=false on every injected context line (rules, file/buffer/
++    -- URL attachments, tool prompts), so hidden messages are context even when
++    -- a tag or context id is missing.
++    local is_hidden = opts.visible == false or msg.visible == false
++
++    return has_content and not is_context and not is_hidden
++end
++
++---Strip picker-expanded annotations from message content. CodeCompanion
++---replaces @{tool}, @{group}, and #{buffer} references in submitted prompts
++---with the configured tool replacement message, tool-group prompt, and buffer
++---note (see codecompanion.interactions.chat.tools). When a message is only
++---such annotations plus a trivial remainder (for example a greeting), the
++---annotations would dominate the title prompt, so the remainder is returned
++---instead. Messages whose remainder is not trivial are returned unchanged so
++---real requests that mention tools keep their full context.
++---@param content string
++---@return string
++local function strip_picker_annotations(content)
++    local tools_cfg = config.interactions and config.interactions.chat and config.interactions.chat.tools
++    if type(tools_cfg) ~= "table" then
++        return content
++    end
++
++    local stripped = content
++
++    -- Tool-group prompts, e.g. "I'm giving you access to ${tools} to help you
++    -- perform file operations" (config.interactions.chat.tools.groups)
++    for _, group in pairs(tools_cfg.groups or {}) do
++        if type(group) == "table" and type(group.prompt) == "string" and type(group.tools) == "table" then
++            local fragment = group.prompt:gsub("%${tools}", table.concat(group.tools, ", ") .. " tools")
++            stripped = stripped:gsub(vim.pesc(fragment), "")
++        end
++    end
++
++    -- Per-tool replacement text, e.g. "the ${tool} tool"
++    -- (config.interactions.chat.tools.opts.tool_replacement_message)
++    local tool_replacement = (tools_cfg.opts or {}).tool_replacement_message
++    if type(tool_replacement) == "string" then
++        for name, value in pairs(tools_cfg) do
++            if name ~= "opts" and name ~= "groups" and type(value) == "table" then
++                stripped = stripped:gsub(vim.pesc(tool_replacement:gsub("%${tool}", name)), "")
++            end
++        end
++    end
++
++    -- Buffer notes, e.g. "file `path` (with buffer number: 32)"
++    stripped = stripped:gsub("file `[^`]*` %(with buffer number: %d+%)", "")
++
++    stripped = stripped:gsub("%s+", " "):gsub("^%s+", ""):gsub("%s+$", "")
++    if stripped == content then
++        return content
++    end
++
++    -- Only replace content when the remainder is trivial (empty or at most
++    -- two words). Otherwise keep the original so requests that merely mention
++    -- tools or attachments are preserved.
++    local word_count = #vim.split(stripped, "%s+", { trimempty = true })
++    if stripped == "" or word_count <= 2 then
++        return stripped
++    end
++
++    return content
++end
++
+ ---@class CodeCompanion.History.TitleGenerator
+ ---@field opts CodeCompanion.History.Opts
+ local TitleGenerator = {}
+@@ -35,10 +112,7 @@ function TitleGenerator:_count_user_messages(chat)
+     end, chat.messages)
+ 
+     local actual_user_messages = vim.tbl_filter(function(msg)
+-        local has_content = msg.content and vim.trim(msg.content) ~= ""
+-        return has_content
+-            and not (msg.opts and msg.opts.tag)
+-            and not (msg.opts and (msg.opts.reference or msg.opts.context_id))
++        return is_title_relevant_message(msg)
+     end, user_messages)
+ 
+     return #actual_user_messages
+@@ -100,10 +174,8 @@ function TitleGenerator:generate(chat, callback, is_refresh)
+     -- Filter relevant messages (both user and assistant, excluding tagged/reference messages)
+     local relevant_messages = vim.tbl_filter(function(msg)
+         -- Include user and assistant messages with actual content
+-        local has_content = msg.content and vim.trim(msg.content) ~= ""
+         local is_relevant_role = msg.role == config.constants.USER_ROLE or msg.role == config.constants.LLM_ROLE
+-        local not_tagged = not (msg.opts and (msg.opts.tag or msg.opts.reference or msg.opts.context_id))
+-        return has_content and is_relevant_role and not_tagged
++        return is_relevant_role and is_title_relevant_message(msg)
+     end, chat.messages)
+ 
+     if #relevant_messages == 0 then
+@@ -131,6 +203,9 @@ function TitleGenerator:generate(chat, callback, is_refresh)
+             local msg = relevant_messages[i]
+             local role_prefix = msg.role == config.constants.USER_ROLE and "User" or "Assistant"
+             local content = vim.trim(msg.content)
++            if msg.role == config.constants.USER_ROLE then
++                content = strip_picker_annotations(content)
++            end
+ 
+             -- Truncate individual message if too long
+             if #content > 1000 then
+@@ -146,8 +221,11 @@ function TitleGenerator:generate(chat, callback, is_refresh)
+         local first_user_msg = nil
+         for _, msg in ipairs(relevant_messages) do
+             if msg.role == config.constants.USER_ROLE then
+-                first_user_msg = msg
+-                break
++                local content = vim.trim(msg.content)
++                if strip_picker_annotations(content) ~= "" then
++                    first_user_msg = msg
++                    break
++                end
+             end
+         end
+ 
+@@ -156,7 +234,7 @@ function TitleGenerator:generate(chat, callback, is_refresh)
+             return callback(nil)
+         end
+ 
+-        local content = vim.trim(first_user_msg.content)
++        local content = strip_picker_annotations(vim.trim(first_user_msg.content))
+ 
+         -- Truncate individual message if too long
+         if #content > 1000 then
+@@ -215,6 +293,25 @@ Title:]],
+         )
+     end
+ 
++    local custom_prompt = (self.opts.title_generation_opts or {}).prompt
++    if type(custom_prompt) == "string" and vim.trim(custom_prompt) ~= "" then
++        prompt = custom_prompt .. "\n\nConversation:\n" .. conversation_context .. "\nTitle:"
++    elseif type(custom_prompt) == "function" then
++        local ok, result = pcall(custom_prompt, {
++            conversation_context = conversation_context,
++            is_refresh = is_refresh,
++            original_title = chat.opts.title,
++            default_prompt = prompt,
++        })
++        if not ok then
++            log:error("Custom title prompt failed: %s", result)
++            return callback(nil, "Custom title prompt failed: " .. tostring(result))
++        end
++        if type(result) == "string" and vim.trim(result) ~= "" then
++            prompt = result
++        end
++    end
++
+     self:_make_adapter_request(chat, prompt, callback)
+ end
+ 
+diff --git a/lua/codecompanion/_extensions/history/types.lua b/lua/codecompanion/_extensions/history/types.lua
+index 21a322e..29ff960 100644
+--- a/lua/codecompanion/_extensions/history/types.lua
++++ b/lua/codecompanion/_extensions/history/types.lua
+@@ -8,6 +8,7 @@
+ ---@field refresh_every_n_prompts? number Number of user prompts after which to refresh the title (0 to disable)
+ ---@field max_refreshes? number Maximum number of times to refresh the title (default: 3)
+ ---@field format_title? fun(original_title: string):string a function that applies a custom transformation to the title.
++---@field prompt? string|fun(context: {conversation_context:string,is_refresh:boolean,original_title?:string,default_prompt:string}):string Custom title-generation rules or full prompt builder.
+ 
+ ---@class CodeCompanion.History.SummaryOpts
+ ---@field create_summary_keymap? string | table Keymap to generate summary for current chat (default: "gcs")
