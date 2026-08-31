@@ -114,7 +114,7 @@ end
 ---
 --- Both the keymap picker and the sub-picker use this builder, which provides:
 --- - Unified format function (label: path)
---- - Shared keybindings: <C-y> copy, <C-p> paste, <C-n> markdown, <A-c>/<A-l> toggle
+--- - Shared keybindings: <C-y> copy, <C-p> paste, <C-n> markdown, <A-f>/<A-c>/<A-l> toggles
 --- - Configurable confirm behavior (copy vs paste)
 --- - Optional preview pane with file stats
 --- - Optional parent picker reference for sub-picker close chaining
@@ -286,6 +286,18 @@ function M.build(opts)
             "paste_to_buffer_markdown",
             mode = { "n", "i" },
             desc = "Paste as markdown link",
+          },
+          ["<A-f>"] = {
+            function()
+              vim.g.code_ref_filename_only = not (vim.g.code_ref_filename_only or false)
+              vim.notify(
+                "Path picker view: " .. (vim.g.code_ref_filename_only and "filename only" or "all path formats"),
+                vim.log.levels.INFO
+              )
+              refresh_picker()
+            end,
+            mode = { "n", "i" },
+            desc = "Toggle filename-only view",
           },
           ["<A-c>"] = {
             function()

@@ -16,7 +16,6 @@ M.ai_patterns = {
   "claude_code",
   "cag",
   "cc-agd",
-  "agent",
   "pi-agent",
   "pi_session",
   "sidekick",
@@ -52,13 +51,22 @@ M.ai_chat_filetypes = {
 M.group_labels = {
   ai = "AI",
   term = "T",
-  lazygit = "LZ",
+  lazygit = "LG",
   file = "F",
   util = "U",
 }
 
 local function lastused(item)
   return (item.info and item.info.lastused or 0)
+end
+
+local function comes_before_by_lastused(a, b)
+  local a_lastused = lastused(a)
+  local b_lastused = lastused(b)
+  if a_lastused ~= b_lastused then
+    return a_lastused > b_lastused
+  end
+  return (a.buf or math.huge) < (b.buf or math.huge)
 end
 
 local function matches_any(value, patterns)
@@ -81,42 +89,44 @@ local function has_value(values, value)
   return false
 end
 
-local function classify_ai_priority(name, filetype)
-  if has_value(M.ai_chat_filetypes, filetype) or matches_any(name, { "codecompanion" }) then
-    return 1
+---Return the command-bearing portion of a terminal URI without its cwd.
+---A terminal name such as `term:///repo/Codex//123:zsh` must not promote zsh
+---to the AI group merely because the working directory contains `Codex`.
+local function identity_name(buftype, name)
+  if buftype ~= "terminal" then
+    return name
   end
-  if matches_any(name, { "claude", "claudecode", "claude-code", "claude_code", "cag", "cc-agd" })
-    or matches_any(filetype, { "claude", "claudecode", "claude-code", "claude_code" })
-  then
-    return 2
-  end
-  if matches_any(name, { "sidekick", "pi-agent", "pi_session", " pi " }) or matches_any(filetype, { "sidekick" }) then
-    return 3
-  end
-  return 9
+  return name:match("//%d+:(.*)$") or name:match("//([^/]*)$") or name
 end
 
---- Classify a buffer into a group rank.
---- @param buf number Buffer number
+--- Classify buffer metadata into a group rank.
+--- Keeping this pure makes classification independently testable and prevents
+--- normal files under AI-named directories from being promoted accidentally.
+--- @param buftype string
+--- @param name string
+--- @param filetype string
 --- @return number group_rank (1=ai, 2=terminal, 3=lazygit, 4=file, 5=utility)
 --- @return string group_name
 --- @return number group_subrank
-function M.classify(buf)
-  local buftype = vim.bo[buf].buftype
-  local name = vim.api.nvim_buf_get_name(buf) or ""
-  local filetype = vim.bo[buf].filetype or ""
-
+function M.classify_values(buftype, name, filetype)
+  buftype = buftype or ""
+  name = name or ""
+  filetype = filetype or ""
+  local identity = identity_name(buftype, name)
   -- Normal files must stay files even when their path contains ".claude" or similar.
   if buftype == "" and not has_value(M.ai_chat_filetypes, filetype) then
     return 4, "file", 1
   end
 
   -- AI tools outrank generic terminals, so sidekick/claude/cag terminals group as AI.
-  if matches_any(name, M.ai_patterns) or matches_any(filetype, M.ai_patterns) or has_value(M.ai_chat_filetypes, filetype) then
-    return 1, "ai", classify_ai_priority(name, filetype)
+  if matches_any(identity, M.ai_patterns)
+    or matches_any(filetype, M.ai_patterns)
+    or has_value(M.ai_chat_filetypes, filetype)
+  then
+    return 1, "ai", 1
   end
 
-  if matches_any(name, M.lazygit_patterns) or matches_any(filetype, M.lazygit_patterns) then
+  if matches_any(identity, M.lazygit_patterns) or matches_any(filetype, M.lazygit_patterns) then
     return 3, "lazygit", 1
   end
 
@@ -128,22 +138,33 @@ function M.classify(buf)
   return 5, "util", 1
 end
 
---- True for buffers worth surfacing in the focused hidden/agent cycle.
---- This intentionally targets terminal and AI/agent buffers instead of every
---- file buffer, which keeps <A-r> useful for picking agent terminals.
---- @param buf number
---- @param info table|nil
+--- Classify a buffer into a group rank.
+--- @param buf number Buffer number
+--- @return number group_rank (1=ai, 2=terminal, 3=lazygit, 4=file, 5=utility)
+--- @return string group_name
+--- @return number group_subrank
+function M.classify(buf)
+  return M.classify_values(
+    vim.bo[buf].buftype,
+    vim.api.nvim_buf_get_name(buf) or "",
+    vim.bo[buf].filetype or ""
+  )
+end
+
+--- True for metadata worth surfacing in the focused hidden/agent cycle.
+--- @param buftype string
+--- @param name string
+--- @param filetype string
 --- @param mode? integer 1=terminal/agent buffers, 2=agent/chat buffers only
 --- @return boolean
-function M.is_focused_hidden(buf, info, mode)
-  info = info or vim.fn.getbufinfo(buf)[1] or {}
+function M.is_focused_values(buftype, name, filetype, mode)
   mode = mode or 1
-
-  local buftype = vim.bo[buf].buftype
-  local filetype = vim.bo[buf].filetype or ""
-  local name = vim.api.nvim_buf_get_name(buf) or ""
+  buftype = buftype or ""
+  name = name or ""
+  filetype = filetype or ""
+  local identity = identity_name(buftype, name)
   local is_chat_filetype = has_value(M.ai_chat_filetypes, filetype)
-  local is_ai = matches_any(name, M.ai_patterns)
+  local is_ai = matches_any(identity, M.ai_patterns)
     or matches_any(filetype, M.ai_patterns)
     or is_chat_filetype
 
@@ -159,16 +180,30 @@ function M.is_focused_hidden(buf, info, mode)
     return is_ai
   end
 
-  return is_ai or matches_any(name, M.terminal_patterns) or matches_any(filetype, M.terminal_patterns)
+  return is_ai or matches_any(identity, M.terminal_patterns) or matches_any(filetype, M.terminal_patterns)
+end
+
+--- True for buffers worth surfacing in the focused hidden/agent cycle.
+--- This intentionally targets terminal and AI/agent buffers instead of every
+--- file buffer, which keeps <A-r> useful for picking agent terminals.
+--- @param buf number
+--- @param _info table|nil Retained for finder call-site compatibility.
+--- @param mode? integer 1=terminal/agent buffers, 2=agent/chat buffers only
+--- @return boolean
+function M.is_focused_hidden(buf, _info, mode)
+  return M.is_focused_values(
+    vim.bo[buf].buftype,
+    vim.api.nvim_buf_get_name(buf) or "",
+    vim.bo[buf].filetype or "",
+    mode
+  )
 end
 
 --- Sort picker items by lastused (most recent first)
 --- @param items snacks.picker.finder.Item[]
 --- @return snacks.picker.finder.Item[]
 function M.sort_lastused(items)
-  table.sort(items, function(a, b)
-    return lastused(a) > lastused(b)
-  end)
+  table.sort(items, comes_before_by_lastused)
   return items
 end
 
@@ -189,13 +224,10 @@ function M.sort_items(items)
     if a_rank ~= b_rank then
       return a_rank < b_rank
     end
-    local a_subrank = a._group_subrank or math.huge
-    local b_subrank = b._group_subrank or math.huge
-    if a_subrank ~= b_subrank then
-      return a_subrank < b_subrank
-    end
-    -- Within same group, sort by lastused (most recent first)
-    return lastused(a) > lastused(b)
+    -- Every identity within a group shares one last-used timeline. In
+    -- particular, CodeCompanion must not stay above a more recent Claude or
+    -- Sidekick buffer merely because it has a different AI subtype.
+    return comes_before_by_lastused(a, b)
   end)
 
   return items
@@ -214,6 +246,7 @@ function M.finder(opts, ctx)
     current = true,
     nofile = false,
     sort_lastused = true,
+    group_by_kind = true,
     focus_hidden = false,
     focus_hidden_mode = 0,
   }, opts)

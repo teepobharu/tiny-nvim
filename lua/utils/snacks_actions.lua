@@ -562,6 +562,22 @@ local function normalize_dir(dir)
   return vim.fn.fnamemodify(dir, ":p"):gsub("/$", "")
 end
 
+---Return the directory represented by a picker item.
+---Directory picker entries point at themselves; file entries point at their parent.
+---@param abs_path string
+---@param item table|nil
+---@return string
+local function get_item_dirpath(abs_path, item)
+  if item and item.dir then
+    return abs_path
+  end
+  local stat = vim.uv.fs_stat(abs_path)
+  if stat and stat.type == "directory" then
+    return abs_path
+  end
+  return vim.fn.fnamemodify(abs_path, ":h")
+end
+
 local function relative_to_dir(target_path, base_dir)
   local target = vim.fn.fnamemodify(target_path, ":p"):gsub("/$", "")
   local base = normalize_dir(base_dir or vim.fn.getcwd(0))
@@ -668,10 +684,10 @@ function M.open_lazygit_log_path(file_path, opts)
     end
   end
 
-  snacks.lazygit({
+  snacks.lazygit {
     args = { "-f", ctx.filter_path },
     cwd = ctx.cwd,
-  })
+  }
 end
 
 function M.lazygit_log_selected(picker, item)
@@ -795,6 +811,35 @@ function M.copy_path_absolute(picker, item)
   })
 end
 
+--- Picker action: Copy relative **directory** path to current CWD
+function M.copy_dirpath_relative_cwd(picker, item)
+  copy_selected_paths(picker, item, {
+    label = "relative dirpath (to cwd)",
+    format = function(file_path, sel_item)
+      local abs_path = to_absolute_path(file_path, sel_item, picker)
+      if not abs_path then
+        return nil
+      end
+      local dir = get_item_dirpath(abs_path, sel_item)
+      return relative_to_dir(dir, vim.fn.getcwd(0))
+    end,
+  })
+end
+
+--- Picker action: Copy absolute **directory** path
+function M.copy_dirpath_absolute(picker, item)
+  copy_selected_paths(picker, item, {
+    label = "absolute dirpath",
+    format = function(file_path, sel_item)
+      local abs_path = to_absolute_path(file_path, sel_item, picker)
+      if not abs_path then
+        return nil
+      end
+      return get_item_dirpath(abs_path, sel_item)
+    end,
+  })
+end
+
 --- Picker action: Copy git-root relative path(s) - supports multi-selection.
 --- With no selection uses the current item. With multi-select copies all paths
 --- newline-separated. Bound to <C-y> across file/buffer/git pickers.
@@ -821,7 +866,8 @@ function M.copy_path_select(picker, item)
   end
 
   -- Generate unified path variants and code-ref items
-  local path_variants = code_ref.generate_path_variants(file_path)
+  local filename_only = vim.g.code_ref_filename_only or false
+  local path_variants = code_ref.generate_path_variants(file_path, { filename_only = filename_only })
   local coderef_items = code_ref.generate_coderef_items(path_variants, line, col)
 
   -- Build picker items: path formats first, then code-ref formats
@@ -857,6 +903,9 @@ function M.copy_path_select(picker, item)
   local hide_col = vim.g.code_ref_hide_col or false
   local hide_line = vim.g.code_ref_hide_line or false
   local title = "Select Path Format (Enter: paste)"
+  if filename_only then
+    title = title .. " [file:name]"
+  end
   if #coderef_items > 0 then
     local state_parts = {}
     if hide_line then
@@ -869,7 +918,7 @@ function M.copy_path_select(picker, item)
   end
 
   -- Footer: actions + toggles (visible in input window)
-  local footer = "<CR> paste • <C-y> copy • <C-n> md • <A-c> col • <A-l> line"
+  local footer = "<CR> paste • <C-y> copy • <C-n> md • <A-f> file • <A-c> col • <A-l> line"
 
   builder.build {
     items = picker_items,
@@ -2233,6 +2282,8 @@ M.path_copy_actions = {
   copy_path_git_multi = M.copy_path_git_multi,
   copy_path_abs_multi = M.copy_path_abs_multi,
   copy_path_select = M.copy_path_select,
+  copy_dirpath_relative_cwd = M.copy_dirpath_relative_cwd,
+  copy_dirpath_absolute = M.copy_dirpath_absolute,
 }
 
 -- Buffer filtering actions table (only for buffer picker)

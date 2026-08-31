@@ -164,14 +164,16 @@ This keeps custom external traversal logic intact while still using the `externa
 - Override the `buffers` source `finder` for source-specific ordering.
 - Build the same item shape as the built-in buffers source.
 - Apply custom ordering **before** `ctx.filter:filter(items)`.
-- Use a separate picker opt (for example `group_by_kind`) toggled by a custom action/key.
+- Enable `group_by_kind` in both the source config and finder defaults. Keeping
+  the default in both places matters: direct finder calls do not necessarily
+  pass the fully merged source options.
 
 Sketch:
 
 ```lua
 finder = function(opts, ctx)
   local items = build_buffer_items(opts)
-  if opts.group_by_kind then
+  if opts.group_by_kind then -- true by default for the buffers source
     sort_by_group_then_lastused(items)
   elseif opts.sort_lastused then
     sort_by_lastused(items)
@@ -180,7 +182,10 @@ finder = function(opts, ctx)
 end
 ```
 
-This preserves default matcher behavior while still giving a stable grouped default order when no search is active.
+This preserves default matcher behavior while giving a stable grouped default
+order when no search is active. Focused `<A-r>` modes reuse the grouped order;
+they change visibility only. Inside each group, use one `lastused` timeline
+instead of pinning individual AI subtypes above more recently used peers.
 
 ### 11. Buffer Hidden Focus Is Separate From Default `hidden`
 
@@ -208,12 +213,21 @@ This avoids mixing normal buffer listing, grouped sorting, and hidden terminal d
 
 - Protect normal file buffers first: `buftype == ""` should stay `file` unless it has an explicit AI chat filetype like `codecompanion`.
 - Then classify AI identities from `filetype` and name/command patterns: `codecompanion`, `claude`, `claudecode`, `cag`, `cc-agd`, `sidekick`, `pi`, etc.
+- Avoid a bare `agent` substring: it also matches unrelated terminal commands
+  such as `ssh-agent`; prefer known tool/filetype identities.
+- For `term://cwd//pid:command` names, classify the command-bearing tail, not
+  the full URI. Otherwise a cwd such as `Documents/Codex` promotes ordinary
+  zsh or LazyGit buffers into the AI group.
 - Then classify `lazygit` separately so it ranks after regular terminals.
 - Then classify generic terminals.
 
-Current group priority is: `ai -> term -> lazygit -> file -> util`.
+Current default group priority is: `ai -> term -> lazygit -> file -> util`.
 
-Focused modes sort by group priority even when the optional grouping toggle is off. AI sub-priority is `codecompanion -> claude/cag -> sidekick/pi -> other AI`, then last-used within each sub-priority. Buffer rows include short labels: `[AI]`, `[T]`, `[LG]`, `[F]`, `[U]`.
+Focused modes use the same group priority. Every buffer within a group is then
+sorted by `lastused` (most recent first), including CodeCompanion, Claude/cag,
+and Sidekick/pi within the AI group. Buffer rows include short labels: `[AI]`,
+`[T]`, `[LG]`, `[F]`, `[U]`. Scope titles keep the base `Buffers [path]
+(idx/total)` text and append active grouped/focused mode suffixes.
 
 ## Actions
 
@@ -388,6 +402,16 @@ Current convention:
 
 - `<C-y>` copies git-root-relative paths by default (`copy_path_git_multi`).
 - `YP` is the explicit absolute-path copy action.
+- `git_status` merges the same `Yy`, `Yg`, `Yp`, `YP`, `YY`, and `<M-y>`
+  actions as file pickers while retaining its `<M-g>` diff toggle.
+
+The shared code-reference picker builder owns path-view toggles for both
+`,crp` and the `YY`/`<M-y>` sub-picker. `<A-f>` toggles between all path
+variants and a single filename-only row by setting
+`vim.g.code_ref_filename_only`, closing the current format picker, and reopening
+it through the caller's refresh callback. Keep this state and toggle in
+`code_ref_picker_builder.lua`; duplicating it in either caller makes the two
+entry points drift.
 
 ---
 

@@ -219,7 +219,9 @@ return {
           filesystem = {
             bind_to_cwd = false,
             -- bind_to_cwd = true, -- true creates a 2-way binding between vim's cwd and neo-tree's root
-            follow_current_file = { enabled = vim.g.follow_current_file_enabled ~= nil and vim.g.follow_current_file_enabled or true },
+            follow_current_file = {
+              enabled = vim.g.follow_current_file_enabled ~= nil and vim.g.follow_current_file_enabled or true,
+            },
             use_libuv_file_watcher = true,
           },
           window = {
@@ -248,7 +250,6 @@ return {
                 function()
                   vim.g.follow_current_file_enabled = not (vim.g.follow_current_file_enabled and true or false)
 
-
                   local config = require("neo-tree").ensure_config()
                   if not config then
                     vim.notify("Neo-tree config not found", vim.log.levels.ERROR)
@@ -256,23 +257,23 @@ return {
                   end
                   if config.filesystem and config.filesystem.follow_current_file then
                     if vim.g.follow_current_file_enabled == config.filesystem.follow_current_file.enabled then
-                      vim.print("Follow current file is already " .. tostring(vim.g.follow_current_file_enabled) .. ", no need to update")
+                      vim.print(
+                        "Follow current file is already "
+                          .. tostring(vim.g.follow_current_file_enabled)
+                          .. ", no need to update"
+                      )
                       return
                     else
                       -- notes: does require original config else keymap got rewritten to default
-                      require("neo-tree").setup(
-                        vim.tbl_deep_extend("force", config,
-                        {
-                          filesystem = {
-                            follow_current_file = {
+                      require("neo-tree").setup(vim.tbl_deep_extend("force", config, {
+                        filesystem = {
+                          follow_current_file = {
 
-                              -- enabled = true, -- This is the key setting
-                              enabled = vim.g.follow_current_file_enabled,
-                            },
+                            -- enabled = true, -- This is the key setting
+                            enabled = vim.g.follow_current_file_enabled,
                           },
-                      })
-                    )
-
+                        },
+                      }))
                     end
                   end
                   -- below not work not sure why
@@ -324,39 +325,49 @@ return {
               local filepath = node:get_id()
               local filename = node.name
               local modify = vim.fn.fnamemodify
+              local dirpath = node.type == "directory" and filepath or modify(filepath, ":h")
 
               local results = {
-                filepath,
-                modify(filepath, ":."),
-                modify(filepath, ":~"),
-                filename,
-                modify(filename, ":r"),
-                modify(filename, ":e"),
+                filepath, -- 1: file absolute
+                modify(filepath, ":."), -- 2: file relative cwd
+                modify(filepath, ":~"), -- 3: file tilde
+                dirpath, -- 4: dir absolute
+                modify(dirpath, ":."), -- 5: dir relative cwd
+                modify(dirpath, ":~"), -- 6: dir tilde
               }
 
+              if node.type == "file" then
+                table.insert(results, filename) -- 7: filename
+                table.insert(results, modify(filename, ":r")) -- 8: filename no ext
+              end
+
+              local file_idx = #results
               local options = {}
-              table.insert(options, string.format("1 Path full   : %s", results[1]))
-              table.insert(options, string.format("2 Path rel    : %s", results[2]))
-              table.insert(options, string.format("3 Path ~      : %s", results[3]))
+              table.insert(options, string.format("1 File abs    : %s", results[1]))
+              table.insert(options, string.format("2 File rel    : %s", results[2]))
+              table.insert(options, string.format("3 File ~      : %s", results[3]))
+              table.insert(options, string.format("4 Dir abs     : %s", results[4]))
+              table.insert(options, string.format("5 Dir rel     : %s", results[5]))
+              table.insert(options, string.format("6 Dir ~       : %s", results[6]))
 
               if node.type == "file" then
-                table.insert(options, string.format("4 File        : %s", results[4]))
-                table.insert(options, string.format("5 File no ext : %s", results[5]))
+                table.insert(options, string.format("7 Name        : %s", results[file_idx - 1]))
+                table.insert(options, string.format("8 Name no ext : %s", results[file_idx]))
               end
 
               vim.ui.select(options, { prompt = "Choose to copy to clipboard:" }, function(choice)
                 if choice then
                   local i = tonumber(choice:sub(1, 1))
-                  if i then
-                    local result = results[i]
-                    copy_path_to_registers(result)
-                    vim.notify("Copied: " .. result .. " to vim clipboard")
+                  if i and results[i] then
+                    copy_path_to_registers(results[i])
+                    vim.notify("Copied: " .. results[i] .. " to vim clipboard")
                   else
                     vim.notify "Invalid selection"
                   end
                 else
-                  copy_path_to_registers(results[4])
-                  vim.notify("Copied: " .. results[4] .. " to vim clipbard by default")
+                  -- Default: file absolute
+                  copy_path_to_registers(results[1])
+                  vim.notify("Copied: " .. results[1] .. " to vim clipboard by default")
                 end
               end)
             end,
@@ -372,6 +383,22 @@ return {
               local filepath = node:get_id()
               copy_path_to_registers(filepath)
               vim.notify("Copied: " .. filepath, vim.log.levels.INFO)
+            end,
+            copy_rel_dir = function(state)
+              local node = state.tree:get_node()
+              local path = node:get_id()
+              local dir = node.type == "directory" and path or vim.fn.fnamemodify(path, ":h")
+              local relative_dir = vim.fn.fnamemodify(dir, ":.")
+              copy_path_to_registers(relative_dir)
+              vim.notify("Copied dir: " .. relative_dir, vim.log.levels.INFO)
+            end,
+            copy_abs_dir = function(state)
+              local node = state.tree:get_node()
+              local path = node:get_id()
+              local dir = node.type == "directory" and path or vim.fn.fnamemodify(path, ":h")
+              dir = vim.fn.fnamemodify(dir, ":p")
+              copy_path_to_registers(dir)
+              vim.notify("Copied dir: " .. dir, vim.log.levels.INFO)
             end,
             telescope_livegrep_cwd = function(state)
               local opts = get_opts_for_files_and_grep(state, "file")
@@ -542,8 +569,10 @@ return {
                 -- custom binding
                 ["YY"] = "copy_selector",
                 ["go"] = "openGitRemote",
-                ["Yp"] = "copy_file_name_current",
-                ["YP"] = "copy_abs_file",
+                ["Yp"] = "copy_rel_dir",
+                ["YP"] = "copy_abs_dir",
+                ["Yf"] = "copy_file_name_current",
+                ["YF"] = "copy_abs_file",
                 ["Tg"] = "telescope_livegrep_cwd",
                 ["Tf"] = "telescope_find_files",
                 -- git copied from git mapping

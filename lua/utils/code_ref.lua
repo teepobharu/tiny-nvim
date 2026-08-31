@@ -201,16 +201,29 @@ end
 --- Single source of truth for path variant generation used by both
 --- the keymap code_ref_picker and the sub-picker copy_path_select.
 ---@param file_path string absolute file path to generate variants for
----@param opts? { ref_buf_path?: string, include_dirs?: boolean }
+---@param opts? { ref_buf_path?: string, include_dirs?: boolean, filename_only?: boolean }
 ---@return table[] path_variants array of { label, path, key } (deduplicated)
 function M.generate_path_variants(file_path, opts)
   opts = opts or {}
   local include_dirs = opts.include_dirs ~= false -- default true
 
+  if opts.filename_only then
+    local normalized = file_path:gsub("/+$", "")
+    local filename = vim.fn.fnamemodify(normalized, ":t")
+    return {
+      {
+        label = "Filename",
+        path = filename ~= "" and filename or normalized,
+        key = "filename",
+      },
+    }
+  end
+
   -- Determine reference buffer for relative path calculation
   local ref_buf_path = opts.ref_buf_path
   if not ref_buf_path then
-    local prev_buf = vim.api.nvim_buf_get_name(vim.fn.bufnr "#")
+    local alt_bufnr = vim.fn.bufnr "#"
+    local prev_buf = alt_bufnr > 0 and vim.api.nvim_buf_get_name(alt_bufnr) or ""
     local current_buf = vim.api.nvim_buf_get_name(0)
     ref_buf_path = (prev_buf ~= "" and prev_buf) or current_buf
   end

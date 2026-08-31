@@ -2034,7 +2034,8 @@ function M.code_ref_picker(opts)
   local range = code_ref.get_visual_range(use_visual)
 
   -- Generate unified path variants and code-ref items
-  local path_variants = code_ref.generate_path_variants(bufpath)
+  local filename_only = vim.g.code_ref_filename_only or false
+  local path_variants = code_ref.generate_path_variants(bufpath, { filename_only = filename_only })
   local items = code_ref.generate_coderef_items(path_variants, line, col, range, show_char)
 
   if not items or #items == 0 then
@@ -2055,11 +2056,14 @@ function M.code_ref_picker(opts)
   if use_visual then
     table.insert(state_parts, show_char and "char:on" or "char:off")
   end
+  if filename_only then
+    table.insert(state_parts, "file:name")
+  end
   local state_label = (#state_parts > 0) and (" [" .. table.concat(state_parts, " ") .. "]") or ""
   local title = (opts.title or "Code Reference (Enter: paste)") .. state_label
 
   -- Footer: actions + toggles (visible in input window)
-  local footer = "<CR> paste • <C-y> copy • <C-n> md • <A-c> col/char • <A-l> line"
+  local footer = "<CR> paste • <C-y> copy • <C-n> md • <A-f> file • <A-c> col/char • <A-l> line"
 
   builder.build {
     items = items,

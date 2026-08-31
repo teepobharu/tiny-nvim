@@ -97,14 +97,20 @@ local function open_file_in_remote(file_path, ref)
 end
 
 local function with_buffer_group_suffix(picker, base_title)
-  base_title = (base_title or picker.title or "Buffers")
-    :gsub("%s+•%s+grouped$", "")
-    :gsub("%s+•%s+hidden focus$", "")
-    :gsub("%s+•%s+agent chats$", "")
+  base_title = base_title or picker.title or "Buffers"
+  while true do
+    local stripped =
+      base_title:gsub("%s+•%s+grouped$", ""):gsub("%s+•%s+hidden focus$", ""):gsub("%s+•%s+agent chats$", "")
+    if stripped == base_title then
+      break
+    end
+    base_title = stripped
+  end
   if picker and picker.opts and picker.opts.group_by_kind then
     base_title = base_title .. " • grouped"
   end
-  local focus_mode = picker and picker.opts and (picker.opts.focus_hidden_mode or (picker.opts.focus_hidden and 1 or 0)) or 0
+  local focus_mode = picker and picker.opts and (picker.opts.focus_hidden_mode or (picker.opts.focus_hidden and 1 or 0))
+    or 0
   if focus_mode == 1 then
     base_title = base_title .. " • hidden focus"
   elseif focus_mode == 2 then
@@ -831,7 +837,12 @@ M.keymaps = {
         local snacks_actions = require "utils.snacks_actions"
         -- fabllack to files when empty
 
+        local pattern
+        if inputUtils.is_visual_mode() then
+          pattern = inputUtils.getSelectedLines "visual_selection"
+        end
         local picker = Snacks.picker.buffers {
+          pattern = pattern,
 
           -- win = {
           --   input = {
@@ -860,10 +871,11 @@ M.keymaps = {
         -- fallback to files when no buffer (make sure below is same as <leader><ff> mapping)
         if not picker or picker.closed then
           Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state({
-            search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
+            pattern = pattern,
           }, { source = "files" }))
         end
       end,
+      mode = { "n", "x" },
     },
     {
       "<leader>fq",
@@ -933,7 +945,7 @@ M.keymaps = {
       "<leader>ff",
       function()
         Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state({
-          search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
+          pattern = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
         }, { source = "files" }))
       end,
       desc = "Find Files",
@@ -1012,7 +1024,7 @@ M.keymaps = {
       "<leader>fF",
       function()
         Snacks.picker.files(require("utils.snacks_terminal").get_initial_picker_state({
-          search = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
+          pattern = inputUtils.is_visual_mode() and inputUtils.getSelectedLines "visual_selection",
           title = "Find Files Monorepo/Subproject",
         }, { cwd_default = "subproject", use_previous_cwd_state = false, source = "files" }))
       end,
@@ -1333,13 +1345,16 @@ local snacks_picker_shared_keys = {
     },
   },
   -- Copy path actions - applies to file/grep/explorer pickers
+  -- `f`/`F` suffix = filepath, `p`/`P` suffix = dirpath
   copy_path_keys = {
     input = {
       ["<C-y>"] = { "copy_path_git_multi", mode = { "n", "i" }, desc = "Copy Git Path(s)" },
       ["Yy"] = { "copy_path_relative_buffer", mode = { "n" }, desc = "Copy Relative Path (Buffer)" },
       ["Yg"] = { "copy_path_relative_git", mode = { "n" }, desc = "Copy Relative Path (Git)" },
-      ["Yp"] = { "copy_path_relative_cwd", mode = { "n" }, desc = "Copy Relative Path (CWD)" },
-      ["YP"] = { "copy_path_absolute", mode = { "n" }, desc = "Copy Absolute Path" },
+      ["Yp"] = { "copy_dirpath_relative_cwd", mode = { "n" }, desc = "Copy Relative Dirpath (CWD)" },
+      ["YP"] = { "copy_dirpath_absolute", mode = { "n" }, desc = "Copy Absolute Dirpath" },
+      ["Yf"] = { "copy_path_relative_cwd", mode = { "n" }, desc = "Copy Relative Filepath (CWD)" },
+      ["YF"] = { "copy_path_absolute", mode = { "n" }, desc = "Copy Absolute Filepath" },
       ["YY"] = { "copy_path_select", mode = { "n" }, desc = "Copy Path Select" },
       ["<M-y>"] = { "copy_path_select", mode = { "n", "i" }, desc = "Copy Path Select" },
     },
@@ -1571,7 +1586,7 @@ M.sources_n_keys = {
     git_status = {
       win = {
         input = {
-          keys = vim.tbl_extend("force", {}, {
+          keys = vim.tbl_extend("force", snacks_picker_shared_keys.copy_path_keys.input, {
             ["<M-g>"] = { "gitdiff_toggle_group", mode = { "n", "i" }, desc = "Toggle git diff" },
           }),
         },
@@ -1607,7 +1622,9 @@ M.sources_n_keys = {
       end,
       hidden = false,
       nofile = true,
-      group_by_kind = false,
+      -- The default list is always grouped: AI, terminal, LazyGit, files, utility.
+      -- Focused <A-r> modes use the same ordering while changing only visibility.
+      group_by_kind = true,
       focus_hidden = false,
       focus_hidden_mode = 0,
       transform = function(item, ctx)
@@ -1720,7 +1737,8 @@ M.sources_n_keys = {
             vim.notify(string.format("Buffer scope: %s (%d/%d)", short_cwd, next_idx, #chain), vim.log.levels.INFO)
           end
 
-          local title = next_idx == 1 and "Buffers" or string.format("Buffers [%s] (%d/%d)", short_cwd, next_idx, #chain)
+          local title = next_idx == 1 and "Buffers"
+            or string.format("Buffers [%s] (%d/%d)", short_cwd, next_idx, #chain)
           picker.title = with_buffer_group_suffix(picker, title)
 
           picker:refresh()
@@ -1756,7 +1774,7 @@ M.sources_n_keys = {
       },
       win = {
         input = {
-          footer = picker_scope_footer({ "a-e: ext", "a-s: 🔀", "a-S: subproj", "a-r: hidden/agent" }),
+          footer = picker_scope_footer { "a-e: ext", "a-s: 🔀", "a-S: subproj", "a-r: hidden/agent" },
           keys = vim.tbl_extend("force", snacks_picker_group_keys.files_keys.input, {
             ["<M-e>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle ext buffers" },
             ["<M-b>"] = { "toggle_external_scope", mode = { "n", "i" }, desc = "Toggle ext buffers" },

@@ -1,9 +1,9 @@
 ---
 title: "Fix C-space search carry when switching picker scope"
-status: open
+status: review
 priority: medium
 created: 2026-07-07
-updated: 2026-07-07
+updated: 2026-07-19
 refs:
 related:
   - [toggle_picker_source](lua/utils/snacks_actions.lua:1705-1800)
@@ -45,10 +45,10 @@ For non-live sources (files/buffers/git_files), the user's typed input lives in 
 
 ## Implementation Plan
 
-- [ ] Change `<leader>ff` to pass `pattern` instead of `search` for visual mode
-- [ ] Change `<leader>fF` (monorepo files) to pass `pattern` instead of `search` for visual mode
-- [ ] Change `<leader><space>` files fallback to pass `pattern` instead of `search` for visual mode
-- [ ] Leave `search` as-is for live pickers (`<leader>/`, `<leader>fw`, `<leader>sG`, `<leader>sB`) — those are correct
+- [x] Change `<leader>ff` to pass `pattern` instead of `search` for visual mode
+- [x] Change `<leader>fF` (monorepo files) to pass `pattern` instead of `search` for visual mode
+- [x] Change `<leader><space>` files fallback to pass `pattern` instead of `search` for visual mode
+- [x] Leave `search` as-is for live pickers (`<leader>/`, `<leader>fw`, `<leader>sG`, `<leader>sB`) — those are correct
 - [ ] Verify `<C-space>` cycle carries the word through files → buffers → git_files → files
 - [ ] Verify `<M-g>` (grep toggle) still works — it already reads both fields correctly
 
@@ -64,16 +64,22 @@ For non-live sources (files/buffers/git_files), the user's typed input lives in 
 
 ### How to verify
 
-Test in any project with multiple files. Use a distinctive word that matches at least one filename.
+Run the headless regression test with the isolated worktree profile, then test
+the full picker cycle in any project with multiple files. Use a distinctive
+word that matches at least one filename.
 
 ### Commands
 
 ```bash
-NVIM_APPNAME=nvim3_jelly_tinynvim nvim
+NVIM_APPNAME=nvimwt3a nvim --headless -l tests/test_picker_search_and_paths.lua
+
+NVIM_APPNAME=nvimwt3a nvim
 ```
 
 ### Checklist
 
+- [x] Automated test confirms all three non-live entry points pass the visual selection as `pattern`, never `search`.
+- [x] Full-profile check confirms `<leader><space>` is registered in visual mode, so its file fallback is reachable.
 - [ ] Visual-select a word that matches a filename (e.g. `snacks_actions` or `editor_keymaps`)
 - [ ] Press `<leader>ff` — word appears in the files picker input box
 - [ ] Press `<C-space>` — switches to buffers, word is still in the input
@@ -90,3 +96,18 @@ NVIM_APPNAME=nvim3_jelly_tinynvim nvim
 - [files keymap with search opt](lua/utils/editor_keymaps.lua:933-941)
 - Snacks `filter.lua`: `~/.local/share/nvim3_jelly_tinynvim/lazy/snacks.nvim/lua/snacks/picker/core/filter.lua` — `pattern` vs `search` semantics
 - [Snacks picker filter docs](docs/memory/snacks_picker.md)
+
+## Main vs Worktree Diff — 2026-07-27
+
+The `<leader>ff` fix (single entry point) is already in `main`. The worktree extends it to **3 additional entry points**:
+
+| Entry point | `main` (uses `search` — silent, not carried by `<C-space>`) | Worktree (uses `pattern` — visible, carried by `<C-space>`) |
+|-------------|--------------------------------------------------------------|--------------------------------------------------------------|
+| `<leader>ff` (files) | `search` | `pattern` |
+| `<leader>fF` (monorepo files) | `search` | `pattern` |
+| `<leader><space>` (buffer picker visual mode) | No visual mode support | Visual mode enabled, passes `pattern` to buffer picker |
+| `<leader><space>` (files fallback when no buffers) | `search` | `pattern` |
+
+**What this means for you**: If you visual-select a word and press `<leader><space>` or `<leader>fF` in the **main profile**, the word will be silently applied but won't appear in the input box and won't carry through `<C-space>` cycles. In the **worktree profile**, all four entry points show the word and carry it.
+
+**To test**: Visual-select a distinctive filename word, then try each entry point above and press `<C-space>` to cycle — the word should persist in the input box across all picker switches.

@@ -4,6 +4,17 @@ local keyutil = require "utils.keyutil"
 local editor_keymaps = require "utils.editor_keymaps"
 
 local isSnackEnabled = keyutil.isSnackEnabled
+local snacks_keys = vim.deepcopy(editor_keymaps.keymaps.snacks)
+
+-- Keep native scratch bindings at <leader>ns/<leader>no while adding the richer
+-- multi-source browser on a separate uppercase shortcut.
+table.insert(snacks_keys, {
+  "<leader>nS",
+  function()
+    require("utils.scratch_notes_picker").open()
+  end,
+  desc = "All Notes/Scratch Sources",
+})
 
 local logo = [[
        \   /
@@ -81,6 +92,6 @@ return {
         },
       },
     },
-    keys = editor_keymaps.keymaps.snacks,
+    keys = snacks_keys,
   },
 }

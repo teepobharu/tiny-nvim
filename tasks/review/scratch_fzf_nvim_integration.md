@@ -1,9 +1,10 @@
 ---
 title: "Create nvim scratch fzf system — recreate/extend scratch.fzf with multi-source, grep mode, source cycling"
-status: draft
+status: review
 priority: medium
 created: 2026-07-03
-updated: 2026-07-03
+updated: 2026-08-29
+implementation_status: ready-for-review
 created_by: task-orchestrator-skill
 task_orchestrator_version: "1.4.0"
 source: text
@@ -50,6 +51,14 @@ Snacks.scratch is a scratch buffer utility. scratch.fzf is a full notes ecosyste
 
 Answer these before starting implementation. Each includes a suggested default based on the investigation.
 
+Accepted for this implementation cycle:
+
+- [x] Coexist with `scratch.fzf` as the CLI fallback.
+- [x] Add `<leader>nS`; preserve native `<leader>ns` and `<leader>no`.
+- [x] Include all four sources in the MVP.
+- [x] Restrict grep to the active source roots.
+- [x] Deliver source cycling, preview, grep, and daily-note creation together.
+
 1. Replace or coexist with scratch.fzf?
    - A) Full nvim recreation (cleaner long-term, more work)
    - B) Coexist — keep CLI as fallback (safer, faster MVP)
@@ -77,32 +86,45 @@ Answer these before starting implementation. Each includes a suggested default b
 
 ## Implementation Plan
 
-- [ ] Create new snacks picker source `scratch_multi` aggregating all 4 sources
-- [ ] Implement source cycling action (`<A-s>`) with dynamic picker refresh + title update
-- [ ] Add grep mode toggle (`<A-g>`) — switch from file list to `Snacks.picker.grep` scoped to active source
-- [ ] Add file preview with actual content (snacks preview)
-- [ ] Support daily note creation from within picker
-- [ ] Map to chosen entry key (pending Q2)
+- [x] Create new snacks picker source `scratch_multi` aggregating all 4 sources
+- [x] Implement source cycling action (`<A-s>`) with dynamic picker refresh + title update
+- [x] Add grep mode toggle (`<A-g>`) — switch from file list to `Snacks.picker.grep` scoped to active source
+- [x] Add file preview with actual content (snacks preview)
+- [x] Support daily note creation from within picker
+- [x] Add `<leader>nS` while preserving native `<leader>ns` and `<leader>no`
+
+## Implementation
+
+- [Multi-source picker](lua/utils/scratch_notes_picker.lua) — source discovery, dynamic catalog, grep mode, previews, and daily-note creation.
+- [Snacks keymap](lua/plugins/extra/mySnacks.lua) — routes `<leader>nS` to the new picker while preserving the native `<leader>ns` selector and `<leader>no` creator.
+- [Regression tests](tests/test_scratch_notes_picker.lua) — source cycling, date paths, depth/type filtering, aggregation, missing roots, and idempotent note creation.
+- [Living memory](docs/memory/scratch_picker.md) — controls and non-obvious Snacks finder/grep behavior.
 
 ## Success Criteria
 
-- `<leader>ns` (or chosen key) opens a unified picker with all 4 note sources
+- `<leader>nS` opens a unified picker with all 4 note sources
 - `alt-s` cycles through sources with visual feedback (title change)
 - Grep mode toggle searches file contents within the active source
 - File preview shows actual content (not just metadata)
 - Daily note creation works from within the picker
-- No regression to existing `<leader>no` scratch buffer creation
+- No regression to native `<leader>ns` scratch selection or `<leader>no` scratch buffer creation
 
 ## Verification
 
 ### How to verify
 
-Open Neovim with main profile, trigger the scratch picker, and test all modes.
+Run the pure filesystem regression test, then open the isolated worktree profile and test all picker modes. Do not use the daily-driver profile until the batch is accepted.
 
 ### Commands
 
 ```bash
-NVIM_APPNAME=nvim3_jelly_tinynvim nvim
+NVIM_APPNAME=nvimwt3a nvim --headless -u NONE -i NONE \
+  --cmd 'set rtp^=/Users/tharutaipree/dotfiles/.config/nvimwt3a' \
+  -l tests/test_scratch_notes_picker.lua
+```
+
+```bash
+NVIM_APPNAME=nvimwt3a nvim
 ```
 
 ### Checklist
@@ -112,5 +134,59 @@ NVIM_APPNAME=nvim3_jelly_tinynvim nvim
 - [ ] Title updates to show current source
 - [ ] Grep mode toggle searches file contents
 - [ ] File preview panel shows actual file content
+- [ ] `<C-n>` creates today's note for the active daily source and prompts from `all`/`scratch-files`
 - [ ] Existing `<leader>no` still works for new scratch buffers
 - [ ] Works when some source directories are empty or missing
+
+### Verification evidence (2026-07-19)
+
+- [x] Headless filesystem suite covers source cycling, depth/type filtering,
+      aggregation, missing roots, idempotent creation, and blank override
+      fallback (no root-level daily targets).
+- [x] Source-level review confirms `<leader>nS` is added for the new picker while
+      native `<leader>ns` and `<leader>no` bindings remain available.
+- [ ] User completed the interactive checklist and signed off in the
+      consolidated review group.
+
+## User Signoff
+
+- [ ] Close this task after all manual checks pass.
+- [ ] Keep this task open and record failed checks below.
+
+### Failed checks / follow-up
+
+- None recorded.
+
+## Review Feedback — 2026-07-27
+
+1. **Switch key from `<leader>ns` to `<leader>nS`** — capital S distinguishes the multi-source picker from the simpler scratch select.
+2. **Add `<A-e>` to toggle visibility of empty file content** — filter out/show scratch files that have zero content.
+3. **Remove indent space from labels** — labels currently have leading space padding; remove it for compact display.
+4. **Add source filter for `Snacks.scratch.list()` entries** — the scratch source returns items from `Snacks.scratch.list()` that include metadata like `item.cwd`, `item.ft`, `item.branch`, `item.stat.size`. Use these fields to filter/deduplicate and distinguish by:
+   - File extension (`.lua`, `.json`, `.startify`, etc.)
+   - Branch context (`item.branch` when present)
+   - Empty vs non-empty files (`item.stat.size == 0`)
+   - CWD context (`item.cwd`)
+
+Sample item structure captured from runtime:
+```lua
+{
+  _path = ".../scratch/9a10cdef.lua",
+  item = {
+    count = 1,
+    cwd = ".../lua/config",
+    file = ".../scratch/9a10cdef.lua",
+    ft = "lua",
+    icon = "󰢱",
+    name = "Scratch",
+    stat = { size = 33, ... }
+  },
+  text = "Scratch lua",
+  title = "Scratch"
+}
+```
+
+- [x] Change entry key to `<leader>nS`
+- [x] Add `<A-e>` toggle for empty file visibility
+- [x] Remove label indent space
+- [x] Add source filter using `Snacks.scratch.list()` metadata fields

@@ -921,6 +921,26 @@ keymap("n", "<localleader>cf", function()
 end, { desc = "Copy relative filepath name" })
 -- copy absolute filepath - use neotree (no relative file)
 keymap("n", "<localleader>cF", ':let @+=expand("%:p")<CR>', { desc = "Copy absolute filepath" })
+
+local function copy_current_buffer_path(kind, label)
+  local bufname = vim.api.nvim_buf_get_name(0)
+  if bufname == "" then
+    vim.notify("Current buffer has no file path", vim.log.levels.WARN)
+    return
+  end
+  local path = vim.fn.fnamemodify(bufname, ":p:h")
+  if kind == "rel" then
+    -- make dirpath relative to cwd, shorten $HOME to ~
+    path = vim.fn.fnamemodify(path, ":~:.")
+  end
+  require("utils.myinput").copy_and_notify(path, "plus", "Copied " .. label .. ": " .. path)
+end
+keymap("n", "<localleader>cp", function()
+  copy_current_buffer_path("rel", "relative dirpath")
+end, { desc = "Copy current buffer relative dirpath" })
+keymap("n", "<localleader>cP", function()
+  copy_current_buffer_path("abs", "absolute dirpath")
+end, { desc = "Copy current buffer absolute dirpath" })
 -- lsp / files
 keymap("n", "<localleader>rs", "", { desc = "Setup" })
 keymap(
@@ -1853,5 +1873,4 @@ vim.api.nvim_create_user_command("FzfSessionDelayed", function()
     vim.cmd [[execute "normal \<Esc>:FzfSession\<CR>"]]
   end)
 end, { desc = "Open FzfSession picker with delay (for vs alias)" })
-
 
