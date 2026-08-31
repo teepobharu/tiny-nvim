@@ -1,0 +1,19 @@
+diff --git a/lua/project_nvim/project.lua b/lua/project_nvim/project.lua
+index 8c6bad7..a1b2c3d 100644
+--- a/lua/project_nvim/project.lua
++++ b/lua/project_nvim/project.lua
+@@ -13,12 +13,12 @@ function M.find_lsp_root()
+   -- Get lsp client for current buffer
+   -- Returns nil or string
+   local buf_ft = vim.api.nvim_buf_get_option(0, "filetype")
+-  local clients = vim.lsp.buf_get_clients()
++  local clients = vim.lsp.get_clients({ bufnr = 0 })
+   if next(clients) == nil then
+     return nil
+   end
+
+-  for _, client in pairs(clients) do
++  for _, client in ipairs(clients) do
+     local filetypes = client.config.filetypes
+     if filetypes and vim.tbl_contains(filetypes, buf_ft) then
+       if not vim.tbl_contains(config.options.ignore_lsp, client.name) then
