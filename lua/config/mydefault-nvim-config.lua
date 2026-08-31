@@ -30,7 +30,7 @@ vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
     -- "xxLegacyCopilotAi", -- mute legacy CopilotChat
     -- Plugin-level extras
     "harpoon",
-    "wakatime",
+    "mywaka",
     -- "codecompanion", -- TODO: not being used migrated to: myAi
     -- "blink",
     "claude-code", -- "extras.claudecode" looks config also same not sure why
