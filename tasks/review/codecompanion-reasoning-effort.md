@@ -3,7 +3,7 @@ title: "Flexible per-model thinking control in CodeCompanion"
 status: review
 priority: medium
 created: 2026-05-31
-updated: 2026-07-12
+updated: 2026-08-27
 refs:
   - eba3b42f86ed3831b1a473744e94a90d6dee4b6b [tag:v19.17.0] @2026-06-21 chore(main): release 19.17.0 (#3161)
 related:
@@ -29,11 +29,11 @@ CodeCompanion 19.17 has lifecycle details that made the original allowlist/gate 
 - OpenAI chat-completions uses legacy flat handlers while Responses uses nested request handlers.
 - Agoda metadata may report `thinkingCapability=None` while features still include `Thinking` (GPT-5.4).
 
-The old `M.codecompanion_reasoning_models` allowlist and destructive sanitizer were removed. Capability is now advisory; the wire profile remains available for manual/future values.
+The old `M.codecompanion_reasoning_models` allowlist and destructive sanitizer were removed. Capability remains advisory by default; exact endpoint/model/level probes may opt a route into strict validation while unknown models retain manual values.
 
 ## Implementation
 
-- [x] Keep `reasoning_effort` (`openai_agd`) and `reasoning.effort` (`openai_responses_agd`) always present, optional, free-form, and implicitly unset.
+- [x] Keep `reasoning_effort` (`openai_agd`) and `reasoning.effort` (`openai_responses_agd`) always present, optional, and unset by default; unknown models remain free-form while exact routes expose verified levels.
 - [x] Clear inherited upstream `medium` defaults after adapter construction (Lua deep-merge cannot erase a parent value with `nil`).
 - [x] Add `:CodeCompanionThinking`, `<leader>At`, inspect, refresh, custom values, explicit `none`, and clear/inherit.
 - [x] Remember overrides per chat + adapter + model and restore them when returning to a model.
@@ -50,14 +50,14 @@ The old `M.codecompanion_reasoning_models` allowlist and destructive sanitizer w
 - GPT-5.4: `high`, `xhigh`, and `none` accepted; reasoning-token use changed for high/xhigh; `minimal` rejected. Non-default sampling conflicted with active effort.
 - Claude Sonnet 5: flat `reasoning_effort=high` plus `temperature=0.42` and `top_p=0.8` returned HTTP 200. Acceptance is proven; effort-level differentiation was not observable in the small probe.
 - Gemini 2.5 Flash: effort changed reported reasoning use. Gemini 3.5 Flash accepted the bare model ID; the preview alias failed.
-- DeepSeek R1 is obligatory. o3 rejected `none`. Qwen 3.6 rejected `reasoning_effort`.
+- DeepSeek R1 is obligatory. o3 rejected `none`. Qwen 3.8 Chat Completions accepted `reasoning_effort=none|low|medium|xhigh` in the 2026-08-27 probe, but rejected `high` and `max`; its exact model rule hides and strips only those unsupported values.
 - `/v1/responses` accepted `gpt-5.3-codex` with nested `reasoning.effort=low`.
 
-These results guide warnings and request normalization only. An explicit unknown/unsupported value is still passed through.
+These results guide warnings and request normalization. Unknown models and advisory capability records still pass explicit values through; strict exact-route rules reject and strip only verified-invalid values.
 
 ## Deferred follow-up
 
-Synthetic model-picker entries such as `gpt-5.5 [high]` remain separate in [model-effort presets](tasks/open/codecompanion-model-effort-presets.md). The current task controls the active chat after model selection and preserves per-model values.
+Model-selector preset entries are now generated through the shared thinking registry and apply an initial effort after model selection. Future families can extend the registry without adding adapter aliases; the current task still controls the active chat and preserves per-model values.
 
 ## Verification
 
@@ -102,13 +102,13 @@ NVIM_APPNAME=nvimwt3a nvim
 
 ### Checklist
 
-- [ ] `<leader>At` opens a model-aware picker and `<custom value…>` accepts a free-form string.
+- [ ] `<leader>At` opens a model-aware picker; custom input remains available for unknown/advisory models while strict routes show only verified levels.
 - [ ] GPT-5.4 can be set to `high`; `inspect` shows the flat `reasoning_effort` field and current value.
 - [ ] Switch GPT-5.4 → Claude Sonnet 5, set Claude to `low`, then switch back; GPT restores `high` and Claude restores `low`.
 - [ ] In `/debug`, manually change the current effort and save; a later model switch remembers that manual value.
 - [ ] A `/debug` or YAML model-only switch does not copy the source model's effort onto the target model.
 - [ ] `clear` removes the override/inherits provider behavior; `none` remains a distinct explicit value.
-- [ ] A Qwen or unknown model is not blocked from a manual value; known unsupported/out-of-range values show a warning.
+- [ ] Qwen exposes `none`/`low`/`medium`/`xhigh` and rejects `high`/`max`; unknown models retain manual values.
 - [ ] `openai_responses_agd` maps the dotted setting to nested `reasoning.effort`.
 - [ ] Regular chats still submit successfully after switching models; temperature/top_p remain visible in chat settings.
 - [ ] The daily-driver profile remains untouched until the user accepts and syncs the commit.

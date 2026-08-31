@@ -13,7 +13,7 @@ local MODELS = require("utils.my_ai_constants").models
 -- for easier maintenance and to optionally exclude them from adapter selection
 --- @param use_dynamic_fetch boolean? whether to use dynamic model fetching for the OpenAI Agoda adapter (default: false)
 function M.get_agoda_adapters(use_dynamic_fetch)
-  return {
+  local adapters = {
     -- not used
     -- Claude via Agoda GenAI Gateway
     -- claude_agd = function()
@@ -67,7 +67,8 @@ function M.get_agoda_adapters(use_dynamic_fetch)
     -- Uses the normalized AGD proxy base from my_ai_constants.
     -- Uses dynamic model fetching via fetch_model_helper from my_codecompanion_actions
     [myAiC.providers.openai_agd.adapter_name] = function()
-      local adapter = require("codecompanion.adapters").extend("openai", {
+      local adapter
+      adapter = require("codecompanion.adapters").extend("openai", {
         -- Override name so logs/notifications show "openai_agd" not the parent "openai"
         name = myAiC.providers.openai_agd.adapter_name,
         formatted_name = "OpenAI AGD",
@@ -160,7 +161,7 @@ function M.get_agoda_adapters(use_dynamic_fetch)
         url = "${url}${chat_url}",
         schema = {
           model = {
-            default = MODELS.gpt.GPT_5_2,
+            default = MODELS.qwen.QWEN_3_8_27B,
             choices = function(self, opts)
               -- use_dynamic_fetch is captured from the outer get_agoda_adapters(use_dynamic_fetch) argument.
               -- merge_agoda_adapters() always calls get_agoda_adapters(true), so this closure
@@ -194,7 +195,7 @@ function M.get_agoda_adapters(use_dynamic_fetch)
                   entry.opts = vim.tbl_extend("force", entry.opts or {}, { can_reason = true })
                 end
               end
-              return result
+              return thinking.expand_model_choices(self, result)
             end,
           },
           -- temperature = {
@@ -203,15 +204,21 @@ function M.get_agoda_adapters(use_dynamic_fetch)
           max_completion_tokens = {
             default = 4096,
           },
-          -- Always present: model capability is advisory and arbitrary manual values must map.
+          -- Always present: unknown model capability stays permissive; exact
+          -- route rules can still reject a known-invalid manual value.
           reasoning_effort = {
             order = 2,
             mapping = "parameters",
             type = "string",
             optional = true,
             enabled = true,
-            choices = { "none", "minimal", "low", "medium", "high", "xhigh", "max" },
-            desc = "Optional proxy reasoning effort. Free-form values are allowed; clear/unset is different from none.",
+            choices = function(self)
+              return thinking.levels_for(self)
+            end,
+            validate = function(value)
+              return thinking.validate_effort(adapter, value)
+            end,
+            desc = "Optional proxy reasoning effort. Exact route rules reject known-invalid levels; unknown models show all common levels.",
           },
         },
       })
@@ -222,13 +229,16 @@ function M.get_agoda_adapters(use_dynamic_fetch)
       return adapter
     end,
   }
+
+  return adapters
 end
 
 -- Get Agoda-specific adapter for codex/responses models (uses /v1/responses endpoint)
 function M.get_agoda_responses_adapters()
-  return {
+  local adapters = {
     [myAiC.providers.openai_responses_agd.adapter_name] = function()
-      local adapter = require("codecompanion.adapters").extend("openai_responses", {
+      local adapter
+      adapter = require("codecompanion.adapters").extend("openai_responses", {
         name = myAiC.providers.openai_responses_agd.adapter_name,
         formatted_name = "OpenAI Responses AGD",
         env = {
@@ -261,8 +271,10 @@ function M.get_agoda_responses_adapters()
         schema = {
           model = {
             default = MODELS.gpt.GPT_5_3_CODEX,
-            choices = {
+            choices = thinking.expand_model_choices(myAiC.providers.openai_responses_agd.adapter_name, {
               -- gpt-5.6 tiers confirmed working at /v1/responses on AGD proxy (2026-07-14).
+              -- The shared thinking module appends local low/high/xhigh/max
+              -- selector aliases; only canonical names reach the proxy.
               [MODELS.gpt.GPT_5_6_SOL] = {
                 formatted_name = "GPT 5.6 Sol",
                 meta = { context_window = 1050000 },
@@ -284,7 +296,7 @@ function M.get_agoda_responses_adapters()
                 meta = { context_window = 1050000 },
                 opts = { can_manage_context = true, has_function_calling = true, has_vision = true, can_reason = true },
               },
-            },
+            }),
           },
           max_output_tokens = {
             default = 4096,
@@ -295,8 +307,13 @@ function M.get_agoda_responses_adapters()
             type = "string",
             optional = true,
             enabled = true,
-            choices = { "none", "minimal", "low", "medium", "high", "xhigh", "max" },
-            desc = "Optional Responses API reasoning effort. Free-form values are allowed.",
+            choices = function(self)
+              return thinking.levels_for(self)
+            end,
+            validate = function(value)
+              return thinking.validate_effort(adapter, value)
+            end,
+            desc = "Optional Responses API reasoning effort. Exact route rules reject known-invalid levels; unknown models show all common levels.",
           },
           -- Codex models on AGD reject top_p — suppress it (same pattern upstream uses for gpt-5.4-nano)
           top_p = {
@@ -310,6 +327,8 @@ function M.get_agoda_responses_adapters()
       return adapter
     end,
   }
+
+  return adapters
 end
 
 -- Merge Agoda responses adapters with existing adapters configuration

@@ -5,6 +5,7 @@ local schema = require "codecompanion.schema"
 local constants = require "utils.my_ai_constants"
 local thinking = require "utils.my_codecompanion_thinking"
 local adapter_utils = require "utils.my_codecompanion_utils"
+local actions = require "utils.my_codecompanion_actions"
 
 local function eq(expected, actual, label)
   assert(vim.deep_equal(expected, actual), ("%s: expected %s, got %s"):format(
@@ -76,11 +77,11 @@ do
         supported_endpoints = { "/v1/chat/completions" },
       },
       {
-        name = "qwen-3.6-27b",
+        name = "qwen-3.8-27b",
         maker = "ALIBABA",
         isChatModel = true,
-        thinkingCapability = "None",
-        features = {},
+        thinkingCapability = "Optional",
+        features = { { name = "Thinking" } },
         supported_endpoints = { "/v1/chat/completions" },
       },
       {
@@ -105,7 +106,9 @@ do
   eq(6, count, "metadata count")
   eq("supported", thinking.resolve_capability(flat_adapter("gpt-5.4"), "gpt-5.4").status, "GPT feature hint")
   eq("required", thinking.resolve_capability(flat_adapter("deepseek-r1-0528-maas")).mode, "Obligatory normalized")
-  eq("unsupported", thinking.resolve_capability(flat_adapter("qwen-3.6-27b")).status, "Qwen advisory")
+  local qwen = thinking.resolve_capability(flat_adapter("qwen-3.8-27b"))
+  eq("supported", qwen.status, "Qwen transport override")
+  eq(true, qwen.enforce_levels, "Qwen transport rule is exact")
   eq("unknown", thinking.resolve_capability(flat_adapter("future-model")).status, "future model remains controllable")
   local future_gpt = thinking.resolve_capability(flat_adapter("gpt-5.99-future"))
   eq("unsupported", future_gpt.status, "metadata remains advisory for a future GPT")
@@ -123,8 +126,6 @@ for _, model in ipairs({
   "gpt-5.4",
   "claude-sonnet-5",
   "gemini-3.5-flash",
-  "qwen-3.6-27b",
-  "kimi-k2.7-code",
   "future-model",
 }) do
   local chat = flat_chat(model)
@@ -132,6 +133,141 @@ for _, model in ipairs({
   eq("vendor-new-level", chat.settings.reasoning_effort, model .. " free-form effort")
   eq(0.42, chat.settings.temperature, model .. " temperature preserved")
   eq(0.8, chat.settings.top_p, model .. " top_p preserved")
+end
+
+do
+  local capability = thinking.resolve_capability(flat_adapter("qwen-3.8-27b"))
+  eq({ "none", "low", "medium", "xhigh" }, capability.levels, "Qwen Chat exposes verified reasoning levels")
+
+  local chat = flat_chat("qwen-3.8-27b")
+  eq(true, thinking.set("none", { chat = chat }), "Qwen Chat accepts none")
+  eq("none", chat.settings.reasoning_effort, "accepted Qwen none is stored")
+  eq(true, thinking.set("xhigh", { chat = chat }), "Qwen Chat accepts xhigh")
+  eq("xhigh", chat.settings.reasoning_effort, "accepted Qwen effort is stored")
+  eq(false, thinking.set("high", { chat = chat }), "Qwen Chat rejects high")
+  eq(false, thinking.set("max", { chat = chat }), "Qwen Chat rejects max")
+end
+
+for _, model in ipairs({ "grok-4.3", "grok-4.5", "grok-4.6" }) do
+  local capability = thinking.resolve_capability(flat_adapter(model))
+  eq(true, capability.enforce_levels, model .. " Chat rule is exact")
+  eq({ "low", "medium", "high", "xhigh" }, capability.levels, model .. " Chat exposes verified reasoning levels")
+
+  local chat = flat_chat(model)
+  eq(true, thinking.set("xhigh", { chat = chat }), model .. " Chat accepts xhigh")
+  eq(false, thinking.set("max", { chat = chat }), model .. " Chat rejects max")
+end
+
+for _, model in ipairs({ "kimi-k2.6", "kimi-k2.7-code" }) do
+  local capability = thinking.resolve_capability(flat_adapter(model))
+  eq(true, capability.enforce_levels, model .. " Chat rule is exact")
+  eq({ "low", "medium", "high", "xhigh", "max" }, capability.levels, model .. " Chat exposes verified reasoning levels")
+
+  local chat = flat_chat(model)
+  eq(true, thinking.set("max", { chat = chat }), model .. " Chat accepts max")
+end
+
+do
+  local capability = thinking.resolve_capability(flat_adapter("gpt-5.6-luna"))
+  eq(true, capability.enforce_levels, "GPT-5.6 chat rule is exact")
+  eq({ "none", "low", "medium", "high", "xhigh" }, capability.levels, "GPT-5.6 chat levels")
+
+  local chat = flat_chat("gpt-5.6-luna")
+  eq(false, thinking.set("max", { chat = chat }), "GPT-5.6 chat rejects max")
+  eq(nil, chat.settings.reasoning_effort, "rejected GPT-5.6 effort is not stored")
+  eq(false, thinking.set("minimal", { chat = chat }), "GPT-5.6 chat rejects minimal")
+  eq(true, thinking.set("xhigh", { chat = chat }), "GPT-5.6 chat accepts xhigh")
+  eq("xhigh", chat.settings.reasoning_effort, "accepted GPT-5.6 effort is stored")
+end
+
+do
+  eq(35, #thinking.model_selector_presets("openai_agd"), "Chat selector includes GPT-5.6, Qwen, Grok, and Kimi verified presets")
+  eq(12, #thinking.model_selector_presets("openai_responses_agd"), "Responses selector has four GPT-5.6 efforts per tier")
+
+  local chat_preset = thinking.resolve_model_selector_preset("openai_agd", "gpt-5.6-luna-xhigh")
+  eq("gpt-5.6-luna", chat_preset.model, "Chat selector alias resolves canonical Luna")
+  eq("xhigh", chat_preset.effort, "Chat selector alias resolves effort")
+  eq(nil, thinking.resolve_model_selector_preset("openai_agd", "gpt-5.6-luna-max"), "Chat does not advertise max alias")
+
+  local qwen_preset = thinking.resolve_model_selector_preset("openai_agd", "qwen-3.8-27b-xhigh")
+  eq("qwen-3.8-27b", qwen_preset.model, "Chat selector alias resolves canonical Qwen")
+  eq("xhigh", qwen_preset.effort, "Qwen selector alias resolves effort")
+  eq(nil, thinking.resolve_model_selector_preset("openai_agd", "qwen-3.8-27b-high"), "Chat omits unsupported Qwen high alias")
+  eq(nil, thinking.resolve_model_selector_preset("openai_agd", "qwen-3.8-27b-max"), "Chat omits unsupported Qwen max alias")
+
+  local grok_preset = thinking.resolve_model_selector_preset("openai_agd", "grok-4.6-xhigh")
+  eq("grok-4.6", grok_preset.model, "Chat selector alias resolves canonical Grok")
+  eq("xhigh", grok_preset.effort, "Grok selector alias resolves effort")
+  eq(nil, thinking.resolve_model_selector_preset("openai_agd", "grok-4.6-max"), "Chat omits unsupported Grok max alias")
+
+  local kimi_preset = thinking.resolve_model_selector_preset("openai_agd", "kimi-k2.7-code-max")
+  eq("kimi-k2.7-code", kimi_preset.model, "Chat selector alias resolves canonical Kimi")
+  eq("max", kimi_preset.effort, "Kimi selector alias resolves max")
+
+  local responses_preset = thinking.resolve_model_selector_preset("openai_responses_agd", "gpt-5.6-luna-max")
+  eq("gpt-5.6-luna", responses_preset.model, "Responses selector alias resolves canonical Luna")
+  eq("max", responses_preset.effort, "Responses selector alias resolves max")
+
+  local chat_choices = thinking.expand_model_choices("openai_agd", {
+    ["gpt-5.6-luna"] = { formatted_name = "GPT 5.6 Luna" },
+  })
+  eq("GPT 5.6 Luna [xhigh]", chat_choices["gpt-5.6-luna-xhigh"].formatted_name, "Chat selector label is readable")
+  assert(chat_choices["gpt-5.6-luna-low"], "Chat selector exposes Luna low")
+  assert(chat_choices["gpt-5.6-luna-high"], "Chat selector exposes Luna high")
+  eq(nil, chat_choices["gpt-5.6-luna-max"], "Chat selector omits Luna max")
+end
+
+do
+  local chat = flat_chat("gpt-5.6-luna-xhigh")
+  thinking.attach(chat)
+  eq("xhigh", chat.settings.reasoning_effort, "selector alias initializes the visible effort")
+  eq(true, thinking.set("high", { chat = chat }), "manual selector override is accepted")
+  thinking.reconcile(chat)
+  eq("high", chat.settings.reasoning_effort, "manual selector override wins over preset")
+  thinking.clear({ chat = chat })
+  thinking.reconcile(chat)
+  eq("xhigh", chat.settings.reasoning_effort, "clear restores the model selector preset")
+end
+
+do
+  local selected
+  local listed
+  local chat = {
+    adapter = { name = constants.providers.openai_agd.adapter_name },
+    change_model = function(_, args)
+      selected = args.model
+    end,
+  }
+  actions.pick_current_provider_model(chat, {
+    models = { "grok-4.6", "grok-4.6-xhigh" },
+    select = function(models, choose)
+      listed = vim.deepcopy(models)
+      choose("grok-4.6-xhigh")
+    end,
+  })
+  eq({ "grok-4.6", "grok-4.6-xhigh" }, listed, "current-provider picker skips adapter selection")
+  eq("grok-4.6-xhigh", selected, "current-provider picker changes the active chat model")
+end
+
+do
+  local original_select = vim.ui.select
+  local choices
+  vim.ui.select = function(items, _, callback)
+    choices = vim.deepcopy(items)
+    callback(nil)
+  end
+
+  thinking.pick(flat_chat("gpt-5.6-luna"))
+  eq(false, vim.tbl_contains(choices, "minimal"), "GPT-5.6 picker hides minimal")
+  eq(false, vim.tbl_contains(choices, "max"), "GPT-5.6 picker hides max")
+  eq(false, vim.tbl_contains(choices, "<custom value…>"), "GPT-5.6 picker hides custom input")
+
+  thinking.pick(flat_chat("future-picker-model"))
+  for _, level in ipairs({ "none", "minimal", "low", "medium", "high", "xhigh", "max" }) do
+    eq(true, vim.tbl_contains(choices, level), "unknown picker shows " .. level)
+  end
+  eq(true, vim.tbl_contains(choices, "<custom value…>"), "unknown picker keeps custom input")
+  vim.ui.select = original_select
 end
 
 do
@@ -205,6 +341,10 @@ end
 local chat_factory = adapter_utils.get_agoda_adapters(false)[constants.providers.openai_agd.adapter_name]
 
 do
+  local configured_adapters = adapter_utils.get_agoda_adapters(false)
+  eq(nil, configured_adapters.openai_agd_luna_xhigh, "no Luna xhigh chat adapter alias")
+  eq(nil, configured_adapters.openai_agd_luna_max, "no Luna max chat adapter alias")
+
   local adapter = chat_factory()
   eq(nil, adapter.schema.reasoning_effort.default, "chat effort has no implicit default")
   for _, name in ipairs({
@@ -220,7 +360,7 @@ do
   end
 end
 
-for _, model in ipairs({ "qwen-3.6-27b", "future-model" }) do
+for _, model in ipairs({ "future-model" }) do
   local adapter = chat_factory()
   adapter:map_schema_to_params({
     model = model,
@@ -234,7 +374,27 @@ for _, model in ipairs({ "qwen-3.6-27b", "future-model" }) do
   eq(0.8, payload.top_p, model .. " unverified top_p survives")
 end
 
-for _, model in ipairs({ "o3", "qwen-3.6-27b", "future-model" }) do
+do
+  local adapter = chat_factory()
+  adapter:map_schema_to_params({
+    model = "qwen-3.8-27b",
+    reasoning_effort = "xhigh",
+    temperature = 0.42,
+    top_p = 0.8,
+  })
+  local payload = adapters.call_handler(adapter, "build_parameters", vim.deepcopy(adapter.parameters), {})
+  eq("xhigh", payload.reasoning_effort, "Qwen Chat keeps verified xhigh")
+  eq(0.42, payload.temperature, "Qwen Chat preserves temperature with effort")
+  eq(0.8, payload.top_p, "Qwen Chat preserves top_p with effort")
+  eq(true, adapter.schema.reasoning_effort.validate("xhigh"), "Qwen Chat schema accepts xhigh")
+
+  adapter:map_schema_to_params({ model = "qwen-3.8-27b", reasoning_effort = "high" })
+  payload = adapters.call_handler(adapter, "build_parameters", vim.deepcopy(adapter.parameters), {})
+  eq(nil, payload.reasoning_effort, "Qwen Chat strips unsupported high")
+  eq(false, adapter.schema.reasoning_effort.validate("high"), "Qwen Chat schema rejects high")
+end
+
+for _, model in ipairs({ "o3", "qwen-3.8-27b", "future-model" }) do
   local adapter = chat_factory()
   adapter.schema.model.default = model
   adapter.schema.model.choices = function()
@@ -294,9 +454,70 @@ do
 end
 
 do
+  for _, model in ipairs({ "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna" }) do
+    local adapter = chat_factory()
+    adapter.schema.model.default = model
+    adapter:map_schema_to_params({
+      model = model,
+      reasoning_effort = "xhigh",
+      temperature = 0.42,
+      top_p = 0.8,
+    })
+    local payload = adapters.call_handler(adapter, "build_parameters", vim.deepcopy(adapter.parameters), {})
+    eq("xhigh", payload.reasoning_effort, model .. " chat keeps xhigh")
+    eq(nil, payload.temperature, model .. " chat normalizes temperature with xhigh")
+    eq(nil, payload.top_p, model .. " chat normalizes top_p with xhigh")
+    eq(true, adapter.schema.reasoning_effort.validate("xhigh"), model .. " schema accepts xhigh")
+
+    for _, invalid_effort in ipairs({ "minimal", "max" }) do
+      adapter.schema.model.default = model
+      adapter:map_schema_to_params({ model = model, reasoning_effort = invalid_effort })
+      payload = adapters.call_handler(adapter, "build_parameters", vim.deepcopy(adapter.parameters), {})
+      eq(nil, payload.reasoning_effort, model .. " chat omits " .. invalid_effort)
+      eq(false, adapter.schema.reasoning_effort.validate(invalid_effort), model .. " schema rejects " .. invalid_effort)
+    end
+  end
+end
+
+do
+  local adapter = chat_factory()
+  local alias = "gpt-5.6-luna-xhigh"
+  local source = { model = alias, temperature = 0.42, top_p = 0.8 }
+  adapter.schema.model.default = alias
+  adapter:map_schema_to_params(source)
+  local payload = adapters.call_handler(adapter, "build_parameters", vim.deepcopy(adapter.parameters), {})
+  eq("gpt-5.6-luna", payload.model, "Chat selector alias sends canonical model")
+  eq("xhigh", payload.reasoning_effort, "Chat selector alias supplies effort")
+  eq(nil, payload.temperature, "Chat selector alias normalizes incompatible temperature")
+  eq(alias, source.model, "Chat selector mapping does not mutate YAML settings")
+  eq(true, adapter.schema.reasoning_effort.validate("xhigh"), "Chat alias inherits canonical validation")
+  eq(false, adapter.schema.reasoning_effort.validate("max"), "Chat alias still rejects max")
+end
+
+for _, preset in ipairs({
+  { alias = "qwen-3.8-27b-xhigh", model = "qwen-3.8-27b", effort = "xhigh" },
+  { alias = "grok-4.6-xhigh", model = "grok-4.6", effort = "xhigh" },
+  { alias = "kimi-k2.7-code-max", model = "kimi-k2.7-code", effort = "max" },
+}) do
+  local adapter = chat_factory()
+  adapter.schema.model.default = preset.alias
+  adapter:map_schema_to_params({ model = preset.alias })
+  local payload = adapters.call_handler(adapter, "build_parameters", vim.deepcopy(adapter.parameters), {})
+  eq(preset.model, payload.model, preset.alias .. " sends the canonical model")
+  eq(preset.effort, payload.reasoning_effort, preset.alias .. " supplies the verified effort")
+end
+
+do
   local factory = adapter_utils.get_agoda_responses_adapters()[constants.providers.openai_responses_agd.adapter_name]
+  local configured_adapters = adapter_utils.get_agoda_responses_adapters()
+  eq(nil, configured_adapters.openai_responses_agd_luna_xhigh, "no Luna xhigh Responses adapter alias")
+  eq(nil, configured_adapters.openai_responses_agd_luna_max, "no Luna max Responses adapter alias")
   local adapter = factory()
   eq(nil, adapter.schema["reasoning.effort"].default, "Responses effort has no implicit default")
+  assert(adapter.schema.model.choices["gpt-5.6-luna-low"], "Responses selector exposes Luna low")
+  assert(adapter.schema.model.choices["gpt-5.6-luna-high"], "Responses selector exposes Luna high")
+  assert(adapter.schema.model.choices["gpt-5.6-luna-xhigh"], "Responses selector exposes Luna xhigh")
+  assert(adapter.schema.model.choices["gpt-5.6-luna-max"], "Responses selector exposes Luna max")
   for _, name in ipairs({ "setup", "build_parameters", "build_messages", "parse_chat", "parse_tokens" }) do
     assert(adapters.get_handler(adapter, name), "missing inherited Responses handler: " .. name)
   end
@@ -310,6 +531,62 @@ do
   eq(nil, payload.temperature, "Responses request-only normalization")
   adapter:map_schema_to_params({ model = "gpt-5.3-codex" })
   eq(nil, adapter.parameters.reasoning, "nested clear removes stale effort")
+
+  for _, model in ipairs({ "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna" }) do
+    for _, effort in ipairs({ "xhigh", "max" }) do
+      adapter.schema.model.default = model
+      adapter:map_schema_to_params({ model = model, ["reasoning.effort"] = effort })
+      payload = adapters.call_handler(adapter, "build_parameters", vim.deepcopy(adapter.parameters), {})
+      eq(effort, payload.reasoning.effort, model .. " Responses keeps " .. effort)
+      eq(true, adapter.schema["reasoning.effort"].validate(effort), model .. " Responses schema keeps " .. effort)
+    end
+  end
+
+  local alias = "gpt-5.6-luna-max"
+  adapter.schema.model.default = alias
+  adapter:map_schema_to_params({ model = alias })
+  payload = adapters.call_handler(adapter, "build_parameters", vim.deepcopy(adapter.parameters), {})
+  eq("gpt-5.6-luna", payload.model, "Responses selector alias sends canonical model")
+  eq("max", payload.reasoning.effort, "Responses selector alias supplies max")
+end
+
+do
+  local prompt_library = require "utils.my_codecompanion_prompt_library"
+  local chat_factory = adapter_utils.get_agoda_adapters()[constants.providers.openai_agd.adapter_name]
+  local responses_factory = adapter_utils.get_agoda_responses_adapters()[constants.providers.openai_responses_agd.adapter_name]
+  local library = prompt_library.build({ { role = "user", content = "" } }, {
+    enabled_providers = { openai_agd = true, copilot = false },
+  })
+
+  for _, preset in ipairs(thinking.model_selector_presets(constants.providers.openai_agd.adapter_name)) do
+    local title = "AGD Chat " .. preset.model .. " [" .. preset.effort .. "]"
+    local entry = library[title]
+    assert(entry, "missing reusable Chat prompt: " .. title)
+    eq(constants.providers.openai_agd.adapter_name, entry.opts.adapter.name, title .. " generic adapter")
+    eq(preset.model, entry.opts.adapter.model, title .. " canonical model")
+    assert(entry.opts.callbacks and entry.opts.callbacks.on_created, title .. " applies a preset")
+
+    local adapter = chat_factory()
+    adapter.schema.model.default = preset.model
+    local chat = { adapter = adapter, settings = { model = preset.model } }
+    entry.opts.callbacks.on_created(chat)
+    eq(preset.effort, chat.settings.reasoning_effort, title .. " preset applied")
+  end
+
+  for _, preset in ipairs(thinking.model_selector_presets(constants.providers.openai_responses_agd.adapter_name)) do
+    local title = "AGD Responses gpt " .. preset.model:gsub("^gpt%-", "") .. " [" .. preset.effort .. "]"
+    local entry = library[title]
+    assert(entry, "missing reusable Responses prompt: " .. title)
+    eq(constants.providers.openai_responses_agd.adapter_name, entry.opts.adapter.name, title .. " generic adapter")
+    eq(preset.model, entry.opts.adapter.model, title .. " model")
+    assert(entry.opts.callbacks and entry.opts.callbacks.on_created, title .. " applies a preset")
+
+    local adapter = responses_factory()
+    adapter.schema.model.default = preset.model
+    local chat = { adapter = adapter, settings = { model = preset.model } }
+    entry.opts.callbacks.on_created(chat)
+    eq(preset.effort, chat.settings["reasoning.effort"], title .. " preset applied")
+  end
 end
 
 thinking.register_capability("openai_agd", "future-model", {

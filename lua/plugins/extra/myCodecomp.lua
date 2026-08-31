@@ -481,7 +481,8 @@ return {
         chat = {
           -- Reasoning effort: use <leader>At / :CodeCompanionThinking, or edit /debug.
           -- openai_agd maps `reasoning_effort`; openai_responses_agd maps `reasoning.effort`.
-          -- Both fields are optional/free-form and capability metadata is advisory only.
+          -- Exact live-verified transport rules hide/block invalid levels; unknown
+          -- models remain permissive and expose all common levels as a fallback.
           -- For ACP (codex/claude_code) adapters: use /acp_session_options slash command instead.
           adapter = DEFAULT_ADAPTER,
           model = DEFAULT_MODEL,
@@ -544,9 +545,17 @@ return {
               end,
               description = "Thinking level",
             },
+            current_provider_model_picker = {
+              modes = { n = "gA" },
+              index = 8,
+              callback = function(chat)
+                require("utils.my_codecompanion_actions").pick_current_provider_model(chat)
+              end,
+              description = "Select model (current provider)",
+            },
             buffer_picker = {
               modes = { i = "<C-b>" },
-              index = 8,
+              index = 9,
               callback = function()
                 pcall(vim.cmd, "stopinsert")
                 run_codecompanion_slash_picker "buffer"
@@ -555,7 +564,7 @@ return {
             },
             file_picker = {
               modes = { i = "<C-f>" },
-              index = 9,
+              index = 10,
               callback = function()
                 pcall(vim.cmd, "stopinsert")
                 run_codecompanion_slash_picker "file"

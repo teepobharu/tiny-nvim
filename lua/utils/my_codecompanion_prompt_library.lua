@@ -6,6 +6,7 @@
 -- Alias format: "<adapter>_<model_dashes_to_underscores_dots_removed>"
 
 local ai_constants = require "utils.my_ai_constants"
+local thinking = require "utils.my_codecompanion_thinking"
 
 local M = {}
 
@@ -110,18 +111,34 @@ end
 ---@param alias string Slash command alias
 ---@param empty_prompt table Empty prompt template
 ---@param opts table? Build options controlling attached editor context
+---@param reasoning_effort string? Initial thinking value for the new chat
 ---@return table prompt_library entry
-local function make_entry(adapter_name, model, alias, empty_prompt, opts)
+local function make_entry(adapter_name, model, alias, empty_prompt, opts, reasoning_effort)
+  local entry_opts = {
+    adapter = {
+      name = adapter_name,
+      model = model,
+    },
+    is_slash_cmd = true,
+    alias = alias,
+  }
+  -- CodeCompanion's prompt adapter opts only accept the adapter name/model.
+  -- Apply a preset after the chat is created so one generic adapter can serve
+  -- every model/effort combination without per-model adapter aliases.
+  if reasoning_effort then
+    entry_opts.callbacks = {
+      on_created = function(chat)
+        require("utils.my_codecompanion_thinking").set(reasoning_effort, {
+          chat = chat,
+          source = "prompt_library",
+        })
+      end,
+    }
+  end
+
   return {
     interaction = "chat",
-    opts = {
-      adapter = {
-        name = adapter_name,
-        model = model,
-      },
-      is_slash_cmd = true,
-      alias = alias,
-    },
+    opts = entry_opts,
     prompts = with_editor_context(empty_prompt, opts),
   }
 end
@@ -171,6 +188,29 @@ function M.build(empty_prompt, opts)
           end
         end
       end
+    end
+  end
+
+  -- Chat presets use the one generic OpenAI-compatible adapter. Selecting a
+  -- prompt applies the route-verified effort after chat creation; aliases only
+  -- exist locally and the canonical model is sent to AGD.
+  if enabled == nil or enabled.openai_agd then
+    local adapter = ai_constants.providers.openai_agd.adapter_name
+    for _, preset in ipairs(thinking.model_selector_presets(adapter)) do
+      local title = "AGD Chat " .. preset.model .. " [" .. preset.effort .. "]"
+      local alias = make_alias(adapter, preset.model) .. "_" .. preset.effort
+      lib[title] = make_entry(adapter, preset.model, alias, empty_prompt, opts, preset.effort)
+    end
+  end
+
+  -- Responses presets use the one generic Responses adapter. The shared
+  -- selector registry keeps this list independent from Chat-only models.
+  if enabled == nil or enabled.openai_agd or enabled.openai_responses_agd then
+    local adapter = ai_constants.providers.openai_responses_agd.adapter_name
+    for _, preset in ipairs(thinking.model_selector_presets(adapter)) do
+      local title = "AGD Responses gpt " .. strip_family_prefix("gpt", preset.model) .. " [" .. preset.effort .. "]"
+      local alias = make_alias(adapter, preset.model) .. "_" .. preset.effort
+      lib[title] = make_entry(adapter, preset.model, alias, empty_prompt, opts, preset.effort)
     end
   end
 

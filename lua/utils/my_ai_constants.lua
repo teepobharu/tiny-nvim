@@ -37,7 +37,7 @@ M.models = {
     GPT_5_3_CHAT_LATEST = "gpt-5.3-chat-latest",
     -- gpt-5.6 codenamed tiers (verified working at chat endpoint, 2026-07-14):
     -- sol = new flagship (matches gpt-5.5 cost $5/$30), terra = standard (matches
-    -- gpt-5.4 cost $2.5/$15), luna = new cheaper-flagship tier ($1/$6, 1.05M ctx).
+    -- gpt-5.4 cost $2.5/$15), luna = new cheaper-flagship tier ($0.20/$1.20, 1.05M ctx).
     -- GPT_5_5 is kept as the "flagship -1" fallback (see top_choices.gpt.alt.L)
     -- rather than removed — do not delete a superseded flagship, demote it.
     GPT_5_6_SOL = "gpt-5.6-sol",
@@ -66,7 +66,9 @@ M.models = {
     GEMINI_3_1_PRO = "gemini-3.1-pro",
     GEMINI_3_1_PRO_PREVIEW = "gemini-3.1-pro-preview",
     GEMINI_3_1_FLASH_LITE = "gemini-3.1-flash-lite",
+    GEMINI_3_5_FLASH_LITE = "gemini-3.5-flash-lite",
     GEMINI_3_5_FLASH = "gemini-3.5-flash",
+    GEMINI_3_6_FLASH = "gemini-3.6-flash",
     GEMINI_3_PRO = "gemini-3-pro",
     GEMINI_3_FLASH = "gemini-3-flash",
     GEMINI_2_5_PRO = "gemini-2.5-pro",
@@ -91,9 +93,9 @@ M.models = {
 
   -- Qwen models (AGD proxy IDs)
   qwen = {
-    QWEN_3_6_27B = "qwen-3.6-27b",
+    QWEN_3_8_27B = "qwen-3.8-27b",
     -- QWQ_32B = "qwq-32b", -- 400 Invalid model name at chat endpoint
-    -- QWEN_3_5_27B = "qwen-3.5-27b", -- removed from proxy
+    -- QWEN_3_6_27B = "qwen-3.6-27b", -- removed from proxy (404 as of 2026-08-19)
   },
 
   -- Kimi (Moonshot) models
@@ -103,6 +105,10 @@ M.models = {
   },
 
   others = {
+    CURSOR_COMPOSER_2_5 = "cursor-composer-2.5",
+    GROK_4_3 = "grok-4.3",
+    GROK_4_5 = "grok-4.5",
+    GROK_4_6 = "grok-4.6",
     GROK_FAST_1 = "grok-code-fast-1",
   },
 }
@@ -196,7 +202,7 @@ M.providers = {
       gpt = {
         -- default=current tier, alt=previous tier; env overrides from ~/dotfiles/.bash_exports
         default = {
-          XS = env_or("AGD_GPT_NANO", M.models.gpt.GPT_5_4_NANO),
+          XS = env_or("AGD_GPT_NANO", M.models.gpt.GPT_5_6_LUNA),
           S = env_or("AGD_GPT_MINI", M.models.gpt.GPT_5_MINI),
           M = M.models.gpt.GPT_5_2,
           -- gpt-5.6-sol matches gpt-5.5 cost ($5/$30) and supersedes it as flagship
@@ -226,18 +232,19 @@ M.providers = {
       gemini = {
         -- default=current tier, alt=previous tier; env overrides from ~/dotfiles/.bash_exports
         default = {
-          S = env_or("AGD_GEMINI_FLASH_LITE", M.models.gemini.GEMINI_3_1_FLASH_LITE),
-          M = env_or("AGD_GEMINI_FLASH_BALANCED", M.models.gemini.GEMINI_3_5_FLASH),
+          S = env_or("AGD_GEMINI_FLASH_LITE", M.models.gemini.GEMINI_3_5_FLASH_LITE),
+          M = env_or("AGD_GEMINI_FLASH_BALANCED", M.models.gemini.GEMINI_3_6_FLASH),
           L = env_or("AGD_GEMINI_PRO", M.models.gemini.GEMINI_3_1_PRO_PREVIEW),
         },
         alt = {
-          S = env_or("AGD_GEMINI_FLASH_LITE_PREV", M.models.gemini.GEMINI_2_5_FLASH_LITE),
-          M = env_or("AGD_GEMINI_PRO_PREV", M.models.gemini.GEMINI_2_5_FLASH),
+          S = env_or("AGD_GEMINI_FLASH_LITE_PREV", M.models.gemini.GEMINI_3_1_FLASH_LITE),
+          M = env_or("AGD_GEMINI_FLASH_BALANCED_PREV", M.models.gemini.GEMINI_3_5_FLASH),
+          L = env_or("AGD_GEMINI_PRO_PREV", M.models.gemini.GEMINI_2_5_FLASH),
         },
       },
       inhouse = { -- in-house / MaaS; env overrides from ~/dotfiles/.bash_exports
         default = {
-          S = env_or("AGD_INHOUSE_QWEN", M.models.qwen.QWEN_3_6_27B),
+          S = env_or("AGD_INHOUSE_QWEN", M.models.qwen.QWEN_3_8_27B),
           M = env_or("AGD_INHOUSE_DEEPSEEK", M.models.deepseek.DEEPSEEK_R1),
           L = env_or("AGD_INHOUSE_GEMMA", M.models.gemini.GEMMA_4),
         },
@@ -246,10 +253,20 @@ M.providers = {
           L = env_or("AGD_INHOUSE_GEMMA_MAAS", M.models.gemini.GEMMA_4_26B_A4B_IT_MAAS),
         },
       },
-      -- not exists
-      -- grok = {
-      --   default = { S = M.models.others.GROK_FAST_1 },
-      -- },
+      -- Optional AGD model families available from the comparison catalog.
+      grok = {
+        default = {
+          M = M.models.others.GROK_4_6,
+          L = M.models.others.GROK_4_3,
+        },
+        alt = {
+          S = M.models.others.GROK_FAST_1,
+          M = M.models.others.GROK_4_5,
+        },
+      },
+      cursor = {
+        default = { M = M.models.others.CURSOR_COMPOSER_2_5 },
+      },
     },
     avante_opts = {
       avante_inherited_from = "openai",
@@ -388,7 +405,7 @@ M.static_models = { -- Fast models (for quick operations)
 
   -- Commit-short — mirrors $AGD_COMMIT_SHORT_* in ~/dotfiles/.bash_exports.
   commit_short = {
-    env_or("AGD_COMMIT_SHORT_1", M.models.gpt.GPT_5_4_NANO),
+    env_or("AGD_COMMIT_SHORT_1", M.models.gpt.GPT_5_6_LUNA),
     env_or("AGD_COMMIT_SHORT_2", M.models.gpt.GPT_4_1_MINI),
     env_or("AGD_COMMIT_SHORT_3", M.models.gemini.GEMINI_3_1_FLASH_LITE),
     env_or("AGD_COMMIT_SHORT_4", M.models.gpt.GPT_4_1_MINI),
@@ -399,7 +416,7 @@ M.static_models = { -- Fast models (for quick operations)
   commit_long = {
     env_or("AGD_COMMIT_LONG_1", M.models.gpt.GPT_4_1_MINI),
     env_or("AGD_COMMIT_LONG_2", M.models.gemini.GEMINI_3_1_FLASH_LITE),
-    env_or("AGD_COMMIT_LONG_3", M.models.gpt.GPT_5_4_MINI),
+    env_or("AGD_COMMIT_LONG_3", M.models.gpt.GPT_5_6_LUNA),
     env_or("AGD_COMMIT_LONG_4", M.models.gemini.GEMINI_3_1_PRO_PREVIEW),
   },
 
@@ -436,7 +453,7 @@ M.static_models = { -- Fast models (for quick operations)
     M.models.gpt.GPT_5_MINI,
     env_or("AGD_GEMINI_FLASH_BALANCED", M.models.gemini.GEMINI_3_5_FLASH),
     env_or("AGD_GEMINI_FLASH_LITE", M.models.gemini.GEMINI_3_1_FLASH_LITE),
-    env_or("AGD_INHOUSE_QWEN", M.models.qwen.QWEN_3_6_27B),
+    env_or("AGD_INHOUSE_QWEN", M.models.qwen.QWEN_3_8_27B),
     env_or("AGD_INHOUSE_GEMMA_MAAS", M.models.gemini.GEMMA_4_26B_A4B_IT_MAAS),
     M.models.gpt.GPT_4O,
     M.models.gpt.GPT_4O_MINI,
@@ -453,7 +470,7 @@ M.static_models = { -- Fast models (for quick operations)
 
 M.defaults = {
   adapter = M.providers.openai_agd.adapter_name,
-  model = M.models.qwen.QWEN_3_6_27B,
+  model = M.models.qwen.QWEN_3_8_27B,
   -- Default parameters
   temperature = 0.75,
   max_tokens = 20480,
@@ -552,7 +569,7 @@ end
 
 -- M.DEFAULT_COPILOT_MODEL = M.models.others.GROK_FAST_1 -- x0.33
 M.DEFAULT_COPILOT_MODEL = env_or("AGD_LATEST", M.models.gpt.GPT_5_MINI)
-M.DEFAULT_AGD_MODEL = env_or("AGD_INHOUSE_QWEN", M.models.qwen.QWEN_3_6_27B)
+M.DEFAULT_AGD_MODEL = env_or("AGD_INHOUSE_QWEN", M.models.qwen.QWEN_3_8_27B)
 
 -- ============================================================================
 -- Provider Keymap Slot Pattern

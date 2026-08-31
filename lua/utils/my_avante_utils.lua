@@ -67,7 +67,7 @@ function M.get_agoda_providers(opts)
     openai_agd = {
       __inherited_from = avante.avante_inherited_from,
       endpoint = avante.endpoint,
-      model = p.top_choices.gpt.default.M, -- default to gpt default M tier
+      model = AI.DEFAULT_AGD_MODEL, -- shared Qwen default; GPT remains selectable
       timeout = AI.defaults.timeout,
       model_names = AI.get_agd_model_names(opts),
       extra_request_body = avante.request_defaults,
@@ -224,7 +224,7 @@ end
 function M.select_model_agd(opts)
   local current_provider, current_model = M.current_provider_and_model()
   local agd_providers = M.get_agoda_providers(opts)
-  local default_agd_model = AI.providers.openai_agd.top_choices.gpt.default.M
+  local default_agd_model = AI.DEFAULT_AGD_MODEL
 
   prune_copilot_provider()
 

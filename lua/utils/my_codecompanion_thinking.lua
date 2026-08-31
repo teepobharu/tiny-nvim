@@ -4,6 +4,50 @@ local AI_CONST = require "utils.my_ai_constants"
 local COMMON_LEVELS = { "none", "minimal", "low", "medium", "high", "xhigh", "max" }
 local REQUIRED_LEVELS = { "minimal", "low", "medium", "high" }
 local CLEAR_VALUES = { clear = true, inherit = true, unset = true }
+-- Selector aliases are a local CodeCompanion convenience, not AGD model IDs.
+-- Keep the canonical tier list and endpoint-specific effort sets in one place so
+-- adding a tier never creates another adapter.
+local GPT_5_6_MODELS = {
+  AI_CONST.models.gpt.GPT_5_6_SOL,
+  AI_CONST.models.gpt.GPT_5_6_TERRA,
+  AI_CONST.models.gpt.GPT_5_6_LUNA,
+}
+local GPT_5_6_TIERS = {}
+for _, model in ipairs(GPT_5_6_MODELS) do
+  GPT_5_6_TIERS[model] = true
+end
+local QWEN_CHAT_EFFORTS = { "none", "low", "medium", "xhigh" }
+local GROK_CHAT_EFFORTS = { "low", "medium", "high", "xhigh" }
+local GROK_CHAT_MODELS = {
+  AI_CONST.models.others.GROK_4_3,
+  AI_CONST.models.others.GROK_4_5,
+  AI_CONST.models.others.GROK_4_6,
+}
+local KIMI_CHAT_EFFORTS = { "low", "medium", "high", "xhigh", "max" }
+local KIMI_CHAT_MODELS = {
+  AI_CONST.models.kimi.KIMI_K2_6,
+  AI_CONST.models.kimi.KIMI_K2_7_CODE,
+}
+local SELECTOR_PRESET_SPECS = {
+  openai_agd = {
+    -- Live AGD probe 2026-08-19: GPT-5.6 Chat rejects `max`.
+    { models = GPT_5_6_MODELS, efforts = { "low", "high", "xhigh" } },
+    -- Live AGD probe 2026-08-27: Qwen accepts none/low/medium/xhigh only.
+    { models = { AI_CONST.models.qwen.QWEN_3_8_27B }, efforts = QWEN_CHAT_EFFORTS },
+    -- Live AGD probe 2026-08-23: all current Grok variants accept xhigh, not max.
+    { models = GROK_CHAT_MODELS, efforts = GROK_CHAT_EFFORTS },
+    -- Live AGD probe 2026-08-23: both current Kimi variants accept max.
+    { models = KIMI_CHAT_MODELS, efforts = KIMI_CHAT_EFFORTS },
+  },
+  -- Live AGD probe 2026-08-19: GPT-5.6 Responses accepts xhigh and max.
+  openai_responses_agd = {
+    { models = GPT_5_6_MODELS, efforts = { "low", "high", "xhigh", "max" } },
+  },
+}
+
+local function is_gpt_5_6_tier(model)
+  return type(model) == "string" and GPT_5_6_TIERS[model] == true
+end
 
 local profiles = {}
 local capability_rules = {}
@@ -32,6 +76,79 @@ local function adapter_name(adapter)
     return adapter
   end
   return adapter and adapter.name or nil
+end
+
+---Return local model-selector presets for an adapter. Each preset is resolved
+---to its canonical AGD model and reasoning field before the request is sent.
+---@param adapter CodeCompanion.HTTPAdapter|string|table
+---@return table[]
+function M.model_selector_presets(adapter)
+  local specs = SELECTOR_PRESET_SPECS[adapter_name(adapter)]
+  local presets = {}
+  if not specs then
+    return presets
+  end
+
+  for _, spec in ipairs(specs) do
+    for _, model in ipairs(spec.models) do
+      for _, effort in ipairs(spec.efforts) do
+        table.insert(presets, {
+          alias = model .. "-" .. effort,
+          model = model,
+          effort = effort,
+        })
+      end
+    end
+  end
+  return presets
+end
+
+local function selector_preset_for(adapter, model)
+  if type(model) ~= "string" then
+    return nil
+  end
+  for _, preset in ipairs(M.model_selector_presets(adapter)) do
+    if preset.alias == model then
+      return preset
+    end
+  end
+end
+
+---Resolve a local selector alias such as `gpt-5.6-luna-xhigh`.
+---@param adapter CodeCompanion.HTTPAdapter|string|table
+---@param model string|nil
+---@return table|nil
+function M.resolve_model_selector_preset(adapter, model)
+  return copy(selector_preset_for(adapter, model))
+end
+
+---Return the real proxy model for a selector alias, or the original model.
+---@param adapter CodeCompanion.HTTPAdapter|string|table
+---@param model string|nil
+---@return string|nil
+function M.canonical_model(adapter, model)
+  local preset = selector_preset_for(adapter, model)
+  return preset and preset.model or model
+end
+
+---Append supported selector aliases to a CodeCompanion model choices map.
+---The base model must already be present, which keeps dynamic AGD discovery
+---authoritative about availability.
+---@param adapter CodeCompanion.HTTPAdapter|string|table
+---@param choices table|nil
+---@return table
+function M.expand_model_choices(adapter, choices)
+  local expanded = vim.deepcopy(choices or {})
+  for _, preset in ipairs(M.model_selector_presets(adapter)) do
+    local base_entry = expanded[preset.model]
+    if base_entry ~= nil then
+      local entry = type(base_entry) == "table" and vim.deepcopy(base_entry) or {}
+      entry.formatted_name = ("%s [%s]"):format(entry.formatted_name or preset.model, preset.effort)
+      entry.opts = vim.tbl_extend("force", type(entry.opts) == "table" and entry.opts or {}, { can_reason = true })
+      expanded[preset.alias] = entry
+    end
+  end
+  return expanded
 end
 
 local function resolve_value(value, adapter)
@@ -74,6 +191,20 @@ local function get_path(root, path)
     current = current[segment]
   end
   return current
+end
+
+local function set_path(root, path, value)
+  if type(root) ~= "table" or type(path) ~= "table" or #path == 0 then
+    return
+  end
+
+  local current = root
+  for i = 1, #path - 1 do
+    local segment = path[i]
+    current[segment] = type(current[segment]) == "table" and current[segment] or {}
+    current = current[segment]
+  end
+  current[path[#path]] = value
 end
 
 local function unset_path(root, path)
@@ -202,7 +333,7 @@ local function upstream_reasoning_hint(adapter, model)
 end
 
 function M.resolve_capability(adapter, model)
-  model = model or adapter_model(adapter)
+  model = M.canonical_model(adapter, model or adapter_model(adapter))
   local candidates = {}
 
   if upstream_reasoning_hint(adapter, model) then
@@ -245,6 +376,42 @@ function M.resolve_capability(adapter, model)
     merge_capability(result, candidate.capability)
   end
   return result
+end
+
+---Return the advertised reasoning levels for an adapter/model pair.
+---Unknown capabilities deliberately fall back to the full common set so a
+---new proxy model is not hidden behind stale local metadata.
+---@param adapter CodeCompanion.HTTPAdapter|string|table
+---@param model string|nil
+---@return string[]
+function M.levels_for(adapter, model)
+  return vim.deepcopy(M.resolve_capability(adapter, model).levels or COMMON_LEVELS)
+end
+
+---Validate an explicitly selected effort only when the rule carries an exact,
+---live-verified level set. Family hints and metadata remain advisory.
+---@param adapter CodeCompanion.HTTPAdapter|string|table
+---@param value any
+---@param model string|nil
+---@return boolean
+---@return string|nil
+function M.validate_effort(adapter, value, model)
+  local capability = M.resolve_capability(adapter, model)
+  if capability.enforce_levels ~= true or value == nil then
+    return true
+  end
+  if type(value) == "string" and vim.tbl_contains(capability.levels or {}, value) then
+    return true
+  end
+
+  local name = adapter_name(adapter) or "<unknown>"
+  local selected_model = model or adapter_model(adapter) or "<unknown>"
+  return false, ("%s is unsupported for %s/%s; supported values: %s"):format(
+    tostring(value),
+    name,
+    selected_model,
+    table.concat(capability.levels or {}, ", ")
+  )
 end
 
 local function has_feature(record, feature_name)
@@ -431,6 +598,10 @@ function M.capture_manual(chat, opts)
 
   if not record then
     if current ~= nil then
+      local preset = selector_preset_for(chat.adapter, model)
+      if preset and current == preset.effort then
+        return false
+      end
       store_override(chat, model, current, opts.source or "manual")
       return true
     end
@@ -458,15 +629,21 @@ function M.reconcile(chat)
     return false
   end
 
-  local record = state_for(chat).overrides[override_key(chat)]
+  local model = chat_model(chat)
+  local record = state_for(chat).overrides[override_key(chat, model)]
   local changed = false
   if record then
     chat.settings[profile.schema_key] = copy(record.value)
     record.last_applied = copy(record.value)
     changed = true
+  else
+    local preset = selector_preset_for(chat.adapter, model)
+    if preset and chat.settings[profile.schema_key] == nil then
+      chat.settings[profile.schema_key] = preset.effort
+      changed = true
+    end
   end
 
-  local model = chat_model(chat)
   if sync_chat_yaml then
     sync_chat_yaml(chat, "model", model)
     sync_chat_yaml(chat, profile.schema_key, chat.settings[profile.schema_key])
@@ -639,14 +816,20 @@ function M.set(value, opts)
     return false
   end
 
-  chat.settings = chat.settings or {}
   local model = chat_model(chat) or "<unknown>"
+  local capability = M.resolve_capability(chat.adapter, model)
+  local valid, validation_error = M.validate_effort(chat.adapter, value, model)
+  if not valid then
+    notify(validation_error, vim.log.levels.WARN)
+    return false
+  end
+
+  chat.settings = chat.settings or {}
   store_override(chat, model, value, opts.source or "toggle")
   chat.settings[profile.schema_key] = value
   sync_chat_yaml(chat, profile.schema_key, value)
   sync_debug_buffers(chat, profile.schema_key, value)
 
-  local capability = M.resolve_capability(chat.adapter, model)
   local message = ("Set %s=%s for %s/%s (%s; capability=%s/%s)"):format(
     profile.schema_key,
     value,
@@ -726,10 +909,12 @@ function M.pick(chat)
   local capability = M.resolve_capability(resolved.adapter, model)
   local choices = unique_levels(capability.levels)
   local current = resolved.settings and resolved.settings[profile.schema_key]
-  if current and not vim.tbl_contains(choices, current) then
+  if current and not vim.tbl_contains(choices, current) and capability.enforce_levels ~= true then
     table.insert(choices, 1, current)
   end
-  table.insert(choices, "<custom value…>")
+  if capability.enforce_levels ~= true then
+    table.insert(choices, "<custom value…>")
+  end
   table.insert(choices, "<clear / inherit>")
 
   vim.ui.select(choices, {
@@ -776,6 +961,22 @@ end
 
 function M.map_settings(adapter, settings)
   local profile = M.profile_for(adapter)
+  if settings == nil and type(adapter.make_from_schema) == "function" then
+    settings = adapter:make_from_schema()
+  else
+    settings = vim.deepcopy(settings or {})
+  end
+
+  local preset = selector_preset_for(adapter, settings.model)
+  if preset then
+    settings.model = preset.model
+    -- A model alias supplies an initial value. An explicit setting in the YAML,
+    -- picker, or prompt callback remains the user's later override.
+    if profile and settings[profile.schema_key] == nil then
+      settings[profile.schema_key] = preset.effort
+    end
+  end
+
   if profile then
     adapter.parameters = adapter.parameters or {}
     unset_path(adapter.parameters, profile.param_path)
@@ -802,13 +1003,35 @@ function M.prepare_request(adapter, params)
   if not profile or type(params) ~= "table" then
     return params
   end
+  local model = params.model or adapter_model(adapter)
+  local preset = selector_preset_for(adapter, model)
+  if preset then
+    params.model = preset.model
+    model = preset.model
+  end
+
   local effort = get_path(params, profile.param_path)
+  if effort == nil and preset then
+    set_path(params, profile.param_path, preset.effort)
+    effort = preset.effort
+  end
   if effort == nil then
     return params
   end
 
-  local model = params.model or adapter_model(adapter)
   local capability = M.resolve_capability(adapter, model)
+  local valid, validation_error = M.validate_effort(adapter, effort, model)
+  if not valid then
+    unset_path(params, profile.param_path)
+    notify(("Omitting unsupported %s=%s for %s/%s: %s"):format(
+      profile.schema_key,
+      tostring(effort),
+      adapter_name(adapter) or "<unknown>",
+      model or "<unknown>",
+      validation_error
+    ), vim.log.levels.WARN)
+    return params
+  end
   local explicit_none = type(effort) == "string" and effort:lower() == "none"
   if not explicit_none then
     local conflicts = capability.conflicts
@@ -923,6 +1146,7 @@ function M.attach(chat)
   state.attached = true
   M.capture_manual(chat)
   wrap_chat(chat)
+  M.reconcile(chat)
   return true
 end
 
@@ -996,7 +1220,7 @@ function M.setup(opts)
 end
 
 -- Family hints keep the picker useful before the async AGD metadata cache arrives.
--- They never block a manual value and exact metadata/runtime registrations win.
+-- They remain advisory; only exact route registrations opt into enforcement.
 M.register_capability("openai_agd", "^gpt%-5", {
   status = "supported",
   source = "family_hint",
@@ -1035,12 +1259,8 @@ M.register_capability("openai_agd", "^deepseek", {
   mode = "required",
   levels = vim.deepcopy(REQUIRED_LEVELS),
 }, { pattern = true, priority = 20 })
-M.register_capability("openai_agd", "^qwen%-", {
-  status = "unsupported",
-  source = "verified_proxy_probe_2026_07_12",
-  mode = "none",
-  conflicts = {},
-}, { pattern = true, priority = 30 })
+-- Keep unknown Qwen variants advisory. Qwen 3.8 Chat Completions is registered
+-- exactly below: it accepts none/low/medium/xhigh and rejects high/max.
 M.register_capability("openai_agd", "gpt-5.4", {
   status = "supported",
   source = "verified_proxy_probe_2026_07_12",
@@ -1048,6 +1268,64 @@ M.register_capability("openai_agd", "gpt-5.4", {
   levels = { "none", "low", "medium", "high", "xhigh" },
   conflicts = { temperature = "non_default", top_p = "non_default" },
 }, { priority = 90 })
+-- Exact transport probe, 2026-08-19: Sol, Terra, and Luna accept xhigh on
+-- chat completions but reject both minimal and max. Keep this strict rule
+-- separate from the broad GPT family hint so unknown/future models remain
+-- visible and manually controllable.
+M.register_capability("openai_agd", is_gpt_5_6_tier, {
+  status = "supported",
+  source = "verified_proxy_probe_2026_08_19",
+  mode = "optional",
+  levels = { "none", "low", "medium", "high", "xhigh" },
+  enforce_levels = true,
+  conflicts = { temperature = "non_default", top_p = "non_default" },
+}, { priority = 100 })
+-- Exact transport probe, 2026-08-27: qwen-3.8-27b accepts none, low, medium,
+-- and xhigh on Chat Completions. The model catalog reports Optional Thinking,
+-- but `high` and `max` still fail, so expose only the verified levels.
+M.register_capability("openai_agd", "qwen-3.8-27b", {
+  status = "supported",
+  source = "verified_proxy_probe_2026_08_27",
+  mode = "optional",
+  levels = QWEN_CHAT_EFFORTS,
+  enforce_levels = true,
+  conflicts = {},
+}, { priority = 100 })
+-- Exact transport probe, 2026-08-23: Grok 4.3/4.5 accept low through xhigh
+-- as optional thinking. `max` is rejected by the xAI upstream, so never emit it.
+for _, model in ipairs({ AI_CONST.models.others.GROK_4_3, AI_CONST.models.others.GROK_4_5 }) do
+  M.register_capability("openai_agd", model, {
+    status = "supported",
+    source = "verified_proxy_probe_2026_08_23",
+    mode = "optional",
+    levels = GROK_CHAT_EFFORTS,
+    enforce_levels = true,
+    conflicts = {},
+  }, { priority = 100 })
+end
+-- Grok 4.6 reports obligatory thinking, while retaining the same accepted
+-- effort range. The picker therefore offers levels but no unsupported `max`.
+M.register_capability("openai_agd", AI_CONST.models.others.GROK_4_6, {
+  status = "supported",
+  source = "verified_proxy_probe_2026_08_23",
+  mode = "required",
+  levels = GROK_CHAT_EFFORTS,
+  enforce_levels = true,
+  conflicts = {},
+}, { priority = 100 })
+-- Exact transport probe, 2026-08-23: Kimi K2.6 and K2.7 Code accept the
+-- complete low→max range on Chat Completions. Keep this route-specific so a
+-- future Kimi variant is still discovered rather than inheriting stale limits.
+for _, model in ipairs(KIMI_CHAT_MODELS) do
+  M.register_capability("openai_agd", model, {
+    status = "supported",
+    source = "verified_proxy_probe_2026_08_23",
+    mode = "optional",
+    levels = KIMI_CHAT_EFFORTS,
+    enforce_levels = true,
+    conflicts = {},
+  }, { priority = 100 })
+end
 M.register_capability("openai_agd", "o3", {
   status = "supported",
   source = "verified_proxy_probe_2026_07_12",
@@ -1061,5 +1339,14 @@ M.register_capability("openai_responses_agd", "^gpt%-", {
   mode = "optional",
   conflicts = { temperature = "non_default", top_p = "non_default" },
 }, { pattern = true, priority = 20 })
+-- Exact transport probe, 2026-08-19: all three GPT-5.6 tiers accept xhigh
+-- and max on /v1/responses. Do not mark the full set strict: any unprobed
+-- value remains available under the unknown/fallback policy.
+M.register_capability("openai_responses_agd", is_gpt_5_6_tier, {
+  status = "supported",
+  source = "verified_proxy_probe_2026_08_19",
+  mode = "optional",
+  conflicts = { temperature = "non_default", top_p = "non_default" },
+}, { priority = 100 })
 
 return M

@@ -308,7 +308,7 @@ The earlier `max_tokens` / `temperature = 0` investigation is resolved:
 - The reasoning schema stays present across model switches. Avoid a function-valued `enabled` gate here: CodeCompanion 19.17 can permanently delete a disabled schema key while rendering settings.
 - Clearing effort removes the old flat/nested adapter parameter before remapping, preventing stale request state.
 - Known OpenAI sampling conflicts are normalized only on the outgoing request copy; editable chat settings remain intact.
-- Capability metadata controls advice and warnings, never whether a manual value is mapped.
+- Capability metadata controls advice and warnings; exact live-verified route rules may additionally guard a manually edited invalid value.
 
 The isolated regression suite is [tests/test_codecompanion_thinking.lua](../../tests/test_codecompanion_thinking.lua). Live Agoda observations and the manual verification checklist are documented in the reasoning-control section below and in [the review task](../../tasks/review/codecompanion-reasoning-effort.md).
 
@@ -632,7 +632,11 @@ This extension integrates with CodeCompanion's internal APIs. If pinned version 
 
 - `openai_agd` uses the flat `reasoning_effort` proxy field for GPT, Claude, Gemini, DeepSeek, Kimi, and other models routed through the OpenAI-compatible Agoda endpoint.
 - `openai_responses_agd` uses the nested `reasoning.effort` field.
-- Both schema fields are always present, optional, default to `nil`, and accept free-form strings. Capability metadata changes picker advice; it never blocks or deletes an explicit value.
+- Both schema fields are always present, optional, and default to `nil`. Unknown models expose all common levels and retain the free-form fallback.
+- Exact route probes can opt into strict validation. As of 2026-08-19, GPT-5.6 Sol/Terra/Luna on `openai_agd` accept only `none`, `low`, `medium`, `high`, and `xhigh`; `minimal` and `max` are hidden from the picker, rejected by the command/preset path, and omitted from a manually edited outgoing request.
+- GPT-5.6 Sol/Terra/Luna also have local selector presets. `gpt-5.6-luna-high` and `gpt-5.6-luna-xhigh` are available on `openai_agd`; `openai_responses_agd` additionally exposes `gpt-5.6-luna-max`. The unsuffixed model keeps normal/inherited behavior.
+- These suffixes are not AGD catalog IDs: selection maps them to the canonical model plus the endpoint's reasoning field. Chat exposes only `low` / `high` / `xhigh`; Responses exposes `low` / `high` / `xhigh` / `max`. A later explicit YAML or thinking-picker value overrides the preset for that chat.
+- Prompt-library entries use that one generic Responses adapter and the same selector-preset registry, rather than creating a Luna-specific adapter.
 - Overrides are remembered per chat, adapter, and model. Switching GPT → Claude → GPT restores each model's own override rather than carrying one family's value to another.
 - A toggle/reconcile updates both the editable YAML header and any open `CodeCompanion_debug` snapshot, so neither can overwrite the effective value later.
 - Before each schema mapping, only the managed wire path is reset. Clearing an override therefore cannot leave stale reasoning parameters in `adapter.parameters`.
@@ -645,7 +649,7 @@ Commands:
 ```vim
 :CodeCompanionThinking          " model-aware picker plus free-form input
 :CodeCompanionThinking high     " set current chat override
-:CodeCompanionThinking xhigh    " arbitrary values are allowed
+:CodeCompanionThinking xhigh    " set a supported level for the selected route
 :CodeCompanionThinking none     " explicitly request no thinking (when supported)
 :CodeCompanionThinking clear    " remove override and inherit provider behavior
 :CodeCompanionThinking inspect  " show model, wire field, source, and capability
@@ -659,11 +663,11 @@ Keymaps:
 
 `clear` / `inherit` is intentionally different from `none`: clear omits the parameter, while `none` is an explicit wire value. Required-thinking models may ignore or reject `none`.
 
-### Capability discovery is advisory
+### Capability discovery and exact route rules
 
 At startup, the helper asynchronously caches `GET /v1/internal/models?format=detailed` for one hour. It classifies a model as thinking-capable when `thinkingCapability` is not `None` or its feature list contains `Thinking`; Agoda's `Obligatory` value is normalized to required. The internal endpoint is VPN-dependent and unversioned, so static family hints and runtime registration remain available when discovery fails.
 
-New models remain immediately controllable even before metadata knows about them. Add durable advice without changing the toggle path:
+New models remain immediately controllable even before metadata knows about them. The unknown fallback deliberately shows all common values and keeps the custom-input path. Add durable advice without changing that behavior:
 
 ```lua
 require("utils.my_codecompanion_thinking").register_capability("openai_agd", "future-model", {
@@ -676,7 +680,7 @@ require("utils.my_codecompanion_thinking").register_capability("openai_agd", "fu
 
 For a future model that needs a different native request shape on the same adapter, the registered capability may also provide `request_transform(params, context)`. The canonical per-chat setting stays the same while the transform maps `context.effort` to that model's wire format.
 
-Known-unsupported models such as the current Qwen proxy deployment show a warning, but a manual value is still passed through unchanged. This is deliberate: proxy behavior can change before local metadata or code is updated.
+Most capability records remain advisory, including models whose exact levels are unknown. Qwen 3.8 Chat Completions has an exact route rule: `none`, `low`, `medium`, and `xhigh` are allowed, while `high` and `max` are rejected. Set `enforce_levels = true` only after an exact endpoint/model/level probe; then the picker avoids invalid choices, `:CodeCompanionThinking` refuses them, and the request guard removes a stale manually edited value before it reaches the proxy.
 
 ### Editable settings and live debugging
 
@@ -716,12 +720,13 @@ reasoning.effort: high
 ---
 ```
 
-### Agoda proxy observations (2026-07-12)
+### Agoda proxy observations
 
 - GPT-5.4: `high` and `xhigh` changed reported reasoning-token use; `none` disabled it; `minimal` was rejected. Non-default sampling conflicted with active effort.
+- GPT-5.6 Sol/Terra/Luna (live probe, 2026-08-19): Chat Completions accepted `xhigh` but rejected `minimal` and `max`; Responses accepted both `xhigh` and `max` for all three tiers.
 - Gemini 2.5 Flash: reasoning effort changed reported reasoning use. Some Gemini/DeepSeek models are obligatory, so `none` does not mean the same as clear/inherit.
 - Claude Sonnet 5 accepted `high` together with `temperature=0.42` and `top_p=0.8`; acceptance is verified, but effort-level differentiation was not observable in the small probe.
-- o3 rejected `none`. Qwen 3.6 rejected `reasoning_effort`; both remain manually forceable with a warning so future proxy changes are not blocked.
+- o3 rejected `none`. Qwen 3.8 Chat Completions accepted `reasoning_effort=none|low|medium|xhigh` in the 2026-08-27 probe, but rejected `high` and `max`; the exact rule hides and strips only those unsupported values. Unknown models remain manually forceable so future proxy changes are not blocked.
 
 ### Clearing and stale parameter prevention
 

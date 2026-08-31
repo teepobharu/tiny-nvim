@@ -341,6 +341,81 @@ function M.chat_with_model_picker(adapter_name, use_dynamic)
   end)
 end
 
+---Pick a model for the already-open chat without reopening adapter selection.
+---The chat-buffer `gA` mapping calls this so the provider stays unchanged.
+---@param chat table|nil CodeCompanion chat instance (defaults to last chat)
+---@param opts table|nil Test/advanced options: models, use_dynamic, select
+---@return boolean
+function M.pick_current_provider_model(chat, opts)
+  opts = opts or {}
+  chat = chat or require("codecompanion").last_chat()
+  if not chat or not chat.adapter or not chat.adapter.name then
+    vim.notify("No active CodeCompanion chat/provider", vim.log.levels.WARN)
+    return false
+  end
+
+  local adapter_name = chat.adapter.name
+  local use_dynamic = opts.use_dynamic
+  if use_dynamic == nil then
+    use_dynamic = adapter_name == AI.providers.openai_agd.adapter_name
+  end
+  local models = opts.models or get_adapter_models(adapter_name, use_dynamic)
+  if #models == 0 then
+    vim.notify("No model choices available for " .. adapter_name, vim.log.levels.WARN)
+    return false
+  end
+
+  local function choose(model)
+    if not model then
+      return
+    end
+    if type(chat.change_model) ~= "function" then
+      vim.notify("CodeCompanion chat cannot change its model", vim.log.levels.WARN)
+      return
+    end
+    chat:change_model { model = model }
+  end
+
+  -- A narrow injection point keeps this action testable without replacing the
+  -- real Snacks UI used in a running Neovim session.
+  if type(opts.select) == "function" then
+    opts.select(models, choose)
+    return true
+  end
+
+  local function format_model(model)
+    local preset = require("utils.my_codecompanion_thinking").resolve_model_selector_preset(adapter_name, model)
+    return preset and ("%s [%s]"):format(preset.model, preset.effort) or model
+  end
+
+  local snacks_ok, Snacks = pcall(require, "snacks")
+  if snacks_ok and Snacks.picker and Snacks.picker.pick then
+    local items = {}
+    for _, model in ipairs(models) do
+      table.insert(items, { text = format_model(model), model = model })
+    end
+    Snacks.picker.pick {
+      source = "select",
+      title = "CodeCompanion model — " .. adapter_name,
+      items = items,
+      format = "text",
+      actions = {
+        confirm = function(picker, item)
+          picker:close()
+          choose(item and item.model)
+        end,
+      },
+    }
+    return true
+  end
+
+  vim.ui.select(models, {
+    prompt = "Select model for " .. adapter_name .. ":",
+    format_item = format_model,
+  }, choose)
+  return true
+end
+
 -- Generate all CodeCompanion keymaps for model selection
 -- Returns a complete keymap table ready to use in editor_keymaps
 -- @param baseKeymap table Optional base keymap table to extend
