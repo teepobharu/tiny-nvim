@@ -37,7 +37,7 @@ M.models = {
     GPT_5_3_CHAT_LATEST = "gpt-5.3-chat-latest",
     -- gpt-5.6 codenamed tiers (verified working at chat endpoint, 2026-07-14):
     -- sol = new flagship (matches gpt-5.5 cost $5/$30), terra = standard (matches
-    -- gpt-5.4 cost $2.5/$15), luna = new cheaper-flagship tier ($0.20/$1.20, 1.05M ctx).
+    -- gpt-5.4 cost $2.5/$15), luna = new cheaper-flagship tier ($1/$6, 1.05M ctx).
     -- GPT_5_5 is kept as the "flagship -1" fallback (see top_choices.gpt.alt.L)
     -- rather than removed — do not delete a superseded flagship, demote it.
     GPT_5_6_SOL = "gpt-5.6-sol",

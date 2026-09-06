@@ -306,6 +306,20 @@ return {
     enabled = true,
     -- https://github.com/yetone/avante.nvim?tab=readme-ov-file#default-setup-configuration
     config = function(_, opts)
+      -- Avante's Google search moved to an opt-in tool on its Neovim 0.12
+      -- release line. Keep the 0.11 fallback below, but migrate automatically
+      -- whenever the installed Avante version exposes the tool module.
+      local has_web_search, web_search = pcall(require, "avante.llm_tools.web_search")
+      if has_web_search and web_search.web_search_google then
+        local existing_custom_tools = opts.custom_tools
+        opts.web_search_engine = nil
+        opts.custom_tools = function()
+          local tools = type(existing_custom_tools) == "function" and existing_custom_tools() or existing_custom_tools
+          tools = vim.deepcopy(tools or {})
+          table.insert(tools, web_search.web_search_google)
+          return tools
+        end
+      end
       require("avante").setup(opts)
 
       -- Avante model selector iterates over `avante.config.providers` keys and will
@@ -330,8 +344,9 @@ return {
     opts = {
       -- provider = "copilot", -- You can then change this provider here
       provider = DEFAULT_PROVIDER, -- You can then change this provider here
+      -- Fallback for Avante's Neovim 0.11 release line. The config callback
+      -- above replaces it with web_search_google when that tools API exists.
       web_search_engine = {
-        -- provider = "tavily", -- tavily, serpapi, google, kagi, brave, or searxng
         provider = "google",
       },
       -- Providers: register openai_agd (AGD proxy); optional copilot block if you re-enable Copilot
@@ -711,7 +726,7 @@ return {
       {
         CLAUDE_CODER_MAPPING_PREFIX .. "E",
         "<cmd>ClaudeCode --m gpt-o<cr>",
-        desc = "Toggle Claude GPT 5.4",
+        desc = "Toggle Claude GPT 5.5",
       },
       { CLAUDE_CODER_MAPPING_PREFIX .. "M", "<cmd>ClaudeCodeSelectModel<cr>", desc = "Select Claude model" },
       {

@@ -1,5 +1,5 @@
 -- AI completion fallback via minuet-ai.nvim (active only when Copilot is OFF)
--- AGD default: openai_compatible → shared Gemini medium tier via AGD proxy
+-- AGD default: openai_compatible → Gemini 3.5 Flash Lite via AGD proxy
 -- All provider slots loaded at startup; switch at runtime via:
 --   :Minuet change_provider openai_fim_compatible  (→ FIM / local)
 --   :MinuetFimSwitch ollama|llamacpp               (swap local backend)
@@ -75,7 +75,9 @@ local function remap_openai_agd_model(model)
   return agd_remap[model] or model
 end
 
-local minuet_agd_model = remap_openai_agd_model(AI.providers.openai_agd.top_choices.gemini.default.M)
+-- Shared by virtual text, duet, and the AGD preset. Keep this explicit rather
+-- than tracking the general Gemini medium default: Minuet favors low latency.
+local minuet_agd_model = remap_openai_agd_model(AI.models.gemini.GEMINI_3_5_FLASH_LITE)
 
 -- All provider slots populated at load so :Minuet change_provider works without restart.
 -- stream=true + request_timeout=3: timeout cancels mid-flight but keeps partial tokens.

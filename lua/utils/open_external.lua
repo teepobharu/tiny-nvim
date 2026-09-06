@@ -420,13 +420,16 @@ M.apps = {
     name = "Codex",
     icon = "󱓞",
     category = "Editor",
-    detect = function() return true end,
+    -- Codex desktop currently ships inside ChatGPT.app; retain the standalone
+    -- bundle check for installations that expose Codex.app directly.
+    detect = function() return app_exists("Codex.app") or app_exists("ChatGPT.app") end,
     command_string = function(path)
       local workspace = path_kind(path) == "dir" and path or vim.fn.fnamemodify(path, ":h")
       local prompt_text = "Review this file: " .. path
       local encoded_path = uri_encode(workspace)
       local encoded_prompt = uri_encode(prompt_text)
-      return ("codex://new?path=%s&prompt=%s"):format(encoded_path, encoded_prompt)
+      local uri = ("codex://new?path=%s&prompt=%s"):format(encoded_path, encoded_prompt)
+      return shell_command("open", { uri })
     end,
     spawn = function(path)
       local workspace = path_kind(path) == "dir" and path or vim.fn.fnamemodify(path, ":h")

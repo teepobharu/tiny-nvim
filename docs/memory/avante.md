@@ -1,5 +1,18 @@
 # Avante.nvim Memory Bank
 
+## Avante 0.11 compatibility boundary (2026-09-04)
+
+The canonical Avante configuration is `lua/plugins/extra/myAi.lua`, and this
+worktree currently runs Neovim 0.11.6. Avante `14b8aed` requires Neovim 0.12,
+so the lock remains on the 0.11-compatible `90a0e77` release line.
+
+The config keeps the legacy `web_search_engine.provider = "google"` fallback
+for that release, then detects `avante.llm_tools.web_search` during setup. On a
+future Neovim 0.12-compatible Avante update, it removes the deprecated selector
+and appends `web_search_google` to `custom_tools`, preserving any existing
+custom tools. Google search then requires `GOOGLE_SEARCH_API_KEY` and
+`GOOGLE_SEARCH_ENGINE_ID`; do not read or store those credentials in config.
+
 ## Recent Updates (2026-01-24)
 
 ### Critical New Features

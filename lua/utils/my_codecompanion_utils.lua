@@ -294,7 +294,7 @@ function M.get_agoda_responses_adapters()
               [MODELS.gpt.GPT_5_5] = {
                 formatted_name = "GPT 5.5",
                 meta = { context_window = 1050000 },
-                opts = { can_manage_context = true, has_function_calling = true, has_vision = true, can_reason = true },
+                opts = { can_manage_context = true, has_function_calling = true, has_vision = false, can_reason = true },
               },
             }),
           },
