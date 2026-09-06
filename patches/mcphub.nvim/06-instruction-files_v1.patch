@@ -1,0 +1,438 @@
+diff --git a/lua/mcphub/types.lua b/lua/mcphub/types.lua
+index e29dbbe..7901a59 100644
+--- a/lua/mcphub/types.lua
++++ b/lua/mcphub/types.lua
+@@ -31,8 +31,10 @@
+ ---@field required? boolean
+
+ ---@class CustomMCPServerConfig.CustomInstructions
+----@field text string
+----@field disabled? string
++---@field text? string
++---@field disabled? boolean
++---@field files? string[]
++---@field max_bytes? integer Maximum combined inline and file bytes; defaults to 8192 when files are configured
+
+ ---@class CustomMCPServerConfig
+ ---@field disabled? boolean
+diff --git a/lua/mcphub/utils/prompt.lua b/lua/mcphub/utils/prompt.lua
+index 396f821..8a52fe8 100644
+--- a/lua/mcphub/utils/prompt.lua
++++ b/lua/mcphub/utils/prompt.lua
+@@ -11,6 +11,217 @@ local native = require("mcphub.native")
+ local utils = require("mcphub.utils")
+ local validation = require("mcphub.utils.validation")
+
++local DEFAULT_CUSTOM_INSTRUCTIONS_MAX_BYTES = 8 * 1024
++local instruction_file_cache = {}
++local instruction_file_warnings = {}
++
++---@param path string
++---@return boolean
++local function is_absolute_path(path)
++    return path:sub(1, 1) == "/" or path:match("^%a:[/\\]") ~= nil or path:match("^[/\\][/\\]") ~= nil
++end
++
++---@param path string
++---@param config_source string|nil
++---@return string|nil
++local function resolve_instruction_path(path, config_source)
++    local expanded = vim.fn.expand(path)
++    if is_absolute_path(expanded) then
++        return vim.fs.normalize(expanded)
++    end
++    if not config_source or config_source == "" then
++        return nil
++    end
++    local config_dir = vim.fn.fnamemodify(vim.fn.expand(config_source), ":p:h")
++    return vim.fs.normalize(vim.fs.joinpath(config_dir, expanded))
++end
++
++---@param server_name string
++---@param path string
++---@return string
++local function instruction_file_warning_key(server_name, path)
++    return server_name .. "\0" .. path
++end
++
++---@param server_name string
++---@param path string
++---@param failure_id string
++---@param message string
++local function warn_instruction_file(server_name, path, failure_id, message)
++    local key = instruction_file_warning_key(server_name, path)
++    if instruction_file_warnings[key] == failure_id then
++        return
++    end
++    instruction_file_warnings[key] = failure_id
++    log.warn(message)
++end
++
++---@param server_name string
++---@param path string
++local function clear_instruction_file_warning(server_name, path)
++    instruction_file_warnings[instruction_file_warning_key(server_name, path)] = nil
++end
++
++---@param path string
++---@param server_name string
++---@param requested_limit integer Maximum content bytes needed by this render
++---@return string|nil content
++---@return boolean overflow
++local function read_instruction_file(path, server_name, requested_limit)
++    local uv = vim.uv or vim.loop
++    local stat = uv.fs_stat(path)
++    if not stat or stat.type ~= "file" then
++        warn_instruction_file(
++            server_name,
++            path,
++            "missing",
++            string.format("MCPHub: instruction file for '%s' is missing or not a file: %s", server_name, path)
++        )
++        return nil, false
++    end
++
++    local mtime = stat.mtime or {}
++    local signature = table.concat({ stat.size or -1, mtime.sec or 0, mtime.nsec or 0, stat.ino or 0 }, ":")
++    local cached = instruction_file_cache[path]
++    if cached and cached.signature == signature then
++        if cached.limit >= requested_limit then
++            local content = cached.content:sub(1, requested_limit)
++            local overflow = cached.overflow or #cached.content > requested_limit
++            clear_instruction_file_warning(server_name, path)
++            return content, overflow
++        elseif not cached.overflow then
++            clear_instruction_file_warning(server_name, path)
++            return cached.content, false
++        end
++    end
++
++    local file, open_error = io.open(path, "rb")
++    if not file then
++        warn_instruction_file(
++            server_name,
++            path,
++            "read:" .. signature,
++            string.format(
++                "MCPHub: failed to read instruction file for '%s': %s (%s)",
++                server_name,
++                path,
++                open_error or "unknown error"
++            )
++        )
++        return nil, false
++    end
++    local read_size = math.min(stat.size or (requested_limit + 1), requested_limit + 1)
++    local content, read_error = file:read(read_size)
++    file:close()
++
++    if content == nil then
++        if read_error then
++            warn_instruction_file(
++                server_name,
++                path,
++                "read:" .. signature,
++                string.format(
++                    "MCPHub: failed to read instruction file for '%s': %s (%s)",
++                    server_name,
++                    path,
++                    read_error
++                )
++            )
++            return nil, false
++        end
++        content = ""
++    end
++
++    local overflow = #content > requested_limit
++    if overflow then
++        content = content:sub(1, requested_limit)
++    end
++    instruction_file_cache[path] = {
++        signature = signature,
++        limit = requested_limit,
++        content = content,
++        overflow = overflow,
++    }
++    clear_instruction_file_warning(server_name, path)
++    return content, overflow
++end
++
++---@param byte integer
++---@return integer
++local function utf8_sequence_length(byte)
++    if byte < 0x80 then
++        return 1
++    elseif byte >= 0xC2 and byte <= 0xDF then
++        return 2
++    elseif byte >= 0xE0 and byte <= 0xEF then
++        return 3
++    elseif byte >= 0xF0 and byte <= 0xF4 then
++        return 4
++    end
++    return 1
++end
++
++---@param content string
++---@param max_bytes integer
++---@return integer
++local function utf8_safe_prefix_length(content, max_bytes)
++    local take = math.min(#content, max_bytes)
++    if take == 0 then
++        return 0
++    end
++    local sequence_start = take
++    while sequence_start > 1 do
++        local byte = content:byte(sequence_start)
++        if byte < 0x80 or byte > 0xBF then
++            break
++        end
++        sequence_start = sequence_start - 1
++    end
++    local expected_length = utf8_sequence_length(content:byte(sequence_start))
++    if take - sequence_start + 1 < expected_length then
++        return sequence_start - 1
++    end
++    return take
++end
++
++---@param parts string[]
++---@param remaining integer
++---@return integer
++local function instruction_part_content_budget(parts, remaining)
++    local separator_bytes = #parts > 0 and 2 or 0
++    return math.max(0, remaining - separator_bytes)
++end
++
++---@param parts string[]
++---@param content string
++---@param remaining integer
++---@param source_overflow? boolean
++---@return integer remaining
++---@return boolean truncated
++local function append_instruction_part(parts, content, remaining, source_overflow)
++    if content == "" then
++        return remaining, source_overflow == true
++    end
++    local separator = #parts > 0 and "\n\n" or ""
++    if remaining <= #separator then
++        return 0, true
++    end
++    local available = remaining - #separator
++    local raw_take = math.min(#content, available)
++    local safe_take = utf8_safe_prefix_length(content, raw_take)
++    if safe_take > 0 then
++        table.insert(parts, separator .. content:sub(1, safe_take))
++    end
++    return available - safe_take, source_overflow == true or safe_take < #content
++end
++
++--- Clear cached instruction-file contents and warning deduplication state.
++--- File metadata is checked on every read, so normal file edits invalidate automatically.
++function M.clear_instruction_file_cache()
++    instruction_file_cache = {}
++    instruction_file_warnings = {}
++end
++
+ ---@return string
+ local function get_header()
+     return [[
+@@ -27,13 +238,71 @@ function M.format_custom_instructions(server_name, header)
+     local server_config = config_manager.get_server_config(server_name) or {}
+     local custom_instructions = server_config.custom_instructions or {}
+
+-    if custom_instructions.text and custom_instructions.text ~= "" and not custom_instructions.disabled then
+-        return string.format(
+-            ((header and header ~= "") and header or "\n\n#### Instructions for `%s` server\n\n")
+-                .. custom_instructions.text,
+-            server_name
++    if custom_instructions.disabled then
++        return ""
++    end
++
++    local files = custom_instructions.files
++    local has_files = type(files) == "table" and #files > 0
++    local max_bytes = custom_instructions.max_bytes
++    if max_bytes == nil and not has_files then
++        max_bytes = math.huge
++    elseif type(max_bytes) ~= "number" or max_bytes < 1 or max_bytes % 1 ~= 0 then
++        max_bytes = DEFAULT_CUSTOM_INSTRUCTIONS_MAX_BYTES
++    end
++
++    local parts = {}
++    local remaining = max_bytes
++    local inline_text = type(custom_instructions.text) == "string" and custom_instructions.text or ""
++    local truncated
++    remaining, truncated = append_instruction_part(parts, inline_text, remaining)
++    if truncated then
++        log.warn(
++            string.format("MCPHub: custom instructions for '%s' were truncated to %d bytes", server_name, max_bytes)
+         )
+     end
++
++    if not truncated and type(files) == "table" then
++        local config_source = config_manager.get_config_source(server_name)
++        for _, configured_path in ipairs(files) do
++            local resolved_path = resolve_instruction_path(configured_path, config_source)
++            if not resolved_path then
++                warn_instruction_file(
++                    server_name,
++                    configured_path,
++                    "unresolved",
++                    string.format(
++                        "MCPHub: cannot resolve relative instruction file for '%s' without a config source: %s",
++                        server_name,
++                        configured_path
++                    )
++                )
++            else
++                local content_budget = instruction_part_content_budget(parts, remaining)
++                local content, overflow = read_instruction_file(resolved_path, server_name, content_budget)
++                if content then
++                    remaining, truncated = append_instruction_part(parts, content, remaining, overflow)
++                    if truncated then
++                        log.warn(
++                            string.format(
++                                "MCPHub: custom instructions for '%s' were truncated to %d bytes while loading %s",
++                                server_name,
++                                max_bytes,
++                                resolved_path
++                            )
++                        )
++                        break
++                    end
++                end
++            end
++        end
++    end
++
++    if #parts > 0 then
++        local instructions_header = (header and header ~= "") and string.format(header, server_name)
++            or string.format("\n\n#### Instructions for `%s` server\n\n", server_name)
++        return instructions_header .. table.concat(parts)
++    end
+     return ""
+ end
+
+diff --git a/lua/mcphub/utils/renderer.lua b/lua/mcphub/utils/renderer.lua
+--- a/lua/mcphub/utils/renderer.lua
++++ b/lua/mcphub/utils/renderer.lua
+@@ -85,6 +85,16 @@ function M.estimate_server_tokens(server, server_config)
+     return ok and utils.calculate_tokens(text) or 0
+ end
+
++---@param custom_instructions table|nil
++---@return boolean
++function M.has_custom_instructions(custom_instructions)
++    return type(custom_instructions) == "table"
++        and (
++            (type(custom_instructions.text) == "string" and custom_instructions.text ~= "")
++            or (type(custom_instructions.files) == "table" and #custom_instructions.files > 0)
++        )
++end
++
+ ---@param env table<string, any>
+ ---@param preferred_keys string[]
+ ---@param suffixes string[]
+@@ -660,7 +670,7 @@ function M.render_server_capabilities(server, lines, current_line, server_config, view, is_native)
+
+         local custom_instructions = server_config.custom_instructions or {}
+         local is_disabled = custom_instructions.disabled == true
+-        local has_instructions = custom_instructions.text and #custom_instructions.text > 0
++        local has_instructions = M.has_custom_instructions(custom_instructions)
+         local ci_line = NuiLine()
+             :append(is_disabled and Text.icons.circle or Text.icons.instructions, Text.highlights.muted)
+             :append(
+@@ -783,7 +793,7 @@ function M.render_server_line(server, active)
+     -- Add capabilities counts inline for connected servers
+     if server.status == "connected" and server.capabilities then
+         local custom_instructions = server_config.custom_instructions
+-        if custom_instructions and custom_instructions.text and custom_instructions.text ~= "" then
++        if M.has_custom_instructions(custom_instructions) then
+             local is_disabled = server_config.custom_instructions.disabled
+             line:append(
+                 " " .. Text.icons.instructions .. " ",
+
+diff --git a/lua/mcphub/utils/validation.lua b/lua/mcphub/utils/validation.lua
+index f04ab41..b9b6864 100644
+--- a/lua/mcphub/utils/validation.lua
++++ b/lua/mcphub/utils/validation.lua
+@@ -75,5 +75,78 @@ function M.validate_server_config(name, config)
+         }
+     end
+
++    local custom_instructions = config.custom_instructions
++    if custom_instructions ~= nil then
++        if type(custom_instructions) ~= "table" then
++            return {
++                ok = false,
++                error = Error(
++                    "VALIDATION",
++                    Error.Types.SETUP.INVALID_CONFIG,
++                    string.format("Server '%s' custom_instructions must be an object", name)
++                ),
++            }
++        end
++        if custom_instructions.disabled ~= nil and type(custom_instructions.disabled) ~= "boolean" then
++            return {
++                ok = false,
++                error = Error(
++                    "VALIDATION",
++                    Error.Types.SETUP.INVALID_CONFIG,
++                    string.format("Server '%s' custom_instructions.disabled must be a boolean", name)
++                ),
++            }
++        end
++        if custom_instructions.text ~= nil and type(custom_instructions.text) ~= "string" then
++            return {
++                ok = false,
++                error = Error(
++                    "VALIDATION",
++                    Error.Types.SETUP.INVALID_CONFIG,
++                    string.format("Server '%s' custom_instructions.text must be a string", name)
++                ),
++            }
++        end
++        if custom_instructions.files ~= nil then
++            if type(custom_instructions.files) ~= "table" or not vim.islist(custom_instructions.files) then
++                return {
++                    ok = false,
++                    error = Error(
++                        "VALIDATION",
++                        Error.Types.SETUP.INVALID_CONFIG,
++                        string.format("Server '%s' custom_instructions.files must be an array", name)
++                    ),
++                }
++            end
++            for index, path in ipairs(custom_instructions.files) do
++                if type(path) ~= "string" or path == "" then
++                    return {
++                        ok = false,
++                        error = Error(
++                            "VALIDATION",
++                            Error.Types.SETUP.INVALID_CONFIG,
++                            string.format(
++                                "Server '%s' custom_instructions.files[%d] must be a non-empty string",
++                                name,
++                                index
++                            )
++                        ),
++                    }
++                end
++            end
++        end
++        local max_bytes = custom_instructions.max_bytes
++        if max_bytes ~= nil and (type(max_bytes) ~= "number" or max_bytes < 1 or max_bytes % 1 ~= 0) then
++            return {
++                ok = false,
++                error = Error(
++                    "VALIDATION",
++                    Error.Types.SETUP.INVALID_CONFIG,
++                    string.format("Server '%s' custom_instructions.max_bytes must be a positive integer", name)
++                ),
++            }
++        end
++    end
++
+     local has_stdio = config.command ~= nil
+     local has_sse = config.url ~= nil

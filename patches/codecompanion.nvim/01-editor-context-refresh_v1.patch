@@ -1,0 +1,18 @@
+diff --git a/lua/codecompanion/providers/completion/init.lua b/lua/codecompanion/providers/completion/init.lua
+index dfc17a48..528306e8 100644
+--- a/lua/codecompanion/providers/completion/init.lua
++++ b/lua/codecompanion/providers/completion/init.lua
+@@ -41,4 +41,13 @@ end
+ local M = {}
+ 
++---Invalidate cached editor-context completion entries.
++---@return nil
++local function refresh_editor_context_cache()
++  _ec_cache = {}
++  _ec_cache_valid = false
++end
++
++M.refresh_editor_context_cache = refresh_editor_context_cache
++
+ -- Cache adapter info per buffer (type + evaluated tools)
+ local adapter_cache = {}

@@ -1,10 +1,11 @@
 ---
 title: "Add instruction files for AI agents in MCPHub config"
-status: open
+status: review
 priority: medium
 created: 2026-07-10
-updated: 2026-07-10
-refs: []
+updated: 2026-07-24
+refs:
+  - 163b3ad [tag:v6.2.0] @2025-07-31 chore(release): v6.2.0
 related:
   - [MCPHub Memory Doc](docs/memory/mcphub.md)
   - "MCPHub config: ~/dotfiles/ai/mcp/mcphub.json"
@@ -134,7 +135,7 @@ These layers are complementary. Agent-level files guide general coding; MCPHub i
 ### Research gaps
 
 1. **Exact line numbers in prompt.lua** — The installed v6.2.0 may differ from latest `main`. Compare with local install at `~/.local/share/nvim3_jelly_tinynvim/lazy/mcphub.nvim/lua/mcphub/utils/prompt.lua`.
-2. **mcp-hub backend `custom_instructions` handling** — Whether the mcp-hub fork at `~/projects/mcp-hub` passes `custom_instructions` through the `/mcp` endpoint for external agents was not fully investigated.
+2. **mcp-hub backend `custom_instructions` handling** — A read-only audit on 2026-07-19 confirmed that raw `/mcp` and `/mcp-lean` clients do not receive mcphub.nvim `custom_instructions`. The backend creates MCP SDK servers with capabilities only, and no backend `instructions` handling exists under `src/`.
 3. **Token budget impact** — The exact token cost of loading additional instruction files was not quantified. A practical test with `hub:get_active_servers_prompt()` would be needed.
 4. **File watching** — Whether mcp-hub's config file watcher would detect changes to referenced instruction files (not just `servers.json`) is unknown. A separate watcher or hash-based cache invalidation would likely be needed.
 
@@ -189,39 +190,132 @@ For servers with large inline `custom_instructions.text`, extract to `.md` files
 
 Verify whether the mcp-hub fork at `~/projects/mcp-hub` passes `custom_instructions` through the `/mcp` endpoint for external agents (Claude Code, Codex, etc.). If not, the instruction files would only apply to Neovim-connected clients.
 
+## Implementation (2026-07-19)
+
+Implemented the Neovim-side feature as
+[`06-instruction-files_v1.patch`](patches/mcphub.nvim/06-instruction-files_v1.patch),
+applied after the existing five grouped MCPHub patches against pinned
+mcphub.nvim `v6.2.0` (`163b3ad`).
+
+- Adds and validates `custom_instructions.files` plus optional positive-integer
+  `max_bytes`. File-backed configs default to 8192 bytes per server; legacy
+  inline-only configs remain uncapped unless a limit is explicitly set.
+- Expands `~`/environment references and resolves relative paths from the active
+  server config's directory.
+- Merges inline `text` first, then readable files in declaration order. The
+  combined body and separators share the per-server byte budget, so inline text
+  has deterministic priority.
+- Warns and skips missing/unreadable files without crashing. Warnings are
+  deduplicated by server/path plus stable failure signature, while file contents
+  are cached by path plus size/mtime/inode.
+- Keeps existing server token estimates compatible because the UI estimator
+  already calls the enhanced `prompt.server_to_text()` path.
+- Fixes the existing inline rendering path so literal percent signs in instruction
+  text are not interpreted as `string.format` directives.
+
+Automated coverage lives in
+[`test_mcphub_instruction_files.lua`](tests/test_mcphub_instruction_files.lua)
+with repository fixtures under
+[`tests/fixtures/mcphub-instructions/`](tests/fixtures/mcphub-instructions/).
+
+### Scope boundary / deferred decisions
+
+- No live `~/dotfiles/ai/mcp/mcphub.json` entries or external instruction
+  documents were changed. Phase 5 remains an explicit user migration decision.
+- This client patch affects `hub:get_active_servers_prompt()` consumers (the
+  current CodeCompanion extension plus MCPHub guide/preview output) and MCPHub
+  UI token estimates. It does not change the mcp-hub backend or automatically
+  inject instructions into raw `/mcp` clients. The read-only backend audit
+  confirmed this boundary: `/mcp` and `/mcp-lean` construct capability-only SDK
+  servers and expose tools/resources/prompts without initialization
+  instructions. Backend parity therefore needs a separate design decision for
+  endpoint semantics, file watching/reload behavior, byte caps, reconnects,
+  and private-document exposure. The already-dirty backend checkout was left
+  untouched.
+
 ## Success Criteria
 
-- `custom_instructions.files` array is recognized in `mcphub.json`
-- File contents are loaded and appended to server prompts
-- Token counts include file content sizes
-- Existing inline instructions continue to work (backward compatible)
-- Missing files are logged but don't crash prompt generation
+- [x] `custom_instructions.files` is recognized and validated by mcphub.nvim
+- [x] File contents are loaded and appended to server prompts in deterministic order
+- [x] Token estimates include file content through `server_to_text()`
+- [x] Existing inline instructions continue to work, including literal `%` text
+- [x] Missing files are logged but do not crash prompt generation
+- [ ] Live server configs are migrated to external instruction documents (user decision)
+- [ ] Raw external `/mcp` clients receive file instructions (requires backend investigation/change)
 
 ## Verification
 
 ### How to verify
 
-Restart Neovim, open MCPHub, check that servers with `files` references load without errors.
+Use the isolated `nvimwt3a` profile. First verify that its MCPHub checkout is at
+the pinned commit, restore only that checkout, and reapply the six sorted local
+patches. This targeted command never invokes Lazy and verifies that
+`lazy-lock.json` is unchanged. Then run the headless fixture against the patched
+checkout. Interactive checks require the user to deliberately add a `files`
+entry to a chosen test server config; the implementation does not mutate the
+live external config automatically.
 
 ### Commands
 
 ```bash
-NVIM_APPNAME=nvim3_jelly_tinynvim nvim
+set -euo pipefail
+repo_root="$(git rev-parse --show-toplevel)"
+plugin_root="$HOME/.local/share/nvimwt3a/lazy/mcphub.nvim"
+pinned_commit="163b3ad0caa3987e04e5b1d89bb89d230686d17b"
+lock_before="$(git -C "$repo_root" hash-object lazy-lock.json)"
+
+test "$(git -C "$plugin_root" rev-parse HEAD)" = "$pinned_commit"
+git -C "$plugin_root" restore -- .
+for patch in "$repo_root"/patches/mcphub.nvim/*.patch; do
+  git -C "$plugin_root" apply --check --ignore-space-change "$patch"
+  git -C "$plugin_root" apply --ignore-space-change "$patch"
+done
+git -C "$plugin_root" diff --check
+test "$(git -C "$repo_root" hash-object lazy-lock.json)" = "$lock_before"
+```
+
+```bash
+MCPHUB_PLUGIN_ROOT="$HOME/.local/share/nvimwt3a/lazy/mcphub.nvim" \
+  NVIM_APPNAME=nvimwt3a \
+  nvim --headless -u NONE -i NONE -l tests/test_mcphub_instruction_files.lua
+```
+
+```bash
+NVIM_APPNAME=nvimwt3a nvim
 ```
 
 ```vim
 :MCPHub
-" Check a server with instruction files - should show expanded token count
-:lua print(vim.inspect(require("mcphub").state:get("server_state")))
+" After adding files to a chosen test server, inspect the generated prompt:
+:lua print(require("mcphub").get_hub_instance():get_active_servers_prompt(false, false))
 ```
 
 ### Checklist
 
-- [ ] Servers with `custom_instructions.files` load without errors
-- [ ] Token counts on server rows reflect file content size
-- [ ] `hub:get_active_servers_prompt()` includes file contents
-- [ ] Missing files produce warning logs but don't crash
-- [ ] Servers without `files` continue to work with inline `text` only
+- [ ] The pinned-checkout command applies all six MCPHub patches without an
+      apply error and leaves `lazy-lock.json` unchanged
+- [ ] The headless fixture prints `ok - mcphub instruction files (53 assertions)`
+- [ ] A test server with inline `text` and two `files` renders inline text first, followed by both files
+- [ ] A relative file resolves from the defining config directory even when Neovim's CWD differs
+- [ ] A missing file produces a warning while the remaining server prompt still renders
+- [ ] Lowering `max_bytes` stays within the byte count, preserves valid UTF-8, and produces a warning
+- [ ] A file-only instruction config shows as configured in the expanded section and server-row icon
+- [ ] The server row token estimate increases when a non-empty instruction file is enabled
+- [ ] A server without `files` continues to render inline `text` only
+
+### Agent verification evidence (2026-07-24)
+
+- [x] Fresh detached worktree at `163b3ad` accepted patches `01 -> 02 -> 03 -> 04 -> 05 -> 06` sequentially
+- [x] `git diff --check` passed after the full patch stack
+- [x] `luac -p` passed for `prompt.lua`, `renderer.lua`, `validation.lua`, and `types.lua`
+- [x] Isolated Neovim headless fixture passed all 53 assertions
+
+## User sign-off
+
+- [ ] Accept the implementation and close this task
+- [ ] Keep it open for live config/document migration
+- [ ] Keep it open for raw `/mcp` backend support
+- [ ] Return it for implementation changes (note the failed checklist item)
 
 ## References
 

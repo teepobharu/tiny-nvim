@@ -1,6 +1,6 @@
 # mcphub.nvim patches
 
-Patch files are applied in order by `lazy-local-patcher`. Five grouped patch files cover all local changes against `163b3ad` (v6.2.0).
+Patch files are applied in order by `lazy-local-patcher`. Seven grouped patch files cover all local changes against the pinned plugin checkout (`163b3ad`).
 
 **Application order** (required):
 ```bash
@@ -9,11 +9,15 @@ git apply --ignore-space-change 02-hub-stability_v1.patch
 git apply --ignore-space-change 03-main-ui_v1.patch
 git apply --ignore-space-change 04-clear-auth_v1.patch
 git apply --ignore-space-change 05-stdio-auth-command_v1.patch
+git apply --ignore-space-change 06-instruction-files_v1.patch
+git apply --ignore-space-change 07-codecompanion-resource-refresh_v1.patch
 ```
 
 `02` must precede `03` — env-tool-filters (in `02`) adds hub.lua and main.lua context that `03` depends on.
 `04` depends on `03` for the keymap dispatch infrastructure in main.lua.
 `05` depends on `03` and requires mcp-hub fork patch `external-patches/mcp-hub/04-stdio-auth-command.patch`.
+`06` is a Neovim-only prompt/config patch and must remain after `05` in the sorted local patch stack.
+`07` is applied after `06` and requires the paired CodeCompanion completion-cache patch.
 
 To add a new patch on top, apply all groups first, make changes, then `git diff HEAD -- <files>`. Save as a new `_v2` file rather than overwriting `_v1`.
 
@@ -23,7 +27,7 @@ To add a new patch on top, apply all groups first, make changes, then `git diff 
 
 Upstream compatibility fixes. No shared files with other groups; safe to apply independently.
 
-- Updates CodeCompanion extension glue for v19 behavior — keeps MCPHub tool/resource/prompt integration stable after upstream API changes.
+- Updates CodeCompanion extension glue for v19 behavior — keeps MCPHub tool/resource/prompt integration stable after upstream API changes. Rebased after the v6.2.0-era patch stopped applying atomically.
 - Fixes startup health checks treating compatible `mcp-hub` patch versions as mismatches. Reuses `validation.validate_version()` for the existing hub's `/api/health` version instead of exact string equality, so a running `4.2.1` hub is not hard-restarted when the plugin requires `4.2.0`.
 
 **Files**: `lua/mcphub/extensions/codecompanion/` (core, init, slash_commands, tools, variables), `lua/mcphub/hub.lua`
@@ -100,9 +104,63 @@ can launch a configured stdio `authCommand`.
 
 ---
 
+## 06-instruction-files_v1.patch
+
+Adds external markdown files to per-server custom instructions without changing
+the mcp-hub backend or the external server config.
+
+- **Schema** — `custom_instructions.files` is an array of non-empty paths;
+  `custom_instructions.max_bytes` is an optional positive integer. File-backed
+  configs default to 8192 bytes per server; legacy inline-only configs remain
+  uncapped unless `max_bytes` is explicitly set.
+- **Resolution** — expands `~`/environment references and resolves relative
+  paths from the directory containing the server's active config source.
+- **Prompt merge** — keeps inline `text` first, then appends readable files in
+  declaration order with blank-line separators. The byte cap covers the combined
+  body, including separators, so inline content has deterministic priority.
+  Truncation backs up to a complete UTF-8 codepoint and never exceeds the
+  configured byte budget.
+- **Resilience/cache** — missing or unreadable files warn once per unchanged
+  server/path failure and do not abort prompt generation. Read-error dedup uses
+  a stable metadata signature rather than volatile OS error text. File reads are
+  bounded to the current content budget plus one overflow byte. Cached prefixes
+  record both the file metadata signature and requested limit, grow only when a
+  larger overflowing prefix is requested, and refresh when metadata changes.
+- **Validation/token counts** — validates `disabled`, `text`, `files`, and
+  `max_bytes`. Existing server token estimates already call
+  `prompt.server_to_text()`, so file-backed instructions are counted without a
+  second renderer implementation. Expanded sections and connected-server rows
+  also recognize a non-empty `files` list as configured instructions.
+
+The patch only affects prompts assembled by mcphub.nvim (including the current
+CodeCompanion extension, guide/preview output, and MCPHub UI token estimates).
+It does not inject instructions into raw external clients connected directly to
+the mcp-hub `/mcp` endpoint.
+
+**Server build dependency**: none. This is a Neovim plugin patch only.
+
+**Files**: `lua/mcphub/utils/prompt.lua`, `lua/mcphub/utils/renderer.lua`, `lua/mcphub/utils/validation.lua`, `lua/mcphub/types.lua`
+
+---
+
+## 07-codecompanion-resource-refresh_v1.patch
+
+CodeCompanion snapshots editor context when a chat opens, while its completion
+provider caches the shared context list. A later `resource_list_changed` event
+previously refreshed only global config and syntax, leaving an existing chat
+unable to resolve newly registered MCP resources.
+
+The patch updates MCP entries in every open chat's context, preserves non-MCP
+chat-local entries, and invalidates CodeCompanion completion through the paired
+[`patches/codecompanion.nvim/01-editor-context-refresh_v1.patch`](../codecompanion.nvim/01-editor-context-refresh_v1.patch).
+
+**Files**: `lua/mcphub/extensions/codecompanion/variables.lua`
+
+---
+
 ## Validation note
 
-- Current review on 2026-07-03 regenerated `03-main-ui_v1.patch` from an `01+02` baseline and confirmed `04-clear-auth_v1.patch` still applies against the new `03` baseline. A fresh sequential apply of `01 -> 02 -> 03 -> 04` from clean `163b3ad` passes, including `git diff --check` and `luac -p` over the touched Lua files.
+- Current repair on 2026-09-04 confirms a fresh sequential apply of `01 -> 02 -> 03 -> 04 -> 05 -> 06 -> 07` from clean `163b3ad` passes. `01` must retain the `init.lua` `strategies` to `interactions` conversion; without it the CodeCompanion v19 extension fails during startup.
 - `git apply --check` with multiple patch files can be misleading here; validate by applying each patch one at a time in a temporary worktree.
 - If `lazy-local-patcher` shows both `Applied ...` and `Error applying ...`, inspect the plugin checkout first. `restore_all()` restores files to the checkout's current `HEAD`; if `HEAD` is a leftover local patch-baseline commit instead of the lockfile commit, early patches may already be in `HEAD` and fail when reapplied.
 

@@ -1,0 +1,70 @@
+diff --git a/lua/mcphub/extensions/codecompanion/variables.lua b/lua/mcphub/extensions/codecompanion/variables.lua
+index dff525f..d901638 100644
+--- a/lua/mcphub/extensions/codecompanion/variables.lua
++++ b/lua/mcphub/extensions/codecompanion/variables.lua
+@@ -1,5 +1,43 @@
+ local M = {}
+ local mcphub = require("mcphub")
++local MCP_EDITOR_CONTEXT_PREFIX = "mcp:"
++
++---@param editor_context table
++local function clear_mcp_editor_contexts(editor_context)
++    for key, _ in pairs(editor_context) do
++        if type(key) == "string" and key:sub(1, #MCP_EDITOR_CONTEXT_PREFIX) == MCP_EDITOR_CONTEXT_PREFIX then
++            editor_context[key] = nil
++        end
++    end
++end
++
++---@param editor_context table
++---@param resource_ids string[]
++local function refresh_open_chat_contexts(editor_context, resource_ids)
++    local ok, codecompanion = pcall(require, "codecompanion")
++    if not ok or type(codecompanion.buf_get_chat) ~= "function" then
++        return
++    end
++
++    local ok_chats, entries = pcall(codecompanion.buf_get_chat)
++    if ok_chats and type(entries) == "table" then
++        for _, entry in ipairs(entries) do
++            local chat = entry.chat
++            local chat_context = chat and chat.editor_context and chat.editor_context.editor_context
++            if type(chat_context) == "table" then
++                clear_mcp_editor_contexts(chat_context)
++                for _, resource_id in ipairs(resource_ids) do
++                    chat_context[resource_id] = editor_context[resource_id]
++                end
++            end
++        end
++    end
++
++    local ok_completion, completion = pcall(require, "codecompanion.providers.completion")
++    if ok_completion and type(completion.refresh_editor_context_cache) == "function" then
++        completion.refresh_editor_context_cache()
++    end
++end
+ 
+ ---@param opts MCPHub.Extensions.CodeCompanionConfig
+ function M.register(opts)
+@@ -28,11 +66,7 @@ function M.register(opts)
+     end
+ 
+     -- Remove existing MCP editor context entries
+-    for key, _ in pairs(cc_editor_context) do
+-        if type(key) == "string" and key:sub(1, 4) == "mcp:" then
+-            cc_editor_context[key] = nil
+-        end
+-    end
++    clear_mcp_editor_contexts(cc_editor_context)
+ 
+     local added_resources = {}
+     -- Add current resources as editor context
+@@ -82,6 +116,8 @@ function M.register(opts)
+         table.insert(added_resources, var_id)
+     end
+ 
++    refresh_open_chat_contexts(cc_editor_context, added_resources)
++
+     -- Update syntax highlighting for editor context
+     M.update_variable_syntax(added_resources)
+ end

@@ -526,26 +526,73 @@ Custom instructions are injected into the system prompt for LLMs. They guide how
 }
 ```
 
-### How External Agents Access Configs
+#### External instruction files (local v6.2.0 patch)
 
-External agents (Claude Code, OpenCode, etc.) receive configurations via the **system prompt**:
+`patches/mcphub.nvim/06-instruction-files_v1.patch` extends the Neovim plugin's
+per-server config with file-backed instructions:
+
+```json
+"custom_instructions": {
+  "disabled": false,
+  "text": "Short inline guidance is kept first.",
+  "files": [
+    "~/.agents/docs/mcphub/gitlab-instructions.md",
+    "./docs/server-conventions.md"
+  ],
+  "max_bytes": 8192
+}
+```
+
+- `files` must be an array of non-empty strings. `text`, `disabled`, and
+  `max_bytes` are also type-validated when MCPHub loads the server config.
+- `~` and environment references are expanded. Relative paths are resolved from
+  the directory of the active config file that defined the server, not from
+  Neovim's current working directory.
+- Merge order is inline `text`, then readable files in declaration order, with
+  blank lines between parts.
+- When at least one file is configured, the combined body is capped per server
+  at `max_bytes` (8 KiB by default), including separators. Because inline text
+  is merged first, it wins when the cap truncates later content. Legacy
+  inline-only configs remain uncapped unless `max_bytes` is explicitly set.
+  Truncation emits a warning, backs up to a complete UTF-8 codepoint, and never
+  exceeds the configured byte count.
+- Missing/unreadable files emit one warning per unchanged server/path failure
+  and are skipped without aborting prompt generation. Read-error dedup uses the
+  file metadata signature, so volatile OS error text does not cause repeats.
+  Reads are limited to the current content budget plus one overflow byte.
+  Cached prefixes include their requested limit plus size/mtime/inode metadata;
+  larger overflowing requests reread only the larger bounded prefix, while
+  ordinary file edits invalidate cached content.
+- Existing server token estimates need no parallel loader: they estimate
+  `prompt.server_to_text()`, which now contains the merged file content.
+- File-only instruction configs are treated as configured in both expanded
+  server sections and connected-server row icons, even when inline `text` is
+  empty.
+
+Scope boundary: this is a mcphub.nvim client patch. It affects prompt consumers
+of `hub:get_active_servers_prompt()` (including the current CodeCompanion
+extension), MCPHub guide/preview output, and the MCPHub UI's token estimates. It
+does not modify the mcp-hub backend or inject these files into raw external
+clients connected directly to `/mcp`; that remains a separate backend
+investigation.
+
+### How mcphub.nvim prompt consumers access custom instructions
+
+The current CodeCompanion extension and MCPHub prompt previews call the client-side
+prompt builder:
 
 ```
-┌─────────────────┐     HTTP Request      ┌─────────────────┐
-│  Claude Code    │ ───────────────────►  │    mcp-hub      │
-│  (CLI Agent)    │                       │   (:37373)      │
-└─────────────────┘                       └────────┬────────┘
-                                                   │
-                                                   ▼
-                                          get_active_servers_prompt()
-                                                   │
-                                                   ▼
-                                          ┌─────────────────┐
-                                          │  System Prompt  │
-                                          │  - Server list  │
-                                          │  - Tool schemas │
-                                          │  - Custom instr │
-                                          └─────────────────┘
+┌─────────────────┐       Lua call       ┌─────────────────────────────┐
+│ CodeCompanion / │ ───────────────────► │ get_active_servers_prompt() │
+│ MCPHub preview  │                      └──────────────┬──────────────┘
+└─────────────────┘                                     │
+                                                        ▼
+                                             ┌─────────────────┐
+                                             │  Prompt text    │
+                                             │  - Server list  │
+                                             │  - Tool schemas │
+                                             │  - Custom instr │
+                                             └─────────────────┘
 ```
 
 **What's included:**
@@ -553,7 +600,10 @@ External agents (Claude Code, OpenCode, etc.) receive configurations via the **s
 - Active servers and their capabilities
 - Tool/resource schemas (excluding disabled ones)
 - Custom instructions per server
-- Auto-approve status (for UI confirmation logic)
+
+Raw Claude Code, Codex, OpenCode, or other clients connecting to mcp-hub over
+`/mcp` do not call this Lua prompt builder. They need separate backend/client
+support if the same custom instruction text must be delivered there.
 
 ### LLM Server Control
 
@@ -1022,6 +1072,19 @@ require("mcphub").setup({
     }
 })
 ```
+
+### CodeCompanion v19 patch-stack repair
+
+For the pinned `mcphub.nvim` checkout `163b3ad`,
+`patches/mcphub.nvim/01-compat_v1.patch` must include the `init.lua` migration
+from `config.strategies.chat.tools` to `config.interactions.chat.tools`. If that
+hunk is removed during conflict resolution, the CodeCompanion extension fails
+at startup because `strategies` is nil.
+
+Validate the full local stack in a clean disposable checkout by applying
+`01` through `07` one file at a time. Treat `git apply --check` as the source
+of truth: `lazy-local-patcher` can emit a later `Applied` notification after
+an earlier patch error.
 
 ---
 

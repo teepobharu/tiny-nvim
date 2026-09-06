@@ -54,6 +54,9 @@ Patches are applied in sorted order within a plugin directory.
 | 9   | `patches/mcphub.nvim/09-endpoint-inspector-auth-copy.patch` | `mcphub.nvim` | `v6.2.0` (`163b3ad`) | 2026-05-22 | Endpoint inspector auth URL plus `y`/`Y` copy actions for MCP rows | Local |
 | 10  | `patches/mcphub.nvim/10-configurable-agent-profiles.patch` | `mcphub.nvim` | `v6.2.0` (`163b3ad`) | 2026-05-22 | CLI agent registry supports preset-backed profiles such as `claude-agd` | Local |
 | 11  | `patches/mcphub.nvim/11-copy-payload-token-counts.patch` | `mcphub.nvim` | `v6.2.0` (`163b3ad`) | 2026-05-22 | Active tool copy payload/result lines and server/tool token estimates | Local |
+| 12  | `patches/codecompanion-history.nvim/01-title-prompt-v1.patch` | `codecompanion-history.nvim` | `bc1b4fe` | 2026-07-19 | Configurable rules plus v19 context filtering for persisted chat titles | Local |
+| 13  | `patches/codecompanion.nvim/01-editor-context-refresh_v1.patch` | `codecompanion.nvim` | `eba3b42` | 2026-08-29 | Public invalidation for cached editor-context completion entries | Local |
+| 14  | `patches/mcphub.nvim/07-codecompanion-resource-refresh_v1.patch` | `mcphub.nvim` | `163b3ad` after `01`–`06` | 2026-08-29 | Refreshes MCP resources in already-open CodeCompanion chats | Local |
 
 ### Patch 1: mcphub.nvim CodeCompanion v19 compatibility
 
@@ -173,6 +176,23 @@ counts, controlled by `ui.token_counts`; server counts filter out
 **Server build dependency**: none. This is client/UI behavior only.
 
 **Suggested commit title**: `mcphub: copy active payloads and show token estimates`.
+
+### Patch 12: codecompanion-history.nvim title prompt override
+
+**Problem**: The history extension owns persisted chat titles but hard-codes
+its title-generation prompt. `format_title` can normalize a generated title;
+it cannot tell the model to prioritize the user's request or ignore generic
+prompt-library labels.
+
+**Fix**: Add `title_generation_opts.prompt`. A non-empty string supplies title
+rules and is combined with the filtered conversation. A function can build the
+complete prompt from the filtered conversation, refresh state, original title,
+and default prompt. The patch also reads CodeCompanion v19's top-level `_meta`
+and `context` fields, so injected rules and editor context are excluded before
+the first user message is selected. Function errors are returned through the
+existing generation callback instead of breaking the chat event.
+
+**Server build dependency**: none. This is a Neovim plugin patch only.
 
 ## Lifecycle
 
