@@ -44,6 +44,7 @@ vim.g.enable_extra_plugins = vim.g.enable_extra_plugins
     -- Personal override groups (load after extras they override)
     "myEditor",
     "mySnacks", -- snacks.nvim (picker, dashboard, terminal, explorer, etc.)
+    "myInstructionPicker", -- standalone AI instruction/rule/skill catalog
     "myCoding",
     "myMinuet",
     "myBlinkIcons",

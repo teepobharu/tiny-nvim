@@ -48,6 +48,8 @@
 - [neotree.md](neotree.md) — neo-tree config, keybindings, gotchas
 - [oil.md](oil.md) — oil.nvim file manager config and patterns
 - [obsidian.md](obsidian.md) — Obsidian vault registry/config audit and cleanup picker
+- [instruction-picker.md](instruction-picker.md) — standalone catalog for AI instruction, rule, and skill files
+- [scratch_picker.md](scratch_picker.md) — multi-source notes picker, source/grep cycling, daily-note creation
 - [snacks_picker.md](snacks_picker.md) — snacks.nvim picker config, path copy, session picker, CWD state
 
 ## Keybindings & Config

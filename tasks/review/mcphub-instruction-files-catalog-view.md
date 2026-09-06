@@ -1,14 +1,18 @@
 ---
 title: "Exploratory scope for MCPHub instruction files catalog view"
-status: open
+status: review
 priority: low
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-08-29
 refs: []
 related:
   - [MCPHub.nvim Source](https://github.com/ravitemer/mcphub.nvim)
   - [MCPHub Memory Doc](docs/memory/mcphub.md)
-  - [Instruction Files Config Task](tasks/open/mcphub-instruction-files-config.md)
+  - [Instruction Files Config Task](tasks/review/mcphub-instruction-files-config.md)
+  - [Standalone Instruction Picker](lua/utils/instruction_picker.lua)
+  - [Personal Picker Registration](lua/plugins/extra/myInstructionPicker.lua)
+  - [Instruction Picker Memory](docs/memory/instruction-picker.md)
+  - [Instruction Picker Tests](tests/test_instruction_picker.lua)
 ---
 
 ## Objective
@@ -195,6 +199,17 @@ end
 - Not part of the MCPHub UI — user would need a separate key binding
 - Less "batteries included" than an MCPHub view (no built-in markdown rendering, but Snacks picker can open files directly)
 
+### Implementation decision (2026-07-19)
+
+Approach C is implemented as a standalone Snacks picker. It does not modify MCPHub source or patches.
+
+- [instruction_picker.lua](lua/utils/instruction_picker.lua) owns source configuration, bounded discovery, classification, fuzzy-search rows, preview, open, and copy actions.
+- [myInstructionPicker.lua](lua/plugins/extra/myInstructionPicker.lua) registers `:InstructionFiles` and `<leader>fI` without replacing Snacks' existing `init` callback.
+- Global sources are configurable through `vim.g.instruction_picker_sources`; project discovery starts at the current Git root.
+- Discovery recognizes instruction filenames, `SKILL.md` below skill trees, and Markdown/MDC rule files. It skips dependency/build directories and nested symlinks, and caps depth, visited nodes, and readable file size.
+- Missing configured paths are counted in the picker title and do not abort discovery.
+- Rows show agent, scope, category, path, and heading. `<CR>` opens the file, `<C-y>` copies its absolute path, and `<C-l>` copies its content.
+
 ### Data source design
 
 The catalog would scan these paths:
@@ -232,25 +247,52 @@ Each entry shows: file path, associated agent/tool, scope (global/project), and 
 
 ## Success Criteria
 
-- [ ] Feasibility assessment completed with specific code references
-- [ ] Recommended approach documented with pros/cons
-- [ ] Data source (instruction file paths) cataloged
-- [ ] Row design and actions defined
-- [ ] If Approach C (Snacks picker) is chosen: prototype ready for testing
+- [x] Feasibility assessment completed with specific code references
+- [x] Recommended approach documented with pros/cons
+- [x] Data source (instruction file paths) cataloged
+- [x] Row design and actions defined
+- [x] Approach C implemented and ready for isolated-profile testing
 
 ## Verification
 
 ### How to verify
 
-N/A — This is an exploratory/scoping task. Deliverable is the assessment document itself.
+Use the `nvimwt3a` worktree profile. Run the headless regression test first, then launch the profile in a Git project and exercise the picker. Missing optional global paths are expected to be skipped without an error.
+
+### Commands
+
+```bash
+NVIM_APPNAME=nvimwt3a nvim --headless -u NONE -i NONE \
+  --cmd 'set rtp^=/Users/tharutaipree/dotfiles/.config/nvimwt3a' \
+  -l tests/test_instruction_picker.lua
+
+NVIM_APPNAME=nvimwt3a nvim --headless -i NONE \
+  +'lua assert(vim.fn.exists(":InstructionFiles") == 2); local m=vim.fn.maparg("<leader>fI", "n", false, true); assert(m.desc == "Instruction files"); local e,r=require("utils.instruction_picker").discover(); assert(#e > 0 and #r.errors == 0); print("instruction picker wiring: ok", #e)' \
+  +qa
+
+NVIM_APPNAME=nvimwt3a nvim
+```
+
+Inside Neovim, run `:InstructionFiles` or press `<leader>fI`.
 
 ### Checklist
 
-- [ ] Three approaches evaluated with code-level references
-- [ ] Recommended approach identified
-- [ ] Implementation scope estimated (lines of code, files affected)
-- [ ] Risks and constraints documented
-- [ ] Follow-up task created for implementation (if applicable)
+- [ ] The picker opens without opening MCPHub and shows global and current-project rows.
+- [ ] The agent, scope, category, and path columns make each row's origin clear.
+- [ ] Typing terms from a path, heading, agent, or scope filters the expected row.
+- [ ] Moving selection updates the file preview; `<CR>` opens the selected file.
+- [ ] `<C-y>` copies the absolute path and `<C-l>` copies the file content.
+- [ ] Missing configured paths do not raise an error; the title reports unavailable paths when present.
+- [ ] The catalog refreshes on each open after an instruction file is added or removed.
+
+### Verification evidence (2026-07-19)
+
+- [x] Fixture-based headless test passes for classification, source deduplication, missing paths, ignored directories, metadata/search text, rendering columns, sorting, and content reads.
+- [x] Full `NVIM_APPNAME=nvimwt3a` startup registers `:InstructionFiles` and `<leader>fI`.
+- [x] `:InstructionFiles` opens an active Snacks picker in the isolated headless profile.
+- [x] Live discovery found 92 entries with zero read errors and no traversal cap.
+- [x] `git diff --check` passes for the implementation, test, task, and memory files.
+- [ ] User completed the isolated interactive checklist above and signed off in the consolidated review group.
 
 ## References
 
@@ -263,4 +305,16 @@ N/A — This is an exploratory/scoping task. Deliverable is the assessment docum
 - [Help view](https://github.com/ravitemer/mcphub.nvim/blob/main/lua/mcphub/ui/views/help.lua) — Simplest view reference
 - [Renderer](https://github.com/ravitemer/mcphub.nvim/blob/main/lua/mcphub/utils/renderer.lua) — Row rendering pattern
 - Research brief: `/tmp/mcphub-research-2.md` — full research output from this session
-- [Related task: Instruction Files Config](tasks/open/mcphub-instruction-files-config.md) — Companion task for config-side changes
+- [Related task: Instruction Files Config](tasks/review/mcphub-instruction-files-config.md) — Companion task for config-side changes
+
+## Review Feedback — 2026-07-27
+
+1. **Add `<A-s>` to toggle between each tool** — cycle the instruction catalog view by agent/tool (claude, cursor, codex, opencode, etc.)
+2. **Add `<A-g>` to toggle global scope** — filter to show only global-level instruction files
+3. **Shorten labels** — use compact labels: `[g]` (global), `[p]` (project), `[sk]` (skill), `[md]` (instruction)
+4. **Remove indent space from labels** — labels currently have leading space padding; remove it for compact display
+
+- [x] Add `<A-s>` tool/agent cycle toggle
+- [x] Add `<A-g>` global scope filter toggle
+- [x] Shorten labels to `[g]`, `[p]`, `[sk]`, `[md]`
+- [x] Remove label indent space
