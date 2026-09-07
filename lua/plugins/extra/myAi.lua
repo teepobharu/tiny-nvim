@@ -10,86 +10,12 @@ local DEFAULT_PROVIDER = AI_CFG.DEFAULT_PROVIDER
 local ENABLE_COPILOT = AI_CFG.ENABLE_COPILOT
 
 local git_util = require "utils.git"
+local mcphub_backend_util = require "utils.mcphub_backend"
 
 local is_git_worktree_profile = git_util.is_worktree_dir(vim.fn.stdpath "config")
 
-local function resolve_mcphub_backend()
-  local function first_existing_cli(candidates)
-    for _, candidate in ipairs(candidates) do
-      if vim.fn.filereadable(candidate) == 1 then
-        return candidate
-      end
-    end
-    return ""
-  end
-
-  local function cli_from_repo(repo_path)
-    local repo = vim.trim(repo_path or "")
-    if repo == "" then
-      return ""
-    end
-
-    return first_existing_cli {
-      repo .. "/dist/cli.js",
-      repo .. "/src/utils/cli.js",
-    }
-  end
-
-  local server_url = vim.trim(vim.env.MCP_HUB_SERVER_URL or "")
-  if server_url ~= "" then
-    return {
-      use_bundled_binary = false,
-      server_url = server_url,
-      cmd = nil,
-      cmdArgs = nil,
-    }
-  end
-
-  local cli_path = ""
-  local fork_cli_env = vim.trim(vim.env.MCP_HUB_FORK_CLI or "")
-  if fork_cli_env ~= "" then
-    if vim.fn.filereadable(fork_cli_env) == 1 then
-      cli_path = fork_cli_env
-    else
-      vim.notify(("mcphub: MCP_HUB_FORK_CLI not readable, ignoring: %s"):format(fork_cli_env), vim.log.levels.WARN)
-    end
-  end
-  if cli_path == "" then
-    cli_path = cli_from_repo(vim.env.MCP_HUB_FORK_REPO)
-  end
-
-  -- Zero-config defaults for local fork development.
-  if cli_path == "" then
-    local default_repos = {
-      vim.fn.expand "~/projects/mcp-hub",
-      vim.fn.expand "~/worktree/mcp-hub",
-    }
-    for _, repo in ipairs(default_repos) do
-      cli_path = cli_from_repo(repo)
-      if cli_path ~= "" then
-        break
-      end
-    end
-  end
-
-  if cli_path ~= "" then
-    return {
-      use_bundled_binary = false,
-      server_url = nil,
-      cmd = "node",
-      cmdArgs = { cli_path },
-    }
-  end
-
-  return {
-    use_bundled_binary = true,
-    server_url = nil,
-    cmd = nil,
-    cmdArgs = nil,
-  }
-end
-
-local mcphub_backend = resolve_mcphub_backend()
+local mcphub_backend = mcphub_backend_util.resolve()
+local mcphub_config = mcphub_backend_util.config_path()
 
 local CLAUDE_CODER_MAPPING_PREFIX = "<leader>C"
 -- caveat : might not updated when something changed until restart nvim ?
@@ -468,6 +394,7 @@ return {
           return require("utils.mcphub_auth").list_all_urls()
         end,
       })
+      require("utils.mcphub_attach").install()
       require("mcphub").setup(opts)
     end,
     opts = {
@@ -475,15 +402,15 @@ return {
       server_url = mcphub_backend.server_url,
       cmd = mcphub_backend.cmd,
       cmdArgs = mcphub_backend.cmdArgs,
-      config = vim.fn.expand "~/dotfiles/ai/mcp/mcphub.json",
+      config = mcphub_config,
       shutdown_delay = 60 * 60 * 1000, -- 60min ~ Delay in ms before shutting down the server when last instance closes (default: 5 minutes)
       port = is_git_worktree_profile and 37374 or 37373,
       -- Disable workspace mode for consistent port access by CLI agents on worktree profiles.
       -- Main checkout keeps workspace mode enabled.
       -- Without this, workspace mode creates per-directory hubs on random ports (40000-41000)
       workspace = {
-        -- enabled = false,
-        enabled = not is_git_worktree_profile,
+        -- Remote/tunneled hub must stay on 37373; workspace mode would pick 40000+.
+        enabled = (mcphub_backend.workspace_enabled ~= false) and not is_git_worktree_profile,
         look_for = { ".mcphub/servers.json" },
         port_range = { min = 40000, max = 41000 }, -- Port range for generating unique workspace ports
         -- TODO: check if needed

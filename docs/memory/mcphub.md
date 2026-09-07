@@ -111,10 +111,13 @@ require("mcphub").setup({
 
 - `MCP_HUB_FORK_CLI=/abs/path/to/mcp-hub/dist/cli.js` -> starts fork with `node <cli.js>`
 - `MCP_HUB_FORK_REPO=/abs/path/to/mcp-hub` -> auto-detects `dist/cli.js` or `src/utils/cli.js`
-- `MCP_HUB_SERVER_URL=http://host:port` -> connect to external hub endpoint instead of spawning local
-- If env is omitted, `myAi.lua` also auto-detects local fork repos at `~/projects/mcp-hub` and `~/worktree/mcp-hub`
+- `MCP_HUB_MODE=attach|spawn|auto` -> attach to `MCP_HUB_SERVER_URL`, spawn local, or auto (URL set => attach)
+- `MCP_HUB_SERVER_URL=http://host:port` -> attach target (ignored when `MCP_HUB_MODE=spawn`)
+- If spawn and env is omitted, also auto-detects local fork repos at `~/projects/mcp-hub` and `~/worktree/mcp-hub`
 
-Resolution order is `MCP_HUB_SERVER_URL` -> `MCP_HUB_FORK_CLI` -> `MCP_HUB_FORK_REPO` -> default local fork paths -> bundled binary.
+Resolution: `MCP_HUB_MODE` then (`attach` + URL) or (`spawn`: `MCP_HUB_FORK_CLI` -> `MCP_HUB_FORK_REPO` -> default fork paths -> bundled binary).
+
+For a remote or tunneled attach, MCPHub may report `config_source` paths from the hub host. The attach adapter remaps those to `MCPHUB_CONFIG` and keeps the original cache key as an alias; both are required before server-state filtering runs.
 
 ### Workspace Mode Warning
 
