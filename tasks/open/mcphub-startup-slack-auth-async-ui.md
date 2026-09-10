@@ -3,16 +3,44 @@ title: "MCPHub startup should not block on Slack bridge auth"
 status: "open"
 priority: "high"
 created: 2026-07-03
-updated: 2026-07-12
+updated: 2026-09-13
 refs:
   - 163b3ad [tag:v6.2.0] chore(release): v6.2.0
 related:
   - [MCPHub config](lua/plugins/extra/myAi.lua)
   - [MCPHub memory](docs/memory/mcphub.md)
-  - [Main UI patch task](tasks/open/reconcile-mcphub-03-main-ui-patch.md)
+  - [Main UI patch task](tasks/review/reconcile-mcphub-03-main-ui-patch.md)
   - [MCPHub multi-profile task](tasks/open/mcphub-multi-profile-port-conflict.md)
   - [MCPHub clear auth command](tasks/review/mcphub-clear-auth-command.md)
+  - [Done slices split out](tasks/review/mcphub-stdio-passive-auth-and-cursor-fix.md)
+  - [Initial-load Endpoints + CLI Agents](tasks/review/mcphub-ui-initial-load-cli-agents.md)
 ---
+
+## Grooming (2026-09-13)
+
+Scope trimmed to the remaining work. Completed slices moved to
+[mcphub-stdio-passive-auth-and-cursor-fix](tasks/review/mcphub-stdio-passive-auth-and-cursor-fix.md):
+
+- Slice 1 (Slack bridge passive auth) - implemented and verified 2026-07-03;
+  `SLACK_MCP_BRIDGE_AUTO_AUTH=0` still present in `mcphub.json` (re-checked 2026-09-11).
+- Slice 2 (Cursor popup) - root cause found and fixed 2026-07-07 (Cursor is a
+  config-backed agent; no more `cursor mcp` shell-out).
+- Slice 4 auth parts (stdio `authCommand` + `l` + auto-reconnect) - shipped as
+  `05-stdio-auth-command_v1.patch`.
+- Frontend initial-load visibility - implemented in
+  [mcphub-ui-initial-load-cli-agents](tasks/review/mcphub-ui-initial-load-cli-agents.md):
+  the main dashboard stays visible, logs move to `L`, and a bounded pre-ready
+  `/api/health` retry exposes connection rows/tools as soon as the backend
+  creates them. The remaining backend work still removes the global
+  `READY`-after-all-connections bottleneck.
+
+Remaining (this task):
+
+- Slice 3: backend async startup (hub `READY` before all server connections settle).
+- Slice 4 (UI): automatic pre-ready snapshots are complete; a user-triggered
+  soft refresh key (`<C-r>` candidate) remains optional. The current `r` is a
+  soft reconnect only when the hub is down (patch 14 in `02`/`03`), not a
+  status refresh while starting.
 
 ## Objective
 
@@ -28,8 +56,8 @@ The current behavior is not only a UI redraw issue. The backend marks the hub
 ready only after all configured MCP connections have completed startup, and the
 Slack bridge starts its own OAuth flow during stdio initialization. This causes:
 
-- `:MCPHub` on a fresh Neovim session to show logs or appear stuck until all
-  servers settle.
+- `:MCPHub` on a fresh Neovim session to show an empty/stale server dashboard
+  until all servers settle.
 - Slack bridge OAuth to open a browser auth popup during automatic startup.
   - Sometimes Cursor opens around the same time as Slack auth. The earlier
     "Cursor is the OS handler" hypothesis is not supported by current local
@@ -190,10 +218,12 @@ Relevant source references:
   connect timeout is `5 * 60000`, so a bad server can delay readiness for up to
   five minutes.
 
-The Neovim UI is created asynchronously, but the main view hides the server UI
-behind logs until hub state is `READY` or `RESTARTED`:
+Before the 2026-09-13 `03-main-ui_v2` revision, the Neovim main view hid the
+server UI behind logs until hub state was `READY` or `RESTARTED`. The revised
+patch keeps the dashboard visible and reads bounded pre-ready health snapshots;
+the backend readiness wait below still prevents the global `READY` transition:
 
-- `~/.local/share/nvimwt3a/lazy/mcphub.nvim/lua/mcphub/ui/views/main.lua:1112-1133`.
+- [03-main-ui_v2](patches/mcphub.nvim/03-main-ui_v2.patch).
 
 That explains the difference between a fresh hub startup and a later Neovim
 session attached to an already-ready hub.
@@ -304,8 +334,9 @@ Suggested key behavior:
 - `<C-r>` should call health/status refresh and redraw the main UI even when the
   hub is not ready.
 - `<C-r>` should not perform hard restart or backend capability reload.
-- If the UI is in logs view because hub state is starting, `<C-r>` should switch
-  or redraw into main status view when health has server rows.
+- The main view now performs bounded automatic health snapshots while starting.
+  If added, `<C-r>` should be a user-triggered extra snapshot/reconnect, not a
+  view switch or backend capability reload.
 
 Benefit of showing UI first:
 
@@ -338,9 +369,9 @@ Benefit of showing UI first:
    existing HTTP OAuth `authorizationUrl` path without a clear server type/action
    distinction.
 
-### Slice 1: Slack bridge passive auth
+### Slice 1: Slack bridge passive auth (DONE - see split-out review task)
 
-- [ ] Add passive auth support in
+- [x] Add passive auth support in
       `/Users/tharutaipree/projects/ai/slack-official-mcp-bridge`.
   - Suggested env: `SLACK_MCP_BRIDGE_AUTO_AUTH=0`.
   - Missing token should return a quick JSON-RPC error with an auth-required
@@ -350,17 +381,17 @@ Benefit of showing UI first:
   - Existing `auth` subcommand should continue to run PKCE OAuth and save the
     token.
   - Existing valid-token startup should continue to proxy `initialize`.
-- [ ] Build or typecheck the bridge with `npm run build`.
+- [x] Build or typecheck the bridge with `npm run build`.
 - [x] Configure `slack_official_bridge` in `~/dotfiles/ai/mcp/mcphub.json` to
       pass `SLACK_MCP_BRIDGE_AUTO_AUTH=0`.
 - [x] Update the `slack_official_bridge` config note so it says startup is
       passive and manual auth is `node .../build/index.js auth`.
 
-### Slice 2: Cursor validation if popup persists
+### Slice 2: Cursor validation if popup persists (DONE - root cause found and fixed)
 
-- [ ] If Cursor still opens after passive auth is enabled, run the Cursor
-      follow-up validation commands and capture the exact launch chain before
-      attributing it to URL handler state.
+- [x] Cursor popup traced to the CLI Agents panel shelling out `cursor mcp list`
+      (not URL-handler state); Cursor is now config-backed. Evidence in the
+      split-out review task.
 
 ### Slice 3: Backend async startup
 
@@ -371,10 +402,13 @@ Benefit of showing UI first:
 - [ ] Preserve the existing all-server startup summary log, but generate it from
       a background `Promise.allSettled` path instead of blocking readiness.
 
-### Slice 4: Neovim UI and refresh
+### Slice 4: Neovim UI and refresh (partially done)
 
-- [ ] Update `mcphub.nvim` main view so `STARTING` can render known server rows
-      instead of logs-only.
+- [x] Keep the `mcphub.nvim` main dashboard visible during `STARTING`, with
+      logs reserved for `L`. [03-main-ui_v2](patches/mcphub.nvim/03-main-ui_v2.patch)
+      polls the pre-ready health route for up to 15 seconds and updates only
+      changed snapshots, so existing connection rows/tools appear before global
+      `READY`.
 - [ ] Add `<C-r>` as soft status refresh / SSE reconnect, keeping `r` as hard
       capability refresh and `R` as hard restart.
 - [x] Add a deliberate user-triggered auth action for stdio auth-required rows,
@@ -478,7 +512,9 @@ lsof -i :37374
 - [ ] Pressing `l` on the Slack bridge row starts the auth flow intentionally.
 - [ ] Pressing `l` on HTTP OAuth servers still uses the existing
       authorization-url behavior.
-- [ ] Slow/failing server does not keep the UI in logs-only view.
+- [ ] Manual test: a slow/failing server leaves the stable main dashboard
+      visible and its own row changes independently; it never replaces the
+      dashboard with logs.
 - [ ] `<C-r>` or the chosen soft refresh key updates server statuses while hub
       state is still starting.
 - [ ] Current `r` still performs hard capability refresh only when the hub is

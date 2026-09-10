@@ -3,13 +3,23 @@ title: "MCPHub multi-profile port conflict causes SIGTERM and bulk disconnects"
 status: open
 priority: high
 created: 2026-03-25
-updated: 2026-07-02
+updated: 2026-09-11
 related:
   - [MCPHub config](lua/plugins/extra/myAi.lua)
   - [MCPHub memory doc](docs/memory/mcphub.md)
   - [MCPHub integration task](tasks/review/mcphub_integration.md)
   - "Shared server config: ~/dotfiles/ai/mcp/mcphub.json"
 ---
+
+## Freshness check (2026-09-11)
+
+Workarounds from the 2026-05-21 status are still in place in
+[myAi.lua](lua/plugins/extra/myAi.lua): worktree profile uses fixed port `37374`
+with workspace mode disabled; main profile keeps workspace mode on fixed port
+`47474` via `workspace.get_port()`. No new conflict evidence since; left open
+until the two-main-profiles-same-workspace-port case is either reproduced or
+closed. The mcp-hub fork endpoint-cleanup fix (idempotent cleanup for
+`/mcp` and `/mcp-lean`) is present in the local fork at `~/projects/mcp-hub`.
 
 ## Objective
 

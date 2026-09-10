@@ -3,7 +3,7 @@ title: "Monitor mcphub.nvim PR #279 merge — remove patch when merged"
 status: open
 priority: low
 created: 2026-03-15
-updated: 2026-07-02
+updated: 2026-09-11
 related:
   - [Patch task](tasks/completed/patch-mcphub-codecompanion-v19.md)
   - [MCPHub config](lua/plugins/extra/myAi.lua)
@@ -32,6 +32,11 @@ removed to avoid drift. This is a watch-and-cleanup task.
 ## Action Items
 
 - [ ] Re-check PR #279 status with `gh pr view 279 --repo ravitemer/mcphub.nvim --json state,mergedAt`.
+      Last check 2026-09-11: `state: OPEN`, `mergedAt: null` — still not merged.
+      Note: the local `01-compat_v1.patch` base drifted to upstream `8ff40b5` and no
+      longer applies fresh on the main-profile base `7cd5db3` (see
+      [lazy-local-patching.md](docs/memory/lazy-local-patching.md)). If the PR merges, rebase
+      or replace the patch on the new upstream base rather than just deleting it.
 - [ ] If merged, update `mcphub.nvim` in the worktree profile before touching the daily-driver profile.
 - [ ] Remove only the patch files that are obsolete after confirming upstream contains the fix.
 - [ ] Archive the companion patch task only after the replacement is verified.

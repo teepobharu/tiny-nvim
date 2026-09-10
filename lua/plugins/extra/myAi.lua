@@ -525,6 +525,14 @@ return {
                   path = "~/.codex/config.toml",
                   matcher = ".mcp_servers",
                 },
+                {
+                  -- Source of truth for the mcph mapping; merged into the runtime
+                  -- config by ~/dotfiles/ai/codex/sync-agoda-mcp.sh (append-only).
+                  key = "2",
+                  label = "dg_mcp",
+                  path = "~/dotfiles/ai/codex/config.ag-mcp.toml",
+                  matcher = ".mcp_servers",
+                },
               },
             },
             {

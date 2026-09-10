@@ -1,9 +1,9 @@
 ---
 title: "Investigate MCPHub UI stuck on Starting... or showing 'No servers found'"
-status: open
+status: review
 priority: medium
 created: 2026-01-13
-updated: 2026-01-13
+updated: 2026-09-11
 refs:
   - mcphub.nvim 6.2.0
   - mcp-hub fork at ~/projects/mcp-hub
@@ -11,10 +11,27 @@ related:
   - [MCPHub Memory Doc](docs/memory/mcphub.md)
   - [myAi.lua config](lua/plugins/extra/myAi.lua)
   - [mcphub.json](~/dotfiles/ai/mcp/mcphub.json)
-  - [Log dedup patch](patches/mcphub.nvim/03-log-dedup-throttle.patch)
-  - [Compatible health version patch](patches/mcphub.nvim/06-compatible-health-version-check.patch)
-  - [Hard restart confirm patch](patches/mcphub.nvim/07-confirm-hard-restart.patch)
+  - [Grouped hub stability patch](patches/mcphub.nvim/02-hub-stability_v1.patch)
+  - [Grouped main UI patch](patches/mcphub.nvim/03-main-ui_v1.patch)
 ---
+
+## Resolution Evidence (2026-09-11 grooming)
+
+The confirmed root cause (servers missing/mismatched `config_source`, so the
+grouped renderer filtered them all out) no longer reproduces against the live
+hub:
+
+- `/api/health` on port 37373 returned 50 servers, **0 missing `config_source`**, all with
+  a single distinct value: `/Users/tharutaipree/dotfiles/ai/mcp/mcphub.json` -
+  the same path the active-config resolver uses.
+- The stale patch file references below (03-log-dedup-throttle, 06-compatible-health-version-check,
+  07-confirm-hard-restart) were reorganized into the grouped patches listed in
+  related: log dedup and the compatible health check now live in
+  `02-hub-stability_v1.patch`.
+
+Left in `review/` because a full fresh-startup reproduction in a real session
+was not re-run after the fix. If `:MCPHub` on a cold hub start shows the server
+list without "No servers found", move this to `completed/`.
 
 ## Objective
 

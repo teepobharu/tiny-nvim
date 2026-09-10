@@ -194,6 +194,20 @@ All CLI agents should connect to:
 http://localhost:37373/mcp
 ```
 
+### Codex Mapping Source (mcph)
+
+The codex-to-hub mapping is `[mcp_servers.mcph]` (`npx mcp-remote` to `http://localhost:37373/mcp-lean`).
+It comes from dotfiles, but from the managed Agoda MCP catalog, not the main base config:
+
+- Source of truth: `~/dotfiles/ai/codex/config.ag-mcp.toml` (portable Agoda MCP catalog)
+- Merge into runtime: `~/dotfiles/ai/codex/sync-agoda-mcp.sh --review/--apply` (append-only; adds only missing `[mcp_servers.*]` tables, timestamped backup)
+- Runtime (what codex reads): `~/.codex/config.toml`
+
+The main base config `~/dotfiles/ai/codex/config.toml` deliberately contains no `[mcp_servers]` tables.
+A whole-file TOML merge of the base config can replace nested maps like `mcp_servers` or `projects` and clobber runtime-generated tables.
+Caveat: if the runtime `mcph` entry lives outside the `# BEGIN managed Agoda MCP catalog additions` block (it does on this Mac, written by the Desktop), later catalog edits to that entry (for example a port change) do not propagate because the sync script only appends missing tables.
+The `:MCPHub` CLI Agents panel exposes both files on the codex row: `1` opens the runtime `~/.codex/config.toml`, `2` opens the dotfiles catalog.
+
 ### Configuration Examples
 
 #### Claude Code (`~/.mcp.json`)
@@ -344,6 +358,27 @@ require("mcphub").setup({
 | `q` | Close           |
 | `r` | Refresh         |
 | `R` | Restart mcp-hub |
+
+### Initial Load View
+
+From `setup_state = in_progress` onward, the main view remains the server
+dashboard; the live log stream is available only through `L` (patch
+`03-main-ui_v2`). A fixed state row shows `Starting...` plus either setup,
+waiting, or partial server/tool availability, so the layout is present before a
+hub connection finishes. This prevents a variable-length log buffer from
+replacing the dashboard or moving its sections while servers connect.
+
+When opened before `READY`, the UI immediately reads `GET /api/health` and
+retries a bounded 30 times at 500 ms, one request at a time. The health response
+reads the backend connection map, so the MCP Servers section can show an
+individual server and its tool count as soon as that connection exists or
+finishes, rather than waiting for every configured server. Press `l` on that
+server to reveal its tool names. Unchanged snapshots do not redraw the main
+view; close/context changes invalidate pending retries.
+
+Endpoint rows still use the configured port with a red dot until ready, and the
+agent registry remains async and hub-independent. This does not alter the
+backend's global `READY` policy or make a still-connecting MCP tool usable.
 
 ### Main View Keys
 
@@ -705,7 +740,8 @@ Registered in `lua/plugins/extra/myAi.lua`.
 Some stdio bridges, such as `slack_official_bridge`, own their OAuth flow
 inside the bridge process instead of using MCPHub's HTTP OAuth provider. Do not
 let these bridges auto-open auth during `initialize`; that can block startup and
-hide the MCPHub server list behind logs.
+delay individual server status, even though the main dashboard now remains
+visible during startup.
 
 Local pattern:
 

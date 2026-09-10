@@ -1,17 +1,23 @@
 # mcphub.nvim patches
 
-Patch files are applied in order by `lazy-local-patcher`. Seven grouped patch files cover all local changes against the pinned plugin checkout (`163b3ad`).
+Patch files are applied in order by `lazy-local-patcher`. Eight grouped patch files cover all local changes against the pinned plugin checkout (`163b3ad`).
 
 **Application order** (required):
 ```bash
 git apply --ignore-space-change 01-compat_v1.patch
 git apply --ignore-space-change 02-hub-stability_v1.patch
 git apply --ignore-space-change 03-main-ui_v1.patch
+git apply --ignore-space-change 03-main-ui_v2.patch
 git apply --ignore-space-change 04-clear-auth_v1.patch
 git apply --ignore-space-change 05-stdio-auth-command_v1.patch
 git apply --ignore-space-change 06-instruction-files_v1.patch
 git apply --ignore-space-change 07-codecompanion-resource-refresh_v1.patch
 ```
+
+`02` must precede `03` — env-tool-filters (in `02`) adds hub.lua and main.lua context that `03` depends on.
+`03-main-ui_v2` must follow `03-main-ui_v1` — it replaces the startup-only
+logs branch in `main.lua` and extends `ui/init.lua` with pre-ready status
+snapshots.
 
 `02` must precede `03` — env-tool-filters (in `02`) adds hub.lua and main.lua context that `03` depends on.
 `04` depends on `03` for the keymap dispatch infrastructure in main.lua.
@@ -64,6 +70,32 @@ Main-view UI work. Depends on `02-hub-stability_v1` for hub.lua and main.lua con
 - **Deduped log badge rendering** — repeated log entries with `entry.count > 1` display a muted `xN` suffix in server entry rendering.
 
 **Files**: `lua/mcphub/config.lua`, `lua/mcphub/hub.lua`, `lua/mcphub/ui/init.lua`, `lua/mcphub/ui/views/main.lua`, `lua/mcphub/ui/capabilities/`, `lua/mcphub/utils/renderer.lua`
+
+---
+
+## 03-main-ui_v2.patch
+
+Follow-up to `03-main-ui_v1`. Applies after `03-main-ui_v1` and before `04-clear-auth_v1`.
+
+- **Stable startup dashboard** — from `setup_state = in_progress` onward, the
+  main view renders the server, Endpoints, CLI Agents, and workspace sections.
+  A fixed hub-state row says `Starting...`, `Setting up MCPHub`, or the partial
+  server/tool count while the connection settles. Live logs belong only to `L`,
+  so startup no longer swaps the dashboard for a variable-length log buffer.
+  Logs and server-output notifications redraw only the Logs view.
+- **Early server snapshots** — when the UI opens before the hub is ready, it
+  immediately calls `GET /api/health`, then performs up to 30 non-overlapping
+  retries at 500 ms while the UI remains visible. The main view redraws only
+  when the returned server/workspace snapshot changes. This exposes a completed
+  connection and its tool count as soon as the backend has created its
+  connection object, without waiting for every configured server or the global
+  `READY` event. Use `l` to expand that row for tool names. A generation guard
+  stops stale retries after close or context switch.
+- **Boundary** — this is an observability/UI improvement only: it does not
+  change backend readiness, force a capability refresh, or make a connecting
+  server executable before its MCP initialization completes.
+
+**Files**: `lua/mcphub/ui/init.lua`, `lua/mcphub/ui/views/main.lua`
 
 ---
 

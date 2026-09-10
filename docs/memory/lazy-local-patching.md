@@ -47,16 +47,26 @@ Patches are applied in sorted order within a plugin directory.
 
 | #   | Patch file                                              | Plugin        | Applied on version      | Date       | Why                                                                               | Upstream                                                            |
 | --- | ------------------------------------------------------- | ------------- | ----------------------- | ---------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
-| 1   | `patches/mcphub.nvim/01-codecompanion-v19-compat.patch` | `mcphub.nvim` | `v6.2.0` (`163b3ad`) | 2026-03-21 | CodeCompanion v19 renamed `variables` → `editor_context`, changed tool/image APIs | [PR #279](https://github.com/ravitemer/mcphub.nvim/pull/279) — Open |
-| 6   | `patches/mcphub.nvim/06-compatible-health-version-check.patch` | `mcphub.nvim` | `v6.2.0` (`163b3ad`) | 2026-05-21 | Existing hub health check treated compatible patch versions as mismatch and triggered hard restart | Local |
-| 7   | `patches/mcphub.nvim/07-confirm-hard-restart.patch` | `mcphub.nvim` | `v6.2.0` (`163b3ad`) | 2026-05-21 | Automatic startup mismatch hard restart could happen without confirmation | Local |
-| 8   | `patches/mcphub.nvim/08-main-view-keymap-dispatch.patch` | `mcphub.nvim` | `v6.2.0` (`163b3ad`) | 2026-05-22 | Patch 05 cursor-line mappings deleted normal `e`/`t` server/tool actions | Local |
-| 9   | `patches/mcphub.nvim/09-endpoint-inspector-auth-copy.patch` | `mcphub.nvim` | `v6.2.0` (`163b3ad`) | 2026-05-22 | Endpoint inspector auth URL plus `y`/`Y` copy actions for MCP rows | Local |
-| 10  | `patches/mcphub.nvim/10-configurable-agent-profiles.patch` | `mcphub.nvim` | `v6.2.0` (`163b3ad`) | 2026-05-22 | CLI agent registry supports preset-backed profiles such as `claude-agd` | Local |
-| 11  | `patches/mcphub.nvim/11-copy-payload-token-counts.patch` | `mcphub.nvim` | `v6.2.0` (`163b3ad`) | 2026-05-22 | Active tool copy payload/result lines and server/tool token estimates | Local |
+| 1   | `patches/mcphub.nvim/01-compat_v1.patch`                | `mcphub.nvim` | `8ff40b5` (see drift note) | 2026-09-11 | CodeCompanion v19 renamed `variables` → `editor_context`, changed tool/image APIs | [PR #279](https://github.com/ravitemer/mcphub.nvim/pull/279) — Open |
+| 2   | `patches/mcphub.nvim/02-hub-stability_v1.patch`         | `mcphub.nvim` | `163b3ad` after `01`    | 2026-09-11 | Env tool filters, log dedup/throttle, hard-restart confirm, workspace switch debounce, SSE recovery | Local |
+| 3   | `patches/mcphub.nvim/03-main-ui_v1.patch`               | `mcphub.nvim` | `163b3ad` after `01`+`02` | 2026-09-11 | Main-view sections/folding, Endpoints + CLI Agents panels, multi-server expansion, capability summaries | Local |
+| 4   | `patches/mcphub.nvim/03-main-ui_v2.patch`               | `mcphub.nvim` | `163b3ad` after `03-main-ui_v1` | 2026-09-13 | Keep logs in `L`; show dashboard/state shell during setup and poll pre-ready server/tool counts | Local |
+| 5   | `patches/mcphub.nvim/04-clear-auth_v1.patch`            | `mcphub.nvim` | `163b3ad` after `03`    | 2026-09-11 | `POST /servers/clear-auth` endpoint plus `X` key on server rows, file-edit fallback | Local |
+| 6   | `patches/mcphub.nvim/05-stdio-auth-command_v1.patch`    | `mcphub.nvim` | `163b3ad` after `03`    | 2026-09-11 | Config-driven `authCommand` for stdio servers; `l` starts auth on unauthorized rows | Local |
+| 7   | `patches/mcphub.nvim/06-instruction-files_v1.patch`     | `mcphub.nvim` | `163b3ad` after `05`    | 2026-09-11 | Neovim-only prompt/config instruction files | Local |
+| 8   | `patches/mcphub.nvim/07-codecompanion-resource-refresh_v1.patch` | `mcphub.nvim` | `163b3ad` after `01`–`06` | 2026-08-29 | Refreshes MCP resources in already-open CodeCompanion chats | Local |
 | 12  | `patches/codecompanion-history.nvim/01-title-prompt-v1.patch` | `codecompanion-history.nvim` | `bc1b4fe` | 2026-07-19 | Configurable rules plus v19 context filtering for persisted chat titles | Local |
 | 13  | `patches/codecompanion.nvim/01-editor-context-refresh_v1.patch` | `codecompanion.nvim` | `eba3b42` | 2026-08-29 | Public invalidation for cached editor-context completion entries | Local |
-| 14  | `patches/mcphub.nvim/07-codecompanion-resource-refresh_v1.patch` | `mcphub.nvim` | `163b3ad` after `01`–`06` | 2026-08-29 | Refreshes MCP resources in already-open CodeCompanion chats | Local |
+
+### Known base drift: mcphub.nvim 01-compat_v1
+
+Checked 2026-09-11: `01-compat_v1.patch` was generated against upstream `8ff40b5` and only applies cleanly there; it fails on the current main-profile lazy checkout base `7cd5db3` (and `07`, which depends on `01` context, fails in a fresh sequential apply on `7cd5db3` too).
+The live checkouts still work because patched files persist between Lazy syncs; the failure only bites on a fresh revert/re-apply (e.g. `:Lazy update mcphub.nvim`).
+Before any Lazy sync of `mcphub.nvim` in the main profile, rebase `01-compat_v1` (and re-verify `07`) onto the new base, or pin the plugin back to `8ff40b5`/`163b3ad`.
+The `nvimwt3a` worktree profile is still on `163b3ad`. A disposable
+checkout at that base proves the full `01`→`07` stack plus the revised
+`03-main-ui_v2` applies cleanly (verified 2026-09-13); sync its
+user-owned configuration worktree separately when it is next rebased/updated.
 
 ### Patch 1: mcphub.nvim CodeCompanion v19 compatibility
 

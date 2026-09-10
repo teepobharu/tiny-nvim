@@ -1,17 +1,30 @@
 ---
 title: "Reconcile MCPHub 03 main UI patch ownership"
-status: "open"
+status: "review"
 priority: "high"
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-09-13
 refs:
   - 163b3ad [tag:v6.2.0] chore(release): v6.2.0
 related:
   - [Patch catalog](patches/mcphub.nvim/README.md)
   - [03 main UI patch](patches/mcphub.nvim/03-main-ui_v1.patch)
+  - [03 main UI patch v2](patches/mcphub.nvim/03-main-ui_v2.patch)
   - [02 hub stability patch](patches/mcphub.nvim/02-hub-stability_v1.patch)
   - [MCPHub memory](docs/memory/mcphub.md)
+  - [Initial-load sections task](tasks/review/mcphub-ui-initial-load-cli-agents.md)
 ---
+
+## Status (2026-09-13 revision)
+
+All agent-side reconciliation work is done and verified (see checkboxes below).
+What remains is manual `:MCPHub` UI verification, which is why this task is in
+`review/`. The 2026-09-13 revision of `03-main-ui_v2.patch` removes startup
+logs from the main dashboard, keeps a fixed state/layout shell during setup,
+and adds bounded pre-ready health snapshots for early server/tool counts. It
+applies in the full sequential `163b3ad` stack; do not reuse the earlier
+`7cd5db3` claim because `01-compat_v1` still has a known base-drift gate. See
+[mcphub-ui-initial-load-cli-agents](tasks/review/mcphub-ui-initial-load-cli-agents.md).
 
 ## Objective
 
