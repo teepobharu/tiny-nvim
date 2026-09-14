@@ -457,6 +457,24 @@ return {
               name = "claude",
               binding_flat = "mcphub",
               binding_lean = "mcphub-lean",
+              settings_roots = {
+                {
+                  id = "user",
+                  label = "User setup",
+                  scope = "user",
+                  path = "~/.claude",
+                  setup_files = { "CLAUDE.md", "AGENTS.md" },
+                  skill_dirs = { "skills" },
+                },
+                {
+                  id = "local",
+                  label = "Local setup",
+                  scope = "local",
+                  path = ".claude",
+                  setup_files = { "settings.json", "CLAUDE.md" },
+                  skill_dirs = { "skills" },
+                },
+              },
               config_alternates = {
                 {
                   key ="m",
@@ -490,6 +508,16 @@ return {
               command = "claude",
               config_dir = "~/.claude-agd",
               config_path = "~/.claude-agd/.claude.json",
+              settings_roots = {
+                {
+                  id = "user",
+                  label = "User setup",
+                  scope = "user",
+                  path = "~/.claude-agd",
+                  setup_files = { "settings.json", "CLAUDE.md" },
+                  skill_dirs = { "skills" },
+                },
+              },
               config_alternates = {
                 {
                   key = "1",
@@ -518,6 +546,16 @@ return {
               name = "codex",
               binding_flat = "mcphub",
               binding_lean = "mcphub-lean",
+              settings_roots = {
+                {
+                  id = "user",
+                  label = "User setup",
+                  scope = "user",
+                  path = "~/.codex",
+                  setup_files = { "AGENTS.override.md", "AGENTS.md" },
+                  skill_dirs = { "skills" },
+                },
+              },
               config_alternates = {
                 {
                   key = "1",
@@ -539,6 +577,24 @@ return {
               name = "cursor",
               binding_flat = "mcphub",
               binding_lean = "mcphub-lean",
+              settings_roots = {
+                {
+                  id = "user",
+                  label = "User setup",
+                  scope = "user",
+                  path = "~/.cursor",
+                  setup_files = { "mcp.json" },
+                  skill_dirs = { "skills" },
+                },
+                {
+                  id = "local",
+                  label = "Local setup",
+                  scope = "local",
+                  path = ".cursor",
+                  setup_files = { "mcp.json" },
+                  skill_dirs = { "skills" },
+                },
+              },
               config_alternates = {
                 {
                   key = "1",
@@ -564,6 +620,24 @@ return {
               binding_flat = "mcphub",
               binding_lean = "mcphub-lean",
               scopes = { "user", "project" },
+              settings_roots = {
+                {
+                  id = "user",
+                  label = "User setup",
+                  scope = "user",
+                  path = "~/.pi/agent",
+                  setup_files = { "settings.json", "AGENTS.md" },
+                  skill_dirs = { "skills" },
+                },
+                {
+                  id = "local",
+                  label = "Local setup",
+                  scope = "local",
+                  path = ".pi",
+                  setup_files = { "settings.json", "AGENTS.md" },
+                  skill_dirs = { "skills" },
+                },
+              },
               config_alternates = {
                 {
                   key = "1",
@@ -582,9 +656,55 @@ return {
                 },
               },
             },
-            { name = "opencode", binding_flat = "mcphub", binding_lean = "mcphub-lean" },
+            {
+              name = "opencode",
+              binding_flat = "mcphub",
+              binding_lean = "mcphub-lean",
+              settings_roots = {
+                {
+                  id = "user",
+                  label = "User setup",
+                  scope = "user",
+                  path = "~/.config/opencode",
+                  setup_files = { "opencode.json", "opencode.jsonc", "AGENTS.md" },
+                  skill_dirs = { "skills" },
+                },
+                {
+                  id = "local",
+                  label = "Local setup",
+                  scope = "local",
+                  path = ".opencode",
+                  setup_files = { "opencode.json", "opencode.jsonc", "AGENTS.md" },
+                  skill_dirs = { "skills" },
+                },
+              },
+            },
           },
           scopes = { "user", "project" },
+        },
+        agent_settings = {
+          enabled = true,
+          default_mode = "full",
+          modes = { "full", "user", "local" },
+          shared_label = "Shared agent setup",
+          shared_roots = {
+            {
+              id = "dotfiles-agents",
+              label = "Dotfiles agents",
+              scope = "user",
+              path = "~/dotfiles/ai/agents",
+              setup_files = { "AGENTS.override.md", "AGENTS.md" },
+              skill_dirs = { "skills" },
+            },
+            {
+              id = "workspace",
+              label = "Workspace instructions",
+              scope = "local",
+              path = ".",
+              setup_files = { "AGENTS.override.md", "AGENTS.md", "CLAUDE.md" },
+              skill_dirs = { ".agents/skills" },
+            },
+          },
         },
         token_counts = {
           enabled = true,

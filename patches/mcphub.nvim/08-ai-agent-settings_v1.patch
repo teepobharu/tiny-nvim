@@ -1,0 +1,307 @@
+diff --git a/lua/mcphub/config.lua b/lua/mcphub/config.lua
+--- a/lua/mcphub/config.lua
++++ b/lua/mcphub/config.lua
+@@ -104,6 +104,12 @@
+             },
+             scopes = { "user", "project" },
+         },
++        agent_settings = {
++            enabled = true,
++            default_mode = "full",
++            modes = { "full", "user", "local" },
++            shared_roots = {},
++        },
+         input_navigation = {
+             next_field = "J",
+             prev_field = "K",
+diff --git a/lua/mcphub/ui/views/main.lua b/lua/mcphub/ui/views/main.lua
+--- a/lua/mcphub/ui/views/main.lua
++++ b/lua/mcphub/ui/views/main.lua
+@@ -690,7 +690,11 @@
+                     local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
+                     if line_type == "endpoint" then
+                         self:handle_endpoint_inspect()
+-                    elseif line_type == "agent_binding" then
++                    elseif
++                        line_type == "agent_binding"
++                        or line_type == "agent_settings_file"
++                        or line_type == "agent_skill_file"
++                    then
+                         self:handle_edit_config()
+                     else
+                         self:handle_edit()
+@@ -810,9 +814,11 @@
+     }
+     self.keymaps["R"] = {
+         action = function()
+-            local line_type = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++            local line_type, context = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
+             if line_type == "agent_binding" then
+                 self:refresh_agent_registry()
++            elseif self:_is_agent_settings_line(line_type, context) then
++                self:refresh_agent_settings()
+             else
+                 self.ui:restart()
+             end
+@@ -907,6 +913,11 @@
+         self.keymaps["T"] = {
+             action = function() self:toggle_all_sections() end,
+             desc = "Toggle all sections", silent = false,
++        }
++        self.keymaps["gS"] = {
++            action = function() self:cycle_agent_settings_mode() end,
++            desc = "Cycle AI agent settings scope",
++            silent = false,
+         }
+         do
+             local cfg = self:_get_agent_registry_config()
+@@ -1268,6 +1279,9 @@
+     elseif t == "agent_binding" then
+         local agents = require("utils.mcphub_agents")
+         path = vim.fn.expand(agents.config_path(context.profile or context.agent, context.scope))
++    elseif (t == "agent_settings_file" or t == "agent_skill_file") and context and context.target then
++        self:_open_config_target(context.target)
++        return
+     end
+     if not path or path == "" then
+         return
+@@ -1841,6 +1855,231 @@
+     end
+ 
+     table.insert(lines, Text.empty_line())
++    return lines
++end
++
++-- ── Render: AI Agent Settings panel ────────────────────────────────────────
++
++local function agent_settings_state(state)
++    if state == "ready" then
++        return "● ", Text.highlights.success, "ready"
++    end
++    if state == "partial" then
++        return "◐ ", Text.highlights.warning, "partial"
++    end
++    return "○ ", Text.highlights.error, "setup needed"
++end
++
++local function agent_settings_path(path)
++    return vim.fn.fnamemodify(path, ":~")
++end
++
++function MainView:_get_agent_settings_config()
++    return ((mcphub_config.ui or {}).agent_settings or {})
++end
++
++function MainView:_get_agent_settings_mode()
++    local cfg = self:_get_agent_settings_config()
++    return self._agent_settings_mode or cfg.default_mode or "full"
++end
++
++function MainView:_agent_settings_collapsed(name, default_collapsed)
++    self.collapsed_sections = self.collapsed_sections or {}
++    if self.collapsed_sections[name] == nil then
++        self.collapsed_sections[name] = default_collapsed
++    end
++    return self.collapsed_sections[name]
++end
++
++function MainView:_is_agent_settings_line(line_type, context)
++    if line_type == "agent_settings_file" or line_type == "agent_skill_file" then
++        return true
++    end
++    return line_type == "section_header"
++        and context
++        and type(context.name) == "string"
++        and context.name:find("agent_settings", 1, true) == 1
++end
++
++function MainView:cycle_agent_settings_mode()
++    local cfg = self:_get_agent_settings_config()
++    if cfg.enabled == false then
++        return
++    end
++    local discovery = require("utils.mcphub_agent_settings")
++    self._agent_settings_mode = discovery.next_mode(self:_get_agent_settings_mode(), cfg.modes)
++    discovery.invalidate()
++    self:draw()
++end
++
++function MainView:refresh_agent_settings()
++    require("utils.mcphub_agent_settings").invalidate()
++    self:draw()
++end
++
++---@param line_offset number
++---@return NuiLine[]
++function MainView:render_agent_settings(line_offset)
++    local ui_cfg = mcphub_config.ui or {}
++    local cfg = self:_get_agent_settings_config()
++    if cfg.enabled == false then
++        return {}
++    end
++
++    local discovery = require("utils.mcphub_agent_settings")
++    local mode = self:_get_agent_settings_mode()
++    local snapshot = discovery.inspect((ui_cfg.agent_registry or {}).agents or {}, cfg, mode)
++    local lines = {}
++    local current_line = line_offset
++    local mode_label = mode:sub(1, 1):upper() .. mode:sub(2)
++    local summary = snapshot.summary
++
++    local panel_key = "agent_settings"
++    local panel_collapsed = self:_agent_settings_collapsed(panel_key, false)
++    local fold_icon = panel_collapsed and Text.icons.triangleRight or Text.icons.triangleDown
++    local header = NuiLine()
++        :append(fold_icon .. " ", Text.highlights.muted)
++        :append("󰚩 AI Agent Settings", Text.highlights.title)
++        :append("  " .. mode_label .. " view", Text.highlights.info)
++        :append("  gS:scope R:rescan", Text.highlights.muted)
++    table.insert(lines, Text.pad_line(header))
++    current_line = current_line + 1
++    self:track_line(current_line, "section_header", { name = panel_key, hint = "h:fold l:unfold gS:scope R:rescan" })
++    table.insert(lines, self:divider())
++    current_line = current_line + 1
++    if panel_collapsed then
++        return lines
++    end
++
++    local summary_state = summary.missing == 0 and (summary.partial == 0 and "ready" or "partial") or "missing"
++    local summary_icon, summary_hl = agent_settings_state(summary_state)
++    local summary_line = NuiLine()
++        :append("  " .. summary_icon, summary_hl)
++        :append(
++            string.format(
++                "%d ready · %d partial · %d setup needed · %d skills",
++                summary.ready,
++                summary.partial,
++                summary.missing,
++                summary.skills
++            ),
++            Text.highlights.muted
++        )
++    table.insert(lines, Text.pad_line(summary_line))
++    current_line = current_line + 1
++
++    local function render_subheader(name, label, default_collapsed)
++        local collapsed = self:_agent_settings_collapsed(name, default_collapsed)
++        local icon = collapsed and Text.icons.triangleRight or Text.icons.triangleDown
++        table.insert(lines, Text.pad_line(NuiLine():append("    " .. icon .. " " .. label, Text.highlights.muted)))
++        current_line = current_line + 1
++        self:track_line(current_line, "section_header", { name = name, hint = "h:fold l:unfold" })
++        return collapsed
++    end
++
++    for _, group in ipairs(snapshot.groups) do
++        local group_key = "agent_settings:" .. group.id
++        local group_collapsed = self:_agent_settings_collapsed(group_key, true)
++        local state_icon, state_hl, state_label = agent_settings_state(group.state)
++        local group_fold = group_collapsed and Text.icons.triangleRight or Text.icons.triangleDown
++        local group_line = NuiLine()
++            :append("  " .. group_fold .. " ", Text.highlights.muted)
++            :append(state_icon, state_hl)
++            :append(group.label, Text.highlights.info)
++            :append("  " .. state_label, Text.highlights.muted)
++            :append(" · " .. #group.skills .. " skills", Text.highlights.muted)
++        if group.profile and group.available ~= nil then
++            group_line:append(
++                group.available and " · CLI found" or " · CLI missing",
++                group.available and Text.highlights.success or Text.highlights.warning
++            )
++        end
++        table.insert(lines, Text.pad_line(group_line))
++        current_line = current_line + 1
++        self:track_line(current_line, "section_header", { name = group_key, hint = "h:fold l:unfold" })
++        if not group_collapsed then
++            local roots_key = group_key .. ":roots"
++            local roots_collapsed = render_subheader(
++                roots_key,
++                string.format("Setup roots (%d/%d)", group.existing_roots, #group.roots),
++                false
++            )
++            if not roots_collapsed then
++                if #group.roots == 0 then
++                    table.insert(lines, Text.pad_line(NuiLine():append("      No configured roots", Text.highlights.muted)))
++                    current_line = current_line + 1
++                else
++                    for _, root in ipairs(group.roots) do
++                        local icon = root.exists and "● " or "○ "
++                        local hl = root.exists and Text.highlights.success or Text.highlights.warning
++                        local line = NuiLine()
++                            :append("      " .. icon, hl)
++                            :append(root.label .. " (" .. root.scope .. ")  ", Text.highlights.info)
++                            :append(agent_settings_path(root.path), Text.highlights.muted)
++                            :append("  " .. root.skills .. " skills", Text.highlights.muted)
++                        table.insert(lines, Text.pad_line(line))
++                        current_line = current_line + 1
++                    end
++                end
++            end
++
++            local files_key = group_key .. ":files"
++            local files_collapsed = render_subheader(
++                files_key,
++                string.format("Settings (%d/%d)", group.existing_files, #group.files),
++                false
++            )
++            if not files_collapsed then
++                if #group.files == 0 then
++                    table.insert(lines, Text.pad_line(NuiLine():append("      No config files declared", Text.highlights.muted)))
++                    current_line = current_line + 1
++                else
++                    for _, target in ipairs(group.files) do
++                        local icon = target.exists and "● " or "○ "
++                        local hl = target.exists and Text.highlights.success or Text.highlights.warning
++                        local line = NuiLine()
++                            :append("      " .. icon, hl)
++                            :append(target.label .. "  ", Text.highlights.info)
++                            :append(agent_settings_path(target.path), Text.highlights.muted)
++                        table.insert(lines, Text.pad_line(line))
++                        current_line = current_line + 1
++                        self:track_line(current_line, "agent_settings_file", {
++                            target = target,
++                            hint = "e:edit",
++                        })
++                    end
++                end
++            end
++
++            local skills_key = group_key .. ":skills"
++            local skills_collapsed = render_subheader(skills_key, "Skills (" .. #group.skills .. ")", true)
++            if not skills_collapsed then
++                if #group.skills == 0 then
++                    table.insert(
++                        lines,
++                        Text.pad_line(NuiLine():append("      No SKILL.md files under selected roots", Text.highlights.muted))
++                    )
++                    current_line = current_line + 1
++                else
++                    for _, skill in ipairs(group.skills) do
++                        local line = NuiLine()
++                            :append("      ● ", Text.highlights.success)
++                            :append(skill.label .. "  ", Text.highlights.info)
++                            :append(agent_settings_path(skill.path), Text.highlights.muted)
++                        table.insert(lines, Text.pad_line(line))
++                        current_line = current_line + 1
++                        self:track_line(current_line, "agent_skill_file", {
++                            target = { label = skill.label, path = skill.path },
++                            hint = "e:open",
++                        })
++                    end
++                end
++            end
++        end
++        table.insert(lines, Text.empty_line())
++        current_line = current_line + 1
++    end
++
+     return lines
+ end
+ 
+@@ -2412,6 +2651,7 @@
+     table.insert(lines, Text.empty_line())
+     vim.list_extend(lines, self:render_endpoints(#lines))
+     vim.list_extend(lines, self:render_agent_registry(#lines))
++    vim.list_extend(lines, self:render_agent_settings(#lines))
+ 
+     -- Add spacing before workspaces section
+     table.insert(lines, Text.empty_line())

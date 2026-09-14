@@ -1053,6 +1053,29 @@ Fix:
 - Config-only rows expose `e` / configured alternate config shortcuts, but not
   `a`/`A`/`t`/`d`.
 
+### AI Agent Settings dashboard
+
+`08-ai-agent-settings_v1.patch` adds a read-only **AI Agent Settings** panel
+to the MCPHub main view after CLI Agents. It is a setup/discovery view, not a
+replacement for the existing MCP binding controls.
+
+- Configuration lives in `ui.agent_settings` and per-profile `settings_roots`
+  in `lua/plugins/extra/myAi.lua`. Declare only paths that should be inspected;
+  each root can define `scope = "user"|"local"`, setup files, and skill
+  directories.
+- `lua/utils/mcphub_agent_settings.lua` stats configured paths and discovers
+  `SKILL.md` names with a one-second cache. It never reads config contents or
+  invokes agent CLIs, preserving the Cursor no-probe safety boundary.
+- `gS` cycles **Full**, **User**, and **Local** root modes; `R` rescans only
+  while the cursor is in this panel. The top row summarizes ready/partial/setup
+  states and total skills.
+- Agent sections and their Setup roots, Settings, and Skills subsections reuse
+  `h`/`l`, `T`, and `J`/`K`. File and skill rows use `e` to open the selected
+  file through the existing MCPHub hide-and-edit flow; a missing setup file can
+  be opened for first-time creation.
+- Keep this patch last in the local MCPHub patch stack. It requires the final
+  section/key dispatch introduced by patches 03 through 07.
+
 ### Active capability copy and token estimates
 
 **Copy behavior**:

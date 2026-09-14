@@ -1,6 +1,6 @@
 # mcphub.nvim patches
 
-Patch files are applied in order by `lazy-local-patcher`. Eight grouped patch files cover all local changes against the pinned plugin checkout (`163b3ad`).
+Patch files are applied in order by `lazy-local-patcher`. Nine grouped patch files cover all local changes against the pinned plugin checkout (`163b3ad`).
 
 **Application order** (required):
 ```bash
@@ -12,6 +12,7 @@ git apply --ignore-space-change 04-clear-auth_v1.patch
 git apply --ignore-space-change 05-stdio-auth-command_v1.patch
 git apply --ignore-space-change 06-instruction-files_v1.patch
 git apply --ignore-space-change 07-codecompanion-resource-refresh_v1.patch
+git apply --ignore-space-change 08-ai-agent-settings_v1.patch
 ```
 
 `02` must precede `03` — env-tool-filters (in `02`) adds hub.lua and main.lua context that `03` depends on.
@@ -24,8 +25,21 @@ snapshots.
 `05` depends on `03` and requires mcp-hub fork patch `external-patches/mcp-hub/04-stdio-auth-command.patch`.
 `06` is a Neovim-only prompt/config patch and must remain after `05` in the sorted local patch stack.
 `07` is applied after `06` and requires the paired CodeCompanion completion-cache patch.
+`08` is a read-only dashboard extension and must remain after `07`; it relies on the final main-view key dispatch and section-folding behavior.
 
 To add a new patch on top, apply all groups first, make changes, then `git diff HEAD -- <files>`. Save as a new `_v2` file rather than overwriting `_v1`.
+
+---
+
+## 08-ai-agent-settings_v1.patch
+
+Read-only AI-agent setup dashboard in the MCPHub main view.
+
+- Adds an **AI Agent Settings** panel after CLI Agents, with an aggregate readiness state and skill count.
+- `gS` cycles the panel between **Full**, **User**, and **Local** configured roots; `R` rescans only when the cursor is inside this panel.
+- Every configured agent has a foldable section with nested **Setup roots**, **Settings**, and **Skills** groups. Existing `h`/`l`, `T`, and `J`/`K` behavior applies to those headers.
+- File and `SKILL.md` rows use `e` to hide MCPHub and open that file, including a missing configured setup file for first-time editing.
+- Discovery is delegated to `lua/utils/mcphub_agent_settings.lua`, which inspects only configured local paths and does not invoke agent CLIs.
 
 ---
 

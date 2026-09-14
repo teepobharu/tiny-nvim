@@ -55,6 +55,7 @@ Patches are applied in sorted order within a plugin directory.
 | 6   | `patches/mcphub.nvim/05-stdio-auth-command_v1.patch`    | `mcphub.nvim` | `163b3ad` after `03`    | 2026-09-11 | Config-driven `authCommand` for stdio servers; `l` starts auth on unauthorized rows | Local |
 | 7   | `patches/mcphub.nvim/06-instruction-files_v1.patch`     | `mcphub.nvim` | `163b3ad` after `05`    | 2026-09-11 | Neovim-only prompt/config instruction files | Local |
 | 8   | `patches/mcphub.nvim/07-codecompanion-resource-refresh_v1.patch` | `mcphub.nvim` | `163b3ad` after `01`–`06` | 2026-08-29 | Refreshes MCP resources in already-open CodeCompanion chats | Local |
+| 9   | `patches/mcphub.nvim/08-ai-agent-settings_v1.patch`    | `mcphub.nvim` | `163b3ad` after `01`–`07` | 2026-09-15 | Read-only AI-agent setup roots, state, and skill discovery dashboard | Local |
 | 12  | `patches/codecompanion-history.nvim/01-title-prompt-v1.patch` | `codecompanion-history.nvim` | `bc1b4fe` | 2026-07-19 | Configurable rules plus v19 context filtering for persisted chat titles | Local |
 | 13  | `patches/codecompanion.nvim/01-editor-context-refresh_v1.patch` | `codecompanion.nvim` | `eba3b42` | 2026-08-29 | Public invalidation for cached editor-context completion entries | Local |
 
@@ -64,8 +65,8 @@ Checked 2026-09-11: `01-compat_v1.patch` was generated against upstream `8ff40b5
 The live checkouts still work because patched files persist between Lazy syncs; the failure only bites on a fresh revert/re-apply (e.g. `:Lazy update mcphub.nvim`).
 Before any Lazy sync of `mcphub.nvim` in the main profile, rebase `01-compat_v1` (and re-verify `07`) onto the new base, or pin the plugin back to `8ff40b5`/`163b3ad`.
 The `nvimwt3a` worktree profile is still on `163b3ad`. A disposable
-checkout at that base proves the full `01`→`07` stack plus the revised
-`03-main-ui_v2` applies cleanly (verified 2026-09-13); sync its
+checkout at that base proves the full `01`→`08` stack plus the revised
+`03-main-ui_v2` and AI-agent settings dashboard apply cleanly (verified 2026-09-15); sync its
 user-owned configuration worktree separately when it is next rebased/updated.
 
 ### Patch 1: mcphub.nvim CodeCompanion v19 compatibility
