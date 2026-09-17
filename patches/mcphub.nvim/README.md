@@ -1,6 +1,6 @@
 # mcphub.nvim patches
 
-Patch files are applied in order by `lazy-local-patcher`. Nine grouped patch files cover all local changes against the pinned plugin checkout (`163b3ad`).
+Patch files are applied in order by `lazy-local-patcher`. Ten grouped patch files cover all local changes against the pinned plugin checkout (`163b3ad`).
 
 **Application order** (required):
 ```bash
@@ -13,6 +13,7 @@ git apply --ignore-space-change 05-stdio-auth-command_v1.patch
 git apply --ignore-space-change 06-instruction-files_v1.patch
 git apply --ignore-space-change 07-codecompanion-resource-refresh_v1.patch
 git apply --ignore-space-change 08-ai-agent-settings_v1.patch
+git apply --ignore-space-change 09-agent-settings-view_v1.patch
 ```
 
 `02` must precede `03` — env-tool-filters (in `02`) adds hub.lua and main.lua context that `03` depends on.
@@ -25,20 +26,49 @@ snapshots.
 `05` depends on `03` and requires mcp-hub fork patch `external-patches/mcp-hub/04-stdio-auth-command.patch`.
 `06` is a Neovim-only prompt/config patch and must remain after `05` in the sorted local patch stack.
 `07` is applied after `06` and requires the paired CodeCompanion completion-cache patch.
-`08` is a read-only dashboard extension and must remain after `07`; it relies on the final main-view key dispatch and section-folding behavior.
+`08` is the read-only dashboard foundation and must remain after `07`; it relies on the final main-view key dispatch and section-folding behavior.
+`09` moves that dashboard into its own UI view and must remain after `08`.
 
 To add a new patch on top, apply all groups first, make changes, then `git diff HEAD -- <files>`. Save as a new `_v2` file rather than overwriting `_v1`.
 
 ---
 
+## 09-agent-settings-view_v1.patch
+
+Moves the AI-agent setup dashboard out of the main MCPHub view and into a
+dedicated **Agents** view, selected with `Z` from any MCPHub view.
+
+- Defaults to **User** scope. `gS` cycles **User → Local → Full**; Full keeps
+  User and Local/workspace configuration under separate top-level groups.
+- Supports ordinary fold controls on every visible level: `h` / `l`, `za`,
+  `zc`, `zo`, `zM`, `zR`, plus `T` and `J` / `K`. `h` on a concrete root,
+  file, or skill row collapses its nearest open parent, matching MCP-server
+  tool-list behavior while normal `j` remains down-navigation.
+- `y` copies the selected root, setup/config file, or `SKILL.md` absolute path
+  to the system clipboard.
+- `e` opens an editable centered popup for files without dismissing MCPHub.
+  The popup preserves whitespace for generic config/instruction files. On a
+  directory, `e` instead opens Neovim's directory buffer after closing the
+  MCPHub float, so root rows remain actionable.
+- Adds `trim_content = false` to the generic multiline-input helper for this
+  file-editor use case; existing callers retain trim-by-default behavior.
+
+**Files**: `lua/mcphub/config.lua`, `lua/mcphub/ui/init.lua`,
+`lua/mcphub/ui/views/agent_settings.lua`, `lua/mcphub/ui/views/main.lua`,
+`lua/mcphub/utils/text.lua`, `lua/mcphub/utils/ui.lua`
+
 ## 08-ai-agent-settings_v1.patch
 
-Read-only AI-agent setup dashboard in the MCPHub main view.
+Read-only AI-agent setup dashboard foundation. `09-agent-settings-view_v1.patch`
+moves its final presentation into the dedicated Agents view.
 
-- Adds an **AI Agent Settings** panel after CLI Agents, with an aggregate readiness state and skill count.
-- `gS` cycles the panel between **Full**, **User**, and **Local** configured roots; `R` rescans only when the cursor is inside this panel.
+- Adds the discovery configuration and initial section-rendering support used by the
+  later dedicated view.
+- Prior to `09`, `gS` cycles the panel between **Full**, **User**, and **Local**
+  configured roots; `R` rescans only when the cursor is inside this panel.
 - Every configured agent has a foldable section with nested **Setup roots**, **Settings**, and **Skills** groups. Existing `h`/`l`, `T`, and `J`/`K` behavior applies to those headers.
-- File and `SKILL.md` rows use `e` to hide MCPHub and open that file, including a missing configured setup file for first-time editing.
+- File and `SKILL.md` rows initially use `e` to hide MCPHub and open that file;
+  `09` replaces this with the in-place popup editor.
 - Discovery is delegated to `lua/utils/mcphub_agent_settings.lua`, which inspects only configured local paths and does not invoke agent CLIs.
 
 ---
@@ -206,7 +236,7 @@ chat-local entries, and invalidates CodeCompanion completion through the paired
 
 ## Validation note
 
-- Current repair on 2026-09-04 confirms a fresh sequential apply of `01 -> 02 -> 03 -> 04 -> 05 -> 06 -> 07` from clean `163b3ad` passes. `01` must retain the `init.lua` `strategies` to `interactions` conversion; without it the CodeCompanion v19 extension fails during startup.
+- Current repair confirms a fresh sequential apply of `01 -> 02 -> 03 -> 03-v2 -> 04 -> 05 -> 06 -> 07 -> 08 -> 09` from clean `163b3ad` passes. `01` must retain the `init.lua` `strategies` to `interactions` conversion; without it the CodeCompanion v19 extension fails during startup.
 - `git apply --check` with multiple patch files can be misleading here; validate by applying each patch one at a time in a temporary worktree.
 - If `lazy-local-patcher` shows both `Applied ...` and `Error applying ...`, inspect the plugin checkout first. `restore_all()` restores files to the checkout's current `HEAD`; if `HEAD` is a leftover local patch-baseline commit instead of the lockfile commit, early patches may already be in `HEAD` and fail when reapplied.
 

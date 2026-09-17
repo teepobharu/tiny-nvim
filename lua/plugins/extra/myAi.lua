@@ -605,6 +605,7 @@ return {
                 {
                   key = "2",
                   label = "p_mcp",
+                  scope = "local",
                   path = "./.cursor/mcp.json",
                   matcher = ".mcpServers",
                 },
@@ -652,6 +653,7 @@ return {
                 {
                   key = "3",
                   label = "p_set",
+                  scope = "local",
                   path = "./.pi/settings.json",
                 },
               },
@@ -684,8 +686,11 @@ return {
         },
         agent_settings = {
           enabled = true,
-          default_mode = "full",
-          modes = { "full", "user", "local" },
+          -- Open the separate Agent Settings view in user scope first.  Full
+          -- view still renders user and local/workspace configuration as
+          -- separate groups instead of mixing the two path classes.
+          default_mode = "user",
+          modes = { "user", "local", "full" },
           shared_label = "Shared agent setup",
           shared_roots = {
             {

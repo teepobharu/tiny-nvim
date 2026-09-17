@@ -64,11 +64,23 @@ local function mode_includes(mode, scope)
   return mode == "full" or mode == nil or scope == mode
 end
 
+local function target_scope(source)
+  if source.scope == "user" or source.scope == "local" then
+    return source.scope
+  end
+  local path = source.path or ""
+  if path == "." or path:match("^%./") then
+    return "local"
+  end
+  return "user"
+end
+
 local function target_from(value, root, fallback_label, kind)
   local source = type(value) == "table" and value or { path = value }
   local target = vim.deepcopy(source)
   target.label = target.label or fallback_label or vim.fn.fnamemodify(target.path or "", ":t")
   target.kind = kind or target.kind or "setup"
+  target.scope = target_scope(source)
   target.path = resolve_path(root, target.path)
   target.exists = path_exists(target.path)
   return target
@@ -104,7 +116,12 @@ local function collect_root(root_cfg, mode, result, skill_seen, file_seen)
   table.insert(result.roots, root)
 
   for _, file in ipairs(root_cfg.setup_files or root_cfg.files or {}) do
-    add_target(result.files, file_seen, target_from(file, root_path, nil, "setup"))
+    local target = target_from(file, root_path, nil, "setup")
+    target.scope = type(file) == "table" and file.scope or scope
+    if target.scope ~= "user" and target.scope ~= "local" then
+      target.scope = scope
+    end
+    add_target(result.files, file_seen, target)
   end
 
   for _, skill_dir in ipairs(root_cfg.skill_dirs or {}) do
@@ -128,17 +145,24 @@ local function collect_root(root_cfg, mode, result, skill_seen, file_seen)
   end
 end
 
-local function collect_config_targets(agent_cfg, result, file_seen)
+local function collect_config_targets(agent_cfg, mode, result, file_seen)
   if agent_cfg.config_path then
-    add_target(result.files, file_seen, target_from({
+    local target = target_from({
       label = "primary config",
       path = agent_cfg.config_path,
       matcher = agent_cfg.config_matcher,
-    }, "", nil, "config"))
+      scope = agent_cfg.config_scope,
+    }, "", nil, "config")
+    if mode_includes(mode, target.scope) then
+      add_target(result.files, file_seen, target)
+    end
   end
 
   for _, target in ipairs(agent_cfg.config_alternates or {}) do
-    add_target(result.files, file_seen, target_from(target, "", "config", "config"))
+    local config_target = target_from(target, "", "config", "config")
+    if mode_includes(mode, config_target.scope) then
+      add_target(result.files, file_seen, config_target)
+    end
   end
 end
 
@@ -159,10 +183,13 @@ local function inspect_group(spec, mode)
     collect_root(root, mode, result, skill_seen, file_seen)
   end
   for _, target in ipairs(spec.config_targets or {}) do
-    add_target(result.files, file_seen, target_from(target, "", "config", "config"))
+    local config_target = target_from(target, "", "config", "config")
+    if mode_includes(mode, config_target.scope) then
+      add_target(result.files, file_seen, config_target)
+    end
   end
   if spec.agent_cfg then
-    collect_config_targets(spec.agent_cfg, result, file_seen)
+    collect_config_targets(spec.agent_cfg, mode, result, file_seen)
   end
 
   table.sort(result.roots, function(a, b)
@@ -224,11 +251,14 @@ function M.inspect(agents_cfg, settings_cfg, mode)
 
   local groups = {}
   if #(settings_cfg.shared_roots or {}) > 0 then
-    table.insert(groups, inspect_group({
+    local shared = inspect_group({
       id = "shared",
       label = settings_cfg.shared_label or "Shared agent setup",
       roots = settings_cfg.shared_roots,
-    }, mode))
+    }, mode)
+    if #shared.roots + #shared.files > 0 then
+      table.insert(groups, shared)
+    end
   end
 
   local ok, agents = pcall(require, "utils.mcphub_agents")
@@ -237,14 +267,17 @@ function M.inspect(agents_cfg, settings_cfg, mode)
       id = agent_cfg.id or agent_cfg.name,
       label = agent_cfg.label or agent_cfg.id or agent_cfg.name,
     }
-    table.insert(groups, inspect_group({
+    local group = inspect_group({
       id = profile.id,
       label = profile.label,
       profile = profile,
       available = ok and agents.is_available(profile) or nil,
       roots = agent_cfg.settings_roots or {},
       agent_cfg = agent_cfg,
-    }, mode))
+    }, mode)
+    if #group.roots + #group.files > 0 then
+      table.insert(groups, group)
+    end
   end
 
   local summary = {

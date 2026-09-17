@@ -3,7 +3,7 @@ title: "MCPHub AI Agent Settings dashboard"
 status: review
 priority: medium
 created: 2026-09-15
-updated: 2026-09-15
+updated: 2026-09-17
 refs:
   - 163b3ad [tag:v6.2.0] @2025-07-31 07:52:38 +0000 chore(release): v6.2.0
 related:
@@ -12,29 +12,34 @@ related:
   - [CLI agent helper](lua/utils/mcphub_agents.lua)
   - [MCPHub patch catalog](patches/mcphub.nvim/README.md)
   - [Agent settings patch](patches/mcphub.nvim/08-ai-agent-settings_v1.patch)
+  - [Dedicated agent settings view](patches/mcphub.nvim/09-agent-settings-view_v1.patch)
   - [MCPHub memory](docs/memory/mcphub.md)
   - [Native skills catalog follow-up](tasks/open/codecompanion-rules-mcphub-native-skills.md)
 ---
 
 ## Objective
 
-Make the MCPHub main view a safe, read-only place to inspect AI-agent setup:
+Make MCPHub's dedicated Agents view a safe, read-only place to inspect AI-agent setup:
 configured user/local roots, setup/config files, related `SKILL.md` files, and
 per-agent readiness without launching agent CLIs.
 
 ## Design
 
-- Add **AI Agent Settings** after the existing CLI Agents panel.
+- Press `Z` to switch from MCPHub to a dedicated **Agents** view; keep the
+  normal main dashboard focused on MCP servers, endpoints, and CLI bindings.
+- Start in **User** scope. `gS` cycles User, Local, and Full; Full renders User
+  and Local/workspace configuration in separate top-level groups.
 - Show an aggregate state detector at the top: ready, partial, setup needed,
   and total discovered skills.
-- Use `gS` to cycle **Full → User → Local** configured roots without restarting
-  the hub. `R` rescans only when the cursor is in this panel.
-- Keep each shared/agent group expandable. Expanded groups expose nested Setup
-  roots, Settings, and Skills sections with the existing `h`/`l`, `T`, and
-  `J`/`K` section mechanics.
-- Each concrete config/setup/skill file row supports `e`, reusing MCPHub's
-  existing hide-and-edit flow. A missing setup file opens as a new editable
-  buffer for first-time setup.
+- `R` rescans only when the cursor is in this view.
+- Keep each scope/agent group expandable. Expanded groups expose nested Setup
+  roots, Settings, and Skills sections with `h`/`l`, `za`/`zc`/`zo`, `zM`/`zR`,
+  `T`, and `J`/`K`. `h` on an item collapses its nearest parent; ordinary `j`
+  stays down-navigation, matching normal Vim movement.
+- `y` copies a concrete root/file/skill path. `e` opens files in MCPHub's
+  centered editor popup without closing MCPHub; directories instead open in
+  Neovim so root rows remain actionable. A missing setup file can be created
+  from the popup.
 - Keep discovery declarative in `myAi.lua`; the helper only stats configured
   paths and scans `SKILL.md` names. It does not parse secrets or run agent CLIs.
 
@@ -47,16 +52,20 @@ per-agent readiness without launching agent CLIs.
 - [x] Route `e`, `R`, and `gS` contextually without changing existing endpoint,
       CLI-binding, server, or capability behavior.
 - [x] Update the patch catalog and MCPHub living-memory documentation.
+- [x] Add `09-agent-settings-view_v1.patch`, the `Z` view switch, path copying,
+      contextual parent-collapse, normal `z` fold controls, and in-place file
+      editor behavior.
+- [x] Default the view to User scope and separate User/Local data in Full mode.
 
 ## Success Criteria
 
-- The panel renders while MCPHub is starting and after it becomes ready.
+- The Agents view renders while MCPHub is starting and after it becomes ready.
 - State/counts identify missing local setup separately from existing user setup.
-- `gS`, `h`, `l`, `T`, and `J`/`K` work on the new headers without breaking
-  the existing dashboard behavior.
-- `e` opens the selected config, instruction, or `SKILL.md` file rather than
-  starting an external agent process.
-- Cursor remains config-only: opening or refreshing this panel never executes
+- `Z`, `gS`, `h`, `l`, `za`, `zM`, `zR`, `T`, and `J`/`K` work without changing
+  the existing main-dashboard behavior.
+- `y` copies the selected root/file/skill path; `e` opens an in-place popup for
+  files and a normal Neovim directory buffer for directories.
+- Cursor remains config-only: opening or refreshing this view never executes
   `cursor mcp list`.
 
 ## Verification
@@ -78,17 +87,21 @@ NVIM_APPNAME=nvimwt3a nvim
 
 ### Checklist
 
-- [ ] The main view shows **AI Agent Settings** with a Full-view aggregate
-      state and skill count before or after hub readiness.
-- [ ] Pressing `gS` cycles Full, User, and Local without restarting MCPHub.
-- [ ] Pressing `l` on an agent row reveals Setup roots, Settings, and Skills;
-      `h` collapses each level.
-- [ ] `J`/`K` navigates the new section headers and `T` folds/unfolds visible
-      sections alongside the existing MCPHub sections.
-- [ ] Pressing `e` on a config/setup row opens that file, and pressing `e` on a
-      skill row opens its `SKILL.md`.
-- [ ] Pressing `R` from the panel rescans displayed state without a hub restart.
-- [ ] Opening and refreshing the panel does not open or foreground Cursor.
+- [ ] Press `Z`: the dedicated **Agents** view opens in User scope and displays
+      a state/skill summary before or after hub readiness.
+- [ ] Press `gS`: User, Local, and Full cycle without restarting MCPHub. In
+      Full, User and Local/workspace configuration stay in separate groups.
+- [ ] Press `l` on an agent row to reveal Setup roots, Settings, and Skills;
+      press `h` on either a header or an item to collapse the relevant level.
+- [ ] Check `za`, `zc`, `zo`, `zM`, `zR`, `T`, and `J`/`K`; ordinary `j` still
+      moves down the list.
+- [ ] Press `y` on a directory, config/setup file, and skill row; each copies
+      its absolute path to the clipboard.
+- [ ] Press `e` on a config/setup/skill file: edit in the centered MCPHub popup
+      and save without leaving the Agents view. Press `e` on a root: open its
+      directory in Neovim.
+- [ ] Press `R` from the Agents view: it rescans displayed state without a hub restart.
+- [ ] Opening and refreshing the view does not open or foreground Cursor.
 
 ## References
 

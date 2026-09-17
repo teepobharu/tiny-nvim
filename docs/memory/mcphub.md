@@ -1055,9 +1055,10 @@ Fix:
 
 ### AI Agent Settings dashboard
 
-`08-ai-agent-settings_v1.patch` adds a read-only **AI Agent Settings** panel
-to the MCPHub main view after CLI Agents. It is a setup/discovery view, not a
-replacement for the existing MCP binding controls.
+`08-ai-agent-settings_v1.patch` provides the read-only discovery foundation;
+`09-agent-settings-view_v1.patch` presents it in a dedicated **Agents** view.
+Press `Z` from MCPHub to switch there. It remains a setup/discovery view, not
+a replacement for the existing MCP binding controls.
 
 - Configuration lives in `ui.agent_settings` and per-profile `settings_roots`
   in `lua/plugins/extra/myAi.lua`. Declare only paths that should be inspected;
@@ -1066,15 +1067,22 @@ replacement for the existing MCP binding controls.
 - `lua/utils/mcphub_agent_settings.lua` stats configured paths and discovers
   `SKILL.md` names with a one-second cache. It never reads config contents or
   invokes agent CLIs, preserving the Cursor no-probe safety boundary.
-- `gS` cycles **Full**, **User**, and **Local** root modes; `R` rescans only
-  while the cursor is in this panel. The top row summarizes ready/partial/setup
+- The view defaults to **User**. `gS` cycles **User → Local → Full**, and Full
+  renders User and Local/workspace setup in separate top-level groups. `R`
+  rescans only the settings view. The top row summarizes ready/partial/setup
   states and total skills.
-- Agent sections and their Setup roots, Settings, and Skills subsections reuse
-  `h`/`l`, `T`, and `J`/`K`. File and skill rows use `e` to open the selected
-  file through the existing MCPHub hide-and-edit flow; a missing setup file can
-  be opened for first-time creation.
-- Keep this patch last in the local MCPHub patch stack. It requires the final
-  section/key dispatch introduced by patches 03 through 07.
+- Agent sections and their Setup roots, Settings, and Skills subsections
+  support `h`/`l`, `za`, `zc`, `zo`, `zM`, `zR`, `T`, and `J`/`K`. On a concrete
+  root/file/skill row, `h` collapses its nearest open parent like the MCP-server
+  tool list; normal `j` remains down-navigation.
+- `y` copies a selected root, config/setup file, or `SKILL.md` absolute path to
+  the system clipboard. `e` opens an in-place centered editor for files and
+  preserves their outer whitespace; `e` on a directory opens Neovim's directory
+  buffer instead. A missing configured setup file can be created through the
+  popup.
+- Keep `09` last in the local MCPHub patch stack. It requires the discovery and
+  main-view context from `08` and the section/key dispatch introduced by
+  patches 03 through 07.
 
 ### Active capability copy and token estimates
 
