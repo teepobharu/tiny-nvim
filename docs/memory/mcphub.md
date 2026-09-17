@@ -1079,10 +1079,12 @@ a replacement for the existing MCP binding controls.
   the system clipboard. `e` opens an in-place centered editor for files and
   preserves their outer whitespace; `e` on a directory opens Neovim's directory
   buffer instead. A missing configured setup file can be created through the
-  popup.
-- Keep `09` last in the local MCPHub patch stack. It requires the discovery and
-  main-view context from `08` and the section/key dispatch introduced by
-  patches 03 through 07.
+  popup. `I` inside that file popup saves and opens the same file in a normal
+  buffer; `l` provides the direct normal-buffer path for a selected root/file/
+  skill row while retaining its ordinary unfold behavior on section headers.
+- Keep `10-agent-settings-open-editor_v1.patch` last in the local MCPHub patch
+  stack. It requires the discovery and main-view context from `08`, the dedicated
+  view in `09`, and the section/key dispatch introduced by patches 03 through 07.
 
 ### Active capability copy and token estimates
 

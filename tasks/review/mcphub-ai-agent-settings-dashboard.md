@@ -13,6 +13,7 @@ related:
   - [MCPHub patch catalog](patches/mcphub.nvim/README.md)
   - [Agent settings patch](patches/mcphub.nvim/08-ai-agent-settings_v1.patch)
   - [Dedicated agent settings view](patches/mcphub.nvim/09-agent-settings-view_v1.patch)
+  - [Agent settings editor navigation](patches/mcphub.nvim/10-agent-settings-open-editor_v1.patch)
   - [MCPHub memory](docs/memory/mcphub.md)
   - [Native skills catalog follow-up](tasks/open/codecompanion-rules-mcphub-native-skills.md)
 ---
@@ -37,9 +38,11 @@ per-agent readiness without launching agent CLIs.
   `T`, and `J`/`K`. `h` on an item collapses its nearest parent; ordinary `j`
   stays down-navigation, matching normal Vim movement.
 - `y` copies a concrete root/file/skill path. `e` opens files in MCPHub's
-  centered editor popup without closing MCPHub; directories instead open in
-  Neovim so root rows remain actionable. A missing setup file can be created
-  from the popup.
+  centered editor popup without closing MCPHub; `I` in that popup saves and
+  opens the same file in a normal buffer. `l` opens a selected concrete path
+  directly, while retaining its unfold behavior on section headers. Directories
+  instead open in Neovim so root rows remain actionable. A missing setup file
+  can be created from the popup.
 - Keep discovery declarative in `myAi.lua`; the helper only stats configured
   paths and scans `SKILL.md` names. It does not parse secrets or run agent CLIs.
 
@@ -56,6 +59,8 @@ per-agent readiness without launching agent CLIs.
       contextual parent-collapse, normal `z` fold controls, and in-place file
       editor behavior.
 - [x] Default the view to User scope and separate User/Local data in Full mode.
+- [x] Add direct `l` navigation for concrete paths and popup `I` save-and-open
+      behavior without changing section-header folding.
 
 ## Success Criteria
 
@@ -64,7 +69,8 @@ per-agent readiness without launching agent CLIs.
 - `Z`, `gS`, `h`, `l`, `za`, `zM`, `zR`, `T`, and `J`/`K` work without changing
   the existing main-dashboard behavior.
 - `y` copies the selected root/file/skill path; `e` opens an in-place popup for
-  files and a normal Neovim directory buffer for directories.
+  files and a normal Neovim directory buffer for directories. `l` opens any
+  selected concrete path directly, and popup `I` saves then opens its file.
 - Cursor remains config-only: opening or refreshing this view never executes
   `cursor mcp list`.
 
@@ -98,8 +104,12 @@ NVIM_APPNAME=nvimwt3a nvim
 - [ ] Press `y` on a directory, config/setup file, and skill row; each copies
       its absolute path to the clipboard.
 - [ ] Press `e` on a config/setup/skill file: edit in the centered MCPHub popup
-      and save without leaving the Agents view. Press `e` on a root: open its
+      and save without leaving the Agents view. Press `I` in that popup to save
+      and open the same file in a normal buffer. Press `e` on a root: open its
       directory in Neovim.
+- [ ] Press `l` on a root, config/setup file, and skill row: each opens its
+      underlying directory/file directly in Neovim. Press `l` on a section
+      header: it still unfolds that section.
 - [ ] Press `R` from the Agents view: it rescans displayed state without a hub restart.
 - [ ] Opening and refreshing the view does not open or foreground Cursor.
 

@@ -1,6 +1,6 @@
 # mcphub.nvim patches
 
-Patch files are applied in order by `lazy-local-patcher`. Ten grouped patch files cover all local changes against the pinned plugin checkout (`163b3ad`).
+Patch files are applied in order by `lazy-local-patcher`. Eleven grouped patch files cover all local changes against the pinned plugin checkout (`163b3ad`).
 
 **Application order** (required):
 ```bash
@@ -14,6 +14,7 @@ git apply --ignore-space-change 06-instruction-files_v1.patch
 git apply --ignore-space-change 07-codecompanion-resource-refresh_v1.patch
 git apply --ignore-space-change 08-ai-agent-settings_v1.patch
 git apply --ignore-space-change 09-agent-settings-view_v1.patch
+git apply --ignore-space-change 10-agent-settings-open-editor_v1.patch
 ```
 
 `02` must precede `03` — env-tool-filters (in `02`) adds hub.lua and main.lua context that `03` depends on.
@@ -28,8 +29,28 @@ snapshots.
 `07` is applied after `06` and requires the paired CodeCompanion completion-cache patch.
 `08` is the read-only dashboard foundation and must remain after `07`; it relies on the final main-view key dispatch and section-folding behavior.
 `09` moves that dashboard into its own UI view and must remain after `08`.
+`10` extends the dedicated view's file navigation and popup editor, and must remain after `09`.
 
 To add a new patch on top, apply all groups first, make changes, then `git diff HEAD -- <files>`. Save as a new `_v2` file rather than overwriting `_v1`.
+
+---
+
+## 10-agent-settings-open-editor_v1.patch
+
+Follow-up to `09-agent-settings-view_v1.patch` for a faster handoff from the
+Agents view into normal Neovim editing.
+
+- `l` on a concrete root, setup/config file, or `SKILL.md` closes MCPHub and
+  opens that directory or file in a normal Neovim buffer. On section headers,
+  `l` continues to unfold the selected section.
+- The centered file popup keeps `e` as its entry point. Its footer and normal-mode
+  hint advertise `I: Save + open`; `I` validates and saves the current popup
+  content, then closes MCPHub and opens the saved file in a normal buffer.
+- `trim_content = false` continues to preserve file whitespace. Other generic
+  multiline popups retain their existing submit/trim behavior and do not claim
+  the normal-mode `I` mapping.
+
+**Files**: `lua/mcphub/ui/views/agent_settings.lua`, `lua/mcphub/utils/ui.lua`
 
 ---
 
@@ -236,7 +257,7 @@ chat-local entries, and invalidates CodeCompanion completion through the paired
 
 ## Validation note
 
-- Current repair confirms a fresh sequential apply of `01 -> 02 -> 03 -> 03-v2 -> 04 -> 05 -> 06 -> 07 -> 08 -> 09` from clean `163b3ad` passes. `01` must retain the `init.lua` `strategies` to `interactions` conversion; without it the CodeCompanion v19 extension fails during startup.
+- Current repair confirms a fresh sequential apply of `01 -> 02 -> 03 -> 03-v2 -> 04 -> 05 -> 06 -> 07 -> 08 -> 09 -> 10` from clean `163b3ad` passes. `01` must retain the `init.lua` `strategies` to `interactions` conversion; without it the CodeCompanion v19 extension fails during startup.
 - `git apply --check` with multiple patch files can be misleading here; validate by applying each patch one at a time in a temporary worktree.
 - If `lazy-local-patcher` shows both `Applied ...` and `Error applying ...`, inspect the plugin checkout first. `restore_all()` restores files to the checkout's current `HEAD`; if `HEAD` is a leftover local patch-baseline commit instead of the lockfile commit, early patches may already be in `HEAD` and fail when reapplied.
 
