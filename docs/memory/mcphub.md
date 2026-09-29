@@ -271,6 +271,27 @@ url = "http://localhost:37373/mcp"
 
 ---
 
+## Running hub build identity
+
+The Help view's **Hub Build** sub-tab is distinct from the plugin
+**Changelog**. It requests `/api/build-info` from the currently attached hub,
+so a remote/tunneled connection shows that server's binary and config paths,
+not the local bundled CLI version. The result is cached by hub, port, and PID;
+disconnect/restart invalidates it. An older binary's 404 appears as a quiet
+"Build info unavailable" message in the tab. Home shares the cached response
+to show version, commit/date, and binary source without repeated requests.
+Hub Build shows the release tag's target commit date and the date of each
+listed fork commit. The `/api/health` `build` summary and Pi `/mcph` status
+offer faster diagnostics without opening UI.
+`X` on Hub Build confirms stopping the current process and leaves this client
+disconnected until an explicit `R` restart (or Home `r` reconnect). It does not reuse the hard-restart
+signal; main dashboard server-row `X` still clears OAuth auth. The new stop
+route accepts only local/tunneled requests with a deliberate-action header;
+it is not available on older hub binaries.
+The fork's historical external patches are now incorporated in commits;
+`patches: []` is accurate until a new `PATCHES.json` manifest is used at build
+time. See [server build identity](../../../../ai/mcp/MCP.md).
+
 ## Running mcp-hub Standalone
 
 For CLI agents to always have access (without Neovim), run mcp-hub independently:
@@ -369,12 +390,34 @@ hub connection finishes. This prevents a variable-length log buffer from
 replacing the dashboard or moving its sections while servers connect.
 
 When opened before `READY`, the UI immediately reads `GET /api/health` and
-retries a bounded 30 times at 500 ms, one request at a time. The health response
-reads the backend connection map, so the MCP Servers section can show an
-individual server and its tool count as soon as that connection exists or
-finishes, rather than waiting for every configured server. Press `l` on that
-server to reveal its tool names. Unchanged snapshots do not redraw the main
-view; close/context changes invalidate pending retries.
+retries a bounded 30 times at 500 ms, one request at a time. It keeps retrying
+if the UI opened before `State.hub_instance` exists, and reads health once even
+when the hub has just announced `READY`: that announcement precedes the hub's
+asynchronous regular server update. The health response reads the backend
+connection map, so the MCP Servers section can show an individual server and
+its tool count as soon as that connection exists or finishes, rather than
+waiting for every configured server. Press `l` on that server to reveal its tool
+names. A changed health response, or the first successful response in a probe
+generation, schedules an in-place redraw even if its snapshot already matches
+state, covering a missed notification without redrawing every 500 ms retry;
+close/context changes invalidate pending retries. Changed state often arrives
+in a burst, so `03-main-ui_v2` coalesces it into one scheduled redraw. After
+the UI is visible, that redraw calls the active view directly rather than using
+`switch_view(current_view)`: a refresh must not run the same view's leave/enter
+lifecycle, recreate its mappings, or reset its cursor handlers.
+
+`11-main-ui-startup-context_v1` queues the first health read after a pending
+workspace `hub:start()` handoff, captures that resolved port, and discards a
+callback when the same Hub instance has switched ports. A matching health
+response also updates the displayed hub state, which recovers a lost SSE
+`READY` event without treating a previous global-hub response as the current
+workspace snapshot. The probe still retries while the Hub client reconnects,
+so this UI repair does not independently mark MCP tools ready.
+
+The main view captures a stable identity for selectable server, section,
+endpoint, workspace, custom-instructions, and agent rows before drawing, then
+restores the cursor to that row if it moved. If the selected row no longer
+exists, the existing numeric cursor fallback remains safe.
 
 Endpoint rows still use the configured port with a red dot until ready, and the
 agent registry remains async and hub-independent. This does not alter the
@@ -1055,8 +1098,8 @@ Fix:
 
 ### AI Agent Settings dashboard
 
-`08-ai-agent-settings_v1.patch` provides the read-only discovery foundation;
-`09-agent-settings-view_v1.patch` presents it in a dedicated **Agents** view.
+`08-agent-settings_v2.patch` combines discovery, the dedicated **Agents** view,
+and editor navigation into one final-state patch.
 Press `Z` from MCPHub to switch there. It remains a setup/discovery view, not
 a replacement for the existing MCP binding controls.
 
@@ -1082,9 +1125,8 @@ a replacement for the existing MCP binding controls.
   popup. `I` inside that file popup saves and opens the same file in a normal
   buffer; `l` provides the direct normal-buffer path for a selected root/file/
   skill row while retaining its ordinary unfold behavior on section headers.
-- Keep `10-agent-settings-open-editor_v1.patch` last in the local MCPHub patch
-  stack. It requires the discovery and main-view context from `08`, the dedicated
-  view in `09`, and the section/key dispatch introduced by patches 03 through 07.
+- Keep the consolidated `08-agent-settings_v2.patch` after patches 03 through
+  07, which provide its main-view section and key-dispatch context.
 
 ### Active capability copy and token estimates
 
@@ -1154,9 +1196,35 @@ hunk is removed during conflict resolution, the CodeCompanion extension fails
 at startup because `strategies` is nil.
 
 Validate the full local stack in a clean disposable checkout by applying
-`01` through `07` one file at a time. Treat `git apply --check` as the source
-of truth: `lazy-local-patcher` can emit a later `Applied` notification after
-an earlier patch error.
+all ordered patch files one at a time. Treat `git apply --check` as the source
+of truth. The local patcher now emits `Applied` only for a successful apply;
+when restore cannot reverse a conflicting file, it refuses to overwrite it.
+
+### Startup mismatch prompts must not consume dashboard keys
+
+`11-startup-guards_v2.patch` distinguishes background Hub discovery
+from an explicit restart. A blocking `vim.fn.confirm()` during automatic
+discovery can consume the next dashboard navigation key and make it look as if
+the MCPHub float was dismissed. Automatic config/cache/version mismatch handling
+therefore attaches only when safe, otherwise leaves the shared Hub untouched and
+emits a non-blocking warning. `R` from an unready Hub remains the explicit path
+for choosing a hard restart; the default configuration prompts, while
+`confirm_hard_restart = false` skips only that explicit prompt.
+
+### First Hub view waits for a key before connecting
+
+If the first MCPHub float stays at `Starting...` with `Port: N/A`, and the next
+key closes it before a reopened view shows servers, check for a blocking
+optional plugin load. On Neovim 0.11.6, the newer Avante checkout ran
+`vim.fn.getchar()` in `plugin/avante.lua` because it requires Neovim 0.12.
+MCPHub's Avante slash-command setup eagerly required that plugin before
+`hub:start()`, so the Hub and UI event loop could not advance until the key.
+
+`15-avante-lazy-startup_v1.patch` defers slash-command registration until
+Avante actually loads. The Avante spec in `lua/plugins/extra/myAi.lua` pins a
+known Neovim 0.11-compatible commit while running 0.11, so loading Avante
+directly also avoids the unsupported-version prompt. On Neovim 0.12, the pin
+no longer applies; run a normal Lazy update to adopt a newer Avante release.
 
 ---
 

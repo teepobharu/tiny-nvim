@@ -1,0 +1,466 @@
+diff --git a/lua/mcphub/config.lua b/lua/mcphub/config.lua
+index 66af3c5..d5efcec 100644
+--- a/lua/mcphub/config.lua
++++ b/lua/mcphub/config.lua
+@@ -60,7 +60,7 @@ local defaults = {
+     ---@type boolean | fun(parsed_params: MCPHub.ParsedParams): boolean | nil | string  Function to determine if a call should be auto-approved
+     auto_approve = false,
+     auto_toggle_mcp_servers = true, -- Let LLMs start and stop MCP servers automatically
+-    confirm_hard_restart = true, -- Ask before automatic startup hard restart
++    confirm_hard_restart = true, -- Confirm an explicit hard restart after a hub mismatch
+     use_bundled_binary = false, -- Whether to use bundled mcp-hub binary
+     ---@type table | fun(context: MCPHub.JobContext): table Global environment variables available to all MCP servers
+     global_env = {}, -- Environment variables that will be available to all MCP servers
+diff --git a/lua/mcphub/hub.lua b/lua/mcphub/hub.lua
+index 04b6247..fc8948a 100644
+--- a/lua/mcphub/hub.lua
++++ b/lua/mcphub/hub.lua
+@@ -134,6 +134,8 @@ local MCP_REQUEST_TIMEOUT = 60000 -- 60s for MCP requests
+ --- @field cmdArgs table The args to pass to the cmd to spawn the server
+ --- @field ready boolean Whether the connection to server is ready
+ --- @field server_job Job|nil The server process job if we started it
++--- @field sse_job Job|nil The current SSE connection job
++--- @field sse_generation integer Invalidates callbacks from replaced SSE jobs
+ --- @field is_owner boolean Whether this instance started the server
+ --- @field is_shutting_down boolean Whether we're in the process of shutting down
+ --- @field mcp_request_timeout number --Max time allowed for a MCP tool or resource to execute in milliseconds, set longer for long running tasks
+@@ -157,6 +159,8 @@ function MCPHub:new(opts)
+         cmdArgs = opts.cmdArgs,
+         ready = false,
+         server_job = nil,
++        sse_job = nil,
++        sse_generation = 0,
+         is_owner = false,
+         is_shutting_down = false,
+         is_starting = false,
+@@ -411,8 +415,10 @@ function MCPHub:_start_server_with_context(context)
+     self.server_job:start()
+ end
+ 
+---- Start the MCP Hub server
+-function MCPHub:start()
++--- Start the MCP Hub server.
++---@param opts? { interactive?: boolean } Set only for an explicit user restart.
++function MCPHub:start(opts)
++    opts = opts or {}
+     if self.is_starting then
+         vim.notify("MCP Hub is starting", vim.log.levels.WARN)
+         return
+@@ -459,6 +465,7 @@ function MCPHub:start()
+                 self:handle_same_port_different_config(context, {
+                     reason = "mcp-hub version mismatch",
+                     allow_connect = false,
++                    interactive = opts.interactive,
+                 })
+                 return
+             end
+@@ -469,6 +476,7 @@ function MCPHub:start()
+                 self:handle_same_port_different_config(context, {
+                     reason = "workspace cache is missing for this running hub",
+                     allow_connect = true,
++                    interactive = opts.interactive,
+                 })
+                 return
+             end
+@@ -485,6 +493,7 @@ function MCPHub:start()
+                     self:handle_same_port_different_config(context, {
+                         reason = "config files changed",
+                         allow_connect = true,
++                        interactive = opts.interactive,
+                     })
+                 end
+             else
+@@ -1422,13 +1431,19 @@ function MCPHub:connect_sse()
+     if self.sse_job then
+         return
+     end
++    -- Every connection attempt receives an epoch. `stop_sse()` also advances
++    -- it, so stdout/exit callbacks from a deliberately replaced job cannot
++    -- alter state after a workspace/context switch.
++    self.sse_generation = (self.sse_generation or 0) + 1
++    local sse_generation = self.sse_generation
++    local sse_job
+     local buffer = ""
+     local base_url = self.server_url or string.format("http://localhost:%d", self.port)
+     base_url = base_url:gsub("/+$", "")
+ 
+     -- Create SSE connection
+     ---@diagnostic disable-next-line: missing-fields
+-    local sse_job = Job:new({
++    sse_job = Job:new({
+         command = "curl",
+         args = {
+             "--no-buffer",
+@@ -1443,6 +1458,9 @@ function MCPHub:connect_sse()
+             base_url .. "/api/events",
+         },
+         on_stdout = vim.schedule_wrap(function(_, data)
++            if self.sse_job ~= sse_job or self.sse_generation ~= sse_generation then
++                return
++            end
+             if data ~= nil then
+                 buffer = buffer .. data .. "\n"
+ 
+@@ -1473,20 +1491,30 @@ function MCPHub:connect_sse()
+             end
+         end),
+         on_stderr = vim.schedule_wrap(function(_, data)
++            if self.sse_job ~= sse_job or self.sse_generation ~= sse_generation then
++                return
++            end
+             log.debug("SSE STDERR: " .. tostring(data))
+         end),
+         on_exit = vim.schedule_wrap(function(_, code)
+             log.debug("SSE JOB exited with " .. tostring(code))
++            -- `stop_sse()` clears and invalidates the active job before
++            -- shutting it down. Ignore that intentional/stale exit rather
++            -- than allowing it to reset a newer connection through
++            -- `handle_hub_stopped()`.
++            if self.sse_job ~= sse_job or self.sse_generation ~= sse_generation then
++                return
++            end
+             self.sse_job = nil
+-            -- If we asked the SSE to stop (stop_sse path) or the whole hub is shutting down,
+-            -- treat the exit as expected and clean up normally.
++            -- A current graceful exit still represents a stopped hub. A
++            -- deliberate `stop_sse()` is handled above as a stale exit.
+             if self.is_shutting_down or code == 0 then
+                 self:handle_hub_stopped("SSE connection closed", code)
+                 return
+             end
+             -- Patch 14: transient SSE drop (curl error 56, idle timeout, server restart, sleep/wake).
+             -- Don't tear down state — probe /api/health first; if the hub is still alive, just reopen SSE.
+-            self:_attempt_sse_recovery(code)
++            self:_attempt_sse_recovery(code, sse_generation)
+         end),
+     })
+ 
+@@ -1498,8 +1526,8 @@ end
+ --- Patch 14: try to recover from a transient SSE disconnect without going through _clean_up().
+ --- Probes the existing hub at the same port. If it's still our hub and reachable, reopens SSE.
+ --- Otherwise falls through to handle_hub_stopped so the existing UI/error path runs.
+-function MCPHub:_attempt_sse_recovery(exit_code)
+-    if self.is_shutting_down then
++function MCPHub:_attempt_sse_recovery(exit_code, sse_generation)
++    if self.is_shutting_down or sse_generation ~= self.sse_generation then
+         return
+     end
+     log.debug("Attempting SSE recovery after exit code " .. tostring(exit_code))
+@@ -1508,6 +1536,11 @@ function MCPHub:_attempt_sse_recovery(exit_code)
+     local was_ready = self.ready
+     self.ready = false
+     self:check_server(function(is_running, is_our_server, _is_same_version)
++        -- A stop, context switch, or newer SSE connection happened while the
++        -- health request was in flight. It owns the next state transition.
++        if self.is_shutting_down or sse_generation ~= self.sse_generation then
++            return
++        end
+         if is_running and is_our_server then
+             log.debug("SSE recovery: hub still alive, reopening SSE without state reset")
+             self.ready = was_ready
+@@ -1524,9 +1557,18 @@ end
+ 
+ --- Stop SSE connection
+ function MCPHub:stop_sse()
+-    if self.sse_job then
+-        self.sse_job:shutdown(0)
+-        self.sse_job = nil
++    -- Invalidate both an active SSE job and a pending recovery health check
++    -- before stopping the job. Its asynchronous callbacks must not tear down
++    -- a hub that is already reconnecting on a different context.
++    -- The readiness flag belongs to the old endpoint. A subsequent `start()`
++    -- must probe the newly resolved port instead of taking check_server()'s
++    -- ready fast path and attaching an SSE stream to a hub that may not exist.
++    self.ready = false
++    self.sse_generation = (self.sse_generation or 0) + 1
++    local sse_job = self.sse_job
++    self.sse_job = nil
++    if sse_job then
++        sse_job:shutdown(0)
+     end
+ end
+ 
+@@ -1579,13 +1621,28 @@ end
+ 
+ --- Ask what to do before killing an existing hub process.
+ ---@param context table Context containing port and config details
+----@param opts? { reason?: string, allow_connect?: boolean }
++---@param opts? { reason?: string, allow_connect?: boolean, interactive?: boolean }
+ ---@return "restart"|"connect"|"cancel"
+ function MCPHub:confirm_hard_restart(context, opts)
+     opts = opts or {}
+     local allow_connect = opts.allow_connect ~= false
+     local reason = opts.reason or "hub context mismatch"
+ 
++    -- Hub discovery runs from asynchronous startup paths, including opening the
++    -- MCPHub dashboard. A blocking confirm steals the next navigation key from
++    -- the float, making it appear that `j` (or any other key) dismissed the UI.
++    -- Background discovery must never restart another client's hub: attach when
++    -- it is safe, otherwise leave it alone and let an explicit `R` retry ask.
++    if opts.interactive ~= true then
++        local action = allow_connect and "connect" or "cancel"
++        local disposition = action == "connect" and "connecting to the existing hub" or "leaving it untouched"
++        vim.notify(
++            "MCP Hub startup found a mismatch (" .. reason .. "); " .. disposition .. ".",
++            vim.log.levels.WARN
++        )
++        return action
++    end
++
+     if config.confirm_hard_restart == false then
+         return "restart"
+     end
+@@ -1627,7 +1684,7 @@ end
+ 
+ --- Handles already running mcp-hub on same port with different config files
+ ---@param context table Context containing port and config details
+----@param opts? { reason?: string, allow_connect?: boolean }
++---@param opts? { reason?: string, allow_connect?: boolean, interactive?: boolean }
+ function MCPHub:handle_same_port_different_config(context, opts)
+     opts = opts or {}
+     local action = self:confirm_hard_restart(context, opts)
+@@ -1667,7 +1724,7 @@ end
+ --- @param reason string|nil Optional reason for the restart
+ function MCPHub:restart(callback, reason)
+     if not self:ensure_ready() then
+-        return self:start()
++        return self:start({ interactive = true })
+     end
+     if self.is_restarting then
+         vim.notify("MCP Hub is already restarting.", vim.log.levels.WARN)
+diff --git a/lua/mcphub/ui/init.lua b/lua/mcphub/ui/init.lua
+index 9dce892..2866484 100644
+--- a/lua/mcphub/ui/init.lua
++++ b/lua/mcphub/ui/init.lua
+@@ -5,6 +5,7 @@
+ local State = require("mcphub.state")
+ local hl = require("mcphub.utils.highlights")
+ local utils = require("mcphub.utils")
++local constants = require("mcphub.utils.constants")
+ 
+ ---@class MCPHub.UI
+ ---@field window number Window handle
+@@ -16,8 +17,11 @@ local utils = require("mcphub.utils")
+ ---@field context table Context from which the UI was opened
+ ---@field startup_status_generation integer Cancels stale pre-ready health probes
+ ---@field startup_status_fetching boolean Ensures only one health probe runs at a time
++---@field startup_status_fetch_generation integer|nil Generation that owns the in-flight health probe
+ ---@field startup_status_rendered_generation integer Limits unchanged snapshot redraws per probe
+ ---@field render_scheduled boolean Coalesces state refreshes in the current event loop
++---@field context_reconcile_pending boolean Defers a real workspace switch during initial startup
++---@field context_reconcile_scheduled boolean Coalesces the deferred workspace-switch check
+ ---@field opts MCPHub.UIConfig Configuration options for UI
+ local UI = {}
+ UI.__index = UI
+@@ -82,8 +86,11 @@ function UI:new(opts)
+         context = {}, -- Context from which the UI was opened
+         startup_status_generation = 0, -- Cancels stale pre-ready health probes
+         startup_status_fetching = false, -- Ensures only one health probe runs at a time
++        startup_status_fetch_generation = nil, -- Generation that owns the in-flight health probe
+         startup_status_rendered_generation = 0, -- Limits unchanged snapshot redraws per probe
+         render_scheduled = false, -- Coalesce bursts of server/setup state changes
++        context_reconcile_pending = false, -- Wait for a real startup context before switching hubs
++        context_reconcile_scheduled = false, -- Coalesce ready-state context reconciliation
+     }
+     setmetatable(instance, self)
+ 
+@@ -125,6 +132,9 @@ function UI:new(opts)
+                 if changes.setup_state then
+                     instance:request_startup_server_snapshot()
+                 end
++                if changes.server_state and instance.context_reconcile_pending then
++                    instance:schedule_context_reconcile()
++                end
+                 instance:schedule_render()
+             end
+         end
+@@ -401,7 +411,10 @@ function UI:cleanup()
+     -- Let in-flight/scheduled startup probes expire without updating a closed UI.
+     self.startup_status_generation = (self.startup_status_generation or 0) + 1
+     self.startup_status_fetching = false
++    self.startup_status_fetch_generation = nil
+     self.render_scheduled = false
++    self.context_reconcile_pending = false
++    self.context_reconcile_scheduled = false
+     self.is_shown = false
+     if not (self.window and vim.api.nvim_win_is_valid(self.window)) then
+         return
+@@ -442,6 +455,33 @@ function UI:schedule_render()
+     end)
+ end
+ 
++--- Retry a genuine workspace switch after the hub that was already starting
++--- has reached READY. The startup path itself owns the initial nil context.
++function UI:schedule_context_reconcile()
++    if self.context_reconcile_scheduled
++        or not self.context_reconcile_pending
++        or not self.is_shown
++    then
++        return
++    end
++
++    self.context_reconcile_scheduled = true
++    vim.schedule(function()
++        self.context_reconcile_scheduled = false
++        if not self.context_reconcile_pending
++            or not self.is_shown
++            or not (self.window and vim.api.nvim_win_is_valid(self.window))
++        then
++            return
++        end
++
++        local hub = State.hub_instance
++        if hub and not hub.is_starting and hub:is_ready() then
++            self:reconcile_context()
++        end
++    end)
++end
++
+ --- Toggle UI visibility
+ --- @param args? table
+ function UI:toggle(args)
+@@ -492,12 +532,27 @@ function UI:show(args)
+     -- Draw current view
+     self:render()
+     self.is_shown = true
+-    self:request_startup_server_snapshot()
++
++    -- reconcile_context() may have queued hub:start() for a workspace port.
++    -- Queue the first probe after that handoff so it cannot accept a healthy
++    -- response from the previous context and decide no retry is needed.
++    vim.schedule(function()
++        if self.is_shown and self.window and vim.api.nvim_win_is_valid(self.window) then
++            self:request_startup_server_snapshot()
++        end
++    end)
+ end
+ 
+ local STARTUP_STATUS_REFRESH_INTERVAL_MS = 500
+ local STARTUP_STATUS_MAX_ATTEMPTS = 30
+ 
++---@param hub MCPHub.Hub
++---@return string
++local function hub_context_port(hub)
++    local current = State.current_hub or {}
++    return tostring(current.port or hub.port or "")
++end
++
+ --- Populate the main view as soon as mcp-hub exposes connection objects.
+ --- The hub's health route is available before and immediately around READY,
+ --- while the regular server update can arrive later over SSE. Retry briefly
+@@ -505,7 +560,14 @@ local STARTUP_STATUS_MAX_ATTEMPTS = 30
+ --- startup snapshot before `State.hub_instance` exists.
+ function UI:request_startup_server_snapshot()
+     self.startup_status_generation = (self.startup_status_generation or 0) + 1
+-    self.startup_status_fetching = false
++    -- Do not clear an older in-flight probe here. `setup_state` can advance the
++    -- generation while its health request is still running; clearing this flag
++    -- would allow overlapping probes, and the stale callback could then strand
++    -- the latest generation without another render. Its callback hands control
++    -- to the newest generation below.
++    if self.startup_status_fetching then
++        return
++    end
+     self:_request_startup_server_snapshot(self.startup_status_generation, 1)
+ end
+ 
+@@ -544,20 +606,49 @@ function UI:_request_startup_server_snapshot(generation, attempt)
+         return
+     end
+ 
++    -- The same Hub object is reused while workspace mode switches ports. Keep
++    -- the probe tied to the resolved port so a late response from the previous
++    -- hub cannot make this UI settle on an empty startup view.
++    local request_port = hub_context_port(hub)
+     self.startup_status_fetching = true
++    self.startup_status_fetch_generation = generation
+     hub:get_health({
++        -- A startup probe must not hold the generation lock forever when the
++        -- local hub is between process start and HTTP readiness.
++        timeout = 3000,
+         callback = function(response)
++            local owns_fetch = self.startup_status_fetch_generation == generation
++            if owns_fetch then
++                self.startup_status_fetching = false
++                self.startup_status_fetch_generation = nil
++            end
++
+             if generation ~= self.startup_status_generation then
++                -- `setup_state` can advance the generation between dispatch and
++                -- completion. Once this old request releases the only in-flight
++                -- slot, immediately resume the current generation; otherwise
++                -- its UI can remain permanently on the first `Starting...`
++                -- render until the user closes and reopens it.
++                if owns_fetch then
++                    vim.schedule(function()
++                        self:_request_startup_server_snapshot(self.startup_status_generation, 1)
++                    end)
++                end
+                 return
+             end
+ 
+-            self.startup_status_fetching = false
+-            if State.hub_instance ~= hub then
++            if State.hub_instance ~= hub or request_port ~= hub_context_port(hub) then
+                 self:request_startup_server_snapshot()
+                 return
+             end
+ 
+             if response then
++                -- A health response is authoritative even if the initial SSE
++                -- READY event raced this UI open. Reflect it immediately so
++                -- the main view cannot remain in "Waiting for server status".
++                if response.state and response.state ~= State.server_state.state then
++                    State:update_hub_state(response.state)
++                end
+                 local servers = response.servers or {}
+                 local workspaces = response.workspaces
+                 local servers_changed = not vim.deep_equal(State.server_state.servers or {}, servers)
+@@ -581,8 +672,11 @@ function UI:_request_startup_server_snapshot(generation, attempt)
+ 
+             -- A ready hub still needs one successful snapshot: the READY signal
+             -- can precede its asynchronous update_servers() call. Retry failed
+-            -- health reads as well as a hub that is still connecting.
+-            if not response or not hub:is_ready() then
++            -- health reads, an incomplete health body, and a hub that is still
++            -- connecting. The bounded loop also covers a delayed SSE reconnect.
++            local health_is_ready = response
++                and (response.state == constants.HubState.READY or response.state == constants.HubState.RESTARTED)
++            if not response or response.servers == nil or not health_is_ready or not hub:is_ready() then
+                 self:_retry_startup_server_snapshot(generation, attempt)
+             end
+         end,
+@@ -599,14 +693,31 @@ function UI:reconcile_context()
+     if not (State.config and State.config.workspace and State.config.workspace.enabled) then
+         return
+     end
++    local current = State.current_hub or {}
++    -- `setup_state = completed` is published before the first `hub:start()`
++    -- resolves and stores its context. A nil port is therefore not a context
++    -- mismatch. Starting again here can stop the initial SSE client and leave
++    -- the first dashboard stuck in its pre-ready snapshot. The first start
++    -- resolves the current cwd itself, so do not queue any work yet.
++    if not current.port then
++        return
++    end
+     local resolved = hub:resolve_context()
+     if not resolved then
+         return
+     end
+-    local current = State.current_hub
+-    if current and tostring(resolved.port) == tostring(current.port) then
++    if tostring(resolved.port) == tostring(current.port) then
++        self.context_reconcile_pending = false
++        return
++    end
++    if hub.is_starting then
++        -- A port exists, so this is a real cwd change rather than initial
++        -- setup. Defer it until the existing start settles; the server-state
++        -- subscriber schedules the one-shot handoff after READY.
++        self.context_reconcile_pending = true
+         return
+     end
++    self.context_reconcile_pending = false
+     -- Cancel any pending debounced switch (patch 12) so we don't fight it
+     if hub._pending_switch_timer then
+         pcall(hub._pending_switch_timer.stop, hub._pending_switch_timer)

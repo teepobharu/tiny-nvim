@@ -1,0 +1,503 @@
+diff --git c/lua/mcphub/hub.lua w/lua/mcphub/hub.lua
+index fc8948a..27cee76 100644
+--- c/lua/mcphub/hub.lua
++++ w/lua/mcphub/hub.lua
+@@ -419,6 +419,11 @@ end
+ ---@param opts? { interactive?: boolean } Set only for an explicit user restart.
+ function MCPHub:start(opts)
+     opts = opts or {}
++    if self.manual_stop and opts.interactive ~= true then
++        log.debug("Skipping automatic MCP Hub start after explicit stop")
++        return
++    end
++    self.manual_stop = false
+     if self.is_starting then
+         vim.notify("MCP Hub is starting", vim.log.levels.WARN)
+         return
+@@ -689,6 +694,41 @@ function MCPHub:get_health(opts)
+     return self:api_request("GET", "health", opts)
+ end
+ 
++--- Get identity from the running hub, not from the locally bundled CLI.
++--- A pre-build-info hub returns 404; Help handles that without a global error.
++---@param opts? { callback?: fun(response: table?, error: string?) }
++function MCPHub:get_build_info(opts)
++    return self:api_request("GET", "build-info", vim.tbl_extend("force", {
++        timeout = 3000,
++        silent = true,
++    }, opts or {}))
++end
++
++--- Deliberately stop the attached hub process without taking the restart path.
++---@param opts? { callback?: fun(ok: boolean, error: string?) }
++function MCPHub:stop_server(opts)
++    opts = opts or {}
++    if not self:ensure_ready() then
++        if opts.callback then opts.callback(false, "MCP Hub is not ready") end
++        return
++    end
++    self.manual_stop = true
++    self.is_restarting = false
++    self:api_request("POST", "stop", {
++        silent = true,
++        headers = { ["X-MCPHub-Action"] = "stop" },
++        callback = function(response, err)
++            if err or not response or response.status ~= "stopping" then
++                self.manual_stop = false
++                if opts.callback then opts.callback(false, err or "unexpected stop response") end
++                return
++            end
++            self:stop()
++            if opts.callback then opts.callback(true) end
++        end,
++    })
++end
++
+ ---@param name string
+ ---@return NativeServer | MCPServer | nil
+ function MCPHub:get_server(name)
+@@ -1145,7 +1185,7 @@ end
+ --- API request helper
+ --- @param method string HTTP method
+ --- @param path string API path
+---- @param opts? { body?: table, timeout?: number, skip_ready_check?: boolean, callback?: fun(response: table?, error: string?), query?: table }
++--- @param opts? { body?: table, headers?: table<string, string>, timeout?: number, skip_ready_check?: boolean, silent?: boolean, callback?: fun(response: table?, error: string?), query?: table }
+ --- @return table|nil, string|nil If no callback is provided, returns response and error
+ function MCPHub:api_request(method, path, opts)
+     opts = opts or {}
+@@ -1184,10 +1224,10 @@ function MCPHub:api_request(method, path, opts)
+         method = method,
+         --INFO: generating custom headers file path to avoid getting .header file not found when simulataneous requests are sent
+         dump = utils.gen_dump_path(),
+-        headers = {
++        headers = vim.tbl_extend("force", {
+             ["Content-Type"] = "application/json",
+             ["Accept"] = "application/json",
+-        },
++        }, opts.headers or {}),
+         raw = raw,
+         on_error = vim.schedule_wrap(function(err)
+             log.debug(string.format("Error while making request to %s: %s", path, vim.inspect(err)))
+@@ -1200,7 +1240,9 @@ function MCPHub:api_request(method, path, opts)
+                 if callback then
+                     callback(nil, tostring(error))
+                 end
+-                State:add_error(error)
++                if not opts.silent then
++                    State:add_error(error)
++                end
+             end
+         end),
+     }
+@@ -1211,7 +1253,9 @@ function MCPHub:api_request(method, path, opts)
+     -- Only skip ready check for health check
+     if not opts.skip_ready_check and not self.ready and path ~= "health" then
+         local err = Error("SERVER", Error.Types.SERVER.INVALID_STATE, "MCP Hub not ready")
+-        State:add_error(err)
++        if not opts.silent then
++            State:add_error(err)
++        end
+         if callback then
+             callback(nil, tostring(err))
+             return
+@@ -1224,7 +1268,9 @@ function MCPHub:api_request(method, path, opts)
+     local function process_response(response)
+         local curl_error = handlers.ResponseHandlers.handle_curl_error(response, request_opts)
+         if curl_error then
+-            State:add_error(curl_error)
++            if not opts.silent then
++                State:add_error(curl_error)
++            end
+             if callback then
+                 callback(nil, tostring(curl_error))
+                 return
+@@ -1235,7 +1281,9 @@ function MCPHub:api_request(method, path, opts)
+ 
+         local http_error = handlers.ResponseHandlers.handle_http_error(response, request_opts)
+         if http_error then
+-            State:add_error(http_error)
++            if not opts.silent then
++                State:add_error(http_error)
++            end
+             if callback then
+                 callback(nil, tostring(http_error))
+                 return
+@@ -1246,7 +1294,9 @@ function MCPHub:api_request(method, path, opts)
+ 
+         local result, parse_error = handlers.ResponseHandlers.parse_json(response.body, request_opts)
+         if parse_error then
+-            State:add_error(parse_error)
++            if not opts.silent then
++                State:add_error(parse_error)
++            end
+             if callback then
+                 callback(nil, tostring(parse_error))
+                 return
+@@ -1428,6 +1478,9 @@ end
+ 
+ --- Connect to SSE events endpoint
+ function MCPHub:connect_sse()
++    if self.manual_stop then
++        return
++    end
+     if self.sse_job then
+         return
+     end
+@@ -1612,7 +1665,7 @@ function MCPHub:handle_hub_restarting()
+ end
+ 
+ function MCPHub:handle_hub_stopping()
+-    if self.is_restarting then
++    if self.is_restarting and not self.manual_stop then
+         vim.defer_fn(function()
+             self:start()
+         end, 1000)
+diff --git c/lua/mcphub/state.lua w/lua/mcphub/state.lua
+index 9010cdb..2948a30 100644
+--- c/lua/mcphub/state.lua
++++ w/lua/mcphub/state.lua
+@@ -14,6 +14,8 @@ local State = {
+ 
+     ---@type MCPHub.Hub?
+     hub_instance = nil,
++    -- Cached on-demand identity of the currently attached server binary.
++    hub_build_info = nil,
+     ---@type MCPHub.UI?
+     ui_instance = nil,
+ 
+@@ -99,6 +101,7 @@ function State:is_connected()
+ end
+ 
+ function State:reset()
++    State.hub_build_info = nil
+     State.server_state = {
+         status = "disconnected",
+         pid = nil,
+@@ -349,6 +352,9 @@ end
+ ---@param status string
+ ---@param ... any
+ function State:update_hub_state(status, ...)
++    if status ~= constants.HubState.READY and status ~= constants.HubState.RESTARTED then
++        self.hub_build_info = nil
++    end
+     self:update({
+         server_state = {
+             state = status,
+diff --git c/lua/mcphub/ui/build_info.lua w/lua/mcphub/ui/build_info.lua
+new file mode 100644
+index 0000000..25d8544
+--- /dev/null
++++ w/lua/mcphub/ui/build_info.lua
+@@ -0,0 +1,38 @@
++local State = require("mcphub.state")
++
++local M = {}
++
++-- One request per attached hub process. Main and Help share the same snapshot,
++-- so dashboard redraws and tab changes never cause a build-info request storm.
++function M.get_cache(ui)
++    local hub = State.hub_instance
++    if not hub or not hub.ready or not State:is_connected() then
++        return { status = "waiting" }
++    end
++
++    local port = tostring((State.current_hub or {}).port or hub.port or "")
++    local pid = (State.server_state or {}).pid
++    local cache = State.hub_build_info
++    if cache and cache.hub == hub and cache.port == port and cache.pid == pid and cache.url == hub.server_url then
++        return cache
++    end
++
++    cache = { status = "loading", hub = hub, port = port, pid = pid, url = hub.server_url }
++    State.hub_build_info = cache
++    hub:get_build_info({
++        callback = function(response, err)
++            if State.hub_build_info ~= cache then
++                return
++            end
++            cache.data = response
++            cache.error = err
++            cache.status = response and "loaded" or (err and err:find("404") and "unavailable" or "error")
++            if ui.is_shown and (ui.current_view == "main" or ui.current_view == "help") then
++                ui:schedule_render()
++            end
++        end,
++    })
++    return cache
++end
++
++return M
+diff --git c/lua/mcphub/ui/init.lua w/lua/mcphub/ui/init.lua
+index 2866484..75e5170 100644
+--- c/lua/mcphub/ui/init.lua
++++ w/lua/mcphub/ui/init.lua
+@@ -560,6 +560,9 @@ end
+ --- startup snapshot before `State.hub_instance` exists.
+ function UI:request_startup_server_snapshot()
+     self.startup_status_generation = (self.startup_status_generation or 0) + 1
++    if State.hub_instance and State.hub_instance.manual_stop then
++        return
++    end
+     -- Do not clear an older in-flight probe here. `setup_state` can advance the
+     -- generation while its health request is still running; clearing this flag
+     -- would allow overlapping probes, and the stale callback could then strand
+@@ -602,6 +605,9 @@ function UI:_request_startup_server_snapshot(generation, attempt)
+         self:_retry_startup_server_snapshot(generation, attempt)
+         return
+     end
++    if hub.manual_stop then
++        return
++    end
+     if self.startup_status_fetching then
+         return
+     end
+@@ -623,6 +629,10 @@ function UI:_request_startup_server_snapshot(generation, attempt)
+                 self.startup_status_fetch_generation = nil
+             end
+ 
++            if hub.manual_stop then
++                return
++            end
++
+             if generation ~= self.startup_status_generation then
+                 -- `setup_state` can advance the generation between dispatch and
+                 -- completion. Once this old request releases the only in-flight
+diff --git c/lua/mcphub/ui/views/help.lua w/lua/mcphub/ui/views/help.lua
+index 2cb4660..f923ca8 100644
+--- c/lua/mcphub/ui/views/help.lua
++++ w/lua/mcphub/ui/views/help.lua
+@@ -4,6 +4,8 @@
+ ---@brief ]]
+ local Text = require("mcphub.utils.text")
+ local View = require("mcphub.ui.views.base")
++local State = require("mcphub.state")
++local BuildInfo = require("mcphub.ui.build_info")
+ 
+ ---@class HelpView:View
+ ---@field active_tab string Currently active tab
+@@ -20,6 +22,7 @@ function HelpView:new(ui)
+         { id = "troubleshooting", text = "Troubleshooting" },
+         { id = "native", text = "Native Servers" },
+         { id = "changelog", text = "Changelog" },
++        { id = "hub_build", text = "Hub Build" },
+     }
+     instance.active_tab = instance.tabs[1].id
+     instance = setmetatable(instance, HelpView)
+@@ -34,6 +37,7 @@ function HelpView:cycle_tab()
+             break
+         end
+     end
++    self:update_build_keymap()
+ end
+ 
+ function HelpView:cycle_tab_reverse()
+@@ -44,6 +48,57 @@ function HelpView:cycle_tab_reverse()
+             break
+         end
+     end
++    self:update_build_keymap()
++end
++
++function HelpView:update_build_keymap()
++    if self.active_tab == "hub_build" then
++        self.keymaps["X"] = {
++            action = function() self:stop_running_hub() end,
++            desc = "Stop hub",
++        }
++    else
++        self.keymaps["X"] = nil
++    end
++    if self.ui.is_shown and self.ui.current_view == "help" then
++        self:apply_keymaps()
++    end
++end
++
++function HelpView:stop_running_hub()
++    local cache = BuildInfo.get_cache(self.ui)
++    local hub = State.hub_instance
++    if not hub or not State:is_connected() then
++        vim.notify("MCP Hub is not connected", vim.log.levels.WARN)
++        return
++    end
++    if cache.status ~= "loaded" or not ((cache.data or {}).build or {}).features.stopHub then
++        vim.notify("This running hub does not advertise the stop endpoint", vim.log.levels.WARN)
++        return
++    end
++    local runtime = cache.data.runtime or {}
++    local choice = vim.fn.confirm(
++        string.format(
++            "Stop the current MCP Hub process?\n\nPort: %s   PID: %s\nOther clients will disconnect. This Neovim will not reconnect until you press R.",
++            tostring(runtime.port or hub.port or "unknown"),
++            tostring(runtime.pid or "unknown")
++        ),
++        "&Stop hub\n&Cancel",
++        2,
++        "Warning"
++    )
++    if choice ~= 1 then
++        return
++    end
++    hub:stop_server({
++        callback = function(ok, err)
++            if ok then
++                vim.notify("MCP Hub stopped; press R to start it again", vim.log.levels.INFO)
++            else
++                vim.notify("Could not stop MCP Hub: " .. tostring(err), vim.log.levels.ERROR)
++            end
++        end,
++    })
+ end
+ 
+ function HelpView:render_tabs()
+@@ -82,6 +137,88 @@ function HelpView:before_enter()
+             desc = "Previous tab",
+         },
+     }
++    self:update_build_keymap()
++end
++
++--- Share Home's per-process build-info cache. A new attached or restarted hub
++--- gets a fresh request; ordinary redraws and tab changes do not.
++function HelpView:get_build_info_cache()
++    return BuildInfo.get_cache(self.ui)
++end
++
++local function display(value)
++    if value == nil or value == "" then
++        return "—"
++    end
++    return tostring(value)
++end
++
++local function render_hub_build(cache)
++    if cache.status == "waiting" then
++        return "# Hub Build (running server)\n\nWaiting for the hub connection..."
++    elseif cache.status == "loading" then
++        return "# Hub Build (running server)\n\nLoading build info from the connected hub..."
++    elseif cache.status == "unavailable" then
++        return "# Hub Build (running server)\n\nBuild info unavailable — this hub binary predates `/api/build-info`. Rebuild and restart the hub to inspect its identity."
++    elseif cache.status ~= "loaded" or type(cache.data) ~= "table" then
++        return "# Hub Build (running server)\n\nCould not load build info: " .. display(cache.error)
++    end
++
++    local build = cache.data.build or {}
++    local runtime = cache.data.runtime or {}
++    local commit = display(build.shortCommit or build.commit)
++    if build.dirty then
++        commit = commit .. " (+dirty)"
++    end
++    if build.branch then
++        commit = commit .. " on " .. build.branch
++    end
++    local lines = {
++        "# Hub Build (running server)",
++        "",
++        "Version: " .. display(build.version),
++        "Commit: " .. commit,
++        "Subject: " .. display(build.commitSubject),
++        "Committed: " .. display(build.commitDate),
++        "Built: " .. display(build.builtAt),
++        "Started: " .. display(runtime.startedAt),
++        "Uptime: " .. display(runtime.uptimeMs and math.floor(runtime.uptimeMs / 1000) .. "s"),
++        "PID: " .. display(runtime.pid) .. "   Node: " .. display(runtime.node) .. "   Port: " .. display(runtime.port),
++        "Binary: " .. display(runtime.binaryPath),
++        "Config: " .. display(runtime.configPath),
++        "",
++        "## Features",
++    }
++    local features = build.features or {}
++    for _, name in ipairs({ "clearAuth", "leanProxy", "stdioAuthCommand" }) do
++        table.insert(lines, (features[name] and "[x] " or "[ ] ") .. name)
++    end
++    table.insert(lines, "OAuth redirect styles: " .. table.concat(features.oauthRedirectStyles or {}, ", "))
++    table.insert(lines, "")
++    table.insert(lines, "## Applied patches")
++    if #((build.patches) or {}) == 0 then
++        table.insert(lines, "None declared (capabilities may be committed in the fork).")
++    else
++        for _, patch in ipairs(build.patches) do
++            table.insert(lines, "[x] " .. display(patch.name))
++        end
++    end
++    table.insert(lines, "")
++    table.insert(lines, "## Changes since " .. display(build.releaseTag))
++    table.insert(lines, "Release tag commit: " .. display(build.releaseTagCommitDate))
++    if #((build.changelog) or {}) == 0 then
++        table.insert(lines, "No commits listed.")
++    else
++        for _, change in ipairs(build.changelog) do
++            if type(change) == "table" then
++                table.insert(lines, "- " .. display(change.committedAt) .. "  " .. display(change.commit) .. "  " .. display(change.subject))
++            else
++                -- Builds produced before dated entries used plain strings.
++                table.insert(lines, "- " .. tostring(change))
++            end
++        end
++    end
++    return table.concat(lines, "\n")
+ end
+ 
+ function HelpView:render()
+@@ -148,6 +285,8 @@ MCPHub is an open-source project that relies on community support. Your support
+         else
+             table.insert(lines, Text.pad_line("Native server guide not found", Text.highlights.error))
+         end
++    elseif self.active_tab == "hub_build" then
++        vim.list_extend(lines, Text.render_markdown(render_hub_build(self:get_build_info_cache())))
+     else -- changelog
+         local changelog = prompt_utils.get_plugin_changelog()
+         if changelog then
+diff --git c/lua/mcphub/ui/views/main.lua w/lua/mcphub/ui/views/main.lua
+index 3039580..47ecfad 100644
+--- c/lua/mcphub/ui/views/main.lua
++++ w/lua/mcphub/ui/views/main.lua
+@@ -5,6 +5,7 @@
+ local Capabilities = require("mcphub.ui.capabilities")
+ local NuiLine = require("mcphub.utils.nuiline")
+ local State = require("mcphub.state")
++local BuildInfo = require("mcphub.ui.build_info")
+ local Text = require("mcphub.utils.text")
+ local View = require("mcphub.ui.views.base")
+ local config_manager = require("mcphub.utils.config_manager")
+@@ -800,7 +801,7 @@ function MainView:setup_active_mode()
+             local State = require("mcphub.state")
+             if State.hub_instance and not State:is_connected() then
+                 vim.notify("MCP Hub: attempting reconnect")
+-                State.hub_instance:start()
++                State.hub_instance:start({ interactive = true })
+                 return
+             end
+             self.ui:hard_refresh()
+@@ -2374,7 +2375,31 @@ function MainView:render_hub_status()
+     if suffix then
+         line:append(suffix, Text.highlights.muted)
+     end
+-    return { Text.pad_line(line) }
++    local lines = { Text.pad_line(line) }
++    if State:is_connected() then
++        local cache = BuildInfo.get_cache(self.ui)
++        if cache.status == "loaded" and type(cache.data) == "table" then
++            local build = cache.data.build or {}
++            local runtime = cache.data.runtime or {}
++            local identity = NuiLine()
++                :append("Hub ", Text.highlights.muted)
++                :append(tostring(build.version or "unknown"), Text.highlights.info)
++                :append("  ·  commit " .. tostring(build.shortCommit or build.commit or "unknown"), Text.highlights.muted)
++                :append("  ·  committed " .. tostring(build.commitDate or "unknown"), Text.highlights.muted)
++            table.insert(lines, Text.pad_line(identity))
++            table.insert(lines, Text.pad_line(NuiLine():append("Bin source: " .. tostring(runtime.binaryPath or "unknown"), Text.highlights.muted)))
++        elseif cache.status == "loading" then
++            table.insert(lines, Text.pad_line(NuiLine():append("Hub build: loading...", Text.highlights.muted)))
++            table.insert(lines, Text.pad_line(NuiLine():append("Bin source: loading...", Text.highlights.muted)))
++        elseif cache.status == "unavailable" then
++            table.insert(lines, Text.pad_line(NuiLine():append("Hub build: unavailable (older binary)", Text.highlights.muted)))
++            table.insert(lines, Text.pad_line(NuiLine():append("Bin source: unavailable", Text.highlights.muted)))
++        elseif cache.status == "error" then
++            table.insert(lines, Text.pad_line(NuiLine():append("Hub build: request failed", Text.highlights.muted)))
++            table.insert(lines, Text.pad_line(NuiLine():append("Bin source: unavailable", Text.highlights.muted)))
++        end
++    end
++    return lines
+ end
+ 
+ function MainView:render()

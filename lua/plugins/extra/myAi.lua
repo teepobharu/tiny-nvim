@@ -230,6 +230,9 @@ return {
     -- Single canonical spec for Avante: do not declare yetone/avante again in plugins/extra/avante.lua.
     -- lazy.nvim merges plugin fragments but does not merge `config` — a second fragment's config would replace this one.
     enabled = true,
+    -- The newer checkout requires Neovim 0.12 and blocks 0.11 startup in
+    -- vim.fn.getchar(). Keep the known compatible revision until upgrading Neovim.
+    commit = vim.fn.has("nvim-0.12") == 0 and "90a0e77c63251c367935caeaa0070670522c960b" or nil,
     -- https://github.com/yetone/avante.nvim?tab=readme-ov-file#default-setup-configuration
     config = function(_, opts)
       -- Avante's Google search moved to an opt-in tool on its Neovim 0.12

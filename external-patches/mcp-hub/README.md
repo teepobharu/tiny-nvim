@@ -4,10 +4,14 @@ These patches target the local `mcp-hub` fork used by
 `lua/plugins/extra/myAi.lua` when `~/projects/mcp-hub/dist/cli.js` or
 `~/projects/mcp-hub/src/utils/cli.js` exists.
 
-All patches are tested against fork commit `6a4ce7e` (mcp-hub v4.2.1).
-Apply in order; each patch assumes the previous ones are already applied.
+These are historical patches for a pre-feature fork checkout. **Do not apply
+them to the current fork tip (`bc31828` plus local build-info work)**: 01/02
+are already present, and 03/04 overlap committed clear-auth/stdio-auth code.
+The old `6a4ce7e` base also predates `src/mcp/proxy.js`, which patch 01 edits,
+so this stack is not a reproducible clean-clone recipe. Use the fork commits
+directly; keep these files only for provenance until they can be archived.
 
-## Application order
+## Historical application order (not for current fork tip)
 
 ```bash
 cd ~/projects/mcp-hub
@@ -78,3 +82,13 @@ npm run build
 
 `myAi.lua` prefers `dist/cli.js`, so rebuilding is required unless you point
 `MCP_HUB_FORK_CLI` directly at `src/utils/cli.js`.
+
+## Build patch manifest
+
+The fork's build script optionally reads `PATCHES.json` at build time. If you
+apply new uncommitted external patches to a future base, write a JSON array of
+`{ "name": "...", "sha256": "...", "appliedAt": "UTC timestamp" }` entries
+for **patches actually applied** before building. The manifest is ignored by
+Git and embedded in the standalone binary; no runtime `.git` or patch-file
+read is needed. The current fork has these capabilities in commits, so its
+manifest is absent and `/api/build-info` correctly reports `patches: []`.

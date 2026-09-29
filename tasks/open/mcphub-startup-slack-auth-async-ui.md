@@ -3,7 +3,7 @@ title: "MCPHub startup should not block on Slack bridge auth"
 status: "open"
 priority: "high"
 created: 2026-07-03
-updated: 2026-09-13
+updated: 2026-09-26
 refs:
   - 163b3ad [tag:v6.2.0] chore(release): v6.2.0
 related:
@@ -31,8 +31,10 @@ Scope trimmed to the remaining work. Completed slices moved to
   [mcphub-ui-initial-load-cli-agents](tasks/review/mcphub-ui-initial-load-cli-agents.md):
   the main dashboard stays visible, logs move to `L`, and a bounded pre-ready
   `/api/health` retry exposes connection rows/tools as soon as the backend
-  creates them. The remaining backend work still removes the global
-  `READY`-after-all-connections bottleneck.
+  creates them. Its v2 follow-up coalesces state redraws, avoids treating a
+  refresh as a view transition, and keeps the selected semantic row anchored
+  when startup inserts or reorders lines. The remaining backend work still
+  removes the global `READY`-after-all-connections bottleneck.
 
 Remaining (this task):
 
@@ -406,9 +408,10 @@ Benefit of showing UI first:
 
 - [x] Keep the `mcphub.nvim` main dashboard visible during `STARTING`, with
       logs reserved for `L`. [03-main-ui_v2](patches/mcphub.nvim/03-main-ui_v2.patch)
-      polls the pre-ready health route for up to 15 seconds and updates only
-      changed snapshots, so existing connection rows/tools appear before global
-      `READY`.
+      polls the pre-ready health route for up to 15 seconds, including through
+      the `State.hub_instance` creation handoff and one read around `READY`, so
+      existing connection rows/tools appear before global readiness without a
+      keypress or reopening the UI.
 - [ ] Add `<C-r>` as soft status refresh / SSE reconnect, keeping `r` as hard
       capability refresh and `R` as hard restart.
 - [x] Add a deliberate user-triggered auth action for stdio auth-required rows,

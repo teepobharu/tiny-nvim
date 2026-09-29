@@ -1,0 +1,170 @@
+diff --git a/lua/lazy-local-patcher/patcher.lua b/lua/lazy-local-patcher/patcher.lua
+index 22dea4c..5f25702 100644
+--- a/lua/lazy-local-patcher/patcher.lua
++++ b/lua/lazy-local-patcher/patcher.lua
+@@ -21,13 +21,57 @@ end
+ 
+ ---@param name string Name of the plugin repository
+ ---@param plugin_path string Full path of the plugin repository
+-function M.restore_repo(name, plugin_path)
+-  local out = M.git_execute(plugin_path, { "restore", "." })
+-  if not out.success then
+-    local msg = string.format(": Error restoring the repository. Check '%s'", plugin_path)
++---@param patch_paths string[] Patches for this repository, in apply order
++---@return boolean restored Whether every applied patch was reversed or already absent
++function M.restore_repo(name, plugin_path, patch_paths)
++  local status = M.git_execute(plugin_path, { "status", "--porcelain" })
++  if not status.success then
++    local msg = string.format(": Error checking the repository. Check '%s'", plugin_path)
+     vim.notify(patcher .. name .. msg, vim.log.levels.ERROR)
++    return false
++  end
++  if vim.trim(status.output) == "" then
++    vim.notify(patcher .. "Already restored " .. name, vim.log.levels.TRACE)
++    return true
++  end
++
++  local unresolved = {}
++  for index = #patch_paths, 1, -1 do
++    local patch_path = patch_paths[index]
++    local reverse_check = M.git_execute(plugin_path, { "apply", "--reverse", "--check", "--ignore-space-change", patch_path })
++    if reverse_check.success then
++      local out = M.git_execute(plugin_path, { "apply", "--reverse", "--ignore-space-change", patch_path })
++      if not out.success then
++        local msg = string.format(": Error restoring patch '%s'. Check '%s'", patch_path, plugin_path)
++        vim.notify(patcher .. name .. msg, vim.log.levels.ERROR)
++        return false
++      end
++    else
++      -- An absent patch can depend on an earlier patch that is also absent.
++      -- Keep unwinding older patches first; final repository cleanliness below
++      -- distinguishes that partial stack from a real local conflict.
++      local forward_check = M.git_execute(plugin_path, { "apply", "--check", "--ignore-space-change", patch_path })
++      if not forward_check.success then
++        table.insert(unresolved, patch_path)
++      end
++    end
++  end
++
++  if #unresolved > 0 then
++    local final_status = M.git_execute(plugin_path, { "status", "--porcelain" })
++    if not final_status.success or vim.trim(final_status.output) ~= "" then
++      local msg = string.format(
++        ": Cannot safely restore patch '%s'; refusing to overwrite local changes. Check '%s'",
++        unresolved[#unresolved],
++        plugin_path
++      )
++      vim.notify(patcher .. name .. msg, vim.log.levels.ERROR)
++      return false
++    end
+   end
+-  vim.notify(patcher .. "Restored " .. name, vim.log.levels.TRACE)
++
++  vim.notify(patcher .. "Restored patches from " .. name, vim.log.levels.TRACE)
++  return true
+ end
+ 
+ ---@param name string Name of the plugin repository
+@@ -38,12 +82,15 @@ function M.apply_patch(name, patch_path, plugin_path)
+   if not out.success then
+     local msg = string.format(": Error applying patches to the repository. Check '%s'", plugin_path)
+     vim.notify(patcher .. name .. msg, vim.log.levels.ERROR)
++    return false
+   end
+   vim.notify(patcher .. "Applied " .. name, vim.log.levels.TRACE)
++  return true
+ end
+ 
+ ---@param opts LazyLocalPatcher.Options
+-function M.apply_all(opts)
++---@return string[] patches Relative patch paths, ordered for application
++function M.collect_patches(opts)
+   local patches = {}
+   for patch in vim.fs.dir(opts.patches_path, { depth = 2 }) do
+     if patch:match("%.patch$") ~= nil then
+@@ -51,28 +98,52 @@ function M.apply_all(opts)
+     end
+   end
+   table.sort(patches)
++  return patches
++end
++
++---@param patch string Relative patch path
++---@return string repository_name
++local function repository_name(patch)
++  return patch:gsub("/.*", ""):gsub("%.patch$", "")
++end
++
++---@param opts LazyLocalPatcher.Options
++function M.apply_all(opts)
++  local patches = M.collect_patches(opts)
+ 
+   for _, patch in ipairs(patches) do
+     local patch_path = opts.patches_path .. "/" .. patch
+-    local repo_path = opts.lazy_path .. "/" .. patch:gsub("/.*", ""):gsub("%.patch$", "")
++    local repo_path = opts.lazy_path .. "/" .. repository_name(patch)
+     M.apply_patch(patch, patch_path, repo_path)
+   end
+ end
+ 
+ ---@param opts LazyLocalPatcher.Options
++---@return boolean restored Whether every plugin repository restored safely
+ function M.restore_all(opts)
+-  for patch, type in vim.fs.dir(opts.patches_path) do
+-    if patch:match("%.patch$") ~= nil or type == "directory" then
+-      local repo_path = opts.lazy_path .. "/" .. patch:gsub("%.patch", "")
+-      M.restore_repo(patch, repo_path)
++  local repositories = {}
++  for _, patch in ipairs(M.collect_patches(opts)) do
++    local name = repository_name(patch)
++    repositories[name] = repositories[name] or {}
++    table.insert(repositories[name], opts.patches_path .. "/" .. patch)
++  end
++
++  local names = vim.tbl_keys(repositories)
++  table.sort(names)
++  local restored = true
++  for _, name in ipairs(names) do
++    if not M.restore_repo(name, opts.lazy_path .. "/" .. name, repositories[name]) then
++      restored = false
+     end
+   end
++  return restored
+ end
+ 
+ ---@param opts LazyLocalPatcher.Options
+ function M.create_group_and_cmd(opts)
+   local group_id = vim.api.nvim_create_augroup("LazyLocalPatcher", {})
+   M.sync_call = false
++  M.restore_ok = true
+ 
+   vim.api.nvim_create_autocmd("User", {
+     desc = "Restore patches when Lazy 'Pre' events are triggered.",
+@@ -80,7 +151,7 @@ function M.create_group_and_cmd(opts)
+     pattern = { "LazySyncPre", "LazyInstallPre", "LazyUpdatePre", "LazyCheckPre" },
+     callback = function(ev)
+       if not M.sync_call then
+-        M.restore_all(opts)
++        M.restore_ok = M.restore_all(opts)
+       end
+       if ev.match == "LazySyncPre" then
+         M.sync_call = true
+@@ -94,10 +165,16 @@ function M.create_group_and_cmd(opts)
+     pattern = { "LazySync", "LazyInstall", "LazyUpdate", "LazyCheck" },
+     callback = function(ev)
+       if not M.sync_call then
+-        M.apply_all(opts)
++        if M.restore_ok then
++          M.apply_all(opts)
++        end
++        M.restore_ok = true
+       elseif ev.match == "LazySync" then
+-        M.apply_all(opts)
++        if M.restore_ok then
++          M.apply_all(opts)
++        end
+         M.sync_call = false
++        M.restore_ok = true
+       end
+     end,
+   })

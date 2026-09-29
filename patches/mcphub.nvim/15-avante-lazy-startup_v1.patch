@@ -1,0 +1,58 @@
+diff --git a/lua/mcphub/extensions/avante/init.lua b/lua/mcphub/extensions/avante/init.lua
+index fa1ff09..0da3859 100644
+--- a/lua/mcphub/extensions/avante/init.lua
++++ b/lua/mcphub/extensions/avante/init.lua
+@@ -197,11 +197,8 @@ end
+ ---@param config MCPHub.Extensions.AvanteConfig
+ function M.setup(config)
+     if config.make_slash_commands then
+-        --Avoid checking for avante if the extension is not enabled
+-        local ok, _ = pcall(require, "avante")
+-        if not ok then
+-            return
+-        end
++        -- Register for MCP events without forcing the optional Avante plugin
++        -- to load while the hub itself is still starting.
+         require("mcphub.extensions.avante.slash_commands").setup()
+     end
+ end
+diff --git a/lua/mcphub/extensions/avante/slash_commands.lua b/lua/mcphub/extensions/avante/slash_commands.lua
+index f7b506c..35e16e7 100644
+--- a/lua/mcphub/extensions/avante/slash_commands.lua
++++ b/lua/mcphub/extensions/avante/slash_commands.lua
+@@ -5,6 +5,11 @@ local M = {}
+ 
+ ---Update avante slash commands with the current MCP prompts.
+ function M.register()
++    -- `require("avante.config")` triggers lazy.nvim's module loader. MCPHub
++    -- must not load Avante while starting just to update slash commands.
++    if not package.loaded["avante"] then
++        return
++    end
+     local ok, avante_config = pcall(require, "avante.config")
+     if not ok then
+         return
+@@ -108,10 +113,21 @@ end
+ 
+ ---Add slash commands to Avante for all active MCP servers
+ function M.setup()
+-    ---Immediately register slash commands if enabled
++    -- Register immediately when Avante is already loaded, otherwise wait for
++    -- its LazyLoad event. MCP server changes still refresh commands later.
+     M.register()
+-    --setup event listeners to update slash commands
+     mcphub.on({ "servers_updated", "prompt_list_changed" }, M.register)
++    if not package.loaded["avante"] then
++        vim.api.nvim_create_autocmd("User", {
++            pattern = "LazyLoad",
++            callback = function(args)
++                if args.data == "avante.nvim" then
++                    M.register()
++                    return true
++                end
++            end,
++        })
++    end
+ end
+ 
+ return M

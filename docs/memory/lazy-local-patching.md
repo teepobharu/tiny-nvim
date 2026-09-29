@@ -49,15 +49,38 @@ Patches are applied in sorted order within a plugin directory.
 | --- | ------------------------------------------------------- | ------------- | ----------------------- | ---------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
 | 1   | `patches/mcphub.nvim/01-compat_v1.patch`                | `mcphub.nvim` | `8ff40b5` (see drift note) | 2026-09-11 | CodeCompanion v19 renamed `variables` → `editor_context`, changed tool/image APIs | [PR #279](https://github.com/ravitemer/mcphub.nvim/pull/279) — Open |
 | 2   | `patches/mcphub.nvim/02-hub-stability_v1.patch`         | `mcphub.nvim` | `163b3ad` after `01`    | 2026-09-11 | Env tool filters, log dedup/throttle, hard-restart confirm, workspace switch debounce, SSE recovery | Local |
-| 3   | `patches/mcphub.nvim/03-main-ui_v1.patch`               | `mcphub.nvim` | `163b3ad` after `01`+`02` | 2026-09-11 | Main-view sections/folding, Endpoints + CLI Agents panels, multi-server expansion, capability summaries | Local |
-| 4   | `patches/mcphub.nvim/03-main-ui_v2.patch`               | `mcphub.nvim` | `163b3ad` after `03-main-ui_v1` | 2026-09-13 | Keep logs in `L`; show dashboard/state shell during setup and poll pre-ready server/tool counts | Local |
-| 5   | `patches/mcphub.nvim/04-clear-auth_v1.patch`            | `mcphub.nvim` | `163b3ad` after `03`    | 2026-09-11 | `POST /servers/clear-auth` endpoint plus `X` key on server rows, file-edit fallback | Local |
-| 6   | `patches/mcphub.nvim/05-stdio-auth-command_v1.patch`    | `mcphub.nvim` | `163b3ad` after `03`    | 2026-09-11 | Config-driven `authCommand` for stdio servers; `l` starts auth on unauthorized rows | Local |
-| 7   | `patches/mcphub.nvim/06-instruction-files_v1.patch`     | `mcphub.nvim` | `163b3ad` after `05`    | 2026-09-11 | Neovim-only prompt/config instruction files | Local |
-| 8   | `patches/mcphub.nvim/07-codecompanion-resource-refresh_v1.patch` | `mcphub.nvim` | `163b3ad` after `01`–`06` | 2026-08-29 | Refreshes MCP resources in already-open CodeCompanion chats | Local |
-| 9   | `patches/mcphub.nvim/08-ai-agent-settings_v1.patch`    | `mcphub.nvim` | `163b3ad` after `01`–`07` | 2026-09-15 | Read-only AI-agent setup roots, state, and skill discovery dashboard | Local |
-| 12  | `patches/codecompanion-history.nvim/01-title-prompt-v1.patch` | `codecompanion-history.nvim` | `bc1b4fe` | 2026-07-19 | Configurable rules plus v19 context filtering for persisted chat titles | Local |
-| 13  | `patches/codecompanion.nvim/01-editor-context-refresh_v1.patch` | `codecompanion.nvim` | `eba3b42` | 2026-08-29 | Public invalidation for cached editor-context completion entries | Local |
+| 3   | `patches/mcphub.nvim/03-main-ui_v3.patch`               | `mcphub.nvim` | `163b3ad` after `02` | 2026-09-29 | Main dashboard, sections/folding, startup shell and pre-ready snapshots (former 03 v1+v2) | Local |
+| 4   | `patches/mcphub.nvim/04-clear-auth_v1.patch`            | `mcphub.nvim` | `163b3ad` after `03` | 2026-09-11 | `POST /servers/clear-auth` and `X` on server rows | Local |
+| 5   | `patches/mcphub.nvim/05-stdio-auth-command_v1.patch`    | `mcphub.nvim` | `163b3ad` after `04` | 2026-09-11 | Config-driven stdio `authCommand` | Local |
+| 6   | `patches/mcphub.nvim/06-instruction-files_v1.patch`     | `mcphub.nvim` | `163b3ad` after `05` | 2026-09-11 | Neovim-only prompt/config instruction files | Local |
+| 7   | `patches/mcphub.nvim/07-codecompanion-resource-refresh_v1.patch` | `mcphub.nvim` | `163b3ad` after `06` | 2026-08-29 | Refresh MCP resources in open CodeCompanion chats | Local |
+| 8   | `patches/mcphub.nvim/08-agent-settings_v2.patch`        | `mcphub.nvim` | `163b3ad` after `07` | 2026-09-29 | Dedicated Agents view, discovery, folding, editing (former 08–10) | Local |
+| 9   | `patches/mcphub.nvim/11-startup-guards_v2.patch`        | `mcphub.nvim` | `163b3ad` after `08` | 2026-09-29 | Startup context, non-blocking discovery, probe handoff, SSE generations (former 11–14) | Local |
+| 10  | `patches/mcphub.nvim/15-avante-lazy-startup_v1.patch`   | `mcphub.nvim` | `163b3ad` after `11` | 2026-09-26 | Keep optional Avante loading out of hub startup | Local |
+| 11  | `patches/mcphub.nvim/16-hub-build-info_v1.patch`        | `mcphub.nvim` | `163b3ad` after `15` | 2026-09-29 | Help → Hub Build reports running binary identity with stale-hub fallback | Local |
+| 12  | `patches/lazy-local-patcher.nvim/01-reversible-stack-restore_v1.patch` | `lazy-local-patcher.nvim` | `cb51ac5` | 2026-09-26 | Reverse ordered patch stacks safely, including patch-created files; report only successful applies | Local |
+| 13  | `patches/codecompanion-history.nvim/01-title-prompt-v1.patch` | `codecompanion-history.nvim` | `bc1b4fe` | 2026-07-19 | Configurable rules plus v19 context filtering for persisted chat titles | Local |
+| 14  | `patches/codecompanion.nvim/01-editor-context-refresh_v1.patch` | `codecompanion.nvim` | `eba3b42` | 2026-08-29 | Public invalidation for cached editor-context completion entries | Local |
+| 15  | `patches/LuaSnip/01-neovim-012-diagnostics_v1.patch` | `LuaSnip` | `642b0c5` | 2026-09-28 | Replace removed `vim.diagnostic.disable()` in the optional snippet-list view; works on Nvim 0.11 and 0.12 | Local |
+
+Nvim 0.12 removed `vim.diagnostic.disable()`. The LuaSnip snippet-list extra still calls it at `642b0c5` (and at upstream master checked 2026-09-28), so opening that view fails without this patch. The patch keeps the buffer-local intent via `vim.diagnostic.enable(false, { bufnr = buf })`. The main and `nvimwt3a` installed LuaSnip checkouts were patched and smoke-tested under Nvim 0.12; patch files exist in both config trees so the change survives Lazy sync. Remove the patch when upstream adopts the new API.
+
+### MCPHub patch 09/10 partial-restoration failure (2026-09-29)
+
+The subsequent consolidation combined 03 v1/v2 → `03-main-ui_v3`, 08–10 →
+`08-agent-settings_v2`, and 11–14 → `11-startup-guards_v2`. In a disposable
+checkout pinned to `163b3ad`, the combined patches recreated the previous
+final Lua tree byte-for-byte, then patch 16 added the Hub Build tab. The new
+11-patch stack applied and reversed cleanly. The installed main-profile plugin
+was brought to that exact final tree by applying only patch 16 on top of the
+already-equivalent old stack. This reduces intermediate churn, especially the
+agent-settings create/modify sequence, but it does **not** establish that
+Lazy's restore/apply lifecycle is fixed; repeat-cycle testing remains in the
+open recovery task.
+
+The main profile remained pinned to `mcphub.nvim` `163b3ad`, yet a Lazy patch cycle reported errors for `09-agent-settings-view_v1.patch` and `10-agent-settings-open-editor_v1.patch`. At 03:31, the untracked `lua/mcphub/ui/views/agent_settings.lua` still had its 03:09 creation timestamp while the tracked plugin files had been restored/reapplied. Patch 09 could not add the already-existing file; patch 10 then lacked patch 09's tracked-file changes. A disposable checkout at `163b3ad` accepted patches 01–15 in order and reversed them 15–01, so the patch files and pinned base were valid. Removing only the stale patch-created file and reapplying 09 then 10 restored the live checkout to a byte-for-byte match with the clean full stack. Headless MCPHub opened and switched to the Agents view.
+
+This is a partial restoration/leftover-untracked-file problem, not demonstrated upstream base drift. The original unpatched `lazy-local-patcher` restoration uses `git restore .`, which cannot remove untracked patch-created files; the local reversible-stack patch is intended to avoid that. It is not yet proven whether an unpatched module loaded during Lazy's own update, a nested event, or another lifecycle path caused this occurrence. Before another broad `:Lazy sync`, reproduce and fix the lifecycle in an isolated profile, then verify repeated restore/apply cycles and no residual untracked file. Do not remove a patch-created file unless its content has been compared with the expected patch stack and a backup exists.
 
 ### Known base drift: mcphub.nvim 01-compat_v1
 
@@ -65,8 +88,8 @@ Checked 2026-09-11: `01-compat_v1.patch` was generated against upstream `8ff40b5
 The live checkouts still work because patched files persist between Lazy syncs; the failure only bites on a fresh revert/re-apply (e.g. `:Lazy update mcphub.nvim`).
 Before any Lazy sync of `mcphub.nvim` in the main profile, rebase `01-compat_v1` (and re-verify `07`) onto the new base, or pin the plugin back to `8ff40b5`/`163b3ad`.
 The `nvimwt3a` worktree profile is still on `163b3ad`. A disposable
-checkout at that base proves the full `01`→`08` stack plus the revised
-`03-main-ui_v2` and AI-agent settings dashboard apply cleanly (verified 2026-09-15); sync its
+checkout at that base proves the full `01`→`11` stack, including the revised
+main UI and AI-agent settings dashboard (verified 2026-09-26); sync its
 user-owned configuration worktree separately when it is next rebased/updated.
 
 ### Patch 1: mcphub.nvim CodeCompanion v19 compatibility
@@ -110,10 +133,12 @@ comparison.
 immediately, disconnecting other Neovim or CLI clients on the same hub without
 explicit user intent.
 
-**Fix**: Add `confirm_hard_restart = true` and prompt before automatic startup
-mismatch hard restarts. Config/cache mismatch prompts default to connecting to
-the existing hub; version mismatch prompts default to cancel. Manual `R` is
-explicit user intent and does not prompt.
+**Fix**: Add `confirm_hard_restart = true`. Automatic startup discovery never
+opens a blocking prompt: it attaches only when safe, otherwise leaves the
+existing shared Hub untouched. An explicit `R` from an unready Hub enters the
+interactive path and asks before a hard restart when `confirm_hard_restart` is
+enabled (the default); disabling that setting skips only the explicit prompt.
+An already-ready Hub restarts directly as explicit intent.
 
 ### Patch 8: mcphub.nvim main-view keymap dispatch
 
@@ -213,7 +238,7 @@ Startup
       └── Registers autocmds for Lazy events
 
 :Lazy sync / :Lazy update
-  ├── LazySyncPre  → restore_all() — reverts all patches (git restore .)
+  ├── LazySyncPre  → restore_all() — reverse-applies known applied patches per repo
   ├── Lazy does git pull / checkout
   └── LazySync     → apply_all()  — re-applies all patches (git apply)
 
@@ -286,8 +311,8 @@ When the upstream fix is merged:
 
 - **First-time application**: After installing `lazy-local-patcher.nvim` for the first time, you need to run `:Lazy sync` or `:lua require("lazy-local-patcher").apply_all()` to apply patches. They don't auto-apply on startup — they persist from the previous sync.
 
-- **Errors after "Restored" + mixed "Applied" notifications**: `restore_all()` runs `git restore .` against the plugin checkout's current `HEAD`; it does not reset the repo to the commit in `lazy-lock.json`. If the plugin checkout is accidentally left on a local patch-baseline commit, earlier patches may already be part of `HEAD` and then fail when `apply_all()` reapplies them. Fix by stashing any current plugin changes, switching the plugin checkout back to the lockfile commit, cleaning it, then applying the patches once in sorted order.
+- **Patch-created files must be reversed, not merely restored**: `git restore .` only resets tracked files. It leaves a file created by a patch (for example `09-agent-settings-view_v1.patch`'s `agent_settings.lua`) untracked, so a later apply fails while trying to create it again. `01-reversible-stack-restore_v1.patch` unwinds the applied stack in descending order, handles missing dependent patches, removes generated files, and refuses to overwrite conflicting user edits. A failed restore blocks that Lazy cycle's reapply; `Applied` is emitted only after a successful `git apply`.
 
 ---
 
-**Last Updated**: 2026-03-21
+**Last Updated**: 2026-09-26

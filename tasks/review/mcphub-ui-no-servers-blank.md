@@ -3,7 +3,7 @@ title: "Investigate MCPHub UI stuck on Starting... or showing 'No servers found'
 status: review
 priority: medium
 created: 2026-01-13
-updated: 2026-09-11
+updated: 2026-09-26
 refs:
   - mcphub.nvim 6.2.0
   - mcp-hub fork at ~/projects/mcp-hub
@@ -13,7 +13,62 @@ related:
   - [mcphub.json](~/dotfiles/ai/mcp/mcphub.json)
   - [Grouped hub stability patch](patches/mcphub.nvim/02-hub-stability_v1.patch)
   - [Grouped main UI patch](patches/mcphub.nvim/03-main-ui_v1.patch)
+  - [Startup context patch](patches/mcphub.nvim/11-main-ui-startup-context_v1.patch)
+  - [Startup input guard patch](patches/mcphub.nvim/12-startup-no-input-steal_v1.patch)
+  - [Patcher stack-restore patch](patches/lazy-local-patcher.nvim/01-reversible-stack-restore_v1.patch)
 ---
+
+## Latest Resolution Evidence (2026-09-26)
+
+### Input-stealing follow-up
+
+The dashboard's `j` mapping itself does not close MCPHub. A focused floating-UI
+test and a `nvim3_jelly_tinynvim` profile replay (with Avante disabled because
+this Neovim version is below its minimum) both kept the window valid when `j`
+was sent while the Hub was `starting` and after it became `ready`.
+
+The remaining startup path capable of consuming that input was the blocking
+`vim.fn.confirm()` used for automatic config/cache/version mismatch handling.
+When an existing CLI-owned Hub is discovered, that dialog overlays the MCPHub
+float and can receive the next navigation key. `12-startup-no-input-steal_v1.patch`
+makes automatic discovery non-blocking: it attaches only when safe and otherwise
+leaves the Hub untouched. `R` is retained as the explicit restart path and
+prompts under the default configuration.
+
+Manual GUI verification is still required: open `:MCPHub` against a shared Hub,
+wait through startup, then press `j` without seeing a restart dialog. On an
+unsafe mismatch, the UI should remain open with a warning; use `R` only when a
+hard-restart decision is intended.
+
+The repeated cold-open symptom is a workspace handoff race, not a backend that
+is still starting: the matching workspace hub on port `47474` was already
+`ready` with 55 server records. `UI:show()` reconciled the workspace and queued
+`hub:start()`, but immediately started its health request against the same Hub
+object's previous port. If that response arrived first, the UI could settle on
+an empty snapshot and never probe the selected workspace hub again.
+
+`11-main-ui-startup-context_v1.patch` queues the first probe after the handoff,
+ties every response to the resolved port, and applies a matching health state
+to `State` so a lost SSE `READY` event cannot leave the server panel at
+`Waiting for server status...`. A headless focused test proves that a stale-port
+response is discarded, the new-port request follows, and only that response
+updates the server rows and state.
+
+The related `09`/`10` patch errors have a separate cause: the old patcher used
+`git restore .`, which retains the untracked file created by `09`. The next
+apply then cannot recreate it, and `10` fails because its prerequisite did not
+apply. `01-reversible-stack-restore_v1.patch` reverses the ordered stack
+instead, including patch-created files, and only emits `Applied` after an
+actual successful apply. A clean `163b3ad` checkout passed `01` through `11`,
+including a partial `01` through `09` restore/reapply that mirrors the failed
+`10` case.
+
+The active `nvim3_jelly_tinynvim` MCPHub checkout then completed the same
+restore/reapply through `11` without a patch error. It now has the expected
+patch-managed working tree, including the generated Agent Settings view.
+
+Manual cold-open verification remains required before this review task can be
+moved by the user.
 
 ## Resolution Evidence (2026-09-11 grooming)
 
@@ -192,6 +247,9 @@ lsof -i :37373
 ### Checklist
 
 - [ ] `:MCPHub` opens and Global section lists servers within 5 seconds
+- [ ] On a fresh open in this config root, wait 5 seconds without pressing a key: the server list replaces `Waiting for server status...` on its own.
+- [ ] With a compatible CLI-owned Hub, `:MCPHub` does not open a restart dialog and `j` remains dashboard navigation during startup.
+- [ ] With an unsafe version mismatch, MCPHub remains visible with a non-blocking warning; `R` presents the explicit restart choice when confirmation is enabled.
 - [ ] Server rows show status (connected/disconnected) with tool counts
 - [ ] Logs tab shows at most 1-2 `pi-mcph-bridge` connect events (not 15+)
 - [ ] No "Starting..." message persists after 10 seconds

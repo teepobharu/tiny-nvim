@@ -1,96 +1,90 @@
 # mcphub.nvim patches
 
-Patch files are applied in order by `lazy-local-patcher`. Eleven grouped patch files cover all local changes against the pinned plugin checkout (`163b3ad`).
+Patch files are applied in filename order by `lazy-local-patcher` against the pinned plugin checkout (`163b3ad`). The 2026-09-29 consolidation folded related follow-ups into 03, 08, and 11. Eleven patches now produce the same Lua tree as the former 01–15 stack, plus the new Hub Build feature in 16.
 
 **Application order** (required):
 ```bash
 git apply --ignore-space-change 01-compat_v1.patch
 git apply --ignore-space-change 02-hub-stability_v1.patch
-git apply --ignore-space-change 03-main-ui_v1.patch
-git apply --ignore-space-change 03-main-ui_v2.patch
+git apply --ignore-space-change 03-main-ui_v3.patch
 git apply --ignore-space-change 04-clear-auth_v1.patch
 git apply --ignore-space-change 05-stdio-auth-command_v1.patch
 git apply --ignore-space-change 06-instruction-files_v1.patch
 git apply --ignore-space-change 07-codecompanion-resource-refresh_v1.patch
-git apply --ignore-space-change 08-ai-agent-settings_v1.patch
-git apply --ignore-space-change 09-agent-settings-view_v1.patch
-git apply --ignore-space-change 10-agent-settings-open-editor_v1.patch
+git apply --ignore-space-change 08-agent-settings_v2.patch
+git apply --ignore-space-change 11-startup-guards_v2.patch
+git apply --ignore-space-change 15-avante-lazy-startup_v1.patch
+git apply --ignore-space-change 16-hub-build-info_v1.patch
 ```
 
-`02` must precede `03` — env-tool-filters (in `02`) adds hub.lua and main.lua context that `03` depends on.
-`03-main-ui_v2` must follow `03-main-ui_v1` — it replaces the startup-only
-logs branch in `main.lua` and extends `ui/init.lua` with pre-ready status
-snapshots.
+`02` adds hub/main context required by `03`; `04` and `05` use the final `03` key dispatch. `08` uses the final main-view folding behavior, `11` follows the completed Agents view, and `15` keeps optional Avante loading out of startup. `16` adds the Help → Hub Build tab and requires a hub with `/api/build-info` for full details; older hubs show an in-tab fallback. The fork now has clear-auth and stdio-auth committed, so external server patches 03/04 are historical, not prerequisites to reapply to its current tip.
 
-`02` must precede `03` — env-tool-filters (in `02`) adds hub.lua and main.lua context that `03` depends on.
-`04` depends on `03` for the keymap dispatch infrastructure in main.lua.
-`05` depends on `03` and requires mcp-hub fork patch `external-patches/mcp-hub/04-stdio-auth-command.patch`.
-`06` is a Neovim-only prompt/config patch and must remain after `05` in the sorted local patch stack.
-`07` is applied after `06` and requires the paired CodeCompanion completion-cache patch.
-`08` is the read-only dashboard foundation and must remain after `07`; it relies on the final main-view key dispatch and section-folding behavior.
-`09` moves that dashboard into its own UI view and must remain after `08`.
-`10` extends the dedicated view's file navigation and popup editor, and must remain after `09`.
-
-To add a new patch on top, apply all groups first, make changes, then `git diff HEAD -- <files>`. Save as a new `_v2` file rather than overwriting `_v1`.
+To change an existing group, reproduce the stack in a disposable checkout, generate a new grouped patch, and verify both forward and reverse application. Never flatten the entire stack into one patch: the groups retain independent feature/rollback boundaries.
 
 ---
 
-## 10-agent-settings-open-editor_v1.patch
+## 08-agent-settings_v2.patch
 
-Follow-up to `09-agent-settings-view_v1.patch` for a faster handoff from the
-Agents view into normal Neovim editing.
-
-- `l` on a concrete root, setup/config file, or `SKILL.md` closes MCPHub and
-  opens that directory or file in a normal Neovim buffer. On section headers,
-  `l` continues to unfold the selected section.
-- The centered file popup keeps `e` as its entry point. Its footer and normal-mode
-  hint advertise `I: Save + open`; `I` validates and saves the current popup
-  content, then closes MCPHub and opens the saved file in a normal buffer.
-- `trim_content = false` continues to preserve file whitespace. Other generic
-  multiline popups retain their existing submit/trim behavior and do not claim
-  the normal-mode `I` mapping.
-
-**Files**: `lua/mcphub/ui/views/agent_settings.lua`, `lua/mcphub/utils/ui.lua`
-
----
-
-## 09-agent-settings-view_v1.patch
-
-Moves the AI-agent setup dashboard out of the main MCPHub view and into a
-dedicated **Agents** view, selected with `Z` from any MCPHub view.
-
-- Defaults to **User** scope. `gS` cycles **User → Local → Full**; Full keeps
-  User and Local/workspace configuration under separate top-level groups.
-- Supports ordinary fold controls on every visible level: `h` / `l`, `za`,
-  `zc`, `zo`, `zM`, `zR`, plus `T` and `J` / `K`. `h` on a concrete root,
-  file, or skill row collapses its nearest open parent, matching MCP-server
-  tool-list behavior while normal `j` remains down-navigation.
-- `y` copies the selected root, setup/config file, or `SKILL.md` absolute path
-  to the system clipboard.
-- `e` opens an editable centered popup for files without dismissing MCPHub.
-  The popup preserves whitespace for generic config/instruction files. On a
-  directory, `e` instead opens Neovim's directory buffer after closing the
-  MCPHub float, so root rows remain actionable.
-- Adds `trim_content = false` to the generic multiline-input helper for this
-  file-editor use case; existing callers retain trim-by-default behavior.
+Combines the former 08–10 Agent settings sequence into one final-state patch.
+`Z` opens the dedicated Agents view; `gS` cycles User, Local, and Full scope.
+Agent roots, setup/config files, and skills appear in foldable groups with
+`h`/`l` and `z` folds. `y` copies paths, `e` opens the in-place file editor,
+`I` saves and opens the edited file, and `l` opens a concrete path in Neovim.
+Discovery uses configured local paths only, not agent CLI calls. Folding and
+editing no longer pass through the obsolete intermediate main-view dashboard.
 
 **Files**: `lua/mcphub/config.lua`, `lua/mcphub/ui/init.lua`,
 `lua/mcphub/ui/views/agent_settings.lua`, `lua/mcphub/ui/views/main.lua`,
 `lua/mcphub/utils/text.lua`, `lua/mcphub/utils/ui.lua`
 
-## 08-ai-agent-settings_v1.patch
+---
 
-Read-only AI-agent setup dashboard foundation. `09-agent-settings-view_v1.patch`
-moves its final presentation into the dedicated Agents view.
+## 11-startup-guards_v2.patch
 
-- Adds the discovery configuration and initial section-rendering support used by the
-  later dedicated view.
-- Prior to `09`, `gS` cycles the panel between **Full**, **User**, and **Local**
-  configured roots; `R` rescans only when the cursor is inside this panel.
-- Every configured agent has a foldable section with nested **Setup roots**, **Settings**, and **Skills** groups. Existing `h`/`l`, `T`, and `J`/`K` behavior applies to those headers.
-- File and `SKILL.md` rows initially use `e` to hide MCPHub and open that file;
-  `09` replaces this with the in-place popup editor.
-- Discovery is delegated to `lua/utils/mcphub_agent_settings.lua`, which inspects only configured local paths and does not invoke agent CLIs.
+Combines the former 11–14 startup race fixes. The first health probe follows
+the resolved workspace port, retries through hub setup, and transfers an
+in-flight probe to a newer generation. Automatic mismatch discovery stays
+non-interactive; only explicit `R` can request a restart confirmation.
+Initial context resolution does not launch a second hub start. SSE jobs and
+recovery callbacks are generation-fenced so an old context cannot reset a
+newer connection.
+
+**Files**: `lua/mcphub/config.lua`, `lua/mcphub/hub.lua`, `lua/mcphub/ui/init.lua`
+
+---
+
+## 15-avante-lazy-startup_v1.patch
+
+MCPHub previously loaded Avante synchronously while setting up slash commands.
+An Avante build requiring a newer Neovim can block in `vim.fn.getchar()`, leaving
+the first Hub window at `Starting...` until a key is consumed and its `quit`
+closes the float.
+
+- Subscribe to MCP server and prompt updates without loading Avante.
+- Register slash commands immediately if Avante is already loaded, or after
+  lazy.nvim reports that Avante has loaded.
+- Keep the Hub connection path independent of the optional integration.
+
+**Files**: `lua/mcphub/extensions/avante/init.lua`,
+`lua/mcphub/extensions/avante/slash_commands.lua`
+
+---
+
+## 16-hub-build-info_v1.patch
+
+Help has a **Hub Build** sub-tab beside the plugin **Changelog**. It fetches
+`/api/build-info` once per attached hub/port/PID, caches the result in
+`mcphub.state`, and shares it with the Home status row. Home shows the running
+version, commit/date, and binary path. Hub Build shows the release tag commit
+date and each listed commit's date, plus capabilities, patch manifest, and
+runtime paths. `X` on Hub Build confirms and sends a deliberate stop request;
+the client suppresses automatic reconnect until an explicit `R` restart. The
+main dashboard's server-row `X` still clears OAuth credentials. A 404 from an
+older hub is shown without a global error; the plugin changelog stays separate.
+
+**Files**: `lua/mcphub/hub.lua`, `lua/mcphub/state.lua`,
+`lua/mcphub/ui/build_info.lua`, `lua/mcphub/ui/views/help.lua`,
+`lua/mcphub/ui/views/main.lua`
 
 ---
 
@@ -107,7 +101,7 @@ Upstream compatibility fixes. No shared files with other groups; safe to apply i
 
 ## 02-hub-stability_v1.patch
 
-Hub lifecycle hardening. Contains env-tool-filters which is the root dependency for `03-main-ui_v1`.
+Hub lifecycle hardening. Contains env-tool-filters which is the root dependency for `03-main-ui_v3`.
 
 - **Env-driven tool filters** — adds `*_ALLOWED_TOOLS_REGEX` / `*_DENIED_TOOLS_REGEX` env var support per server config. Adds strict hide via `removed_tools` blocking tool execution. Adds UI action key `x` for strict-hide toggling on tool rows.
 - **Log dedup/throttle** — deduplicates repeated server log entries; throttles UI notification updates to avoid freezes during disconnect/reconnect bursts.
@@ -119,7 +113,7 @@ Hub lifecycle hardening. Contains env-tool-filters which is the root dependency 
 
 ---
 
-## 03-main-ui_v1.patch
+## 03-main-ui_v3.patch
 
 Main-view UI work. Depends on `02-hub-stability_v1` for hub.lua and main.lua context.
 
@@ -138,9 +132,9 @@ Main-view UI work. Depends on `02-hub-stability_v1` for hub.lua and main.lua con
 
 ---
 
-## 03-main-ui_v2.patch
+### Included startup dashboard changes (formerly `03-main-ui_v2`)
 
-Follow-up to `03-main-ui_v1`. Applies after `03-main-ui_v1` and before `04-clear-auth_v1`.
+These changes are folded into `03-main-ui_v3.patch`; there is no separate follow-up patch.
 
 - **Stable startup dashboard** — from `setup_state = in_progress` onward, the
   main view renders the server, Endpoints, CLI Agents, and workspace sections.
@@ -148,14 +142,25 @@ Follow-up to `03-main-ui_v1`. Applies after `03-main-ui_v1` and before `04-clear
   server/tool count while the connection settles. Live logs belong only to `L`,
   so startup no longer swaps the dashboard for a variable-length log buffer.
   Logs and server-output notifications redraw only the Logs view.
-- **Early server snapshots** — when the UI opens before the hub is ready, it
-  immediately calls `GET /api/health`, then performs up to 30 non-overlapping
-  retries at 500 ms while the UI remains visible. The main view redraws only
-  when the returned server/workspace snapshot changes. This exposes a completed
-  connection and its tool count as soon as the backend has created its
-  connection object, without waiting for every configured server or the global
-  `READY` event. Use `l` to expand that row for tool names. A generation guard
-  stops stale retries after close or context switch.
+- **Early server snapshots** — when the UI opens before the hub exists or is
+  ready, it retries `GET /api/health` up to 30 times at 500 ms while the UI
+  remains visible. The retry survives the asynchronous `State.hub_instance`
+  handoff and makes one health read around `READY`, whose event can precede the
+  hub's regular server update. A changed read, or the first successful read in
+  a probe generation, schedules an in-place redraw; that covers an unchanged
+  snapshot after a missed notification without redrawing every 500 ms retry.
+  This exposes a completed connection and its tool count as soon as the backend
+  has created its connection object, without waiting for every configured server
+  or the global `READY` event. Use `l` to expand that row for tool names. A
+  generation guard stops stale retries after close or context switch.
+- **In-place state redraws** — a burst of server/setup notifications queues one
+  redraw for the current event-loop turn. Once the UI is visible, that redraw
+  calls the already-active view directly instead of re-entering/leaving the
+  same view, so it does not recreate mappings or cursor handlers. The main view
+  anchors selectable server, section, endpoint, workspace, instructions, and
+  agent rows by semantic identity; if a row moves when a new status arrives,
+  the cursor follows it. If the row disappeared, the existing numeric fallback
+  remains in effect.
 - **Boundary** — this is an observability/UI improvement only: it does not
   change backend readiness, force a capability refresh, or make a connecting
   server executable before its MCP initialization completes.
@@ -168,10 +173,9 @@ Follow-up to `03-main-ui_v1`. Applies after `03-main-ui_v1` and before `04-clear
 
 ## 04-clear-auth_v1.patch
 
-Depends on `03-main-ui_v1` for keymap dispatch infrastructure. Requires mcp-hub fork
-`external-patches/mcp-hub/03-clear-auth-endpoint.patch` applied and rebuilt for the
-API path to work. Falls back to file-edit via `utils.mcphub_auth` when the endpoint
-is absent (bundled mcp-hub without the fork patch).
+Depends on `03-main-ui_v3` for keymap dispatch infrastructure. Requires a
+hub binary with `/servers/clear-auth`; the current fork has this committed.
+Falls back to file-edit via `utils.mcphub_auth` when the endpoint is absent.
 
 - **`lua/mcphub/hub.lua`** — `MCPHub:clear_server_auth(name, cb)`: calls `POST /servers/clear-auth`; notifies on success; passes `(false, err)` to callback for fallback handling.
 - **`lua/mcphub/ui/views/main.lua`** — `MainView:handle_clear_auth(context)`: API path → on error falls back to `utils.mcphub_auth.clear_notify` by URL; `X` keymap on server rows dispatches here.
@@ -179,7 +183,8 @@ is absent (bundled mcp-hub without the fork patch).
 
 Also: `lua/utils/mcphub_auth.lua` (project-local helper) updated to try API path before file-edit.
 
-**Server build dependency**: requires mcp-hub fork with `external-patches/mcp-hub/03-clear-auth-endpoint.patch` applied and rebuilt. Without it, `X` falls back to the file-edit path which still needs manual `R` to flush in-memory state.
+**Server build dependency**: requires a hub with clear-auth support. Without it,
+`X` falls back to the file-edit path, which still needs manual `R` to flush in-memory state.
 
 **Files**: `lua/mcphub/hub.lua`, `lua/mcphub/ui/views/main.lua`, `lua/mcphub/utils/renderer.lua`
 
@@ -187,15 +192,17 @@ Also: `lua/utils/mcphub_auth.lua` (project-local helper) updated to try API path
 
 ## 05-stdio-auth-command_v1.patch
 
-Depends on `03-main-ui_v1` for the server-row action flow. Requires mcp-hub fork
-`external-patches/mcp-hub/04-stdio-auth-command.patch` so `/servers/authorize`
-can launch a configured stdio `authCommand`.
+Depends on `03-main-ui_v3` for the server-row action flow. The current fork
+has stdio `authCommand` support committed; older binaries need that capability
+for `/servers/authorize` to launch the configured command.
 
 - **`lua/mcphub/ui/views/main.lua`** — `l` on an unauthorized server row now accepts either an HTTP `authorizationUrl` or a stdio `authCommand`; only HTTP auth opens the callback popup.
 - **`lua/mcphub/hub.lua`** — `authorize_mcp_server` reports command-based auth launches instead of warning that no URL exists.
 - **`lua/mcphub/types.lua`** — documents optional `authCommand` server metadata.
 
-**Server build dependency**: requires mcp-hub fork patch `04-stdio-auth-command.patch` applied and rebuilt. Without it, the UI can call `/servers/authorize`, but stdio auth-required rows will not expose or launch an auth command.
+**Server build dependency**: requires a hub with stdio-auth-command support.
+Without it, the UI can call `/servers/authorize`, but stdio auth-required rows
+will not expose or launch an auth command.
 
 **Files**: `lua/mcphub/hub.lua`, `lua/mcphub/types.lua`, `lua/mcphub/ui/views/main.lua`
 
@@ -257,13 +264,13 @@ chat-local entries, and invalidates CodeCompanion completion through the paired
 
 ## Validation note
 
-- Current repair confirms a fresh sequential apply of `01 -> 02 -> 03 -> 03-v2 -> 04 -> 05 -> 06 -> 07 -> 08 -> 09 -> 10` from clean `163b3ad` passes. `01` must retain the `init.lua` `strategies` to `interactions` conversion; without it the CodeCompanion v19 extension fails during startup.
+- A disposable checkout at `163b3ad` applied the consolidated 01–16 stack in filename order, matched the expected final Lua tree, and reversed to clean. `git diff --check` and Lua parsing passed. This validates patch content and order, not a future Lazy lifecycle run. `01` must retain the `init.lua` `strategies` to `interactions` conversion; without it the CodeCompanion v19 extension fails during startup.
 - `git apply --check` with multiple patch files can be misleading here; validate by applying each patch one at a time in a temporary worktree.
 - If `lazy-local-patcher` shows both `Applied ...` and `Error applying ...`, inspect the plugin checkout first. `restore_all()` restores files to the checkout's current `HEAD`; if `HEAD` is a leftover local patch-baseline commit instead of the lockfile commit, early patches may already be in `HEAD` and fail when reapplied.
 
 ## User notes
 
-Current follow-up requirements for the `03-main-ui_v1.patch` review are tracked in
+Historical follow-up requirements for the former `03-main-ui_v1.patch` review are tracked in
 [reconcile-mcphub-03-main-ui-patch](../../tasks/open/reconcile-mcphub-03-main-ui-patch.md).
 
 Historical notes from the earlier larger main-UI patch:

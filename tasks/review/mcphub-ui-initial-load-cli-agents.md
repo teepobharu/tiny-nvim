@@ -3,7 +3,7 @@ title: "Keep MCPHub startup dashboard stable and expose early server status"
 status: review
 priority: medium
 created: 2026-09-11
-updated: 2026-09-13
+updated: 2026-09-26
 refs:
   - mcphub.nvim lazy checkout `7cd5db3` (main profile), `163b3ad` (nvimwt3a profile)
 related:
@@ -32,6 +32,12 @@ of truth is reachable from the UI.
 `should_show_logs()` branch, so every non-`READY` state replaced the dashboard
 with header + log entries + hub errors + active workspaces. It also let each
 startup log redraw the main view.
+
+Changed server snapshots still took the generic `UI:render()` path, which used
+`switch_view(current_view)`. That treated a state refresh as a view transition:
+it ran the current view's leave/enter hooks, rebuilt mappings and cursor
+handlers, and restored only a physical line number after a new server row
+shifted the layout.
 
 The backend HTTP server exposes `GET /api/health` while it is still starting.
 `startConfiguredServers()` inserts every `MCPConnection` into its connection
@@ -63,12 +69,23 @@ catalog file - not the base config - is the correct source to expose.
       exists; setup failure and the not-started welcome screen remain distinct.
 - [x] Restrict log and server-output notifications to the `L` view, preventing
       streaming logs from redrawing the startup dashboard.
-- [x] On UI open while the hub is not ready, call `GET /api/health`
-      immediately and then at most 30 times at 500 ms, one request at a time.
-      Update state only for changed server/workspace snapshots; a generation
-      guard cancels stale retries after close/context change.
-- [x] Confirm the main-profile MCPHub checkout already matches the revised
-      source; its two changed Lua files parse and pass the focused smoke test.
+- [x] On UI open, call `GET /api/health` immediately and then at most 30 times
+      at 500 ms, one request at a time. Retry through the asynchronous
+      `State.hub_instance` handoff and perform one read around `READY`, whose
+      event can precede its regular server update. A changed read, or the first
+      successful read per probe generation, schedules an in-place redraw even
+      when state already matches; a generation guard cancels stale retries
+      after close/context change.
+- [x] Coalesce a burst of changed state into one scheduled in-place redraw.
+      Once shown, `UI:render()` draws the active view directly instead of
+      re-entering it through `switch_view(current_view)`, so a refresh cannot
+      run leave/enter hooks or recreate its mappings.
+- [x] Preserve the selected main-view row by semantic identity across redraws:
+      server, section, endpoint, workspace, instructions, and agent rows keep
+      their cursor position after a snapshot inserts or reorders lines; a
+      vanished row retains the existing numeric fallback.
+- [x] Validate the revised patch in a clean `163b3ad` stack; no active profile
+      cache or user-owned dirty state was modified.
 - [ ] Sync the revised patch into the user-owned `nvimwt3a` configuration
       worktree when it is next rebased/updated, preserving its separate local
       state.
@@ -88,8 +105,13 @@ catalog file - not the base config - is the correct source to expose.
 - A fast server's connected row and tool count can appear from a health snapshot
   while another configured server is still connecting and the hub has not
   emitted `READY`; `l` expands the row to its tool names.
-- Unchanged health snapshots and log entries do not redraw or move the main
-  dashboard.
+- Log entries do not redraw or move the main dashboard. A changed startup health
+  response, or the first successful response in a probe generation, redraws it
+  in place even when unchanged, so a missed state notification cannot leave the
+  waiting placeholder indefinitely or cause 500 ms redraw churn.
+- Changed server/setup snapshots redraw once in place: they do not run the
+  active view's leave/enter lifecycle, and a selected server/section/endpoint
+  stays selected when its physical line moves.
 - Agent binding rows remain actionable during startup (`t`/`d`/`e`/`R`/alternate
   config keys still dispatch on `agent_binding` lines).
 - The normal `READY` view is unchanged.
@@ -124,11 +146,18 @@ NVIM_APPNAME=nvim3_jelly_tinynvim nvim
       entries; `L` shows those same entries. A `Starting...` state row explains
       pending work while the server, Endpoints, and CLI Agents sections remain
       in one stable layout.
+- [ ] Open `:MCPHub` before the hub instance has been created and do not press
+      any key. When the hub starts, the waiting placeholder automatically
+      changes to server rows; it does not require closing/reopening the UI.
 - [ ] With one intentionally slow server, a faster server's connected row/tool
       count appears before global `READY`; the slow row remains independently
       connecting/failed/unauthorized as reported by the backend.
 - [ ] After the hub becomes ready, the same dashboard sections remain without
       duplication or a layout swap.
+- [ ] Keep the cursor on a server, section, endpoint, or agent row while a
+      startup snapshot adds or reorders rows. The same semantic item remains
+      selected, its normal mappings still work, and the MCPHub window stays
+      open rather than briefly blanking or closing.
 - [ ] CLI Agents rows still respond to `t` (toggle), `e` (config), `R`
       (refresh) during the startup window.
 - [ ] On the codex row, pressing `2` opens
@@ -149,6 +178,29 @@ NVIM_APPNAME=nvim3_jelly_tinynvim nvim
 - No live external hub or agent CLI listing was used. The main-profile source
   matches the revision, while the interactive checklist remains user-owned
   verification.
+
+### Addendum verified by agent (2026-09-26)
+
+- Fresh sequential patch apply from clean `163b3ad`: `01 -> 02 -> 03_v1 ->
+  03_v2 -> 04 -> 05 -> 06 -> 07 -> 08 -> 09 -> 10` passed, followed by
+  `git diff --check` and Lua parsing of the changed UI views.
+- Focused isolated headless redraw smoke: a selected server anchor moved from
+  its old physical line to its new one; a shown UI rendered exactly once
+  without leave/enter hooks; two same-turn state notifications produced one
+  redraw. Result: PASS.
+- No live MCP hub, external agent CLI, or active Neovim profile cache was
+  modified. The interactive checklist remains user-owned verification.
+
+### Startup handoff follow-up verified by agent (2026-09-26)
+
+- Focused isolated headless smoke covered an initial missing hub instance, the
+  deferred retry after creation, a health read while the hub already reports
+  ready, and an unchanged successful response. It verified that the response
+  updates state when needed and schedules one in-place redraw per unchanged
+  probe generation rather than on every retry. Result:
+  PASS.
+- The active Neovim profile cache was not changed; a real cold-start run remains
+  user-owned verification.
 
 ## References
 

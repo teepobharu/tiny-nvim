@@ -1,7 +1,7 @@
-diff --git i/lua/mcphub/config.lua w/lua/mcphub/config.lua
+diff --git a/lua/mcphub/config.lua b/lua/mcphub/config.lua
 index 8f99710..60701d4 100644
---- i/lua/mcphub/config.lua
-+++ w/lua/mcphub/config.lua
+--- a/lua/mcphub/config.lua
++++ b/lua/mcphub/config.lua
 @@ -77,6 +77,42 @@ local defaults = {
      },
      ---@type MCPHub.UIConfig
@@ -45,10 +45,10 @@ index 8f99710..60701d4 100644
          window = {},
          wo = {},
      },
-diff --git i/lua/mcphub/hub.lua w/lua/mcphub/hub.lua
+diff --git a/lua/mcphub/hub.lua b/lua/mcphub/hub.lua
 index 6949488..7881112 100644
---- i/lua/mcphub/hub.lua
-+++ w/lua/mcphub/hub.lua
+--- a/lua/mcphub/hub.lua
++++ b/lua/mcphub/hub.lua
 @@ -1429,7 +1429,15 @@ function MCPHub:connect_sse()
          on_exit = vim.schedule_wrap(function(_, code)
              log.debug("SSE JOB exited with " .. tostring(code))
@@ -100,10 +100,10 @@ index 6949488..7881112 100644
  --- Stop SSE connection
  function MCPHub:stop_sse()
      if self.sse_job then
-diff --git i/lua/mcphub/ui/capabilities/base.lua w/lua/mcphub/ui/capabilities/base.lua
+diff --git a/lua/mcphub/ui/capabilities/base.lua b/lua/mcphub/ui/capabilities/base.lua
 index 4d4c90d..1ee6857 100644
---- i/lua/mcphub/ui/capabilities/base.lua
-+++ w/lua/mcphub/ui/capabilities/base.lua
+--- a/lua/mcphub/ui/capabilities/base.lua
++++ b/lua/mcphub/ui/capabilities/base.lua
 @@ -71,12 +71,17 @@ function CapabilityHandler:handle_cursor_move(view, line)
  
      if type == "submit" and not self.state.is_executing then
@@ -207,10 +207,10 @@ index 4d4c90d..1ee6857 100644
  -- Error handling
  function CapabilityHandler:handle_response(response, err)
      self.state.is_executing = false
-diff --git i/lua/mcphub/ui/capabilities/prompt.lua w/lua/mcphub/ui/capabilities/prompt.lua
+diff --git a/lua/mcphub/ui/capabilities/prompt.lua b/lua/mcphub/ui/capabilities/prompt.lua
 index 269c3a7..83c24bc 100644
---- i/lua/mcphub/ui/capabilities/prompt.lua
-+++ w/lua/mcphub/ui/capabilities/prompt.lua
+--- a/lua/mcphub/ui/capabilities/prompt.lua
++++ b/lua/mcphub/ui/capabilities/prompt.lua
 @@ -172,6 +172,25 @@ function PromptHandler:execute()
      end
  end
@@ -246,10 +246,10 @@ index 269c3a7..83c24bc 100644
          end
      end
  
-diff --git i/lua/mcphub/ui/capabilities/resource.lua w/lua/mcphub/ui/capabilities/resource.lua
+diff --git a/lua/mcphub/ui/capabilities/resource.lua b/lua/mcphub/ui/capabilities/resource.lua
 index 5870253..d9aa2d9 100644
---- i/lua/mcphub/ui/capabilities/resource.lua
-+++ w/lua/mcphub/ui/capabilities/resource.lua
+--- a/lua/mcphub/ui/capabilities/resource.lua
++++ b/lua/mcphub/ui/capabilities/resource.lua
 @@ -107,7 +107,7 @@ function ResourceHandler:render(line_offset)
      vim.list_extend(lines, self:render_section_end())
  
@@ -259,10 +259,10 @@ index 5870253..d9aa2d9 100644
  
      return lines
  end
-diff --git i/lua/mcphub/ui/capabilities/resourceTemplate.lua w/lua/mcphub/ui/capabilities/resourceTemplate.lua
+diff --git a/lua/mcphub/ui/capabilities/resourceTemplate.lua b/lua/mcphub/ui/capabilities/resourceTemplate.lua
 index 070da3b..8d0b6aa 100644
---- i/lua/mcphub/ui/capabilities/resourceTemplate.lua
-+++ w/lua/mcphub/ui/capabilities/resourceTemplate.lua
+--- a/lua/mcphub/ui/capabilities/resourceTemplate.lua
++++ b/lua/mcphub/ui/capabilities/resourceTemplate.lua
 @@ -52,6 +52,14 @@ function ResourceTemplateHandler:execute()
      end
  end
@@ -287,10 +287,10 @@ index 070da3b..8d0b6aa 100644
  
      return lines
  end
-diff --git i/lua/mcphub/ui/capabilities/tool.lua w/lua/mcphub/ui/capabilities/tool.lua
+diff --git a/lua/mcphub/ui/capabilities/tool.lua b/lua/mcphub/ui/capabilities/tool.lua
 index 7ac63d5..51a2479 100644
---- i/lua/mcphub/ui/capabilities/tool.lua
-+++ w/lua/mcphub/ui/capabilities/tool.lua
+--- a/lua/mcphub/ui/capabilities/tool.lua
++++ b/lua/mcphub/ui/capabilities/tool.lua
 @@ -149,11 +149,9 @@ function ToolHandler:handle_param_update(param_name, input)
      else
          -- Only validate non-empty input
@@ -346,11 +346,84 @@ index 7ac63d5..51a2479 100644
  
      return lines
  end
-diff --git i/lua/mcphub/ui/init.lua w/lua/mcphub/ui/init.lua
-index 4865f2d..8dee5a3 100644
---- i/lua/mcphub/ui/init.lua
-+++ w/lua/mcphub/ui/init.lua
-@@ -385,6 +385,11 @@ function UI:cleanup()
+diff --git a/lua/mcphub/ui/init.lua b/lua/mcphub/ui/init.lua
+index 4865f2d..2c129ff 100644
+--- a/lua/mcphub/ui/init.lua
++++ b/lua/mcphub/ui/init.lua
+@@ -14,6 +14,10 @@ local utils = require("mcphub.utils")
+ ---@field is_shown boolean Whether the UI is currently visible
+ ---@field cursor_states table Store cursor positions by view name
+ ---@field context table Context from which the UI was opened
++---@field startup_status_generation integer Cancels stale pre-ready health probes
++---@field startup_status_fetching boolean Ensures only one health probe runs at a time
++---@field startup_status_rendered_generation integer Limits unchanged snapshot redraws per probe
++---@field render_scheduled boolean Coalesces state refreshes in the current event loop
+ ---@field opts MCPHub.UIConfig Configuration options for UI
+ local UI = {}
+ UI.__index = UI
+@@ -75,6 +79,10 @@ function UI:new(opts)
+         is_shown = false, -- Whether the UI is currently visible
+         cursor_states = {}, -- Store cursor positions by view name
+         context = {}, -- Context from which the UI was opened
++        startup_status_generation = 0, -- Cancels stale pre-ready health probes
++        startup_status_fetching = false, -- Ensures only one health probe runs at a time
++        startup_status_rendered_generation = 0, -- Limits unchanged snapshot redraws per probe
++        render_scheduled = false, -- Coalesce bursts of server/setup state changes
+     }
+     setmetatable(instance, self)
+ 
+@@ -85,7 +93,7 @@ function UI:new(opts)
+ 
+     -- Subscribe to state changes
+     State:subscribe(function(_, changes)
+-        if instance.window and vim.api.nvim_win_is_valid(instance.window) then
++        if instance.is_shown and instance.window and vim.api.nvim_win_is_valid(instance.window) then
+             -- Check if we need to update
+             local should_update = false
+             local keys = {
+@@ -99,13 +107,10 @@ function UI:new(opts)
+             }
+             for k, _ in pairs(changes) do
+                 if vim.tbl_contains(keys, k) then
+-                    --if connected then only update the logs view for logs updates
+-                    if k == "logs" and State:is_connected() then
+-                        if instance.current_view == "logs" then
+-                            should_update = true
+-                        else
+-                            should_update = false
+-                        end
++                    -- Logs have their own view. Keeping them out of the main view
++                    -- avoids startup redraws and cursor movement while servers connect.
++                    if k == "logs" or k == "server_output" then
++                        should_update = instance.current_view == "logs"
+                     else
+                         should_update = true
+                     end
+@@ -113,7 +118,13 @@ function UI:new(opts)
+                 end
+             end
+             if should_update then
+-                instance:render()
++                -- `setup_state = completed` is emitted immediately after the hub
++                -- instance is created, before its first READY/server update. Start
++                -- (or restart) the bounded health probe from that handoff point.
++                if changes.setup_state then
++                    instance:request_startup_server_snapshot()
++                end
++                instance:schedule_render()
+             end
+         end
+     end, { "ui", "server", "logs", "setup", "errors", "marketplace" })
+@@ -381,10 +392,20 @@ end
+ 
+ --- Clean up resources
+ function UI:cleanup()
++    -- Let in-flight/scheduled startup probes expire without updating a closed UI.
++    self.startup_status_generation = (self.startup_status_generation or 0) + 1
++    self.startup_status_fetching = false
++    self.render_scheduled = false
++    self.is_shown = false
+     if not (self.window and vim.api.nvim_win_is_valid(self.window)) then
          return
      end
  
@@ -362,10 +435,158 @@ index 4865f2d..8dee5a3 100644
      -- Clean up buffer if it exists
      if self.buffer and vim.api.nvim_buf_is_valid(self.buffer) then
          vim.api.nvim_buf_delete(self.buffer, { force = true })
-diff --git i/lua/mcphub/ui/views/main.lua w/lua/mcphub/ui/views/main.lua
-index e275e30..dbeb7cf 100644
---- i/lua/mcphub/ui/views/main.lua
-+++ w/lua/mcphub/ui/views/main.lua
+@@ -396,7 +417,23 @@ function UI:cleanup()
+     end
+     self.buffer = nil
+     self.window = nil
+-    self.is_shown = false
++end
++
++--- Queue one in-place redraw for a burst of state notifications.
++--- State updates often arrive together while MCP servers are connecting. A
++--- redraw is still needed, but it must not behave like a view transition.
++function UI:schedule_render()
++    if self.render_scheduled or not self.is_shown then
++        return
++    end
++
++    self.render_scheduled = true
++    vim.schedule(function()
++        self.render_scheduled = false
++        if self.is_shown and self.window and vim.api.nvim_win_is_valid(self.window) then
++            self:render()
++        end
++    end)
+ end
+ 
+ --- Toggle UI visibility
+@@ -449,6 +486,101 @@ function UI:show(args)
+     -- Draw current view
+     self:render()
+     self.is_shown = true
++    self:request_startup_server_snapshot()
++end
++
++local STARTUP_STATUS_REFRESH_INTERVAL_MS = 500
++local STARTUP_STATUS_MAX_ATTEMPTS = 30
++
++--- Populate the main view as soon as mcp-hub exposes connection objects.
++--- The hub's health route is available before and immediately around READY,
++--- while the regular server update can arrive later over SSE. Retry briefly
++--- through hub creation so opening MCPHub during setup cannot abandon the
++--- startup snapshot before `State.hub_instance` exists.
++function UI:request_startup_server_snapshot()
++    self.startup_status_generation = (self.startup_status_generation or 0) + 1
++    self.startup_status_fetching = false
++    self:_request_startup_server_snapshot(self.startup_status_generation, 1)
++end
++
++---@param generation integer
++---@param attempt integer
++function UI:_retry_startup_server_snapshot(generation, attempt)
++    if attempt >= STARTUP_STATUS_MAX_ATTEMPTS
++        or generation ~= self.startup_status_generation
++        or not self.is_shown
++        or not (self.window and vim.api.nvim_win_is_valid(self.window))
++    then
++        return
++    end
++
++    vim.defer_fn(function()
++        self:_request_startup_server_snapshot(generation, attempt + 1)
++    end, STARTUP_STATUS_REFRESH_INTERVAL_MS)
++end
++
++---@param generation integer
++---@param attempt integer
++function UI:_request_startup_server_snapshot(generation, attempt)
++    if generation ~= self.startup_status_generation
++        or not self.is_shown
++        or not (self.window and vim.api.nvim_win_is_valid(self.window))
++    then
++        return
++    end
++
++    local hub = State.hub_instance
++    if not hub then
++        self:_retry_startup_server_snapshot(generation, attempt)
++        return
++    end
++    if self.startup_status_fetching then
++        return
++    end
++
++    self.startup_status_fetching = true
++    hub:get_health({
++        callback = function(response)
++            if generation ~= self.startup_status_generation then
++                return
++            end
++
++            self.startup_status_fetching = false
++            if State.hub_instance ~= hub then
++                self:request_startup_server_snapshot()
++                return
++            end
++
++            if response then
++                local servers = response.servers or {}
++                local workspaces = response.workspaces
++                local servers_changed = not vim.deep_equal(State.server_state.servers or {}, servers)
++                local workspaces_changed = workspaces ~= nil
++                    and not vim.deep_equal(State.server_state.workspaces or {}, workspaces)
++                if servers_changed or workspaces_changed then
++                    hub:update_servers(response)
++                end
++                -- update_servers normally notifies the UI. Still draw once for
++                -- an unchanged first response in this probe generation: it can
++                -- arrive after a missed startup notification, but must not make
++                -- every 500 ms retry redraw an otherwise stable main view.
++                if servers_changed
++                    or workspaces_changed
++                    or self.startup_status_rendered_generation ~= generation
++                then
++                    self.startup_status_rendered_generation = generation
++                    self:schedule_render()
++                end
++            end
++
++            -- A ready hub still needs one successful snapshot: the READY signal
++            -- can precede its asynchronous update_servers() call. Retry failed
++            -- health reads as well as a hub that is still connecting.
++            if not response or not hub:is_ready() then
++                self:_retry_startup_server_snapshot(generation, attempt)
++            end
++        end,
++    })
+ end
+ 
+ --- Reconcile UI's hub against current cwd. No-op unless workspace mode is enabled
+@@ -484,7 +616,19 @@ end
+ --- Render current view
+ ---@private
+ function UI:render()
+-    self:switch_view(self.current_view)
++    local view = self.current_view and self.views[self.current_view]
++    if not view then
++        return
++    end
++
++    -- The first render needs enter hooks to install mappings/autocmds. Later
++    -- state refreshes redraw the current view in place so they cannot tear down
++    -- its keymaps, cursor handlers, or selection state.
++    if self.is_shown then
++        view:draw()
++    else
++        self:switch_view(self.current_view)
++    end
+ end
+ 
+ return UI
+diff --git a/lua/mcphub/ui/views/main.lua b/lua/mcphub/ui/views/main.lua
+index e275e30..69d498d 100644
+--- a/lua/mcphub/ui/views/main.lua
++++ b/lua/mcphub/ui/views/main.lua
 @@ -9,6 +9,7 @@ local Text = require("mcphub.utils.text")
  local View = require("mcphub.ui.views.base")
  local config_manager = require("mcphub.utils.config_manager")
@@ -1716,6 +1937,15 @@ index e275e30..dbeb7cf 100644
  -- Helper function to get all tool names for a server
  local function get_server_tool_names(server_name)
      if not State.hub_instance or not State.hub_instance:is_ready() then
+@@ -894,7 +2033,7 @@ function MainView:get_initial_cursor_position()
+     if not self.active_capability and self.cursor_positions.browse_mode then
+         return self.cursor_positions.browse_mode[1]
+     end
+-    return #lines + 1
++    return #lines + 3
+ end
+ 
+ --- Sort servers by status (connected first, then disconnected, disabled last) and alphabetically within each group
 @@ -979,7 +2118,7 @@ function MainView:render_servers(line_offset)
  
              if total_tokens > 0 then
@@ -1734,7 +1964,30 @@ index e275e30..dbeb7cf 100644
      -- Track breadcrumb line for interaction
      -- self:track_line(current_line, "breadcrumb", {
      --     hint = "<CR> to preview servers prompt",
-@@ -1038,36 +2179,41 @@ function MainView:render_servers(line_offset)
+@@ -1015,7 +2156,21 @@ function MainView:render_servers(line_offset)
+     table.insert(lines, self:divider())
+     current_line = current_line + 1
+ 
+-    current_line = renderer.render_servers_grouped(State.server_state.servers, lines, current_line, self)
++    local servers = State.server_state.servers or {}
++    local is_starting = State.setup_state == "in_progress"
++        or vim.tbl_contains(
++            { constants.HubState.STARTING, constants.HubState.CONFIGURING, constants.HubState.RESTARTING },
++            State.server_state.state
++        )
++    if #servers == 0 and is_starting then
++        table.insert(
++            lines,
++            Text.pad_line(NuiLine():append("Waiting for server status...", Text.highlights.muted), nil, 4)
++        )
++        current_line = current_line + 1
++    else
++        current_line = renderer.render_servers_grouped(servers, lines, current_line, self)
++    end
+ 
+     -- -- Add server creation options
+     -- table.insert(
+@@ -1038,36 +2193,41 @@ function MainView:render_servers(line_offset)
      current_line = current_line + 1
  
      -- Native servers section header
@@ -1800,22 +2053,87 @@ index e275e30..dbeb7cf 100644
  function MainView:before_enter()
      View.before_enter(self)
      self:setup_active_mode()
-@@ -1130,6 +2276,14 @@ function MainView:render()
-         if #errors > 0 then
-             vim.list_extend(lines, errors)
-         end
-+        -- Patch 14: still surface known active hubs while the current connection is down,
-+        -- so the user can `gc` to a working workspace hub instead of being stuck with `R`.
-+        local workspaces = State.server_state.workspaces
-+        if workspaces and workspaces.allActive and not vim.tbl_isempty(workspaces.allActive) then
-+            table.insert(lines, Text.empty_line())
-+            table.insert(lines, Text.empty_line())
-+            vim.list_extend(lines, self:render_workspaces(#lines))
+@@ -1109,29 +2269,58 @@ function MainView:before_leave()
+     View.before_leave(self)
+ end
+ 
+-function MainView:should_show_logs()
+-    return not vim.tbl_contains({ constants.HubState.READY, constants.HubState.RESTARTED }, State.server_state.state)
++--- Render one stable hub-state row above the dashboard sections.
++---@return NuiLine[]
++function MainView:render_hub_status()
++    local state = State.server_state.state
++    local state_info = renderer.get_hub_info(state)
++    local suffix = nil
++    local is_starting = State.setup_state == "in_progress"
++        or vim.tbl_contains(
++            { constants.HubState.STARTING, constants.HubState.CONFIGURING, constants.HubState.RESTARTING },
++            state
++        )
++
++    if State.setup_state == "in_progress" then
++        suffix = " - setting up MCPHub"
++    elseif is_starting then
++        local server_count = #(State.server_state.servers or {})
++        if server_count == 0 then
++            suffix = " - waiting for server status"
++        else
++            local tool_count = 0
++            for _, server in ipairs(State.server_state.servers or {}) do
++                if server.status == "connected" then
++                    tool_count = tool_count + #(server.capabilities and server.capabilities.tools or {})
++                end
++            end
++            local tool_suffix = ""
++            if tool_count > 0 then
++                tool_suffix = string.format("; %d tool%s available", tool_count, tool_count == 1 and "" or "s")
++            end
++            suffix = string.format(
++                " - %d server%s reported%s; still connecting",
++                server_count,
++                server_count == 1 and "" or "s",
++                tool_suffix
++            )
 +        end
-         return lines
++    end
++
++    local line = NuiLine():append(state_info.icon, state_info.hl):append(state_info.desc, state_info.hl)
++    if suffix then
++        line:append(suffix, Text.highlights.muted)
++    end
++    return { Text.pad_line(line) }
+ end
+ 
+ function MainView:render()
+     -- Handle special states from base view
+-    if State.setup_state == "failed" or State.setup_state == "in_progress" or State.setup_state == "not_started" then
++    if State.setup_state == "failed" or State.setup_state == "not_started" then
+         return View.render(self)
      end
+     -- Get base header
+     local lines = self:render_header(false)
+-    if self:should_show_logs() then
+-        local state_info = renderer.get_hub_info(State.server_state.state)
+-        local breadcrumb_line = NuiLine():append(state_info.icon, state_info.hl):append(state_info.desc, state_info.hl)
+-        table.insert(lines, Text.pad_line(breadcrumb_line))
+-        table.insert(lines, self:divider())
+-        vim.list_extend(lines, renderer.render_server_entries(State.server_output.entries))
+-        local errors = renderer.render_hub_errors(nil, false)
+-        if #errors > 0 then
+-            vim.list_extend(lines, errors)
+-        end
+-        return lines
+-    end
      -- Handle capability mode
-@@ -1152,6 +2306,12 @@ function MainView:render()
+     if self.active_capability then
+         -- Get base header
+@@ -1149,9 +2338,18 @@ function MainView:render()
+         return capability_view_lines
+     end
+ 
++    vim.list_extend(lines, self:render_hub_status())
++    table.insert(lines, self:divider())
++
      -- Servers section
      vim.list_extend(lines, self:render_servers(#lines))
  
@@ -1828,10 +2146,94 @@ index e275e30..dbeb7cf 100644
      -- Add spacing before workspaces section
      table.insert(lines, Text.empty_line())
      table.insert(lines, Text.empty_line())
-diff --git i/lua/mcphub/utils/renderer.lua w/lua/mcphub/utils/renderer.lua
-index 5a702f6..688f08f 100644
---- i/lua/mcphub/utils/renderer.lua
-+++ w/lua/mcphub/utils/renderer.lua
+@@ -1168,4 +2366,83 @@ end
+ function MainView:render_workspaces(line_offset)
+     return renderer.render_workspaces_section(line_offset, self)
+ end
++
++--- Return a stable identifier for a selectable main-view row.
++---@param line_type string|nil
++---@param context table|nil
++---@return string|nil
++local function cursor_anchor_key(line_type, context)
++    if not line_type then
++        return nil
++    end
++    context = context or {}
++
++    if line_type == "server" and context.name then
++        return "server:" .. context.name
++    end
++    if line_type == "section_header" and context.name then
++        return "section:" .. context.name
++    end
++    if line_type == "endpoint" and context.url then
++        return "endpoint:" .. context.url
++    end
++    if line_type == "workspace" and context.port then
++        return "workspace:" .. tostring(context.port)
++    end
++    if line_type == "customInstructions" and context.server_name then
++        return "instructions:" .. context.server_name
++    end
++    if (line_type == "agent_settings_file" or line_type == "agent_skill_file") and context.target then
++        return line_type .. ":" .. tostring(context.target.path)
++    end
++    if line_type == "agent_binding" then
++        local profile = context.profile and context.profile.id or context.agent
++        local binding = context.binding and context.binding.name or context.binding_lean or context.binding_flat or "none"
++        if profile and context.scope then
++            return table.concat({ "agent", profile, context.scope, binding }, ":")
++        end
++    end
++    if line_type == "create_server" then
++        return line_type
++    end
++end
++
++---@return { key: string, col: number }|nil
++function MainView:_capture_cursor_anchor()
++    if self.active_capability or not self:open() then
++        return nil
++    end
++
++    local cursor = vim.api.nvim_win_get_cursor(self.ui.window)
++    local line_type, context = self:get_line_info(cursor[1])
++    local key = cursor_anchor_key(line_type, context)
++    if not key then
++        return nil
++    end
++    return { key = key, col = cursor[2] }
++end
++
++---@param anchor { key: string, col: number }|nil
++function MainView:_restore_cursor_anchor(anchor)
++    if not anchor or not self:open() then
++        return
++    end
++
++    for _, tracked in ipairs(self.interactive_lines) do
++        if cursor_anchor_key(tracked.type, tracked.context) == anchor.key then
++            local text = vim.api.nvim_buf_get_lines(self.ui.buffer, tracked.line - 1, tracked.line, false)[1] or ""
++            vim.api.nvim_win_set_cursor(self.ui.window, { tracked.line, math.min(anchor.col, #text) })
++            return
++        end
++    end
++end
++
++--- State refreshes can insert, remove, and reorder rows. Preserve the selected
++--- semantic row before View:draw() falls back to its numeric cursor position.
++function MainView:draw()
++    local anchor = self:_capture_cursor_anchor()
++    View.draw(self)
++    self:_restore_cursor_anchor(anchor)
++end
++
+ return MainView
+diff --git a/lua/mcphub/utils/renderer.lua b/lua/mcphub/utils/renderer.lua
+index 5a702f6..2e84237 100644
+--- a/lua/mcphub/utils/renderer.lua
++++ b/lua/mcphub/utils/renderer.lua
 @@ -4,9 +4,86 @@ local Text = require("mcphub.utils.text")
  local config_manager = require("mcphub.utils.config_manager")
  local constants = require("mcphub.utils.constants")
