@@ -23,6 +23,10 @@ local function strip_family_prefix(family, model)
   return (model:gsub("^" .. family .. "%-", ""))
 end
 
+local function model_family(model)
+  return model:match("^([^-]+)%-") or "model"
+end
+
 --- Build an alias string from adapter prefix and model name.
 --- Replaces "-" with "_" and removes "." entirely.
 --- e.g. ("agd", "gpt-5.2") → "agd_gpt_52"
@@ -143,6 +147,17 @@ local function make_entry(adapter_name, model, alias, empty_prompt, opts, reason
   }
 end
 
+-- A non-none Chat preset for a route with an exact tools/reasoning restriction
+-- must not silently add the default file tools. That preserves the selected
+-- reasoning level; users can still add a tool later and receive the chat popup.
+local function prompt_opts_for_preset(opts, adapter, preset)
+  local required_effort = thinking.tool_required_effort(adapter, preset.model)
+  if not required_effort or required_effort == preset.effort then
+    return opts
+  end
+  return vim.tbl_extend("force", {}, opts or {}, { attach_files_tool = false })
+end
+
 --- Build prompt_library entries from ai_constants.providers.
 --- Iterates each provider → top_choices → family → tier → size.
 ---
@@ -199,7 +214,14 @@ function M.build(empty_prompt, opts)
     for _, preset in ipairs(thinking.model_selector_presets(adapter)) do
       local title = "AGD Chat " .. preset.model .. " [" .. preset.effort .. "]"
       local alias = make_alias(adapter, preset.model) .. "_" .. preset.effort
-      lib[title] = make_entry(adapter, preset.model, alias, empty_prompt, opts, preset.effort)
+      lib[title] = make_entry(
+        adapter,
+        preset.model,
+        alias,
+        empty_prompt,
+        prompt_opts_for_preset(opts, adapter, preset),
+        preset.effort
+      )
     end
   end
 
@@ -208,7 +230,14 @@ function M.build(empty_prompt, opts)
   if enabled == nil or enabled.openai_agd or enabled.openai_responses_agd then
     local adapter = ai_constants.providers.openai_responses_agd.adapter_name
     for _, preset in ipairs(thinking.model_selector_presets(adapter)) do
-      local title = "AGD Responses gpt " .. strip_family_prefix("gpt", preset.model) .. " [" .. preset.effort .. "]"
+      local family = model_family(preset.model)
+      local title = "AGD Responses "
+        .. family
+        .. " "
+        .. strip_family_prefix(family, preset.model)
+        .. " ["
+        .. preset.effort
+        .. "]"
       local alias = make_alias(adapter, preset.model) .. "_" .. preset.effort
       lib[title] = make_entry(adapter, preset.model, alias, empty_prompt, opts, preset.effort)
     end

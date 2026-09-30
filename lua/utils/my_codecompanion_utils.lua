@@ -7,6 +7,20 @@ local M = {}
 
 -- `CodeCompanionChat adapter=<adapter> model=<model>` - Open a chat buffer with a specific http adapter and model
 local MODELS = require("utils.my_ai_constants").models
+local RESPONSE_MODEL_DEFAULT_OPTS = {
+  can_manage_context = true,
+  has_function_calling = true,
+  has_vision = true,
+  can_reason = true,
+}
+
+local function response_model_choice(formatted_name, context_window, opts)
+  return {
+    formatted_name = formatted_name,
+    meta = { context_window = context_window },
+    opts = vim.tbl_extend("force", {}, RESPONSE_MODEL_DEFAULT_OPTS, opts or {}),
+  }
+end
 
 -- Get Agoda-specific adapter configurations
 -- These adapters use internal Agoda endpoints and are separated from the main config
@@ -275,27 +289,16 @@ function M.get_agoda_responses_adapters()
               -- gpt-5.6 tiers confirmed working at /v1/responses on AGD proxy (2026-07-14).
               -- The shared thinking module appends local low/high/xhigh/max
               -- selector aliases; only canonical names reach the proxy.
-              [MODELS.gpt.GPT_5_6_SOL] = {
-                formatted_name = "GPT 5.6 Sol",
-                meta = { context_window = 1050000 },
-                opts = { can_manage_context = true, has_function_calling = true, has_vision = true, can_reason = true },
-              },
-              [MODELS.gpt.GPT_5_6_TERRA] = {
-                formatted_name = "GPT 5.6 Terra",
-                meta = { context_window = 1050000 },
-                opts = { can_manage_context = true, has_function_calling = true, has_vision = true, can_reason = true },
-              },
-              [MODELS.gpt.GPT_5_6_LUNA] = {
-                formatted_name = "GPT 5.6 Luna",
-                meta = { context_window = 1050000 },
-                opts = { can_manage_context = true, has_function_calling = true, has_vision = true, can_reason = true },
-              },
+              [MODELS.gpt.GPT_5_6_SOL] = response_model_choice("GPT 5.6 Sol", 1050000),
+              [MODELS.gpt.GPT_5_6_TERRA] = response_model_choice("GPT 5.6 Terra", 1050000),
+              [MODELS.gpt.GPT_5_6_LUNA] = response_model_choice("GPT 5.6 Luna", 1050000),
               -- gpt-5.5 kept as flagship -1 fallback reference — verified working at /v1/responses.
-              [MODELS.gpt.GPT_5_5] = {
-                formatted_name = "GPT 5.5",
-                meta = { context_window = 1050000 },
-                opts = { can_manage_context = true, has_function_calling = true, has_vision = false, can_reason = true },
-              },
+              [MODELS.gpt.GPT_5_5] = response_model_choice("GPT 5.5", 1050000, { has_vision = false }),
+              -- Exact /v1/responses probes, 2026-09-30. GPT-6 retains
+              -- reasoning with tools on Responses; Chat safely falls back to none.
+              [MODELS.gpt.GPT_6_SOL] = response_model_choice("GPT 6 Sol", 1050000),
+              [MODELS.gpt.GPT_6_LUNA] = response_model_choice("GPT 6 Luna", 1050000),
+              [MODELS.others.GROK_4_7] = response_model_choice("Grok 4.7", 500000),
             }),
           },
           max_output_tokens = {

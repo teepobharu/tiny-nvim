@@ -3,7 +3,7 @@ title: "CC: model+effort presets (gpt-5.5-high, gpt-5.3-codex-medium, etc.)"
 status: open
 priority: low
 created: 2026-06-01
-updated: 2026-07-02
+updated: 2026-09-30
 related:
   - [my_codecompanion_utils.lua](lua/utils/my_codecompanion_utils.lua)
   - [my_ai_constants.lua](lua/utils/my_ai_constants.lua)
@@ -17,13 +17,25 @@ Expose synthetic model+effort presets (e.g. `gpt-5.5 [high]`, `gpt-5.4-mini [low
 
 Candidate initial set (from user): `gpt-5.5`, `gpt-5.3-codex`, `gpt-5.4-mini`, `gpt-5.4-nano` × `{high, medium, low}` for the ones that support reasoning.
 
-## Why this doesn't exist yet
+## 2026-09-30 update
 
-There is **no upstream decoupling layer** between `schema.model.choices` keys and the `parameters.model` wire value. Keys are sent verbatim as the API `model` field (`adapters/http/init.lua:192-233`). Synthetic names like `gpt-5.5-high` would be rejected by the API.
+- The route-policy registry in [my_codecompanion_thinking.lua](lua/utils/my_codecompanion_thinking.lua) maps local aliases to canonical wire model IDs and is also the source for strict verified capability rules; add a newly proven model once rather than maintaining separate preset and validation lists.
+- GPT-5.6 Sol/Terra/Luna expose an explicit Chat `none` preset as well as their proven reasoning presets. GPT-6 Sol/Luna now expose exact route-proven Chat presets (`none|low|medium|high|xhigh`) and Responses presets (`none|low|medium|high|xhigh|max`); `minimal` is intentionally omitted.
+- Grok 4.7 exposes exact Chat and Responses presets (`minimal|low|medium|high|xhigh`). Gemini 3.7/3.8 Flash expose exact Chat presets (`low|medium|high`). Claude Sonnet 5/5.5 expose exact Chat presets across the common levels (`none|minimal|low|medium|high|xhigh|max`).
+- A CodeCompanion popup detects the exact observed GPT-5.6 Luna/GPT-6 Sol/GPT-6 Luna Chat + active-tool + non-`none` combination and offers to set `reasoning_effort` to `none`; a submit guard prevents that known-invalid request. If the submitted prompt adds the first tool too late for a choice, a final request guard safely applies `none` with a warning. A non-`none` preset prompt omits automatic file tools, preserving the requested effort; manually added tools still invoke the popup/guard. Responses retains GPT-6 reasoning with function tools.
+- Read-only authenticated AGD catalog lookup (2026-09-30) lists `gpt-6-sol`, `gpt-6-luna`, `grok-4.7`, `gemini-3.7-flash`, `gemini-3.8-flash`, `claude-sonnet-5`, `claude-sonnet-5-5`, `claude-opus-5`, and `claude-opus-5-5`. Every listed candidate advertises Chat Completions and Function Calling; GPT-6 and Grok 4.7 also advertise Responses. GPT-6.1 Sol/Luna are intentionally predeclared as future Chat choices, although no catalog item was returned.
+- Live probes (2026-09-30): Grok 4.7, Gemini 3.7/3.8 Flash, and Claude Sonnet 5/5.5 accepted Chat function tools at `high`; they do not inherit the GPT tool restriction. Claude Opus 5/5.5 returned the account's monthly-cap `403`, so their common-level Chat aliases are explicitly advisory. GPT-6.1 Sol/Luna returned `404`, so their GPT-6-shaped Chat aliases are advisory and have no Responses or tools policy.
+- Catalog `thinkingCapability` is availability metadata, not the accepted `reasoning_effort` set or a function-tools compatibility contract. The ongoing live gate remains: probe each exact adapter + endpoint + effort + tool combination before exposing a preset alias or adding a tool-conflict policy.
+
+## Historical design notes (superseded)
+
+The route-policy implementation above supersedes these pre-implementation options. They are retained only for provenance; do not reintroduce either approach in place of the shared canonical-model/effort mapper.
+
+At the time of investigation, there was **no upstream decoupling layer** between `schema.model.choices` keys and the `parameters.model` wire value. Keys were sent verbatim as the API `model` field (`adapters/http/init.lua:192-233`). Synthetic names like `gpt-5.5-high` would be rejected by the API.
 
 Per-choice `opts` (e.g. `opts.can_reason`) IS accessible via `adapter_utils.model_choice(self)` which merges `opts` into `self.opts` during `handlers.setup`. But there is no built-in `opts.reasoning_effort` → `parameters.reasoning_effort` plumbing.
 
-## Implementation approach
+### Previously considered approaches
 
 Two options (pick one):
 

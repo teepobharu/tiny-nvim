@@ -4,56 +4,170 @@ local AI_CONST = require "utils.my_ai_constants"
 local COMMON_LEVELS = { "none", "minimal", "low", "medium", "high", "xhigh", "max" }
 local REQUIRED_LEVELS = { "minimal", "low", "medium", "high" }
 local CLEAR_VALUES = { clear = true, inherit = true, unset = true }
--- Selector aliases are a local CodeCompanion convenience, not AGD model IDs.
--- Keep the canonical tier list and endpoint-specific effort sets in one place so
--- adding a tier never creates another adapter.
+
+-- This is the one source of truth for route-proven reasoning presets. A catalog
+-- entry alone must not be added here: it needs an exact model + endpoint +
+-- effort probe first. `model_selector_presets` exposes aliases from this table,
+-- while the registrations below enforce the same levels on the matching route.
+-- New current/previous-generation models therefore need one entry, not parallel
+-- selector and capability edits.
+local REASONING_SAMPLING_CONFLICTS = { temperature = "non_default", top_p = "non_default" }
+
+local function verified_route_policy(models, selector_efforts, source, opts)
+  opts = opts or {}
+  local capability = {
+    status = "supported",
+    source = source,
+    mode = opts.mode or "optional",
+    -- An empty table intentionally replaces a lower-priority family hint.
+    conflicts = opts.conflicts or {},
+  }
+  if opts.levels ~= nil then
+    capability.levels = opts.levels
+  end
+  if opts.enforce_levels then
+    capability.enforce_levels = true
+  end
+
+  return {
+    models = models,
+    selector_efforts = selector_efforts,
+    capability = capability,
+    tool_required_effort = opts.tool_required_effort,
+  }
+end
+
+local function strict_verified_route_policy(models, selector_efforts, source, opts)
+  opts = opts or {}
+  local strict_opts = vim.tbl_extend("force", {}, opts, {
+    levels = opts.levels or selector_efforts,
+    enforce_levels = true,
+  })
+  return verified_route_policy(models, selector_efforts, source, strict_opts)
+end
+
 local GPT_5_6_MODELS = {
   AI_CONST.models.gpt.GPT_5_6_SOL,
   AI_CONST.models.gpt.GPT_5_6_TERRA,
   AI_CONST.models.gpt.GPT_5_6_LUNA,
 }
-local GPT_5_6_TIERS = {}
-for _, model in ipairs(GPT_5_6_MODELS) do
-  GPT_5_6_TIERS[model] = true
-end
+local GPT_6_MODELS = { AI_CONST.models.gpt.GPT_6_SOL, AI_CONST.models.gpt.GPT_6_LUNA }
+local GPT_6_1_MODELS = { AI_CONST.models.gpt.GPT_6_1_SOL, AI_CONST.models.gpt.GPT_6_1_LUNA }
+local QWEN_3_8_MODELS = { AI_CONST.models.qwen.QWEN_3_8_27B }
+local GROK_OPTIONAL_CHAT_MODELS = { AI_CONST.models.others.GROK_4_3, AI_CONST.models.others.GROK_4_5 }
+local GROK_REQUIRED_CHAT_MODELS = { AI_CONST.models.others.GROK_4_6 }
+local GROK_4_7_MODELS = { AI_CONST.models.others.GROK_4_7 }
+local GEMINI_3_7_3_8_FLASH_MODELS = {
+  AI_CONST.models.gemini.GEMINI_3_7_FLASH,
+  AI_CONST.models.gemini.GEMINI_3_8_FLASH,
+}
+local CLAUDE_SONNET_5_MODELS = { AI_CONST.models.claude.CLAUDE_SONNET_5 }
+local CLAUDE_SONNET_5_5_MODELS = { AI_CONST.models.claude.CLAUDE_SONNET_5_5 }
+local CLAUDE_OPUS_5_MODELS = { AI_CONST.models.claude.CLAUDE_OPUS_5, AI_CONST.models.claude.CLAUDE_OPUS_5_5 }
+local KIMI_CHAT_MODELS = { AI_CONST.models.kimi.KIMI_K2_6, AI_CONST.models.kimi.KIMI_K2_7_CODE }
+local GPT_5_6_CHAT_LEVELS = { "none", "low", "medium", "high", "xhigh" }
+local GPT_5_6_CHAT_PRESETS = { "none", "low", "high", "xhigh" }
+local GPT_6_CHAT_EFFORTS = { "none", "low", "medium", "high", "xhigh" }
+local GPT_6_RESPONSES_EFFORTS = { "none", "low", "medium", "high", "xhigh", "max" }
 local QWEN_CHAT_EFFORTS = { "none", "low", "medium", "xhigh" }
 local GROK_CHAT_EFFORTS = { "low", "medium", "high", "xhigh" }
-local GROK_CHAT_MODELS = {
-  AI_CONST.models.others.GROK_4_3,
-  AI_CONST.models.others.GROK_4_5,
-  AI_CONST.models.others.GROK_4_6,
-}
+local GROK_4_7_EFFORTS = { "minimal", "low", "medium", "high", "xhigh" }
+local GEMINI_3_7_3_8_FLASH_EFFORTS = { "low", "medium", "high" }
 local KIMI_CHAT_EFFORTS = { "low", "medium", "high", "xhigh", "max" }
-local KIMI_CHAT_MODELS = {
-  AI_CONST.models.kimi.KIMI_K2_6,
-  AI_CONST.models.kimi.KIMI_K2_7_CODE,
-}
-local SELECTOR_PRESET_SPECS = {
+local PROBE_GPT_5_6 = "verified_proxy_probe_2026_08_19"
+local PROBE_QWEN = "verified_proxy_probe_2026_08_27"
+local PROBE_GROK_KIMI = "verified_proxy_probe_2026_08_23"
+local PROBE_FRONTIER_CHAT = "verified_proxy_probe_2026_09_30_chat"
+local PROBE_FRONTIER_RESPONSES = "verified_proxy_probe_2026_09_30_responses"
+
+local VERIFIED_ROUTE_POLICIES = {
   openai_agd = {
-    -- Live AGD probe 2026-08-19: GPT-5.6 Chat rejects `max`.
-    { models = GPT_5_6_MODELS, efforts = { "low", "high", "xhigh" } },
-    -- Live AGD probe 2026-08-27: Qwen accepts none/low/medium/xhigh only.
-    { models = { AI_CONST.models.qwen.QWEN_3_8_27B }, efforts = QWEN_CHAT_EFFORTS },
-    -- Live AGD probe 2026-08-23: all current Grok variants accept xhigh, not max.
-    { models = GROK_CHAT_MODELS, efforts = GROK_CHAT_EFFORTS },
-    -- Live AGD probe 2026-08-23: both current Kimi variants accept max.
-    { models = KIMI_CHAT_MODELS, efforts = KIMI_CHAT_EFFORTS },
+    -- Chat Completions accepts xhigh but rejects minimal/max (2026-08-19).
+    strict_verified_route_policy(GPT_5_6_MODELS, GPT_5_6_CHAT_PRESETS, PROBE_GPT_5_6, {
+      levels = GPT_5_6_CHAT_LEVELS,
+      conflicts = REASONING_SAMPLING_CONFLICTS,
+      -- Luna's tools + non-none conflict was observed on Chat Completions
+      -- (2026-09-29); no other model inherits this without its own probe.
+      tool_required_effort = { [AI_CONST.models.gpt.GPT_5_6_LUNA] = "none" },
+    }),
+    strict_verified_route_policy(QWEN_3_8_MODELS, QWEN_CHAT_EFFORTS, PROBE_QWEN),
+    strict_verified_route_policy(GROK_OPTIONAL_CHAT_MODELS, GROK_CHAT_EFFORTS, PROBE_GROK_KIMI),
+    strict_verified_route_policy(
+      GROK_REQUIRED_CHAT_MODELS,
+      GROK_CHAT_EFFORTS,
+      PROBE_GROK_KIMI,
+      { mode = "required" }
+    ),
+    strict_verified_route_policy(KIMI_CHAT_MODELS, KIMI_CHAT_EFFORTS, PROBE_GROK_KIMI),
+    -- GPT-6 Chat accepts the five values below. With function tools, both
+    -- Sol and Luna require `none`; Responses retains reasoning + tools.
+    strict_verified_route_policy(
+      GPT_6_MODELS,
+      GPT_6_CHAT_EFFORTS,
+      PROBE_FRONTIER_CHAT,
+      {
+        conflicts = REASONING_SAMPLING_CONFLICTS,
+        tool_required_effort = {
+          [AI_CONST.models.gpt.GPT_6_SOL] = "none",
+          [AI_CONST.models.gpt.GPT_6_LUNA] = "none",
+        },
+      }
+    ),
+    strict_verified_route_policy(
+      GROK_4_7_MODELS,
+      GROK_4_7_EFFORTS,
+      PROBE_FRONTIER_CHAT,
+      { mode = "required" }
+    ),
+    strict_verified_route_policy(
+      GEMINI_3_7_3_8_FLASH_MODELS,
+      GEMINI_3_7_3_8_FLASH_EFFORTS,
+      PROBE_FRONTIER_CHAT,
+      { mode = "required" }
+    ),
+    strict_verified_route_policy(CLAUDE_SONNET_5_MODELS, COMMON_LEVELS, PROBE_FRONTIER_CHAT),
+    strict_verified_route_policy(CLAUDE_SONNET_5_5_MODELS, COMMON_LEVELS, PROBE_FRONTIER_CHAT, {
+      mode = "required",
+    }),
   },
-  -- Live AGD probe 2026-08-19: GPT-5.6 Responses accepts xhigh and max.
   openai_responses_agd = {
-    { models = GPT_5_6_MODELS, efforts = { "low", "high", "xhigh", "max" } },
+    -- Responses accepts xhigh/max for every 5.6 tier (2026-08-19).
+    verified_route_policy(GPT_5_6_MODELS, { "low", "high", "xhigh", "max" }, PROBE_GPT_5_6, {
+      conflicts = REASONING_SAMPLING_CONFLICTS,
+    }),
+    strict_verified_route_policy(
+      GPT_6_MODELS,
+      GPT_6_RESPONSES_EFFORTS,
+      PROBE_FRONTIER_RESPONSES,
+      { conflicts = REASONING_SAMPLING_CONFLICTS }
+    ),
+    strict_verified_route_policy(
+      GROK_4_7_MODELS,
+      GROK_4_7_EFFORTS,
+      PROBE_FRONTIER_RESPONSES,
+      { mode = "required" }
+    ),
   },
 }
 
-local function is_gpt_5_6_tier(model)
-  return type(model) == "string" and GPT_5_6_TIERS[model] == true
-end
+-- User-requested catalog/future aliases deliberately remain separate from the
+-- route-proven table above. They map to a canonical model and effort, but do
+-- not create strict validation, a Responses capability, or a tools policy.
+-- GPT-6.1 aliases appear in the normal selector only after dynamic discovery
+-- exposes their base IDs; prompt entries remain labelled as future choices.
+local ADVISORY_SELECTOR_POLICIES = {
+  openai_agd = {
+    { models = GPT_6_1_MODELS, selector_efforts = GPT_6_CHAT_EFFORTS },
+    { models = CLAUDE_OPUS_5_MODELS, selector_efforts = COMMON_LEVELS },
+  },
+}
 
 local profiles = {}
 local capability_rules = {}
 local metadata_capabilities = {}
 local rule_sequence = 0
 local chat_state = setmetatable({}, { __mode = "k" })
+local attached_chats_by_bufnr = setmetatable({}, { __mode = "v" })
 local metadata_state = {
   loading = false,
   fetched_at = nil,
@@ -80,23 +194,26 @@ end
 
 ---Return local model-selector presets for an adapter. Each preset is resolved
 ---to its canonical AGD model and reasoning field before the request is sent.
+---Route-proven presets have strict capability rules; explicit future/catalog
+---aliases are advisory until their exact route is tested.
 ---@param adapter CodeCompanion.HTTPAdapter|string|table
 ---@return table[]
 function M.model_selector_presets(adapter)
-  local specs = SELECTOR_PRESET_SPECS[adapter_name(adapter)]
   local presets = {}
-  if not specs then
-    return presets
-  end
-
-  for _, spec in ipairs(specs) do
-    for _, model in ipairs(spec.models) do
-      for _, effort in ipairs(spec.efforts) do
-        table.insert(presets, {
-          alias = model .. "-" .. effort,
-          model = model,
-          effort = effort,
-        })
+  local name = adapter_name(adapter)
+  for _, specs in ipairs({
+    VERIFIED_ROUTE_POLICIES[name] or {},
+    ADVISORY_SELECTOR_POLICIES[name] or {},
+  }) do
+    for _, spec in ipairs(specs) do
+      for _, model in ipairs(spec.models) do
+        for _, effort in ipairs(spec.selector_efforts or {}) do
+          table.insert(presets, {
+            alias = model .. "-" .. effort,
+            model = model,
+            effort = effort,
+          })
+        end
       end
     end
   end
@@ -310,6 +427,21 @@ function M.register_capability(adapter, matcher, capability, opts)
   return M
 end
 
+local function register_verified_route_policies()
+  for adapter, specs in pairs(VERIFIED_ROUTE_POLICIES) do
+    for _, spec in ipairs(specs) do
+      for _, model in ipairs(spec.models) do
+        local capability = vim.deepcopy(spec.capability)
+        local required_effort = spec.tool_required_effort and spec.tool_required_effort[model]
+        if required_effort then
+          capability.tool_required_effort = required_effort
+        end
+        M.register_capability(adapter, model, capability, { priority = 100 })
+      end
+    end
+  end
+end
+
 local function merge_capability(target, source)
   for key, value in pairs(source or {}) do
     target[key] = copy(value)
@@ -376,6 +508,15 @@ function M.resolve_capability(adapter, model)
     merge_capability(result, candidate.capability)
   end
   return result
+end
+
+---Return the exact effort required when this Chat route has function tools.
+---A nil return means the route has no verified tools/reasoning restriction.
+---@param adapter CodeCompanion.HTTPAdapter|string|table
+---@param model string|nil
+---@return string|nil
+function M.tool_required_effort(adapter, model)
+  return M.resolve_capability(adapter, model).tool_required_effort
 end
 
 ---Return the advertised reasoning levels for an adapter/model pair.
@@ -655,6 +796,152 @@ function M.reconcile(chat)
   return changed
 end
 
+local function bind_chat_to_adapter(chat)
+  local bufnr = chat and chat.bufnr
+  if type(bufnr) ~= "number" or type(chat.adapter) ~= "table" then
+    return
+  end
+  attached_chats_by_bufnr[bufnr] = chat
+  -- The HTTP client deep-copies adapters before forming a body. Retain only a
+  -- scalar identity here, then resolve the original chat below.
+  chat.adapter._thinking_chat_bufnr = bufnr
+end
+
+local function attached_chat_for_adapter(adapter)
+  local bufnr = adapter and adapter._thinking_chat_bufnr
+  if type(bufnr) ~= "number" then
+    return nil
+  end
+  return attached_chats_by_bufnr[bufnr]
+end
+
+local function tool_schema_count(chat)
+  local schemas = chat and chat.tool_registry and chat.tool_registry.schemas
+  return type(schemas) == "table" and vim.tbl_count(schemas) or 0
+end
+
+local function tool_reasoning_conflict_for(adapter, model, effort, tool_count)
+  if adapter_name(adapter) ~= "openai_agd" then
+    return nil
+  end
+
+  model = M.canonical_model(adapter, model)
+  local required_effort = M.tool_required_effort(adapter, model)
+  if type(required_effort) ~= "string" or type(effort) ~= "string" or effort:lower() == required_effort then
+    return nil
+  end
+  if tool_count == 0 then
+    return nil
+  end
+
+  return {
+    effort = effort,
+    key = table.concat({ adapter_name(adapter), model, effort }, "\0"),
+    model = model,
+    required_effort = required_effort,
+    tool_count = tool_count,
+  }
+end
+
+---Return a verified Chat Completions tools/reasoning conflict for this chat.
+---The model policy is intentionally exact: dynamic model discovery alone does
+---not establish that an arbitrary catalog model shares the GPT-5.6 Luna or
+---GPT-6 Sol/Luna contract.
+---@param chat CodeCompanion.Chat|table
+---@return table|nil
+function M.tool_reasoning_conflict(chat)
+  if not chat or adapter_name(chat.adapter) ~= "openai_agd" then
+    return nil
+  end
+
+  local selected_model = chat_model(chat)
+  local model = M.canonical_model(chat.adapter, selected_model)
+  local profile = M.profile_for(chat.adapter)
+  local effort = profile and chat.settings and chat.settings[profile.schema_key] or nil
+  local preset = selector_preset_for(chat.adapter, selected_model)
+  if effort == nil and preset then
+    effort = preset.effort
+  end
+  return tool_reasoning_conflict_for(chat.adapter, model, effort, tool_schema_count(chat))
+end
+
+local function pending_submission_conflict(chat)
+  if not chat then
+    return nil
+  end
+
+  local settings
+  if type(chat.bufnr) == "number" and chat.parsers and chat.parsers.yaml then
+    local ok_parser, parser = pcall(require, "codecompanion.interactions.chat.parser")
+    if ok_parser then
+      local ok_settings, parsed = pcall(parser.settings, chat.bufnr, chat.parsers.yaml, chat.adapter)
+      if ok_settings and type(parsed) == "table" then
+        settings = parsed
+      end
+    end
+  end
+  if not settings then
+    return M.tool_reasoning_conflict(chat)
+  end
+
+  local selected_model = settings.model or chat_model(chat)
+  local model = M.canonical_model(chat.adapter, selected_model)
+  local profile = M.profile_for(chat.adapter)
+  local effort = profile and settings[profile.schema_key] or nil
+  local preset = selector_preset_for(chat.adapter, selected_model)
+  if effort == nil and preset then
+    effort = preset.effort
+  end
+  return tool_reasoning_conflict_for(chat.adapter, model, effort, tool_schema_count(chat))
+end
+
+---Show one non-blocking warning per active model/effort/tool combination.
+---Changing models remains synchronous because CodeCompanion can do it as part
+---of a YAML submission. The explicit `none` action is safe before the next
+---submission and keeps the visible YAML/debug settings in sync.
+---@param chat CodeCompanion.Chat|table
+---@return boolean whether a warning was scheduled
+function M.warn_if_tool_reasoning_conflict(chat)
+  if not chat then
+    return false
+  end
+  local conflict = M.tool_reasoning_conflict(chat)
+  local state = state_for(chat)
+  if not conflict then
+    state.tool_reasoning_warning_key = nil
+    return false
+  end
+
+  if state.tool_reasoning_warning_key == conflict.key then
+    return false
+  end
+  state.tool_reasoning_warning_key = conflict.key
+
+  vim.schedule(function()
+    local current = M.tool_reasoning_conflict(chat)
+    if not current or current.key ~= conflict.key then
+      return
+    end
+
+    local apply_none = ("Set reasoning_effort=%s (recommended)"):format(current.required_effort)
+    local keep = "Keep current reasoning (use Responses for tools)"
+    vim.ui.select({ apply_none, keep }, {
+      prompt = (
+        "%s has %d active function tool(s). AGD Chat Completions rejects %s reasoning_effort=%s with tools."
+      ):format(current.model, current.tool_count, current.model, current.effort),
+    }, function(choice)
+      if choice == apply_none then
+        local confirmed = M.tool_reasoning_conflict(chat)
+        if confirmed and confirmed.key == current.key then
+          state.tool_reasoning_warning_key = nil
+          M.set(confirmed.required_effort, { chat = chat, source = "tool_reasoning_popup" })
+        end
+      end
+    end)
+  end)
+  return true
+end
+
 function M.prepare(chat)
   M.capture_manual(chat)
   return M.reconcile(chat)
@@ -849,6 +1136,7 @@ function M.set(value, opts)
     message,
     (capability.status == "unsupported" or outside_advertised) and vim.log.levels.WARN or vim.log.levels.INFO
   )
+  M.warn_if_tool_reasoning_conflict(chat)
   return true
 end
 
@@ -873,6 +1161,7 @@ function M.clear(opts)
   chat.settings[profile.schema_key] = nil
   sync_chat_yaml(chat, profile.schema_key, nil)
   sync_debug_buffers(chat, profile.schema_key, nil)
+  state_for(chat).tool_reasoning_warning_key = nil
   notify(("Cleared thinking override for %s/%s (%s)"):format(
     adapter_name(chat.adapter) or "<unknown>",
     chat_model(chat) or "<unknown>",
@@ -1019,6 +1308,29 @@ function M.prepare_request(adapter, params)
     return params
   end
 
+  -- on_before_submit runs before CodeCompanion parses @tool references in the
+  -- current prompt, and it does not run for auto-submit. This final adapter
+  -- guard therefore keeps an after-parse tool from reaching AGD with Luna's
+  -- known-invalid effort. The earlier popup still lets the user choose before
+  -- normal submissions; this late path must select the only safe value.
+  local chat = attached_chat_for_adapter(adapter)
+  local tool_conflict = tool_reasoning_conflict_for(adapter, model, effort, tool_schema_count(chat))
+  if tool_conflict then
+    effort = tool_conflict.required_effort
+    set_path(params, profile.param_path, effort)
+    if chat then
+      M.set(effort, { chat = chat, source = "tool_reasoning_request_guard" })
+    end
+    notify(
+      ("Changed %s reasoning_effort to %s before sending because this prompt added %d function tool(s)."):format(
+        tool_conflict.model,
+        effort,
+        tool_conflict.tool_count
+      ),
+      vim.log.levels.WARN
+    )
+  end
+
   local capability = M.resolve_capability(adapter, model)
   local valid, validation_error = M.validate_effort(adapter, effort, model)
   if not valid then
@@ -1118,6 +1430,7 @@ local function wrap_chat(chat)
       capture_before_model_change(self, args and args.model)
       local result = change_model(self, args)
       M.reconcile(self)
+      M.warn_if_tool_reasoning_conflict(self)
       return result
     end
   end
@@ -1128,10 +1441,31 @@ local function wrap_chat(chat)
       M.capture_manual(self)
       local result = change_adapter(self, name, callback)
       if result ~= false then
+        bind_chat_to_adapter(self)
         M.reconcile(self)
+        M.warn_if_tool_reasoning_conflict(self)
       end
       return result
     end
+  end
+
+  if type(chat.add_callback) == "function" then
+    chat:add_callback("on_before_submit", function(current_chat)
+      local conflict = pending_submission_conflict(current_chat)
+      if not conflict then
+        return
+      end
+      M.warn_if_tool_reasoning_conflict(current_chat)
+      notify(
+        ("Blocked %s with %d active function tool(s): set reasoning_effort=%s or use Responses."):format(
+          conflict.model,
+          conflict.tool_count,
+          conflict.required_effort
+        ),
+        vim.log.levels.WARN
+      )
+      return false
+    end)
   end
 end
 
@@ -1139,6 +1473,7 @@ function M.attach(chat)
   if not chat then
     return false
   end
+  bind_chat_to_adapter(chat)
   local state = state_for(chat)
   if state.attached then
     return true
@@ -1147,6 +1482,7 @@ function M.attach(chat)
   M.capture_manual(chat)
   wrap_chat(chat)
   M.reconcile(chat)
+  M.warn_if_tool_reasoning_conflict(chat)
   return true
 end
 
@@ -1202,7 +1538,15 @@ function M.setup(opts)
       if chat then
         M.attach(chat)
         M.reconcile(chat)
+        M.warn_if_tool_reasoning_conflict(chat)
       end
+    end,
+  })
+  vim.api.nvim_create_autocmd("User", {
+    pattern = "CodeCompanionChatToolAdded",
+    group = group,
+    callback = function(event)
+      M.warn_if_tool_reasoning_conflict(chat_for_buffer(event.data and event.data.bufnr))
     end,
   })
 
@@ -1225,13 +1569,13 @@ M.register_capability("openai_agd", "^gpt%-5", {
   status = "supported",
   source = "family_hint",
   mode = "optional",
-  conflicts = { temperature = "non_default", top_p = "non_default" },
+  conflicts = REASONING_SAMPLING_CONFLICTS,
 }, { pattern = true, priority = 20 })
 M.register_capability("openai_agd", "^o%d", {
   status = "supported",
   source = "family_hint",
   mode = "optional",
-  conflicts = { temperature = "non_default", top_p = "non_default" },
+  conflicts = REASONING_SAMPLING_CONFLICTS,
 }, { pattern = true, priority = 20 })
 M.register_capability("openai_agd", function(model)
   return type(model) == "string"
@@ -1259,94 +1603,27 @@ M.register_capability("openai_agd", "^deepseek", {
   mode = "required",
   levels = vim.deepcopy(REQUIRED_LEVELS),
 }, { pattern = true, priority = 20 })
--- Keep unknown Qwen variants advisory. Qwen 3.8 Chat Completions is registered
--- exactly below: it accepts none/low/medium/xhigh and rejects high/max.
 M.register_capability("openai_agd", "gpt-5.4", {
   status = "supported",
   source = "verified_proxy_probe_2026_07_12",
   mode = "optional",
   levels = { "none", "low", "medium", "high", "xhigh" },
-  conflicts = { temperature = "non_default", top_p = "non_default" },
+  conflicts = REASONING_SAMPLING_CONFLICTS,
 }, { priority = 90 })
--- Exact transport probe, 2026-08-19: Sol, Terra, and Luna accept xhigh on
--- chat completions but reject both minimal and max. Keep this strict rule
--- separate from the broad GPT family hint so unknown/future models remain
--- visible and manually controllable.
-M.register_capability("openai_agd", is_gpt_5_6_tier, {
-  status = "supported",
-  source = "verified_proxy_probe_2026_08_19",
-  mode = "optional",
-  levels = { "none", "low", "medium", "high", "xhigh" },
-  enforce_levels = true,
-  conflicts = { temperature = "non_default", top_p = "non_default" },
-}, { priority = 100 })
--- Exact transport probe, 2026-08-27: qwen-3.8-27b accepts none, low, medium,
--- and xhigh on Chat Completions. The model catalog reports Optional Thinking,
--- but `high` and `max` still fail, so expose only the verified levels.
-M.register_capability("openai_agd", "qwen-3.8-27b", {
-  status = "supported",
-  source = "verified_proxy_probe_2026_08_27",
-  mode = "optional",
-  levels = QWEN_CHAT_EFFORTS,
-  enforce_levels = true,
-  conflicts = {},
-}, { priority = 100 })
--- Exact transport probe, 2026-08-23: Grok 4.3/4.5 accept low through xhigh
--- as optional thinking. `max` is rejected by the xAI upstream, so never emit it.
-for _, model in ipairs({ AI_CONST.models.others.GROK_4_3, AI_CONST.models.others.GROK_4_5 }) do
-  M.register_capability("openai_agd", model, {
-    status = "supported",
-    source = "verified_proxy_probe_2026_08_23",
-    mode = "optional",
-    levels = GROK_CHAT_EFFORTS,
-    enforce_levels = true,
-    conflicts = {},
-  }, { priority = 100 })
-end
--- Grok 4.6 reports obligatory thinking, while retaining the same accepted
--- effort range. The picker therefore offers levels but no unsupported `max`.
-M.register_capability("openai_agd", AI_CONST.models.others.GROK_4_6, {
-  status = "supported",
-  source = "verified_proxy_probe_2026_08_23",
-  mode = "required",
-  levels = GROK_CHAT_EFFORTS,
-  enforce_levels = true,
-  conflicts = {},
-}, { priority = 100 })
--- Exact transport probe, 2026-08-23: Kimi K2.6 and K2.7 Code accept the
--- complete low→max range on Chat Completions. Keep this route-specific so a
--- future Kimi variant is still discovered rather than inheriting stale limits.
-for _, model in ipairs(KIMI_CHAT_MODELS) do
-  M.register_capability("openai_agd", model, {
-    status = "supported",
-    source = "verified_proxy_probe_2026_08_23",
-    mode = "optional",
-    levels = KIMI_CHAT_EFFORTS,
-    enforce_levels = true,
-    conflicts = {},
-  }, { priority = 100 })
-end
 M.register_capability("openai_agd", "o3", {
   status = "supported",
   source = "verified_proxy_probe_2026_07_12",
   mode = "optional",
   levels = { "low", "medium", "high" },
-  conflicts = { temperature = "non_default", top_p = "non_default" },
+  conflicts = REASONING_SAMPLING_CONFLICTS,
 }, { priority = 90 })
 M.register_capability("openai_responses_agd", "^gpt%-", {
   status = "supported",
   source = "adapter_hint",
   mode = "optional",
-  conflicts = { temperature = "non_default", top_p = "non_default" },
+  conflicts = REASONING_SAMPLING_CONFLICTS,
 }, { pattern = true, priority = 20 })
--- Exact transport probe, 2026-08-19: all three GPT-5.6 tiers accept xhigh
--- and max on /v1/responses. Do not mark the full set strict: any unprobed
--- value remains available under the unknown/fallback policy.
-M.register_capability("openai_responses_agd", is_gpt_5_6_tier, {
-  status = "supported",
-  source = "verified_proxy_probe_2026_08_19",
-  mode = "optional",
-  conflicts = { temperature = "non_default", top_p = "non_default" },
-}, { priority = 100 })
+
+register_verified_route_policies()
 
 return M

@@ -43,6 +43,14 @@ M.models = {
     GPT_5_6_SOL = "gpt-5.6-sol",
     GPT_5_6_TERRA = "gpt-5.6-terra",
     GPT_5_6_LUNA = "gpt-5.6-luna",
+    -- Exact Chat + Responses route probes, 2026-09-30. These are selectable
+    -- frontier additions; defaults remain controlled by AGD_* environment vars.
+    GPT_6_SOL = "gpt-6-sol",
+    GPT_6_LUNA = "gpt-6-luna",
+    -- User-requested future Chat entries. The proxy had not listed these as of
+    -- 2026-09-30; selector aliases become visible when dynamic discovery does.
+    GPT_6_1_SOL = "gpt-6.1-sol",
+    GPT_6_1_LUNA = "gpt-6.1-luna",
     GPT_4O = "gpt-4o",
     GPT_4O_MINI = "gpt-4o-mini",
     GPT_3_5_TURBO = "gpt-3.5-turbo",
@@ -54,6 +62,9 @@ M.models = {
     CLAUDE_SONNET_4 = "claude-sonnet-4",
     CLAUDE_HAIKU_4_5 = "claude-haiku-4-5",
     CLAUDE_SONNET_5 = "claude-sonnet-5",
+    CLAUDE_SONNET_5_5 = "claude-sonnet-5-5",
+    CLAUDE_OPUS_5 = "claude-opus-5",
+    CLAUDE_OPUS_5_5 = "claude-opus-5-5",
     CLAUDE_SONNET_4_5 = "claude-sonnet-4-5",
     CLAUDE_SONNET_4_6 = "claude-sonnet-4-6",
     CLAUDE_OPUS_4_5 = "claude-opus-4-5",
@@ -69,6 +80,8 @@ M.models = {
     GEMINI_3_5_FLASH_LITE = "gemini-3.5-flash-lite",
     GEMINI_3_5_FLASH = "gemini-3.5-flash",
     GEMINI_3_6_FLASH = "gemini-3.6-flash",
+    GEMINI_3_7_FLASH = "gemini-3.7-flash",
+    GEMINI_3_8_FLASH = "gemini-3.8-flash",
     GEMINI_3_PRO = "gemini-3-pro",
     GEMINI_3_FLASH = "gemini-3-flash",
     GEMINI_2_5_PRO = "gemini-2.5-pro",
@@ -109,12 +122,13 @@ M.models = {
     GROK_4_3 = "grok-4.3",
     GROK_4_5 = "grok-4.5",
     GROK_4_6 = "grok-4.6",
+    GROK_4_7 = "grok-4.7",
     GROK_FAST_1 = "grok-code-fast-1",
   },
 }
 
 --- @alias ModelSize "S"|"M"|"L"
---- @alias TierName "default"|"alt"|"max"
+---@alias TierName "default"|"alt"|"max"|"frontier"|"frontier_prev"|"catalog"|"future"
 
 --- @class FilterModelOpts
 --- @field additional_blacklist? string[]
@@ -216,6 +230,9 @@ M.providers = {
         },
         -- avante works but codex models fail codecompanion /completions (not a chat model)
         max = { L = M.models.gpt.GPT_5_6_SOL, M = M.models.gpt.GPT_5_1_CODEX_MAX },
+        -- Verified frontier additions. Do not change AGD_GPT_* defaults here.
+        frontier = { S = M.models.gpt.GPT_6_LUNA, L = M.models.gpt.GPT_6_SOL },
+        future = { S = M.models.gpt.GPT_6_1_LUNA, L = M.models.gpt.GPT_6_1_SOL },
       },
       claude = {
         -- default=current tier, alt=previous tier; env overrides from ~/dotfiles/.bash_exports
@@ -228,6 +245,11 @@ M.providers = {
           M = env_or("AGD_CLAUDE_M_PREV", M.models.claude.CLAUDE_SONNET_4_6),
           L = env_or("AGD_CLAUDE_L_PREV", M.models.claude.CLAUDE_OPUS_4_7),
         },
+        frontier = { M = M.models.claude.CLAUDE_SONNET_5_5 },
+        frontier_prev = { M = M.models.claude.CLAUDE_SONNET_5 },
+        -- Catalog-listed Chat models; this account was cap-blocked during the
+        -- 2026-09-30 probe, so they deliberately receive no effort presets.
+        catalog = { M = M.models.claude.CLAUDE_OPUS_5, L = M.models.claude.CLAUDE_OPUS_5_5 },
       },
       gemini = {
         -- default=current tier, alt=previous tier; env overrides from ~/dotfiles/.bash_exports
@@ -241,6 +263,7 @@ M.providers = {
           M = env_or("AGD_GEMINI_FLASH_BALANCED_PREV", M.models.gemini.GEMINI_3_5_FLASH),
           L = env_or("AGD_GEMINI_PRO_PREV", M.models.gemini.GEMINI_2_5_FLASH),
         },
+        frontier = { S = M.models.gemini.GEMINI_3_7_FLASH, M = M.models.gemini.GEMINI_3_8_FLASH },
       },
       inhouse = { -- in-house / MaaS; env overrides from ~/dotfiles/.bash_exports
         default = {
@@ -263,6 +286,7 @@ M.providers = {
           S = M.models.others.GROK_FAST_1,
           M = M.models.others.GROK_4_5,
         },
+        frontier = { M = M.models.others.GROK_4_7 },
       },
       cursor = {
         default = { M = M.models.others.CURSOR_COMPOSER_2_5 },
