@@ -283,9 +283,12 @@ to show version, commit/date, and binary source without repeated requests.
 Hub Build shows the release tag's target commit date and the date of each
 listed fork commit. The `/api/health` `build` summary and Pi `/mcph` status
 offer faster diagnostics without opening UI.
-`X` on Hub Build confirms stopping the current process and leaves this client
+`X` on Home or Hub Build confirms stopping the current process and leaves this client
 disconnected until an explicit `R` restart (or Home `r` reconnect). It does not reuse the hard-restart
-signal; main dashboard server-row `X` still clears OAuth auth. The new stop
+signal; main dashboard server-row `x` clears OAuth auth for that server only.
+Tool-row `x` remains strict-hide; native rows do not offer clear-auth. Server
+hover hints expose `x` clear-auth only; global `X` Stop hub appears in the Home footer.
+Both views share one stop handler (including safe fallback for missing feature metadata). The new stop
 route accepts only local/tunneled requests with a deliberate-action header;
 it is not available on older hub binaries.
 The fork's historical external patches are now incorporated in commits;

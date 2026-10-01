@@ -77,14 +77,16 @@ Help has a **Hub Build** sub-tab beside the plugin **Changelog**. It fetches
 `mcphub.state`, and shares it with the Home status row. Home shows the running
 version, commit/date, and binary path. Hub Build shows the release tag commit
 date and each listed commit's date, plus capabilities, patch manifest, and
-runtime paths. `X` on Hub Build confirms and sends a deliberate stop request;
+runtime paths. `X` on Home or Hub Build confirms and sends a deliberate stop request;
 the client suppresses automatic reconnect until an explicit `R` restart. The
-main dashboard's server-row `X` still clears OAuth credentials. A 404 from an
+main dashboard's server-row `x` clears OAuth credentials; tool-row `x` keeps
+strict-hide behavior. Server hover hints show `x` clear-auth; native rows
+omit clear-auth. Global `X` stop appears in the Home footer, not server hints. A 404 from an
 older hub is shown without a global error; the plugin changelog stays separate.
 
 **Files**: `lua/mcphub/hub.lua`, `lua/mcphub/state.lua`,
 `lua/mcphub/ui/build_info.lua`, `lua/mcphub/ui/views/help.lua`,
-`lua/mcphub/ui/views/main.lua`
+`lua/mcphub/ui/views/main.lua`, `lua/mcphub/utils/renderer.lua`
 
 ---
 
@@ -178,8 +180,8 @@ hub binary with `/servers/clear-auth`; the current fork has this committed.
 Falls back to file-edit via `utils.mcphub_auth` when the endpoint is absent.
 
 - **`lua/mcphub/hub.lua`** — `MCPHub:clear_server_auth(name, cb)`: calls `POST /servers/clear-auth`; notifies on success; passes `(false, err)` to callback for fallback handling.
-- **`lua/mcphub/ui/views/main.lua`** — `MainView:handle_clear_auth(context)`: API path → on error falls back to `utils.mcphub_auth.clear_notify` by URL; `X` keymap on server rows dispatches here.
-- **`lua/mcphub/utils/renderer.lua`** — adds `<X> Clear auth` to the hover hint for `unauthorized` server rows.
+- **`lua/mcphub/ui/views/main.lua`** — `MainView:handle_clear_auth(context)`: API path → on error falls back to `utils.mcphub_auth.clear_notify` by URL; patch 16 assigns this to `x` on server rows (`X` stops the hub).
+- **`lua/mcphub/utils/renderer.lua`** — introduces the clear-auth hover hint; patch 16 shows `<x> Clear auth` on all non-native server rows.
 
 Also: `lua/utils/mcphub_auth.lua` (project-local helper) updated to try API path before file-edit.
 

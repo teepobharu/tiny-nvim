@@ -185,10 +185,10 @@ index 9010cdb..2948a30 100644
              state = status,
 diff --git c/lua/mcphub/ui/build_info.lua w/lua/mcphub/ui/build_info.lua
 new file mode 100644
-index 0000000..25d8544
+index 0000000..0ad1ec3
 --- /dev/null
 +++ w/lua/mcphub/ui/build_info.lua
-@@ -0,0 +1,38 @@
+@@ -0,0 +1,76 @@
 +local State = require("mcphub.state")
 +
 +local M = {}
@@ -224,6 +224,44 @@ index 0000000..25d8544
 +        end,
 +    })
 +    return cache
++end
++
++-- Home and Hub Build use the same confirmed, non-reconnecting stop action.
++function M.stop_hub(ui)
++    local cache = M.get_cache(ui)
++    local hub = State.hub_instance
++    if not hub or not State:is_connected() then
++        vim.notify("MCP Hub is not connected", vim.log.levels.WARN)
++        return
++    end
++    local features = ((cache.data or {}).build or {}).features or {}
++    if cache.status ~= "loaded" or not features.stopHub then
++        vim.notify("This running hub does not advertise the stop endpoint", vim.log.levels.WARN)
++        return
++    end
++    local runtime = cache.data.runtime or {}
++    local choice = vim.fn.confirm(
++        string.format(
++            "Stop the current MCP Hub process?\n\nPort: %s   PID: %s\nOther clients will disconnect. This Neovim will not reconnect until you press R.",
++            tostring(runtime.port or hub.port or "unknown"),
++            tostring(runtime.pid or "unknown")
++        ),
++        "&Stop hub\n&Cancel",
++        2,
++        "Warning"
++    )
++    if choice ~= 1 then
++        return
++    end
++    hub:stop_server({
++        callback = function(ok, err)
++            if ok then
++                vim.notify("MCP Hub stopped; press R to start it again", vim.log.levels.INFO)
++            else
++                vim.notify("Could not stop MCP Hub: " .. tostring(err), vim.log.levels.ERROR)
++            end
++        end,
++    })
 +end
 +
 +return M
@@ -263,19 +301,18 @@ index 2866484..75e5170 100644
                  -- `setup_state` can advance the generation between dispatch and
                  -- completion. Once this old request releases the only in-flight
 diff --git c/lua/mcphub/ui/views/help.lua w/lua/mcphub/ui/views/help.lua
-index 2cb4660..f923ca8 100644
+index 2cb4660..bbf54cb 100644
 --- c/lua/mcphub/ui/views/help.lua
 +++ w/lua/mcphub/ui/views/help.lua
-@@ -4,6 +4,8 @@
+@@ -4,6 +4,7 @@
  ---@brief ]]
  local Text = require("mcphub.utils.text")
  local View = require("mcphub.ui.views.base")
-+local State = require("mcphub.state")
 +local BuildInfo = require("mcphub.ui.build_info")
  
  ---@class HelpView:View
  ---@field active_tab string Currently active tab
-@@ -20,6 +22,7 @@ function HelpView:new(ui)
+@@ -20,6 +21,7 @@ function HelpView:new(ui)
          { id = "troubleshooting", text = "Troubleshooting" },
          { id = "native", text = "Native Servers" },
          { id = "changelog", text = "Changelog" },
@@ -283,7 +320,7 @@ index 2cb4660..f923ca8 100644
      }
      instance.active_tab = instance.tabs[1].id
      instance = setmetatable(instance, HelpView)
-@@ -34,6 +37,7 @@ function HelpView:cycle_tab()
+@@ -34,6 +36,7 @@ function HelpView:cycle_tab()
              break
          end
      end
@@ -291,7 +328,7 @@ index 2cb4660..f923ca8 100644
  end
  
  function HelpView:cycle_tab_reverse()
-@@ -44,6 +48,57 @@ function HelpView:cycle_tab_reverse()
+@@ -44,6 +47,25 @@ function HelpView:cycle_tab_reverse()
              break
          end
      end
@@ -313,43 +350,11 @@ index 2cb4660..f923ca8 100644
 +end
 +
 +function HelpView:stop_running_hub()
-+    local cache = BuildInfo.get_cache(self.ui)
-+    local hub = State.hub_instance
-+    if not hub or not State:is_connected() then
-+        vim.notify("MCP Hub is not connected", vim.log.levels.WARN)
-+        return
-+    end
-+    if cache.status ~= "loaded" or not ((cache.data or {}).build or {}).features.stopHub then
-+        vim.notify("This running hub does not advertise the stop endpoint", vim.log.levels.WARN)
-+        return
-+    end
-+    local runtime = cache.data.runtime or {}
-+    local choice = vim.fn.confirm(
-+        string.format(
-+            "Stop the current MCP Hub process?\n\nPort: %s   PID: %s\nOther clients will disconnect. This Neovim will not reconnect until you press R.",
-+            tostring(runtime.port or hub.port or "unknown"),
-+            tostring(runtime.pid or "unknown")
-+        ),
-+        "&Stop hub\n&Cancel",
-+        2,
-+        "Warning"
-+    )
-+    if choice ~= 1 then
-+        return
-+    end
-+    hub:stop_server({
-+        callback = function(ok, err)
-+            if ok then
-+                vim.notify("MCP Hub stopped; press R to start it again", vim.log.levels.INFO)
-+            else
-+                vim.notify("Could not stop MCP Hub: " .. tostring(err), vim.log.levels.ERROR)
-+            end
-+        end,
-+    })
++    BuildInfo.stop_hub(self.ui)
  end
  
  function HelpView:render_tabs()
-@@ -82,6 +137,88 @@ function HelpView:before_enter()
+@@ -82,6 +104,88 @@ function HelpView:before_enter()
              desc = "Previous tab",
          },
      }
@@ -438,7 +443,7 @@ index 2cb4660..f923ca8 100644
  end
  
  function HelpView:render()
-@@ -148,6 +285,8 @@ MCPHub is an open-source project that relies on community support. Your support
+@@ -148,6 +252,8 @@ MCPHub is an open-source project that relies on community support. Your support
          else
              table.insert(lines, Text.pad_line("Native server guide not found", Text.highlights.error))
          end
@@ -448,7 +453,7 @@ index 2cb4660..f923ca8 100644
          local changelog = prompt_utils.get_plugin_changelog()
          if changelog then
 diff --git c/lua/mcphub/ui/views/main.lua w/lua/mcphub/ui/views/main.lua
-index 3039580..47ecfad 100644
+index 3039580..8b0569d 100644
 --- c/lua/mcphub/ui/views/main.lua
 +++ w/lua/mcphub/ui/views/main.lua
 @@ -5,6 +5,7 @@
@@ -459,7 +464,26 @@ index 3039580..47ecfad 100644
  local Text = require("mcphub.utils.text")
  local View = require("mcphub.ui.views.base")
  local config_manager = require("mcphub.utils.config_manager")
-@@ -800,7 +801,7 @@ function MainView:setup_active_mode()
+@@ -746,9 +747,16 @@ function MainView:setup_active_mode()
+             },
+             ["x"] = {
+                 action = function()
+-                    self:handle_removed_tool_toggle()
++                    local line_type, context = self:get_line_info(vim.api.nvim_win_get_cursor(0)[1])
++                    if line_type == "server" and context then
++                        if not context.is_native then
++                            self:handle_clear_auth(context)
++                        end
++                    else
++                        self:handle_removed_tool_toggle()
++                    end
+                 end,
+-                desc = "Strict hide tool",
++                desc = "Clear auth / Strict hide tool",
+             },
+             ["h"] = {
+                 action = function()
+@@ -800,7 +808,7 @@ function MainView:setup_active_mode()
              local State = require("mcphub.state")
              if State.hub_instance and not State:is_connected() then
                  vim.notify("MCP Hub: attempting reconnect")
@@ -468,7 +492,24 @@ index 3039580..47ecfad 100644
                  return
              end
              self.ui:hard_refresh()
-@@ -2374,7 +2375,31 @@ function MainView:render_hub_status()
+@@ -875,14 +883,9 @@ function MainView:setup_active_mode()
+     }
+     self.keymaps["X"] = {
+         action = function()
+-            local cursor = vim.api.nvim_win_get_cursor(0)
+-            local line_type, context = self:get_line_info(cursor[1])
+-            if line_type == "server" and context then
+-                self:handle_clear_auth(context)
+-            end
++            BuildInfo.stop_hub(self.ui)
+         end,
+-        desc = "Clear OAuth / re-auth",
+-        silent = true,
++        desc = "Stop hub",
+     }
+     if not self.active_capability then
+         -- Endpoint and agent keys dispatch by line type here, so cursor movement
+@@ -2374,7 +2377,31 @@ function MainView:render_hub_status()
      if suffix then
          line:append(suffix, Text.highlights.muted)
      end
@@ -501,3 +542,28 @@ index 3039580..47ecfad 100644
  end
  
  function MainView:render()
+diff --git c/lua/mcphub/utils/renderer.lua w/lua/mcphub/utils/renderer.lua
+index 11b902a..6fdfa8a 100644
+--- c/lua/mcphub/utils/renderer.lua
++++ w/lua/mcphub/utils/renderer.lua
+@@ -625,7 +625,7 @@ function M.render_server_capabilities(server, lines, current_line, server_config
+     local needs_authorization = server.status == "unauthorized"
+     local enabled_hint = is_native and "[<l> Expand, <t> Toggle, <a> Auto-approve, <e> Edit, <y> Copy, <Y> Copy path]"
+         or needs_authorization
+-                and "[<l> Authorize, <X> Clear auth, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
++                and "[<l> Authorize, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
+             or "[<l> Expand, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
+     local expanded_hint = is_native and "[<h> Collapse, <t> Toggle, <a> Auto-approve, <e> Edit, <y> Copy, <Y> Copy path]"
+         or "[<h> Collapse, <t> Toggle, <a> Auto-approve, <e> Edit, <d> Delete, <y> Copy, <Y> Copy path]"
+@@ -641,8 +641,11 @@ function M.render_server_capabilities(server, lines, current_line, server_config
+         hint = view:is_server_expanded(server.name) and expanded_hint or enabled_hint
+     end
+ 
++    hint = is_native and hint or hint:sub(1, -2) .. ", <x> Clear auth]"
++
+     view:track_line(current_line, "server", {
+         name = server.name,
++        is_native = is_native == true,
+         status = server.status,
+         hint = hint,
+     })
