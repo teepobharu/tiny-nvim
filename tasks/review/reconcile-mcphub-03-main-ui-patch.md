@@ -8,8 +8,7 @@ refs:
   - 163b3ad [tag:v6.2.0] chore(release): v6.2.0
 related:
   - [Patch catalog](patches/mcphub.nvim/README.md)
-  - [03 main UI patch](patches/mcphub.nvim/03-main-ui_v1.patch)
-  - [03 main UI patch v2](patches/mcphub.nvim/03-main-ui_v2.patch)
+  - [Current 03 main UI patch](patches/mcphub.nvim/03-main-ui_v3.patch)
   - [02 hub stability patch](patches/mcphub.nvim/02-hub-stability_v1.patch)
   - [MCPHub memory](docs/memory/mcphub.md)
   - [Initial-load sections task](tasks/review/mcphub-ui-initial-load-cli-agents.md)
@@ -253,5 +252,5 @@ NVIM_APPNAME=nvimwt3a nvim
 ## References
 
 - [Patch catalog](patches/mcphub.nvim/README.md)
-- [03 main UI patch](patches/mcphub.nvim/03-main-ui_v1.patch)
+- [Current 03 main UI patch](patches/mcphub.nvim/03-main-ui_v3.patch)
 - [02 hub stability patch](patches/mcphub.nvim/02-hub-stability_v1.patch)

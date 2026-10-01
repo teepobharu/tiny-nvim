@@ -225,7 +225,7 @@ server UI behind logs until hub state was `READY` or `RESTARTED`. The revised
 patch keeps the dashboard visible and reads bounded pre-ready health snapshots;
 the backend readiness wait below still prevents the global `READY` transition:
 
-- [03-main-ui_v2](patches/mcphub.nvim/03-main-ui_v2.patch).
+- [Consolidated main UI patch](patches/mcphub.nvim/03-main-ui_v3.patch).
 
 That explains the difference between a fresh hub startup and a later Neovim
 session attached to an already-ready hub.
@@ -407,7 +407,7 @@ Benefit of showing UI first:
 ### Slice 4: Neovim UI and refresh (partially done)
 
 - [x] Keep the `mcphub.nvim` main dashboard visible during `STARTING`, with
-      logs reserved for `L`. [03-main-ui_v2](patches/mcphub.nvim/03-main-ui_v2.patch)
+      logs reserved for `L`. [Consolidated main UI patch](patches/mcphub.nvim/03-main-ui_v3.patch)
       polls the pre-ready health route for up to 15 seconds, including through
       the `State.hub_instance` creation handoff and one read around `READY`, so
       existing connection rows/tools appear before global readiness without a
@@ -424,7 +424,7 @@ Benefit of showing UI first:
       exits successfully, and broadcast `SERVERS_UPDATED` so the UI can redraw
       without a server toggle.
 - [x] Decide whether any UI changes belong in the existing
-      [03 main UI patch](patches/mcphub.nvim/03-main-ui_v1.patch) or a new patch.
+      [03 main UI patch](patches/mcphub.nvim/03-main-ui_v3.patch) or a new patch.
 - [x] Update [docs/memory/mcphub.md](docs/memory/mcphub.md) for stdio
       `authCommand` / on-demand Slack auth behavior.
 - [ ] Update [docs/memory/mcphub.md](docs/memory/mcphub.md) after the async

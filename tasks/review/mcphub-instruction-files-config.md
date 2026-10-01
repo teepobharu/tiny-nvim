@@ -96,7 +96,7 @@ Each server in `mcphub.json` supports a `custom_instructions` object:
 
 #### Token estimates
 
-The token-count behavior now grouped into `patches/mcphub.nvim/03-main-ui_v1.patch` shows approximate token counts on connected server rows. Server counts estimate `mcphub.utils.prompt.server_to_text(server)` after applying `disabled_tools`, `removed_tools`, and env regex tool filters.
+The token-count behavior now grouped into `patches/mcphub.nvim/03-main-ui_v3.patch` shows approximate token counts on connected server rows. Server counts estimate `mcphub.utils.prompt.server_to_text(server)` after applying `disabled_tools`, `removed_tools`, and env regex tool filters.
 
 ### Current gap
 
@@ -174,7 +174,7 @@ Add schema validation for the new `files` array in `custom_instructions`.
 
 ### Phase 4: Update token_counts patch
 
-The local [grouped main UI patch](patches/mcphub.nvim/03-main-ui_v1.patch) estimates token counts for `server_to_text()`. Update it to include file content sizes.
+The local [grouped main UI patch](patches/mcphub.nvim/03-main-ui_v3.patch) estimates token counts for `server_to_text()`. Update it to include file content sizes.
 
 ### Phase 5: Migrate existing large instructions
 

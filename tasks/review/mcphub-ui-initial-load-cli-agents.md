@@ -8,7 +8,7 @@ refs:
   - mcphub.nvim lazy checkout `7cd5db3` (main profile), `163b3ad` (nvimwt3a profile)
 related:
   - [Patch catalog](patches/mcphub.nvim/README.md)
-  - [03 main UI patch v2](patches/mcphub.nvim/03-main-ui_v2.patch)
+  - [Consolidated main UI patch](patches/mcphub.nvim/03-main-ui_v3.patch)
   - [MCPHub config](lua/plugins/extra/myAi.lua)
   - [MCPHub memory](docs/memory/mcphub.md)
   - [Startup non-blocking UI task](tasks/open/mcphub-startup-slack-auth-async-ui.md)
@@ -63,7 +63,7 @@ catalog file - not the base config - is the correct source to expose.
 
 - [x] Replace the startup logs branch in `MainView:render()` with the normal
       dashboard path, shipped as
-      [patches/mcphub.nvim/03-main-ui_v2.patch](patches/mcphub.nvim/03-main-ui_v2.patch).
+      [patches/mcphub.nvim/03-main-ui_v3.patch](patches/mcphub.nvim/03-main-ui_v3.patch).
 - [x] Keep that dashboard shell during setup progress, with a fixed state row
       and a `Waiting for server status...` placeholder until a server snapshot
       exists; setup failure and the not-started welcome screen remain distinct.
@@ -204,7 +204,7 @@ NVIM_APPNAME=nvim3_jelly_tinynvim nvim
 
 ## References
 
-- [Revised main UI patch](patches/mcphub.nvim/03-main-ui_v2.patch)
+- [Revised main UI patch](patches/mcphub.nvim/03-main-ui_v3.patch)
 - [Agent registry helper](lua/utils/mcphub_agents.lua)
 - Codex MCP catalog: `~/dotfiles/ai/codex/config.ag-mcp.toml`
 - Codex MCP sync script: `~/dotfiles/ai/codex/sync-agoda-mcp.sh`

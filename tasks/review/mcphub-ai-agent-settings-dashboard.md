@@ -11,9 +11,7 @@ related:
   - [Agent settings discovery](lua/utils/mcphub_agent_settings.lua)
   - [CLI agent helper](lua/utils/mcphub_agents.lua)
   - [MCPHub patch catalog](patches/mcphub.nvim/README.md)
-  - [Agent settings patch](patches/mcphub.nvim/08-ai-agent-settings_v1.patch)
-  - [Dedicated agent settings view](patches/mcphub.nvim/09-agent-settings-view_v1.patch)
-  - [Agent settings editor navigation](patches/mcphub.nvim/10-agent-settings-open-editor_v1.patch)
+  - [Consolidated Agent settings patch](patches/mcphub.nvim/08-agent-settings_v2.patch)
   - [MCPHub memory](docs/memory/mcphub.md)
   - [Native skills catalog follow-up](tasks/open/codecompanion-rules-mcphub-native-skills.md)
 ---

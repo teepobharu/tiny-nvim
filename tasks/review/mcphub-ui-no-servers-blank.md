@@ -12,9 +12,8 @@ related:
   - [myAi.lua config](lua/plugins/extra/myAi.lua)
   - [mcphub.json](~/dotfiles/ai/mcp/mcphub.json)
   - [Grouped hub stability patch](patches/mcphub.nvim/02-hub-stability_v1.patch)
-  - [Grouped main UI patch](patches/mcphub.nvim/03-main-ui_v1.patch)
-  - [Startup context patch](patches/mcphub.nvim/11-main-ui-startup-context_v1.patch)
-  - [Startup input guard patch](patches/mcphub.nvim/12-startup-no-input-steal_v1.patch)
+  - [Grouped main UI patch](patches/mcphub.nvim/03-main-ui_v3.patch)
+  - [Consolidated startup guards](patches/mcphub.nvim/11-startup-guards_v2.patch)
   - [Patcher stack-restore patch](patches/lazy-local-patcher.nvim/01-reversible-stack-restore_v1.patch)
 ---
 
