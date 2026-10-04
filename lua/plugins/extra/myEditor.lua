@@ -418,7 +418,8 @@ return {
           },
           avante_commands = {
             name = "avante_commands",
-            module = "blink.compat.source",
+            -- MCP selections insert inline; other Avante commands still use blink.compat.
+            module = "utils.avante_mcp_completion",
             score_offset = 1000, -- highest priority - show commands first
             opts = {},
           },

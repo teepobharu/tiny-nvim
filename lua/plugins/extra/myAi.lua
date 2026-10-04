@@ -249,7 +249,14 @@ return {
           return tools
         end
       end
+      local avante_mcp = require "utils.avante_mcphub"
+      avante_mcp.extend_opts(opts, {
+        server_commands = true,
+        tool_commands = true,
+        aliases = {}, -- Optional: { slack = "<exact MCP server name>" }; never guess between Slack servers.
+      })
       require("avante").setup(opts)
+      avante_mcp.install_slash_commands()
 
       -- Avante model selector iterates over `avante.config.providers` keys and will
       -- try to list models for each provider. Avante defaults include `copilot`,

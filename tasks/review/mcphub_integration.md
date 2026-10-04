@@ -3,7 +3,7 @@
 ## Metadata
 
 - **Created**: 2025-01-27
-- **Updated**: 2026-04-26
+- **Updated**: 2026-10-05
 - **Status**: review
 - **Priority**: medium
 - **Tags**: ai, mcp, codecompanion, avante, copilot
@@ -138,9 +138,17 @@ mcphub.nvim handles port conflicts gracefully:
 ### Phase 3: Avante Integration
 
 - [x] **3.1** Enable avante extension in mcphub.setup()
-- [ ] **3.2** Add `system_prompt` function in [avante.lua](lua/plugins/extra/avante.lua)
-- [ ] **3.3** Add `custom_tools` function
+- [x] **3.2** Add lean `system_prompt` through [Avante helper](lua/utils/avante_mcphub.lua), wired by [myAi.lua](lua/plugins/extra/myAi.lua)
+- [x] **3.3** Add approval-aware MCP dispatch and bounded discovery via `custom_tools`
 - [ ] **3.4** Test MCP tool usage
+
+2026-10-05: Lean MCP discovery, explicit server/tool schemas and non-destructive
+inline completion are implemented. The user accepted the current implementation;
+completion follow-up is logged in the existing
+[completed Avante task](tasks/completed/avante-cmp-integration.md).
+160 targeted assertions passed. This broader task stays in review: user sign-off
+on completion does not verify every provider/tool round-trip, CodeCompanion,
+CopilotChat, CLI persistence or policy item in the remaining checklist.
 
 ### Phase 4: CopilotChat Integration ✅
 
