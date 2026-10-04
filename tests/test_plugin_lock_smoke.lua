@@ -1,0 +1,115 @@
+-- Read-only plugin checks in a clean Neovim instance; no Lazy sync, hub or model calls.
+local root = vim.env.NVIM_REVIEW_ROOT or vim.fn.getcwd()
+local plugins = vim.env.NVIM_REVIEW_PLUGIN_ROOT or vim.fn.stdpath("data") .. "/lazy"
+vim.opt.rtp:prepend(root)
+vim.opt.rtp:append(vim.fs.dirname(plugins) .. "/site")
+for name in vim.fs.dir(plugins) do vim.opt.rtp:append(plugins .. "/" .. name) end
+local passed, failed = 0, 0
+local function test(name, fn)
+  local ok, err = pcall(fn)
+  if ok then passed = passed + 1; print("PASS " .. name)
+  else failed = failed + 1; print("FAIL " .. name .. ": " .. tostring(err)) end
+end
+local scratch = vim.fn.tempname()
+vim.fn.mkdir(scratch, "p")
+test("current buffer tab mapping preserves edits and cursor", function()
+  vim.g.mapleader = " "
+  local source = table.concat(vim.fn.readfile(root .. "/lua/config/mykeymaps.lua"), "\n")
+  local stanza = assert(source:match('(local function open_current_buffer_in_new_tab%(%)\n.-\nkeymap%("n", "<leader><Tab>n".-\n)'))
+  local chunk = assert(loadstring("local keymap = vim.keymap.set\n" .. stanza))
+  chunk()
+  local buf = vim.api.nvim_get_current_buf()
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "unsaved", "keep cursor" })
+  vim.api.nvim_win_set_cursor(0, { 2, 3 })
+  local tabs = #vim.api.nvim_list_tabpages()
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(" <Tab>n", true, false, true), "xt", false)
+  assert(#vim.api.nvim_list_tabpages() == tabs + 1)
+  assert(vim.api.nvim_get_current_buf() == buf and vim.bo[buf].modified)
+  assert(vim.deep_equal(vim.api.nvim_win_get_cursor(0), { 2, 3 }))
+  assert(vim.api.nvim_buf_get_lines(buf, 0, 1, false)[1] == "unsaved")
+  vim.cmd "tabclose!"
+end)
+test("LuaSnip snippet list diagnostics stay buffer-local", function()
+  local original = vim.api.nvim_get_current_buf()
+  vim.diagnostic.enable(true)
+  require("luasnip.extras.snippet_list").open()
+  local view = vim.api.nvim_get_current_buf()
+  assert(view ~= original and vim.bo[view].buftype == "nofile")
+  assert(not vim.bo[view].modifiable)
+  assert(not vim.diagnostic.is_enabled({ bufnr = view }))
+  assert(vim.diagnostic.is_enabled({ bufnr = original }))
+  vim.cmd "close!"
+end)
+test("friendly snippets manifest and JSON", function()
+  local base = plugins .. "/friendly-snippets/"
+  local manifest = vim.json.decode(table.concat(vim.fn.readfile(base .. "package.json"), "\n"))
+  for _, entry in ipairs(manifest.contributes.snippets) do
+    local snippets = vim.json.decode(table.concat(vim.fn.readfile(base .. entry.path), "\n"))
+    assert(type(snippets) == "table", entry.path)
+  end
+end)
+test("img-clip setup", function() require("img-clip").setup({}) end)
+test("mini.ai setup and HTML tag textobject", function()
+  require("mini.ai").setup({})
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { "<tag >text</tag >" })
+  vim.api.nvim_win_set_cursor(0, { 1, 7 })
+  assert(require("mini.ai").find_textobject("a", "t") ~= nil)
+end)
+test("quick-code-runner loads", function() assert(type(require("quick-code-runner").setup) == "function") end)
+test("vim-test strategy functions load", function()
+  vim.cmd("source " .. vim.fn.fnameescape(plugins .. "/vim-test/autoload/test/strategy.vim"))
+  assert(vim.fn.exists("*test#strategy#herdr") == 1)
+end)
+test("gitsigns setup and diff API", function()
+  require("gitsigns").setup({ attach_to_untracked = false })
+  assert(type(require("gitsigns").diffthis) == "function")
+end)
+test("Tree-sitter parses Lua, TS and Markdown queries", function()
+  require("nvim-treesitter").setup({ install_dir = vim.fs.dirname(plugins) .. "/site" })
+  for lang, text in pairs({ lua = "local x = 1", typescript = "const x: number = 1;", markdown = "# heading\n\n| a | b |\n|---|---|\n| 1 | 2 |" }) do
+    assert(vim.treesitter.get_string_parser(text, lang):parse()[1])
+    assert(vim.treesitter.query.get(lang, "highlights"))
+  end
+  assert(vim.treesitter.query.get("lua", "textobjects"))
+  assert(type(require("nvim-treesitter-textobjects.select").select_textobject) == "function")
+end)
+test("render-markdown renders headings and tables", function()
+  require("render-markdown").setup({ file_types = { "markdown", "Avante" } })
+  vim.cmd "enew!"
+  vim.api.nvim_buf_set_lines(0, 0, -1, false, { "# heading", "", "| a | b |", "|---|---|", "| 1 | 2 |" })
+  vim.bo.filetype = "markdown"
+  require("render-markdown").render({ buf = vim.api.nvim_get_current_buf() })
+  vim.wait(200, function() return false end, 20)
+  local marks = vim.api.nvim_buf_get_extmarks(0, require("render-markdown.core.ui").ns, 0, -1, {})
+  assert(#marks > 0, "expected rendering extmarks")
+end)
+test("neo-tree filesystem opens and closes", function()
+  require("neo-tree").setup({ enable_git_status = false, filesystem = { use_libuv_file_watcher = false } })
+  require("neo-tree.command").execute({ action = "show", source = "filesystem", dir = root, position = "left" })
+  assert(vim.wait(1500, function()
+    for _, win in ipairs(vim.api.nvim_list_wins()) do
+      if vim.bo[vim.api.nvim_win_get_buf(win)].filetype == "neo-tree" then return true end
+    end
+    return false
+  end, 20), "tree did not open")
+  require("neo-tree.command").execute({ action = "close", source = "filesystem", position = "left" })
+end)
+test("sidekick config loads with NES disabled", function()
+  require("sidekick").setup({ nes = { enabled = false }, cli = { watch = false } })
+  assert(type(require("sidekick.cli").toggle) == "function")
+end)
+test("FFF native file and content search", function()
+  require("fff").setup({ base_path = root, logging = { enabled = false },
+    frecency = { enabled = false, db_path = scratch .. "/files" },
+    history = { enabled = false, db_path = scratch .. "/queries" } })
+  require("fff.core").ensure_initialized()
+  require("fff.file_picker").setup()
+  local files = require("fff").file_search("mykeymaps", { cwd = root, wait_for_index_ms = 10000 })
+  assert(files.total_matched > 0, "file index returned no match")
+  local matches = require("fff").content_search("open_current_buffer_in_new_tab", { cwd = root })
+  assert(matches.total_matched > 0, "grep returned no match")
+  require("fff.fuzzy").cleanup_file_picker()
+end)
+vim.fn.delete(scratch, "rf")
+print(string.format("Review smoke checks: %d passed, %d failed", passed, failed))
+vim.cmd(failed == 0 and "qa!" or "cquit 1")

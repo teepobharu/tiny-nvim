@@ -36,6 +36,7 @@
 - [lazy-nvim-config-merging.md](lazy-nvim-config-merging.md) — deep-merge rules: tables merge, functions don't (last wins)
 - [lazy-local-patching.md](lazy-local-patching.md) — local patches for Lazy plugins via patches/ dir
 - [lazy-nvim-local-dev.md](lazy-nvim-local-dev.md) — local plugin development with Lazy.nvim
+- [plugin-upgrade-checks.md](plugin-upgrade-checks.md) — isolated upgrade probes and FFF/Markdown test setup pitfalls
 
 ## Git / GitLab
 
