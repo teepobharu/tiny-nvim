@@ -3,7 +3,7 @@ title: "Upgrade blink.cmp to v2"
 status: open
 priority: medium
 created: 2026-05-07
-updated: 2026-07-02
+updated: 2026-09-29
 related:
   - [lua/plugins/extra/myCoding.lua](lua/plugins/extra/myCoding.lua)
   - [lua/plugins/coding.lua](lua/plugins/coding.lua)
@@ -12,7 +12,7 @@ related:
 
 ## Objective
 
-Upgrade blink.cmp from pinned v1.10.2 to v2. Currently blocked on Neovim 0.12+. Capture all migration requirements here so upgrade can be done in one session.
+Upgrade blink.cmp from v1.10.2 to v2 after an isolated compatibility pass. The Neovim 0.12 prerequisite is now met; the plugin migration and interactive completion verification remain open.
 
 ## Context
 
@@ -24,16 +24,18 @@ blink.cmp v2 requires blink.lib ("saghen/blink.lib") installed via your package 
 
 Fixed by committing `saghen/blink.cmp` to SHA `9b189bb` (v1.10.2) via `myCoding.lua` override. v2 deferred pending nvim upgrade.
 
-**Current state**:
-- Nvim: 0.11.6 (homebrew stable available: 0.12.2)
+**Current state (2026-09-29)**:
+- Nvim: Homebrew 0.12.5 installed; 0.11.6 keg retained for rollback.
 - blink.cmp: pinned to v1.10.2 via [`lua/plugins/extra/myCoding.lua:4`](lua/plugins/extra/myCoding.lua#L4)
-- lazy-lock.json: `"blink.cmp": { "commit": "9b189bb2a0e03412e0e901dfbd09904f86cd593c" }`
+- Installed plugin and dirty `lazy-lock.json`: `78336bc` (v1.10.2); the config override still names `9b189bb`. Resolve this mismatch before interpreting a future sync.
+- The upstream v2 guide still requires `blink.lib` and documents multiple breaking changes. The upstream README describes v2 as under active development, so treat it as a separate opt-in migration rather than part of a blanket plugin update.
+- Broad `:Lazy sync` is gated by [MCPHub patch-stack recovery](tasks/open/mcphub-patch-stack-recovery.md).
 
 ## Requirements
 
 ### Hard prerequisites
 
-- [ ] Upgrade Neovim to 0.12+ (`brew upgrade neovim` → 0.12.2 available now)
+- [x] Upgrade Neovim to 0.12+ (Homebrew 0.12.5 installed 2026-09-28)
 - [ ] Add `saghen/blink.lib` as dependency
 
 ### Spec changes
@@ -72,20 +74,21 @@ After upgrade, `lazy-lock.json` entry for `blink.cmp` should track v2 SHA (no `b
 
 ## Action Items
 
-- [ ] Re-check current Neovim version before starting; v2 is blocked unless it is 0.12+.
+- [x] Re-check current Neovim version: 0.12.5 installed; recheck again when doing the v2 migration.
+- [ ] Reconcile the override SHA (`9b189bb`) with the installed/lock SHA (`78336bc`) before touching the dirty lockfile.
 - [ ] Re-read current blink.cmp v2 upgrade notes before editing because the plugin API may have changed.
 - [ ] Keep all blink/LuaSnip overrides in [myCoding.lua](lua/plugins/extra/myCoding.lua).
 - [ ] Run the full completion smoke test across Lua, Markdown, and snippet expansion after `:Lazy sync`.
 
 ## Points to Confirm
 
-- [ ] Confirm it is acceptable to upgrade Homebrew Neovim for the daily-driver profile before changing the config.
+- [x] Homebrew Neovim upgrade was requested and completed; no further binary change is needed for v2.
 - [ ] Confirm whether to test first in `NVIM_APPNAME=nvimwt3a` only, then apply to `nvim3_jelly_tinynvim`.
 - [ ] Confirm whether Copilot and Minuet both need to be verified in the same session.
 
 ## Implementation Plan
 
-- [ ] `brew upgrade neovim` — confirm reaches 0.12+
+- [x] `nvim --version` — confirmed 0.12.5 after the Homebrew upgrade.
 - [ ] In `myCoding.lua`: replace commit-pin block with `{ "saghen/blink.cmp", dependencies = { "saghen/blink.lib" } }` override
 - [ ] In `myCoding.lua`: add LuaSnip version unpin override
 - [ ] Run `:Lazy sync` — installs blink.lib, updates blink.cmp to latest v2
@@ -113,7 +116,7 @@ Restart Neovim after sync. Enter insert mode in a Lua buffer (for lazydev comple
 ### Commands
 
 ```bash
-brew upgrade neovim
+nvim --version
 NVIM_APPNAME=nvim3_jelly_tinynvim nvim
 ```
 
@@ -144,3 +147,4 @@ NVIM_APPNAME=nvim3_jelly_tinynvim nvim
 - [Current pin override](lua/plugins/extra/myCoding.lua)
 - [Upstream spec](lua/plugins/coding.lua)
 - [Lazy merging — commit pin pattern](docs/memory/lazy-nvim-config-merging.md)
+- [MCPHub patch-stack recovery gate](tasks/open/mcphub-patch-stack-recovery.md)
