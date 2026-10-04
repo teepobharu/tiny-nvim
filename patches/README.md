@@ -7,3 +7,4 @@ Current plugin patch docs:
 - `patches/codecompanion.nvim/README.md`
 - `patches/codecompanion-history.nvim/README.md`
 - `patches/mcphub.nvim/README.md`
+- `patches/LuaSnip/01-neovim-012-diagnostics_v1.patch` — use the supported per-buffer diagnostics API in the optional snippet-list view (Neovim 0.11/0.12).
