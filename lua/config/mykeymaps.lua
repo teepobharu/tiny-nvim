@@ -262,6 +262,11 @@ keymap("v", "<C-k>", "<C-u>", { desc = "Move page up" })
 -- ============================
 --   Windows and Tabs
 -- ============================
+local function open_current_buffer_in_new_tab()
+  vim.cmd "tab split"
+end
+
+keymap("n", "<leader><Tab>n", open_current_buffer_in_new_tab, { desc = "Current buffer in new tab", silent = true })
 keymap("n", "<leader>wh", ":sp<CR>", { desc = "HSplit", silent = true })
 keymap("n", "<leader>wv", ":vs<CR>", { desc = "VSplit", silent = true })
 keymap("n", "<M-Tab>", ":tabnext<CR>", { noremap = true, silent = true })
@@ -1873,4 +1878,3 @@ vim.api.nvim_create_user_command("FzfSessionDelayed", function()
     vim.cmd [[execute "normal \<Esc>:FzfSession\<CR>"]]
   end)
 end, { desc = "Open FzfSession picker with delay (for vs alias)" })
-
