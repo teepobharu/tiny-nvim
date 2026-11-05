@@ -65,6 +65,79 @@ Patches are applied in sorted order within a plugin directory.
 
 Nvim 0.12 removed `vim.diagnostic.disable()`. The LuaSnip snippet-list extra still calls it at `642b0c5` (and at upstream master checked 2026-09-28), so opening that view fails without this patch. The patch keeps the buffer-local intent via `vim.diagnostic.enable(false, { bufnr = buf })`. The main and `nvimwt3a` installed LuaSnip checkouts were patched and smoke-tested under Nvim 0.12; patch files exist in both config trees so the change survives Lazy sync. Remove the patch when upstream adopts the new API.
 
+### MCPHub 08/16 orphan recovery and repeatable patch cycles (2026-11-03)
+
+The daily checkout at `163b3ad` exactly reproduced the full current stack with
+08 and 16 omitted, plus their untracked `agent_settings.lua` and `build_info.lua`
+files. Those two files matched the full-stack output byte-for-byte. `git apply
+--check` refused both patches because the files already existed. The missing
+Home version/commit row, Help > Hub Build tab, and Agents-view wiring were
+therefore a partial patch application, not missing patch contents or absent
+backend metadata. The running backend already exposed `/api/build-info`.
+
+The revised `patches/lazy-local-patcher.nvim/01-reversible-stack-restore_v1.patch`
+uses a transaction per repository:
+
+- Captures patch-owned files and modes, rejects symlink components and staged
+  changes on those paths, and verifies the configured directory is the Git root.
+- Reverses/normalizes the entire stack and proves every forward apply in a
+  disposable checkout. A refusal or late patch failure leaves installed files
+  untouched. Exact generated-file leftovers can be recovered even when Git hides
+  untracked files; unknown contents and unrelated files are preserved.
+- Rechecks HEAD, staged paths, and original file bytes/modes before committing.
+  Backs up changed originals and a manifest under
+  `stdpath("state")/lazy-local-patcher/transactions/`, then writes only the
+  validated changes. A write failure rolls back completed writes; concurrent edits
+  are not overwritten during rollback. Inspect the reported backup if rollback
+  cannot complete. This is guarded rollback, not crash-atomic multi-file storage.
+- Tracks pre-event results per repository. One conflict does not suppress
+  reapplication elsewhere, including the patcher itself. A repository absent
+  before first install remains eligible for post-install application.
+- Emits repository success only after commit and includes Git failure details.
+
+The earlier seven-test implementation passed normal lifecycle checks but failed
+four adversarial cases: symlink escape, partial mutation before a later refusal,
+global reapply suppression, and hidden orphan files. Those cases are now in
+[`tests/test_lazy_patcher_lifecycle.lua`](../../tests/test_lazy_patcher_lifecycle.lua),
+alongside injected write failure, concurrent edits, staged edits, parent-repository
+protection, first install, private permissions, and explicit executable-mode
+changes. Existing read/write permissions are retained; execute bits are added
+only for users who already have read access when a patch requests executability.
+All 18 regressions passed against the final candidate in an isolated profile.
+The installed MCPHub Lua still matched the clean 11-patch tree (83 files),
+Home/Help/Agents headless rendering passed against current backend metadata, and
+all six Lua query groups plus 18 highlight captures passed with the bundled
+Neovim 0.12.4 parser. The hub remained on PID 63615.
+
+The suite operates only
+on disposable clones; it never restores or applies a daily plugin:
+
+```bash
+NVIM_APPNAME=nvim3_jelly_tinynvim \
+PATCHER_SOURCE="$HOME/.local/share/nvim3_jelly_tinynvim/lazy/lazy-local-patcher.nvim/lua/lazy-local-patcher/patcher.lua" \
+PATCH_TEST_PATCHER="$HOME/.local/share/nvim3_jelly_tinynvim/lazy/lazy-local-patcher.nvim" \
+nvim --headless -u NONE -l tests/test_lazy_patcher_lifecycle.lua
+```
+
+Before recovery, tracked plugin files, all plugin Lua files, the existing patch
+sets, and the installed patcher module were backed up under
+`stdpath("state")/patch-backups/20261103-034015/`. The installed MCPHub Lua then
+matched the clean 11-patch output byte-for-byte. Isolated and installed-source
+headless checks rendered Home's running version/commit/binary path, Help > Hub
+Build's dated commit subjects using a single shared metadata request, and loaded
+the Agents view. The metadata came from a read-only snapshot of the actual hub.
+
+These tests prove recovery of the observed state and the tested lifecycle paths.
+They do not establish which earlier event or loaded module originally left the
+orphan files. Save work and reopen an existing Neovim instance to load the repaired
+plugin and patcher modules; changing files does not replace cached Lua modules.
+The user reported the repaired setup working and accepted the task on 2026-11-06.
+No broad Lazy sync or hub restart was performed by the repair.
+
+The separate `host-shared` server error was caused by its missing filesystem
+root, `~/.cursor/agent-shared`. Creating that configured directory and starting
+only this server restored `connected` with 14 tools; the hub PID stayed 63615.
+
 ### MCPHub patch 09/10 partial-restoration failure (2026-09-29)
 
 The subsequent consolidation combined 03 v1/v2 → `03-main-ui_v3`, 08–10 →
@@ -311,8 +384,8 @@ When the upstream fix is merged:
 
 - **First-time application**: After installing `lazy-local-patcher.nvim` for the first time, you need to run `:Lazy sync` or `:lua require("lazy-local-patcher").apply_all()` to apply patches. They don't auto-apply on startup — they persist from the previous sync.
 
-- **Patch-created files must be reversed, not merely restored**: `git restore .` only resets tracked files. It leaves a file created by a patch (for example `09-agent-settings-view_v1.patch`'s `agent_settings.lua`) untracked, so a later apply fails while trying to create it again. `01-reversible-stack-restore_v1.patch` unwinds the applied stack in descending order, handles missing dependent patches, removes generated files, and refuses to overwrite conflicting user edits. A failed restore blocks that Lazy cycle's reapply; `Applied` is emitted only after a successful `git apply`.
+- **Patch-created files must be reversed, not merely restored**: `git restore .` only resets tracked files. It leaves a file created by a patch (for example `09-agent-settings-view_v1.patch`'s `agent_settings.lua`) untracked, so a later apply fails while trying to create it again. `01-reversible-stack-restore_v1.patch` unwinds the applied stack in descending order, handles missing dependent patches, removes generated files, and refuses to overwrite conflicting user edits. A failed restore blocks reapply only for that repository; other repositories still complete their cycle. `Applied` is emitted only after the full repository transaction succeeds.
 
 ---
 
-**Last Updated**: 2026-09-26
+**Last Updated**: 2026-11-06

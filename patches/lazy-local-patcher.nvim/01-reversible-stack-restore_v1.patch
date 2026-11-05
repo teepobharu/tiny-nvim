@@ -1,170 +1,412 @@
-diff --git a/lua/lazy-local-patcher/patcher.lua b/lua/lazy-local-patcher/patcher.lua
-index 22dea4c..5f25702 100644
---- a/lua/lazy-local-patcher/patcher.lua
-+++ b/lua/lazy-local-patcher/patcher.lua
-@@ -21,13 +21,57 @@ end
- 
- ---@param name string Name of the plugin repository
- ---@param plugin_path string Full path of the plugin repository
+diff --git i/lua/lazy-local-patcher/patcher.lua w/lua/lazy-local-patcher/patcher.lua
+index 22dea4c..dde0e9f 100644
+--- i/lua/lazy-local-patcher/patcher.lua
++++ w/lua/lazy-local-patcher/patcher.lua
+@@ -1,106 +1,351 @@
+ ---@class LazyLocalPatcher.Main
+ local M = {}
+-
+ local patcher = "[lazy-local-patcher] "
++local uv = vim.uv or vim.loop
+
+ ---@param path string
+----@param cmd string[] git command to execute
+----@param error_level number? log level for errors. Hide if nil or false
++---@param cmd string[]
+ M.git_execute = function(path, cmd, error_level)
+   local command = { "git", "-C", path, unpack(cmd) }
+-  local command_output = vim.fn.system(command)
+-  if vim.v.shell_error ~= 0 then
+-    if error_level then
+-      local msg = patcher .. "Error running git command: %s\n%s"
+-      error(string.format(msg, patcher, command, command_output), error_level)
++  local result = vim.system(command):wait()
++  local success = result.code == 0
++  local output = (result.stdout or "") .. (not success and (result.stderr or "") or "")
++  if not success and error_level then error(table.concat(command, " ") .. "\n" .. output, error_level) end
++  return { success = success, output = output }
++end
++
++local function checked(result, context)
++  assert(result.success, context .. "\n" .. result.output)
++  return result.output
++end
++
++-- Only new-file sections are eligible for orphan recovery. Never remove an
++-- arbitrary untracked file, and compare the full bytes before moving one.
++local function generated_files(patch_path)
++  local files, current, creating, in_hunk = {}, nil, false, false
++  for _, line in ipairs(vim.fn.readfile(patch_path)) do
++    if line:match("^diff %-%-git ") then
++      current, creating, in_hunk = nil, false, false
++    elseif not in_hunk and line == "--- /dev/null" then
++      creating = true
++    elseif not in_hunk and creating and line:match("^%+%+%+ ") then
++      local path = line:match("^%+%+%+ [^/]+/(.+)$")
++      if path then
++        current = { path = path, lines = {}, newline = true }
++        table.insert(files, current)
++      end
++    elseif current and line:match("^@@ ") then
++      in_hunk = true
++    elseif current and in_hunk and line:sub(1, 1) == "+" then
++      table.insert(current.lines, line:sub(2))
++    elseif current and line == "\\ No newline at end of file" then
++      current.newline = false
+     end
+-    return { success = false, output = command_output }
+   end
+-  return { success = true, output = command_output }
++  for _, file in ipairs(files) do
++    file.content = table.concat(file.lines, "\n") .. (file.newline and "\n" or "")
++  end
++  return files
+ end
+
+----@param name string Name of the plugin repository
+----@param plugin_path string Full path of the plugin repository
 -function M.restore_repo(name, plugin_path)
 -  local out = M.git_execute(plugin_path, { "restore", "." })
 -  if not out.success then
 -    local msg = string.format(": Error restoring the repository. Check '%s'", plugin_path)
-+---@param patch_paths string[] Patches for this repository, in apply order
-+---@return boolean restored Whether every applied patch was reversed or already absent
-+function M.restore_repo(name, plugin_path, patch_paths)
-+  local status = M.git_execute(plugin_path, { "status", "--porcelain" })
-+  if not status.success then
-+    local msg = string.format(": Error checking the repository. Check '%s'", plugin_path)
-     vim.notify(patcher .. name .. msg, vim.log.levels.ERROR)
-+    return false
+-    vim.notify(patcher .. name .. msg, vim.log.levels.ERROR)
++local function valid_relative(path)
++  assert(path ~= "" and not path:match("^[/\\]") and not path:match("^%a:"), "Invalid patch path: " .. path)
++  for part in (path .. "/"):gmatch("(.-)/") do
++    assert(part ~= "" and part ~= "." and part ~= ".." and part ~= ".git", "Unsafe patch path: " .. path)
 +  end
-+  if vim.trim(status.output) == "" then
-+    vim.notify(patcher .. "Already restored " .. name, vim.log.levels.TRACE)
-+    return true
-+  end
++end
 +
-+  local unresolved = {}
-+  for index = #patch_paths, 1, -1 do
-+    local patch_path = patch_paths[index]
-+    local reverse_check = M.git_execute(plugin_path, { "apply", "--reverse", "--check", "--ignore-space-change", patch_path })
-+    if reverse_check.success then
-+      local out = M.git_execute(plugin_path, { "apply", "--reverse", "--ignore-space-change", patch_path })
-+      if not out.success then
-+        local msg = string.format(": Error restoring patch '%s'. Check '%s'", patch_path, plugin_path)
-+        vim.notify(patcher .. name .. msg, vim.log.levels.ERROR)
-+        return false
-+      end
-+    else
-+      -- An absent patch can depend on an earlier patch that is also absent.
-+      -- Keep unwinding older patches first; final repository cleanliness below
-+      -- distinguishes that partial stack from a real local conflict.
-+      local forward_check = M.git_execute(plugin_path, { "apply", "--check", "--ignore-space-change", patch_path })
-+      if not forward_check.success then
-+        table.insert(unresolved, patch_path)
++-- lstat every component before opening anything: a lexical prefix alone does
++-- not prevent a directory symlink from escaping the repository.
++local function snapshot(root, relative)
++  valid_relative(relative)
++  local path = root
++  local parts = vim.split(relative, "/", { plain = true })
++  for i, part in ipairs(parts) do
++    path = path .. "/" .. part
++    local stat = uv.fs_lstat(path)
++    if stat then
++      assert(stat.type == (i == #parts and "file" or "directory"), "Refusing non-regular patch path: " .. path)
++    end
++  end
++  local stat = uv.fs_lstat(path)
++  if not stat then return { exists = false } end
++  local file = assert(io.open(path, "rb"))
++  local data = assert(file:read("*a")); file:close()
++  return { exists = true, data = data, mode = bit.band(stat.mode, 511) }
++end
++
++local function same(a, b)
++  return a.exists == b.exists and a.data == b.data and a.mode == b.mode
++end
++
++local function write_file(root, relative, value)
++  snapshot(root, relative) -- reject symlinks again immediately before mutation
++  local path = root .. "/" .. relative
++  if not value.exists then
++    if uv.fs_lstat(path) then assert(uv.fs_unlink(path)) end
++    return
++  end
++  vim.fn.mkdir(vim.fn.fnamemodify(path, ":h"), "p")
++  snapshot(root, relative)
++  local temporary = path .. ".lazy-patch-" .. tostring(uv.hrtime())
++  local fd = assert(uv.fs_open(temporary, "wx", value.mode))
++  local ok, err = pcall(function()
++    local offset = 0
++    while offset < #value.data do
++      local written = assert(uv.fs_write(fd, value.data:sub(offset + 1), offset))
++      assert(written > 0, "Short write: " .. temporary)
++      offset = offset + written
++    end
++    assert(uv.fs_close(fd)); fd = nil
++    assert(uv.fs_chmod(temporary, value.mode))
++    assert(uv.fs_rename(temporary, path))
++  end)
++  if fd then uv.fs_close(fd) end
++  if not ok then uv.fs_unlink(temporary); error(err) end
++end
++
++local function owned_paths(repo, patches)
++  local owned = {}
++  for _, patch in ipairs(patches) do
++    local records = vim.split(checked(M.git_execute(repo, { "apply", "--numstat", "-z", patch }), "Invalid patch: " .. patch), "\0", { plain = true })
++    local i = 1
++    while records[i] and records[i] ~= "" do
++      local path = assert(records[i]:match("^[^\t]*\t[^\t]*\t(.*)$"), "Invalid patch statistics")
++      if path == "" then -- git's NUL-separated rename format
++        for j = 1, 2 do
++          local renamed = assert(records[i + j]); valid_relative(renamed); owned[renamed] = true
++        end
++        i = i + 3
++      else
++        valid_relative(path); owned[path] = true; i = i + 1
 +      end
 +    end
 +  end
++  local paths = vim.tbl_keys(owned); table.sort(paths)
++  return paths, owned
++end
 +
-+  if #unresolved > 0 then
-+    local final_status = M.git_execute(plugin_path, { "status", "--porcelain" })
-+    if not final_status.success or vim.trim(final_status.output) ~= "" then
-+      local msg = string.format(
-+        ": Cannot safely restore patch '%s'; refusing to overwrite local changes. Check '%s'",
-+        unresolved[#unresolved],
-+        plugin_path
-+      )
-+      vim.notify(patcher .. name .. msg, vim.log.levels.ERROR)
-+      return false
++-- This helper mutates disposable checkouts only. A legacy git restore can
++-- leave exact generated files behind; unknown contents always block recovery.
++local function remove_orphans(repo, patch, clean_baseline)
++  local removed = {}
++  for _, file in ipairs(generated_files(patch)) do
++    local value = snapshot(repo, file.path)
++    local tracked = M.git_execute(repo, { "ls-files", "--error-unmatch", "--", file.path }).success
++    if not tracked and value.exists and value.data == file.content then
++      removed[file.path] = value
++      write_file(repo, file.path, { exists = false })
++    end
++  end
++  if not next(removed) then return false end
++  if clean_baseline or M.git_execute(repo, { "apply", "--check", "--ignore-space-change", patch }).success then return true end
++  for path, value in pairs(removed) do write_file(repo, path, value) end
++  return false
++end
++
++local function restore_preflight(repo, patches)
++  local unresolved = {}
++  for index = #patches, 1, -1 do
++    local patch = patches[index]
++    if M.git_execute(repo, { "apply", "--reverse", "--check", "--ignore-space-change", patch }).success then
++      checked(M.git_execute(repo, { "apply", "--reverse", "--ignore-space-change", patch }), "Cannot reverse " .. patch)
++    elseif not M.git_execute(repo, { "apply", "--check", "--ignore-space-change", patch }).success
++      and not remove_orphans(repo, patch) then
++      table.insert(unresolved, patch)
 +    end
    end
 -  vim.notify(patcher .. "Restored " .. name, vim.log.levels.TRACE)
++  if #unresolved == 0 then return end
++  assert(vim.trim(checked(M.git_execute(repo, { "status", "--porcelain", "--untracked-files=no" }), "Cannot inspect preflight")) == "",
++    "Cannot safely restore " .. unresolved[#unresolved] .. "; conflicting changes preserved")
++  for _, patch in ipairs(patches) do
++    remove_orphans(repo, patch, true)
++    for _, file in ipairs(generated_files(patch)) do
++      assert(not snapshot(repo, file.path).exists, "Unknown generated-file content preserved: " .. file.path)
++    end
++  end
++end
 +
-+  vim.notify(patcher .. "Restored patches from " .. name, vim.log.levels.TRACE)
-+  return true
- end
- 
- ---@param name string Name of the plugin repository
-@@ -38,12 +82,15 @@ function M.apply_patch(name, patch_path, plugin_path)
-   if not out.success then
-     local msg = string.format(": Error applying patches to the repository. Check '%s'", plugin_path)
-     vim.notify(patcher .. name .. msg, vim.log.levels.ERROR)
++local function commit_plan(repo, paths, before, after)
++  local changed = {}
++  for _, path in ipairs(paths) do
++    assert(same(snapshot(repo, path), before[path]), "File changed during preflight: " .. path)
++    if not same(before[path], after[path]) then table.insert(changed, path) end
++  end
++  if #changed == 0 then return end
++  local backup = vim.fn.stdpath("state") .. "/lazy-local-patcher/transactions/" .. tostring(uv.hrtime())
++  vim.fn.mkdir(backup, "p")
++  local manifest = { repository = repo, files = {} }
++  for _, path in ipairs(changed) do
++    local value = before[path]
++    manifest.files[path] = { exists = value.exists, mode = value.mode }
++    if value.exists then write_file(backup, path, value) end
++  end
++  vim.fn.writefile({ vim.json.encode(manifest) }, backup .. "/manifest.json")
++  local written = {}
++  local ok, err = pcall(function()
++    for _, path in ipairs(changed) do
++      assert(same(snapshot(repo, path), before[path]), "File changed before commit: " .. path)
++      write_file(repo, path, after[path]); table.insert(written, path)
++    end
++  end)
++  if ok then return end
++  local rollback_ok = true
++  for index = #written, 1, -1 do
++    local path = written[index]
++    local restored = pcall(function()
++      assert(same(snapshot(repo, path), after[path]), "Concurrent edit during rollback: " .. path)
++      write_file(repo, path, before[path])
++    end)
++    rollback_ok = rollback_ok and restored
++  end
++  error(tostring(err) .. (rollback_ok and "\nOriginal files restored. Backup: " or "\nInspect rollback failure. Backup: ") .. backup)
++end
++
++-- One repository transaction: prove the whole operation in a disposable clone,
++-- then commit only its owned paths. Neither an unsafe restore nor a late patch
++-- failure can leave a partially applied stack in the installed checkout.
++local function transact(name, plugin_path, patches, apply)
++  local temporary = vim.fn.tempname()
++  local ok, err = pcall(function()
++    local repo = assert(uv.fs_realpath(plugin_path), "Plugin not installed: " .. plugin_path)
++    local top = vim.trim(checked(M.git_execute(repo, { "rev-parse", "--show-toplevel" }), "Not a plugin repository"))
++    assert(uv.fs_realpath(top) == repo, "Refusing parent repository: " .. plugin_path)
++    local head = vim.trim(checked(M.git_execute(repo, { "rev-parse", "HEAD" }), "Cannot resolve plugin HEAD"))
++    local paths, owned = owned_paths(repo, patches)
++    local staged = checked(M.git_execute(repo, { "diff", "--cached", "--name-only", "-z" }), "Cannot inspect index")
++    for _, path in ipairs(vim.split(staged, "\0", { plain = true })) do
++      assert(not owned[path], "Staged changes preserved: " .. path)
++    end
++    local before, after = {}, {}
++    for _, path in ipairs(paths) do before[path] = snapshot(repo, path) end
++    local output = vim.fn.system({ "git", "clone", "--quiet", "--shared", "--no-checkout", repo, temporary })
++    assert(vim.v.shell_error == 0, "Cannot create preflight checkout: " .. output)
++    checked(M.git_execute(temporary, { "checkout", "--quiet", "--detach", head }), "Cannot checkout plugin baseline")
++    for _, path in ipairs(paths) do write_file(temporary, path, before[path]) end
++    restore_preflight(temporary, patches)
++    if apply then
++      for _, patch in ipairs(patches) do
++        assert(M.apply_patch(name .. "/" .. vim.fn.fnamemodify(patch, ":t"), patch, temporary), "Patch preflight failed: " .. patch)
++      end
++    end
++    for _, path in ipairs(paths) do
++      after[path] = snapshot(temporary, path)
++      if before[path].exists and after[path].exists then
++        -- Git rewrites 0600 as 0644. Preserve private access bits; honor an
++        -- intentional executable-mode change only for existing read access.
++        local mode = before[path].mode
++        if bit.band(mode, 64) ~= bit.band(after[path].mode, 64) then
++          mode = bit.band(mode, 438) -- 0666
++          if bit.band(after[path].mode, 64) ~= 0 then
++            mode = bit.bor(mode, bit.rshift(bit.band(mode, 292), 2)) -- 0444 -> 0111
++          end
++        end
++        after[path].mode = mode
++      end
++    end
++    assert(vim.trim(checked(M.git_execute(repo, { "rev-parse", "HEAD" }), "Cannot recheck plugin HEAD")) == head,
++      "Plugin HEAD changed during preflight")
++    assert(checked(M.git_execute(repo, { "diff", "--cached", "--name-only", "-z" }), "Cannot recheck index") == staged,
++      "Plugin index changed during preflight")
++    commit_plan(repo, paths, before, after)
++  end)
++  vim.fn.delete(temporary, "rf")
++  if not ok then
++    vim.notify(patcher .. name .. ": " .. tostring(err), vim.log.levels.ERROR)
 +    return false
-   end
-   vim.notify(patcher .. "Applied " .. name, vim.log.levels.TRACE)
++  end
++  vim.notify(patcher .. (apply and "Applied " or "Restored patches from ") .. name, vim.log.levels.TRACE)
 +  return true
++end
++
++---@param name string
++---@param plugin_path string
++---@param patches string[]
++function M.restore_repo(name, plugin_path, patches)
++  return transact(name, plugin_path, patches, false)
  end
- 
- ---@param opts LazyLocalPatcher.Options
+
+----@param name string Name of the plugin repository
+----@param patch_path string Full path of the patch file
+----@param plugin_path string Full path of the plugin repository
+ function M.apply_patch(name, patch_path, plugin_path)
+   local out = M.git_execute(plugin_path, { "apply", "--ignore-space-change", patch_path })
+   if not out.success then
+-    local msg = string.format(": Error applying patches to the repository. Check '%s'", plugin_path)
+-    vim.notify(patcher .. name .. msg, vim.log.levels.ERROR)
++    vim.notify(patcher .. name .. ": Patch preflight failed\n" .. out.output, vim.log.levels.ERROR)
+   end
+-  vim.notify(patcher .. "Applied " .. name, vim.log.levels.TRACE)
++  return out.success
+ end
+
+----@param opts LazyLocalPatcher.Options
 -function M.apply_all(opts)
-+---@return string[] patches Relative patch paths, ordered for application
 +function M.collect_patches(opts)
    local patches = {}
    for patch in vim.fs.dir(opts.patches_path, { depth = 2 }) do
-     if patch:match("%.patch$") ~= nil then
-@@ -51,28 +98,52 @@ function M.apply_all(opts)
-     end
+-    if patch:match("%.patch$") ~= nil then
+-      table.insert(patches, patch)
+-    end
++    if patch:match("%.patch$") then table.insert(patches, patch) end
    end
    table.sort(patches)
 +  return patches
 +end
-+
-+---@param patch string Relative patch path
-+---@return string repository_name
-+local function repository_name(patch)
-+  return patch:gsub("/.*", ""):gsub("%.patch$", "")
-+end
-+
-+---@param opts LazyLocalPatcher.Options
-+function M.apply_all(opts)
-+  local patches = M.collect_patches(opts)
- 
-   for _, patch in ipairs(patches) do
-     local patch_path = opts.patches_path .. "/" .. patch
+
+-  for _, patch in ipairs(patches) do
+-    local patch_path = opts.patches_path .. "/" .. patch
 -    local repo_path = opts.lazy_path .. "/" .. patch:gsub("/.*", ""):gsub("%.patch$", "")
-+    local repo_path = opts.lazy_path .. "/" .. repository_name(patch)
-     M.apply_patch(patch, patch_path, repo_path)
+-    M.apply_patch(patch, patch_path, repo_path)
++local function repositories(opts)
++  local repos = {}
++  for _, patch in ipairs(M.collect_patches(opts)) do
++    local name = patch:gsub("/.*", ""):gsub("%.patch$", "")
++    repos[name] = repos[name] or {}
++    table.insert(repos[name], opts.patches_path .. "/" .. patch)
    end
++  return repos
  end
- 
- ---@param opts LazyLocalPatcher.Options
-+---@return boolean restored Whether every plugin repository restored safely
- function M.restore_all(opts)
+
+----@param opts LazyLocalPatcher.Options
+-function M.restore_all(opts)
 -  for patch, type in vim.fs.dir(opts.patches_path) do
 -    if patch:match("%.patch$") ~= nil or type == "directory" then
 -      local repo_path = opts.lazy_path .. "/" .. patch:gsub("%.patch", "")
 -      M.restore_repo(patch, repo_path)
-+  local repositories = {}
-+  for _, patch in ipairs(M.collect_patches(opts)) do
-+    local name = repository_name(patch)
-+    repositories[name] = repositories[name] or {}
-+    table.insert(repositories[name], opts.patches_path .. "/" .. patch)
-+  end
-+
-+  local names = vim.tbl_keys(repositories)
-+  table.sort(names)
-+  local restored = true
++-- Eligibility is per repository: a failed pre-event restore must not suppress
++-- reapplication of the other repositories that were successfully restored.
++function M.apply_all(opts, eligible)
++  local repos = repositories(opts)
++  local names = vim.tbl_keys(repos); table.sort(names)
++  local success, results = true, {}
 +  for _, name in ipairs(names) do
-+    if not M.restore_repo(name, opts.lazy_path .. "/" .. name, repositories[name]) then
-+      restored = false
++    if not eligible or eligible[name] then
++      results[name] = transact(name, opts.lazy_path .. "/" .. name, repos[name], true)
++      success = results[name] and success
      end
    end
-+  return restored
++  return success, results
  end
- 
- ---@param opts LazyLocalPatcher.Options
- function M.create_group_and_cmd(opts)
-   local group_id = vim.api.nvim_create_augroup("LazyLocalPatcher", {})
-   M.sync_call = false
-+  M.restore_ok = true
- 
+
+----@param opts LazyLocalPatcher.Options
+-function M.create_group_and_cmd(opts)
+-  local group_id = vim.api.nvim_create_augroup("LazyLocalPatcher", {})
+-  M.sync_call = false
++function M.restore_all(opts)
++  local repos = repositories(opts)
++  local names = vim.tbl_keys(repos); table.sort(names)
++  local success, results = true, {}
++  for _, name in ipairs(names) do
++    local plugin_path = opts.lazy_path .. "/" .. name
++    -- A first install has nothing to restore but must be patched after install.
++    results[name] = not uv.fs_lstat(plugin_path) or M.restore_repo(name, plugin_path, repos[name])
++    success = results[name] and success
++  end
++  return success, results
++end
+
++function M.create_group_and_cmd(opts)
++  local group = vim.api.nvim_create_augroup("LazyLocalPatcher", { clear = true })
++  M.sync_call, M.restored_repos = false, nil
    vim.api.nvim_create_autocmd("User", {
      desc = "Restore patches when Lazy 'Pre' events are triggered.",
-@@ -80,7 +151,7 @@ function M.create_group_and_cmd(opts)
+-    group = group_id,
++    group = group,
      pattern = { "LazySyncPre", "LazyInstallPre", "LazyUpdatePre", "LazyCheckPre" },
      callback = function(ev)
        if not M.sync_call then
 -        M.restore_all(opts)
-+        M.restore_ok = M.restore_all(opts)
+-      end
+-      if ev.match == "LazySyncPre" then
+-        M.sync_call = true
++        local _, results = M.restore_all(opts)
++        M.restored_repos = results
        end
-       if ev.match == "LazySyncPre" then
-         M.sync_call = true
-@@ -94,10 +165,16 @@ function M.create_group_and_cmd(opts)
++      if ev.match == "LazySyncPre" then M.sync_call = true end
+     end,
+   })
+-
+   vim.api.nvim_create_autocmd("User", {
+     desc = "Apply patches when Lazy events are triggered.",
+-    group = group_id,
++    group = group,
      pattern = { "LazySync", "LazyInstall", "LazyUpdate", "LazyCheck" },
      callback = function(ev)
-       if not M.sync_call then
+-      if not M.sync_call then
 -        M.apply_all(opts)
-+        if M.restore_ok then
-+          M.apply_all(opts)
-+        end
-+        M.restore_ok = true
-       elseif ev.match == "LazySync" then
+-      elseif ev.match == "LazySync" then
 -        M.apply_all(opts)
-+        if M.restore_ok then
-+          M.apply_all(opts)
-+        end
-         M.sync_call = false
-+        M.restore_ok = true
+-        M.sync_call = false
++      if not M.sync_call or ev.match == "LazySync" then
++        M.apply_all(opts, M.restored_repos)
++        M.sync_call, M.restored_repos = false, nil
        end
      end,
    })
+ end
+-
+ return M

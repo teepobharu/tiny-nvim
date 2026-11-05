@@ -31,6 +31,10 @@
 - [copilot-model-selection-bug.md](copilot-model-selection-bug.md) — model selection bug analysis and fix
 - [minuet.md](minuet.md) — model pinning, 401 auth cause, change_model backend-switch behavior, AGD subprovider patch
 
+## Tree-sitter
+
+- [nvim-treesitter.md](nvim-treesitter.md) — stale Lua parser shadowing, operator query errors, isolated recovery and parser checks
+
 ## Lazy.nvim
 
 - [lazy-nvim-config-merging.md](lazy-nvim-config-merging.md) — deep-merge rules: tables merge, functions don't (last wins)
